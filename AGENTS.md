@@ -1,6 +1,7 @@
 # Working on bend-osdev
 
-Read `CONVENTIONS.md` first; it is binding. This file is the practical side:
+Read `CONVENTIONS.md` first; it is binding, and `REVIEW.md` is the checklist
+every package must pass before it is committed. This file is the practical side:
 how a package is built, and the Bend rules that bite. `crc/` is the template
 package: copy its shape.
 
