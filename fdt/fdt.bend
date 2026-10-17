@@ -99,13 +99,62 @@ def parse.p2(m: Maybe<&2, U32>, opts: FdtOptions, xs: List<&2, U32>) -> Result<&
 def parse.p1(opts: FdtOptions, +xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
   parse.p2(B.be32_at(xs, 0n), opts, xs)
 
+# The same reader, tail-recursive over the blob: bytes' fast forms for its
+# length and its slices (PROOF.bend: parse_fast proves it equal to
+# parse.p1 above, the reference the proofs compute through)
+
+def parse.fstruct(is17: Bool, os: Nat, sst: Nat, region: List<&2, U32>) -> Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>:
+  match is17:
+    case True{}:
+      S.FdtLexer.finish(True{}, S.lx.go(B.take.fast(sst, B.drop(os, region)), S.FdtLexer.start()))
+    case False{}:
+      S.FdtLexer.finish(False{}, S.lx.go(B.drop(os, region), S.FdtLexer.start()))
+
+def parse.f6(rules: T.FdtTreeRules, +v: U32, boot: U32, +region: List<&2, U32>, orsv: Nat, os: Nat, sst: Nat, ostr: Nat, sstr: Nat) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  parse.p7(R.rsv.read(B.drop(orsv, region)), parse.fstruct(U32.is_lt(16, v), os, sst, region), rules, v, boot, B.take.fast(sstr, B.drop(ostr, region)))
+
+def parse.f5(r: Result<&2, &2, E.FdtError, Unit>, rules: T.FdtTreeRules, h: H.FdtHeader, xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match r:
+    case Done{u}:
+      match h:
+        case H.FdtHeader{magic, totalsize, off_dt_struct, off_dt_strings, off_mem_rsvmap, version, last_comp_version, boot_cpuid_phys, size_dt_strings, size_dt_struct}:
+          parse.f6(rules, version, boot_cpuid_phys, B.take.fast(U32.to_nat(totalsize), xs), U32.to_nat(off_mem_rsvmap), U32.to_nat(off_dt_struct), U32.to_nat(size_dt_struct), U32.to_nat(off_dt_strings), U32.to_nat(size_dt_strings))
+    case Fail{e}:
+      Fail{e}
+
+def parse.f4(m: Maybe<&2, H.FdtHeader>, opts: FdtOptions, +xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match m:
+    case Some{+h}:
+      match opts:
+        case FdtOptions{vs, rules}:
+          parse.f5(H.FdtHeader.check(vs, h, B.len.fast(xs)), rules, h, xs)
+    case None{}:
+      Fail{E.FdtTooShort{}}
+
+def parse.f3(ok: Bool, opts: FdtOptions, +xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match ok:
+    case True{}:
+      parse.f4(H.hdr.decode(xs), opts, xs)
+    case False{}:
+      Fail{E.FdtBadMagic{}}
+
+def parse.f2(m: Maybe<&2, U32>, opts: FdtOptions, xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match m:
+    case Some{v}:
+      parse.f3(U32.is_eq(v, H.FdtHeader.magic_value()), opts, xs)
+    case None{}:
+      Fail{E.FdtTooShort{}}
+
+def parse.f1(opts: FdtOptions, +xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  parse.f2(B.be32_at(xs, 0n), opts, xs)
+
 # the blob's version, boot CPU, reservations and tree, or why it was
 # refused. Checked in this order: the magic (FdtBadMagic; FdtTooShort if
 # there are fewer than 4 bytes, or than 40 after a good magic), then the
 # header (FdtHeader.check), then the reservation block, then the structure
 # block's tokens, then the tree they describe.
 def Fdt.parse(opts: FdtOptions, o: B.Octets) -> Result<&2, &2, E.FdtError, FdtBlob>:
-  parse.p1(opts, B.Octets.to_list(o))
+  parse.f1(opts, B.Octets.to_list(o))
 
 # Writing
 
@@ -117,17 +166,28 @@ def build.layout(+r: List<&2, U32>, +s: List<&2, U32>, +t: List<&2, U32>, boot: 
 def build.simple(+root: T.FdtNode, rsv: List<&2, R.FdtRsv>, boot: U32) -> List<&2, U32>:
   build.layout(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), boot)
 
+# The same writer, tail-recursive over the blob (PROOF.bend: layout_fast,
+# build_fast prove it equal to build.simple above, the reference the proofs
+# compute through). The header and the reservation block are short, so
+# only the structure and strings blocks need the fast forms.
+def build.layout.fast(+r: List<&2, U32>, +s: List<&2, U32>, +t: List<&2, U32>, boot: U32) -> List<&2, U32>:
+  +rest = B.append(r, B.append.fast(s, t))
+  B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, B.len.fast(rest))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len.fast(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(B.len.fast(t)), L.fdt.u32n.fast(B.len.fast(s))}), rest)
+
+def build.fast(+root: T.FdtNode, rsv: List<&2, R.FdtRsv>, boot: U32) -> List<&2, U32>:
+  build.layout.fast(R.rsv.list(rsv), S.toks.fast(T.flat.toks.fast([root], 0n)), T.flat.strs.fast([root]), boot)
+
 def build.dedup(d: T.FdtFlatD, rsv: List<&2, R.FdtRsv>, boot: U32) -> List<&2, U32>:
   match d:
     case T.FdtFlatD{ts, tab}:
       match tab:
         case T.FdtStrTab{bytes, size}:
-          build.layout(R.rsv.list(rsv), S.toks.list(ts), bytes, boot)
+          build.layout.fast(R.rsv.list(rsv), S.toks.fast(ts), bytes, boot)
 
 def build.with(how: T.FdtStrings, +root: T.FdtNode, rsv: List<&2, R.FdtRsv>, boot: U32) -> List<&2, U32>:
   match how:
     case T.FdtStringsSimple{}:
-      build.simple(root, rsv, boot)
+      build.fast(root, rsv, boot)
     case T.FdtStringsDedup{}:
       build.dedup(T.dedup.run(root), rsv, boot)
 
@@ -138,14 +198,22 @@ def Fdt.build_with(how: T.FdtStrings, root: T.FdtNode, rsv: List<&2, R.FdtRsv>, 
 
 # the same, with the simple strings block (each name in turn)
 def Fdt.build(root: T.FdtNode, rsv: List<&2, R.FdtRsv>, boot: U32) -> B.Octets:
-  B.Octets.of_list(build.simple(root, rsv, boot))
+  B.Octets.of_list(build.fast(root, rsv, boot))
 
-# the blocks after the header, as Fdt.build writes them
+# the blocks after the header, as Fdt.build writes them (the reference
+# form, and the fast form)
 def build.rest(+root: T.FdtNode, rsv: List<&2, R.FdtRsv>) -> List<&2, U32>:
   B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))
+
+def build.rest.fast(+root: T.FdtNode, rsv: List<&2, R.FdtRsv>) -> List<&2, U32>:
+  B.append(R.rsv.list(rsv), B.append.fast(S.toks.fast(T.flat.toks.fast([root], 0n)), T.flat.strs.fast([root])))
+
+# Fdt.buildable as the proofs state it (PROOF.bend: buildable_fast)
+def buildable.ref(+root: T.FdtNode, +rsv: List<&2, R.FdtRsv>) -> Bool:
+  Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(build.rest(root, rsv))))))
 
 # what Fdt.build can write so that Fdt.parse reads it back: names without
 # NULs, values shorter than 4 GiB, no reservation equal to the 0, 0 terminator, and a blob shorter than
 # 4 GiB (its sizes and offsets fit their 32-bit fields)
 def Fdt.buildable(+root: T.FdtNode, +rsv: List<&2, R.FdtRsv>) -> Bool:
-  Bool.and(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(build.rest(root, rsv))))))
+  Bool.and(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(build.rest.fast(root, rsv))))))

@@ -93,6 +93,59 @@ def flat.toks(ns: List<&2, FdtNode>, +off: Nat) -> List<&2, S.FdtToken>:
           +o2 = Nat.add(o1, B.len(flat.strs(cs)))
           Con{S.FdtTokBegin{nm}, List.append(&2, S.FdtToken, prop.toks(ps, off), List.append(&2, S.FdtToken, flat.toks(cs, o1), Con{S.FdtTokEnd{}, flat.toks(t, o2)}))}
 
+# The same two writers, for trees of any size (PROOF.bend: strs_fast,
+# ftoks_fast). prop.strs, flat.strs, prop.toks and flat.toks above are the
+# reference forms the proofs compute through; they recurse once per byte
+# or token. These push onto an accumulator (reversed) and recurse into a
+# node's children only, so their depth is the tree's depth.
+
+def pstrs.go(ps: List<&2, FdtProp>, acc: List<&2, U32>) -> List<&2, U32>:
+  match ps:
+    case Nil{}:
+      acc
+    case Con{p, t}:
+      match p:
+        case FdtProp{k, v}:
+          pstrs.go(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(k), acc)})
+
+def pstrs.fast(ps: List<&2, FdtProp>) -> List<&2, U32>:
+  List.reverse(&2, U32, pstrs.go(ps, Nil{}))
+
+def strs.go(ns: List<&2, FdtNode>, acc: List<&2, U32>) -> List<&2, U32>:
+  match ns:
+    case Nil{}:
+      acc
+    case Con{n, t}:
+      match n:
+        case FdtNode{nm, ps, cs}:
+          strs.go(t, strs.go(cs, pstrs.go(ps, acc)))
+
+def flat.strs.fast(ns: List<&2, FdtNode>) -> List<&2, U32>:
+  List.reverse(&2, U32, strs.go(ns, Nil{}))
+
+def ptoks.go(ps: List<&2, FdtProp>, off: Nat, acc: List<&2, S.FdtToken>) -> List<&2, S.FdtToken>:
+  match ps:
+    case Nil{}:
+      acc
+    case Con{p, t}:
+      match p:
+        case FdtProp{k, v}:
+          +o = off
+          ptoks.go(t, Nat.add(o, B.len(B.append(B.Octets.to_list(k), [0]))), Con{S.FdtTokProp{L.fdt.u32n.fast(o), v}, acc})
+
+def ftoks.go(ns: List<&2, FdtNode>, +off: Nat, acc: List<&2, S.FdtToken>) -> List<&2, S.FdtToken>:
+  match ns:
+    case Nil{}:
+      acc
+    case Con{n, t}:
+      match n:
+        case FdtNode{nm, +ps, +cs}:
+          +o1 = Nat.add(off, B.len.fast(pstrs.fast(ps)))
+          ftoks.go(t, Nat.add(o1, B.len.fast(flat.strs.fast(cs))), Con{S.FdtTokEnd{}, ftoks.go(cs, o1, ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))})
+
+def flat.toks.fast(ns: List<&2, FdtNode>, off: Nat) -> List<&2, S.FdtToken>:
+  List.reverse(&2, S.FdtToken, ftoks.go(ns, off, Nil{}))
+
 # Writing, with each name's bytes once (as dtc writes it): a name whose
 # bytes and NUL already occur in the strings block, also as the tail of a
 # longer name, takes that offset; otherwise it is added at the end
@@ -101,30 +154,39 @@ def flat.toks(ns: List<&2, FdtNode>, +off: Nat) -> List<&2, S.FdtToken>:
 type FdtStrTab is Data:
   FdtStrTab{bytes: List<&2, U32>, size: Nat}
 
-# xs is a prefix of ys
-def dedup.prefix(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
+# xs is a prefix of ys (ok: the bytes so far agree); tail-recursive
+def dedup.prefix(xs: List<&2, U32>, ys: List<&2, U32>, ok: Bool) -> Bool:
   match xs ys:
     case Nil{} _:
-      True{}
+      ok
     case Con{a, s} Con{b, t}:
-      Bool.and(U32.is_eq(a, b), dedup.prefix(s, t))
+      match ok:
+        case True{}:
+          dedup.prefix(s, t, U32.is_eq(a, b))
+        case False{}:
+          False{}
     case Con{a, s} Nil{}:
       False{}
 
-def dedup.pick(hit: Bool, o: Nat, rest: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
+def dedup.hit(hit: Bool, o: Nat) -> Maybe<&2, Nat>:
   match hit:
     case True{}:
       Some{o}
     case False{}:
-      rest
+      None{}
 
-# the first offset, from i, at which ys holds k
-def dedup.find(ys: List<&2, U32>, +k: List<&2, U32>, +i: Nat) -> Maybe<&2, Nat>:
+# the first offset, from i, at which ys holds k (found: the offset, once
+# found); tail-recursive, and it stops at the first hit
+def dedup.find(ys: List<&2, U32>, +k: List<&2, U32>, +i: Nat, found: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
   match ys:
     case Nil{}:
-      None{}
+      found
     case Con{+h, +t}:
-      dedup.pick(dedup.prefix(k, Con{h, t}), i, dedup.find(t, k, 1n+i))
+      match found:
+        case Some{o}:
+          Some{o}
+        case None{}:
+          dedup.find(t, k, 1n+i, dedup.hit(dedup.prefix(k, Con{h, t}, True{}), i))
 
 # a name's offset, and the block after it is added if it is new
 type FdtStrAt is Data:
@@ -135,13 +197,13 @@ def dedup.add(m: Maybe<&2, Nat>, +k: List<&2, U32>, bytes: List<&2, U32>, +size:
     case Some{o}:
       FdtStrAt{o, FdtStrTab{bytes, size}}
     case None{}:
-      FdtStrAt{size, FdtStrTab{B.append(bytes, k), Nat.add(size, B.len(k))}}
+      FdtStrAt{size, FdtStrTab{B.append.fast(bytes, k), Nat.add(size, B.len(k))}}
 
 # k with its NUL
 def dedup.intern.nul(tab: FdtStrTab, +k: List<&2, U32>) -> FdtStrAt:
   match tab:
     case FdtStrTab{+bytes, size}:
-      dedup.add(dedup.find(bytes, k, 0n), k, bytes, size)
+      dedup.add(dedup.find(bytes, k, 0n, None{}), k, bytes, size)
 
 def dedup.intern(tab: FdtStrTab, k: List<&2, U32>) -> FdtStrAt:
   dedup.intern.nul(tab, B.append(k, [0]))
@@ -205,7 +267,7 @@ def dedup.flat(r: FdtFlatD) -> FdtFlat:
 def FdtNode.to_tokens_with(how: FdtStrings, +root: FdtNode) -> FdtFlat:
   match how:
     case FdtStringsSimple{}:
-      FdtFlat{flat.toks([root], 0n), B.Octets.of_list(flat.strs([root]))}
+      FdtFlat{flat.toks.fast([root], 0n), B.Octets.of_list(flat.strs.fast([root]))}
     case FdtStringsDedup{}:
       dedup.flat(dedup.run(root))
 
@@ -383,10 +445,6 @@ def flat.names_ok(ns: List<&2, FdtNode>) -> Bool:
         case FdtNode{nm, ps, cs}:
           Bool.and(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(prop.names_ok(ps), Bool.and(flat.names_ok(cs), flat.names_ok(t))))
 
-# every name in the tree is free of NULs
-def FdtNode.names_ok(root: FdtNode) -> Bool:
-  flat.names_ok([root])
-
 # every property value is shorter than 2^32 bytes
 def prop.values_ok(ps: List<&2, FdtProp>) -> Bool:
   match ps:
@@ -406,15 +464,68 @@ def flat.values_ok(ns: List<&2, FdtNode>) -> Bool:
         case FdtNode{nm, ps, cs}:
           Bool.and(prop.values_ok(ps), Bool.and(flat.values_ok(cs), flat.values_ok(t)))
 
+# The same checks as folds, for trees of any size: they recurse into a
+# node's children only (PROOF.bend: names_fast, wf_fast, flat_ok_fast)
+
+def pnames.go(ps: List<&2, FdtProp>, ok: Bool) -> Bool:
+  match ps:
+    case Nil{}:
+      ok
+    case Con{p, t}:
+      match p:
+        case FdtProp{k, v}:
+          pnames.go(t, Bool.and(ok, L.fdt.nonul(B.Octets.to_list(k))))
+
+def names.go(ns: List<&2, FdtNode>, ok: Bool) -> Bool:
+  match ns:
+    case Nil{}:
+      ok
+    case Con{n, t}:
+      match n:
+        case FdtNode{nm, ps, cs}:
+          names.go(t, names.go(cs, pnames.go(ps, Bool.and(ok, L.fdt.nonul(B.Octets.to_list(nm))))))
+
+def pvalues.go(ps: List<&2, FdtProp>, ok: Bool) -> Bool:
+  match ps:
+    case Nil{}:
+      ok
+    case Con{p, t}:
+      match p:
+        case FdtProp{k, v}:
+          pvalues.go(t, Bool.and(ok, L.fdt.fits.fast(B.Octets.len(v))))
+
+def values.go(ns: List<&2, FdtNode>, ok: Bool) -> Bool:
+  match ns:
+    case Nil{}:
+      ok
+    case Con{n, t}:
+      match n:
+        case FdtNode{nm, ps, cs}:
+          values.go(t, values.go(cs, pvalues.go(ps, ok)))
+
+# the reference forms the proofs use
+def names_ok.ref(root: FdtNode) -> Bool:
+  flat.names_ok([root])
+
+def wf.ref(+root: FdtNode) -> Bool:
+  Bool.and(names_ok.ref(root), flat.values_ok([root]))
+
+def flat_ok.ref(+root: FdtNode) -> Bool:
+  Bool.and(names_ok.ref(root), L.fdt.fits(B.len(flat.strs([root]))))
+
+# every name in the tree is free of NULs
+def FdtNode.names_ok(root: FdtNode) -> Bool:
+  names.go([root], True{})
+
 # a tree whose tokens its encoding can carry: names without NULs, values
 # shorter than 2^32 bytes
 def FdtNode.wf(+root: FdtNode) -> Bool:
-  Bool.and(FdtNode.names_ok(root), flat.values_ok([root]))
+  Bool.and(FdtNode.names_ok(root), values.go([root], True{}))
 
 # a tree FdtNode.to_tokens can write so that FdtNode.of_flat reads it back:
 # names without NULs, and a strings block shorter than 4 GiB
 def FdtNode.flat_ok(+root: FdtNode) -> Bool:
-  Bool.and(FdtNode.names_ok(root), L.fdt.fits(B.len(flat.strs([root]))))
+  Bool.and(FdtNode.names_ok(root), L.fdt.fits.fast(B.len.fast(flat.strs.fast([root]))))
 
 # Text: one line per tree, for tests and debugging:
 #   name{prop=hex;...;child{...}...}

@@ -487,6 +487,26 @@ def paths(n, pre=b""):
     return out
 
 
+# A large tree, built the same way here and in the Bend prelude (big.tree):
+# past the sizes at which the package's list code overflowed Bend's stack
+# before it was made tail-recursive
+
+def big_tree(nb, nd):
+    def dev(i):
+        return (b"dev@%d" % i, [(b"compatible", b"acme,widget\0"), (b"reg", be32(i) + be32(16)), (b"status", b"okay\0"), (b"id", be32(i + 1))], [])
+    buses = [(b"bus@%d" % b, [(b"#address-cells", be32(1)), (b"#size-cells", be32(1))], [dev(b * nd + j) for j in range(nd)]) for b in range(nb)]
+    return (b"", [(b"#address-cells", be32(1)), (b"#size-cells", be32(1)), (b"compatible", b"acme,board\0")],
+            [(b"aliases", [(b"serial0", b"/bus@0/dev@0\0")], [])] + buses)
+
+
+def fnv(b):
+    """FNV-1a, 32 bits: the fingerprint the Bend side prints for a large blob"""
+    h = 2166136261
+    for x in b:
+        h = ((h ^ x) * 16777619) & 0xFFFFFFFF
+    return "%d %d" % (len(b), h)
+
+
 def main(seed):
     rng = random.Random(seed)
     lines, expect, trees = [], [], []
@@ -509,6 +529,17 @@ def main(seed):
             trees.append((k, t))
             case("build %d" % k, "B.Octets.hex(F.Fdt.build(%s, %s, %d))" % (btree(t), brsv(rs), boot), simple.hex())
             case("dedup %d" % k, "B.Octets.hex(F.Fdt.build_with(T.FdtStringsDedup{}, %s, %s, %d))" % (btree(t), brsv(rs), boot), dedup.hex())
+
+        # large: a tree of 600 devices (75 KB with the simple strings block)
+        t, rs = big_tree(4, 150), [(0x10000000, 0x10000)]
+        simple, dedup = write(t, rs, 0), write(t, rs, 0, dedup=True)
+        assert read(simple)[3] == t and read(dedup)[3] == t
+        if have_dtc:
+            assert dtc_compile(dts(t, rs), 0, d) == dedup, "dtc writes other bytes than the dedup writer (large tree)"
+            same_as_dtc += 1
+        case("large build", "fp(F.Fdt.build(big.tree(4n, 150n), big.rsv(), 0))", fnv(simple))
+        case("large dedup", "fp(F.Fdt.build_with(T.FdtStringsDedup{}, big.tree(4n, 150n), big.rsv(), 0))", fnv(dedup))
+        case("large parse", "big.parsed(F.Fdt.parse(F.FdtOptions.default(), F.Fdt.build_with(T.FdtStringsDedup{}, big.tree(4n, 150n), big.rsv(), 0)))", fnv(dedup))
 
         # parse: blobs from this writer, half corrupted
         for k in range(140):
@@ -803,6 +834,57 @@ def rreg(r: Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>) -> String:
   match r:
     case Done{v}:
       "ok" ++ regl(v)
+    case Fail{e}:
+      "error " ++ err(e)
+
+# A large tree (gen.py: big_tree), and a blob's length and FNV-1a hash
+
+def big.s(x: String) -> B.Octets:
+  B.Octets.of_string(x)
+
+def big.dev(+i: Nat) -> T.FdtNode:
+  T.FdtNode{big.s("dev@" ++ Nat.show(i)), [T.FdtProp{big.s("compatible"), P.FdtProp.of_text("acme,widget")}, T.FdtProp{big.s("reg"), P.FdtProp.of_cells([U32.from_nat(i), 16])}, T.FdtProp{big.s("status"), P.FdtProp.of_text("okay")}, T.FdtProp{big.s("id"), P.FdtProp.of_u32(U32.from_nat(1n+i))}], []}
+
+def big.devs(k: Nat, +base: Nat, acc: List<&2, T.FdtNode>) -> List<&2, T.FdtNode>:
+  match k:
+    case 0n:
+      acc
+    case 1n+(+q):
+      big.devs(q, base, Con{big.dev(Nat.add(base, q)), acc})
+
+def big.bus(+b: Nat, +nd: Nat) -> T.FdtNode:
+  T.FdtNode{big.s("bus@" ++ Nat.show(b)), [T.FdtProp{big.s("#address-cells"), P.FdtProp.of_u32(1)}, T.FdtProp{big.s("#size-cells"), P.FdtProp.of_u32(1)}], big.devs(nd, Nat.mul(b, nd), Nil{})}
+
+def big.buses(k: Nat, +nd: Nat, acc: List<&2, T.FdtNode>) -> List<&2, T.FdtNode>:
+  match k:
+    case 0n:
+      acc
+    case 1n+(+q):
+      big.buses(q, nd, Con{big.bus(q, nd), acc})
+
+def big.tree(nb: Nat, nd: Nat) -> T.FdtNode:
+  T.FdtNode{big.s(""), [T.FdtProp{big.s("#address-cells"), P.FdtProp.of_u32(1)}, T.FdtProp{big.s("#size-cells"), P.FdtProp.of_u32(1)}, T.FdtProp{big.s("compatible"), P.FdtProp.of_text("acme,board")}], Con{T.FdtNode{big.s("aliases"), [T.FdtProp{big.s("serial0"), P.FdtProp.of_text("/bus@0/dev@0")}], []}, big.buses(nb, nd, Nil{})}}
+
+def big.rsv() -> List<&2, R.FdtRsv>:
+  [R.FdtRsv{W.W64.from_u32(268435456), W.W64.from_u32(65536)}]
+
+def fnv.go(xs: List<&2, U32>, h: U32) -> U32:
+  match xs:
+    case Nil{}:
+      h
+    case Con{b, t}:
+      fnv.go(t, U32.mul(U32.xor(h, b), 16777619))
+
+def fp(+o: B.Octets) -> String:
+  Nat.show(B.Octets.len(o)) ++ " " ++ U32.show(fnv.go(B.Octets.to_list(o), 2166136261))
+
+# a parsed blob, written again with the deduplicated strings block
+def big.parsed(r: Result<&2, &2, E.FdtError, F.FdtBlob>) -> String:
+  match r:
+    case Done{b}:
+      match b:
+        case F.FdtBlob{v, boot, rs, root}:
+          fp(F.Fdt.build_with(T.FdtStringsDedup{}, root, rs, boot))
     case Fail{e}:
       "error " ++ err(e)
 

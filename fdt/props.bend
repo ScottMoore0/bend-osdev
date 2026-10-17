@@ -99,7 +99,7 @@ def FdtProp.of_text(s: String) -> B.Octets:
 
 # a string without NULs, which of_string and string carry unchanged
 def FdtProp.string_ok(s: B.Octets) -> Bool:
-  L.fdt.nonul(B.Octets.to_list(s))
+  L.fdt.nonul.fast(B.Octets.to_list(s))
 
 # <stringlist>: strings one after another, each NUL-terminated
 
@@ -140,6 +140,8 @@ def pr.sl.fin(st: FdtStrList) -> Result<&2, &2, E.FdtError, List<&2, B.Octets>>:
 def FdtProp.strings(o: B.Octets) -> Result<&2, &2, E.FdtError, List<&2, B.Octets>>:
   pr.sl.fin(pr.sl.fold(B.Octets.to_list(o), FdtStrList{Nil{}, Nil{}}))
 
+# the bytes of a <stringlist> (the reference form the proofs compute
+# through; it recurses once per string)
 def pr.sl.list(ss: List<&2, B.Octets>) -> List<&2, U32>:
   match ss:
     case Nil{}:
@@ -147,17 +149,41 @@ def pr.sl.list(ss: List<&2, B.Octets>) -> List<&2, U32>:
     case Con{s, t}:
       B.append(B.Octets.to_list(s), Con{0, pr.sl.list(t)})
 
+# The same, tail-recursive, for lists of any size (PROOF.bend: sl_fast):
+# each string's bytes and its NUL pushed, reversed, onto acc
+def pr.sl.out(ss: List<&2, B.Octets>, acc: List<&2, U32>) -> List<&2, U32>:
+  match ss:
+    case Nil{}:
+      acc
+    case Con{s, t}:
+      pr.sl.out(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(s), acc)})
+
+def pr.sl.fast(ss: List<&2, B.Octets>) -> List<&2, U32>:
+  List.reverse(&2, U32, pr.sl.out(ss, Nil{}))
+
 # each string, then a NUL
 def FdtProp.of_strings(ss: List<&2, B.Octets>) -> B.Octets:
-  B.Octets.of_list(pr.sl.list(ss))
+  B.Octets.of_list(pr.sl.fast(ss))
 
-# strings without NULs, which of_strings and strings carry unchanged
-def FdtProp.strings_ok(ss: List<&2, B.Octets>) -> Bool:
+# strings_ok as the proofs state it (the reference form)
+def pr.strings_ok.ref(ss: List<&2, B.Octets>) -> Bool:
   match ss:
     case Nil{}:
       True{}
     case Con{s, t}:
-      Bool.and(L.fdt.nonul(B.Octets.to_list(s)), FdtProp.strings_ok(t))
+      Bool.and(L.fdt.nonul(B.Octets.to_list(s)), pr.strings_ok.ref(t))
+
+def pr.sl.ok(ss: List<&2, B.Octets>, ok: Bool) -> Bool:
+  match ss:
+    case Nil{}:
+      ok
+    case Con{s, t}:
+      pr.sl.ok(t, Bool.and(ok, L.fdt.nonul.fast(B.Octets.to_list(s))))
+
+# strings without NULs, which of_strings and strings carry unchanged
+# (PROOF.bend: strings_ok_fast)
+def FdtProp.strings_ok(ss: List<&2, B.Octets>) -> Bool:
+  pr.sl.ok(ss, True{})
 
 # <prop-encoded-array>: 32-bit cells
 
@@ -181,6 +207,7 @@ def pr.cells.go(xs: List<&2, U32>, acc: List<&2, U32>) -> Result<&2, &2, E.FdtEr
 def FdtProp.cells(o: B.Octets) -> Result<&2, &2, E.FdtError, List<&2, U32>>:
   pr.cells.go(B.Octets.to_list(o), Nil{})
 
+# the bytes of the cells (the reference form; it recurses once per cell)
 def pr.cells.list(cs: List<&2, U32>) -> List<&2, U32>:
   match cs:
     case Nil{}:
@@ -188,8 +215,19 @@ def pr.cells.list(cs: List<&2, U32>) -> List<&2, U32>:
     case Con{c, t}:
       B.append(B.be32(c), pr.cells.list(t))
 
+# the same, tail-recursive (PROOF.bend: cells_fast)
+def pr.cells.out(cs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match cs:
+    case Nil{}:
+      acc
+    case Con{c, t}:
+      pr.cells.out(t, List.reverse.go(&2, U32, B.be32(c), acc))
+
+def pr.cells.fast(cs: List<&2, U32>) -> List<&2, U32>:
+  List.reverse(&2, U32, pr.cells.out(cs, Nil{}))
+
 def FdtProp.of_cells(cs: List<&2, U32>) -> B.Octets:
-  B.Octets.of_list(pr.cells.list(cs))
+  B.Octets.of_list(pr.cells.fast(cs))
 
 # reg: (address, size) pairs, each of #address-cells and #size-cells cells
 # (taken from the parent node); 0, 1 or 2 cells each, so that a W64 holds it
@@ -267,14 +305,15 @@ def pr.cells_of(n: Nat, +v: W.W64) -> List<&2, U32>:
         case 1n+q:
           List.append(&2, U32, B.zeros(q), [W.W64.hi(v), W.W64.lo(v)])
 
-def pr.reg.list(+ac: Nat, +sc: Nat, rs: List<&2, FdtReg>) -> List<&2, U32>:
+# each pair's cells, reversed, in front of acc
+def pr.reg.out(+ac: Nat, +sc: Nat, rs: List<&2, FdtReg>, acc: List<&2, U32>) -> List<&2, U32>:
   match rs:
     case Nil{}:
-      Nil{}
+      acc
     case Con{r, t}:
       match r:
         case FdtReg{a, s}:
-          List.append(&2, U32, pr.cells_of(ac, a), List.append(&2, U32, pr.cells_of(sc, s), pr.reg.list(ac, sc, t)))
+          pr.reg.out(ac, sc, t, List.reverse.go(&2, U32, pr.cells_of(sc, s), List.reverse.go(&2, U32, pr.cells_of(ac, a), acc)))
 
 def FdtProp.of_reg(ac: Nat, sc: Nat, rs: List<&2, FdtReg>) -> B.Octets:
-  FdtProp.of_cells(pr.reg.list(ac, sc, rs))
+  FdtProp.of_cells(List.reverse(&2, U32, pr.reg.out(ac, sc, rs, Nil{})))

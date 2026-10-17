@@ -191,6 +191,413 @@ def rev_app(-A: Data, +xs: List<&2, A>, +a: List<&2, A>, +b: List<&2, A>) -> {Li
 def revrev(-A: Data, +xs: List<&2, A>) -> {xs == List.reverse(&2, A, List.reverse.go(&2, A, xs, Nil{})) : List<&2, A>}:
   Equal.trans(List<&2, A>, xs, List.append(&2, A, xs, Nil{}), List.reverse(&2, A, List.reverse.go(&2, A, xs, Nil{})), gapp_nil(A, xs), rev_app(A, xs, Nil{}, Nil{}))
 
+# The fast forms: the code runs tail-recursive forms (layout.bend,
+# structure.bend, tree.bend, fdt.bend: the .fast and .go defs), and each is
+# equal, for every input, to the reference form the proofs below compute
+# through. Stated {reference == fast}, the direction a rewrite needs to turn
+# a fast form back into its reference. Each accumulator lemma has the shape
+# go(xs, acc) == reverse.go(ref(xs), acc), and then reversing twice gives the
+# reference back (revrev), as in bytes' own proofs.
+
+def add_succ_r(+x: Nat, +a: Nat) -> {1n+Nat.add(x, a) == Nat.add(x, 1n+a) : Nat}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      %add_succ_r(p, a) : {1n+1n+Nat.add(p, a) == 1n+_ : Nat}
+      {==}
+
+def add_zero_r(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      %add_zero_r(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
+      {==}
+
+def and_true(+b: Bool) -> {Bool.and(b, True{}) == b : Bool}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def and_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.and(Bool.and(a, b), c) == Bool.and(a, Bool.and(b, c)) : Bool}:
+  match a:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+# reversing a joined list onto acc reverses its parts in turn
+def grev_app(-A: Data, +xs: List<&2, A>, +b: List<&2, A>, +acc: List<&2, A>) -> {List.reverse.go(&2, A, b, List.reverse.go(&2, A, xs, acc)) == List.reverse.go(&2, A, List.append(&2, A, xs, b), acc) : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      grev_app(A, t, b, Con{h, acc})
+
+# Numbers: halving with an accumulator
+
+def hgo(+n: Nat, +a: Nat) -> {Nat.add(L.fdt.half(n), a) == L.fdt.half.go(n, a) : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match p:
+        case 0n:
+          {==}
+        case 1n+q:
+          %hgo(q, 1n+a) : {1n+Nat.add(L.fdt.half(q), a) == _ : Nat}
+          add_succ_r(L.fdt.half(q), a)
+
+def half_fast(+n: Nat) -> {L.fdt.half(n) == L.fdt.half.fast(n) : Nat}:
+  %hgo(n, 0n) : {L.fdt.half(n) == _ : Nat}
+  Equal.sym(Nat, Nat.add(L.fdt.half(n), 0n), L.fdt.half(n), add_zero_r(L.fdt.half(n)))
+
+def nbits_fast(+k: Nat, +n: Nat) -> {L.fdt.nbits(k, n) == L.fdt.nbits.fast(k, n) : Word(k)}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+p:
+      %half_fast(n) : {WCon{L.fdt.odd(n), L.fdt.nbits(p, L.fdt.half(n))} == WCon{L.fdt.odd(n), L.fdt.nbits.fast(p, _)} : Word(1n+p)}
+      %nbits_fast(p, L.fdt.half(n)) : {WCon{L.fdt.odd(n), L.fdt.nbits(p, L.fdt.half(n))} == WCon{L.fdt.odd(n), _} : Word(1n+p)}
+      {==}
+
+def high_fast(+k: Nat, +n: Nat) -> {L.fdt.high(k, n) == L.fdt.high.fast(k, n) : Nat}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+p:
+      %half_fast(n) : {L.fdt.high(p, L.fdt.half(n)) == L.fdt.high.fast(p, _) : Nat}
+      high_fast(p, L.fdt.half(n))
+
+def u32n_fast(+n: Nat) -> {L.fdt.u32n(n) == L.fdt.u32n.fast(n) : U32}:
+  %nbits_fast(32n, n) : {L.fdt.u32n(n) == U32{_} : U32}
+  {==}
+
+def fits_fast(+n: Nat) -> {L.fdt.fits(n) == L.fdt.fits.fast(n) : Bool}:
+  %high_fast(32n, n) : {L.fdt.fits(n) == L.fdt.is_zero(_) : Bool}
+  {==}
+
+# Tokens: the structure block's bytes, and the token checks
+
+def tprop_fast(+off: U32, +vb: List<&2, U32>) -> {S.tok.prop(off, vb) == S.tok.prop.fast(off, vb) : List<&2, U32>}:
+  %BL.len_fast(vb) : {S.tok.prop(off, vb) == B.append(B.be32(3), B.append(B.be32(L.fdt.u32n.fast(_)), B.append(B.be32(off), B.append.fast(vb, B.zeros(L.fdt.pad4(_)))))) : List<&2, U32>}
+  %u32n_fast(B.len(vb)) : {S.tok.prop(off, vb) == B.append(B.be32(3), B.append(B.be32(_), B.append(B.be32(off), B.append.fast(vb, B.zeros(L.fdt.pad4(B.len(vb))))))) : List<&2, U32>}
+  %BL.append_fast(vb, B.zeros(L.fdt.pad4(B.len(vb)))) : {S.tok.prop(off, vb) == B.append(B.be32(3), B.append(B.be32(L.fdt.u32n(B.len(vb))), B.append(B.be32(off), _))) : List<&2, U32>}
+  {==}
+
+def tok_fast(+t: S.FdtToken) -> {S.tok.list(t) == S.tok.list.fast(t) : List<&2, U32>}:
+  match t:
+    case S.FdtTokBegin{name}:
+      {==}
+    case S.FdtTokEnd{}:
+      {==}
+    case S.FdtTokProp{off, v}:
+      tprop_fast(off, B.Octets.to_list(v))
+    case S.FdtTokNop{}:
+      {==}
+
+def toks_go(+ts: List<&2, S.FdtToken>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, S.toks.list(ts), acc) == S.toks.go(ts, acc) : List<&2, U32>}:
+  match ts:
+    case Nil{}:
+      {==}
+    case Con{t, r}:
+      %grev_app(U32, S.tok.list(t), S.toks.list(r), acc) : {_ == S.toks.go(r, List.reverse.go(&2, U32, S.tok.list.fast(t), acc)) : List<&2, U32>}
+      %tok_fast(t) : {List.reverse.go(&2, U32, S.toks.list(r), List.reverse.go(&2, U32, S.tok.list(t), acc)) == S.toks.go(r, List.reverse.go(&2, U32, _, acc)) : List<&2, U32>}
+      toks_go(r, List.reverse.go(&2, U32, S.tok.list(t), acc))
+
+def toks_fast(+ts: List<&2, S.FdtToken>) -> {S.toks.list(ts) == S.toks.fast(ts) : List<&2, U32>}:
+  %toks_go(ts, Nil{}) : {S.toks.list(ts) == List.reverse(&2, U32, _) : List<&2, U32>}
+  revrev(U32, S.toks.list(ts))
+
+def valid_fast(+t: S.FdtToken) -> {S.tok.valid.ref(t) == S.FdtToken.valid(t) : Bool}:
+  match t:
+    case S.FdtTokBegin{name}:
+      {==}
+    case S.FdtTokEnd{}:
+      {==}
+    case S.FdtTokProp{off, v}:
+      %Equal.sym(Nat, B.Octets.len(v), B.len(B.Octets.to_list(v)), BL.octets_len_list(v)) : {L.fdt.fits(B.len(B.Octets.to_list(v))) == L.fdt.fits.fast(_) : Bool}
+      fits_fast(B.len(B.Octets.to_list(v)))
+    case S.FdtTokNop{}:
+      {==}
+
+def vgo(+ts: List<&2, S.FdtToken>, +b: Bool) -> {Bool.and(b, S.tok.valid_all.ref(ts)) == S.tok.valid.go(ts, b) : Bool}:
+  match ts:
+    case Nil{}:
+      and_true(b)
+    case Con{t, r}:
+      %vgo(r, Bool.and(b, S.FdtToken.valid(t))) : {Bool.and(b, Bool.and(S.tok.valid.ref(t), S.tok.valid_all.ref(r))) == _ : Bool}
+      %valid_fast(t) : {Bool.and(b, Bool.and(S.tok.valid.ref(t), S.tok.valid_all.ref(r))) == Bool.and(Bool.and(b, _), S.tok.valid_all.ref(r)) : Bool}
+      Equal.sym(Bool, Bool.and(Bool.and(b, S.tok.valid.ref(t)), S.tok.valid_all.ref(r)), Bool.and(b, Bool.and(S.tok.valid.ref(t), S.tok.valid_all.ref(r))), and_assoc(b, S.tok.valid.ref(t), S.tok.valid_all.ref(r)))
+
+def valid_all_fast(+ts: List<&2, S.FdtToken>) -> {S.tok.valid_all.ref(ts) == S.FdtToken.valid_all(ts) : Bool}:
+  vgo(ts, True{})
+
+# The tree: the strings block, the tokens, and the checks
+
+def pstrs_go(+ps: List<&2, T.FdtProp>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, T.prop.strs(ps), acc) == T.pstrs.go(ps, acc) : List<&2, U32>}:
+  match ps:
+    case Nil{}:
+      {==}
+    case Con{p, t}:
+      match p:
+        case T.FdtProp{k, v}:
+          %grev_app(U32, B.Octets.to_list(k), Con{0, T.prop.strs(t)}, acc) : {_ == T.pstrs.go(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(k), acc)}) : List<&2, U32>}
+          pstrs_go(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(k), acc)})
+
+def pstrs_fast(+ps: List<&2, T.FdtProp>) -> {T.prop.strs(ps) == T.pstrs.fast(ps) : List<&2, U32>}:
+  %pstrs_go(ps, Nil{}) : {T.prop.strs(ps) == List.reverse(&2, U32, _) : List<&2, U32>}
+  revrev(U32, T.prop.strs(ps))
+
+def strs_go(+ns: List<&2, T.FdtNode>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, T.flat.strs(ns), acc) == T.strs.go(ns, acc) : List<&2, U32>}:
+  match ns:
+    case Nil{}:
+      {==}
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          %strs_go(t, T.strs.go(cs, T.pstrs.go(ps, acc))) : {List.reverse.go(&2, U32, T.flat.strs(Con{T.FdtNode{nm, ps, cs}, t}), acc) == _ : List<&2, U32>}
+          %strs_go(cs, T.pstrs.go(ps, acc)) : {List.reverse.go(&2, U32, T.flat.strs(Con{T.FdtNode{nm, ps, cs}, t}), acc) == List.reverse.go(&2, U32, T.flat.strs(t), _) : List<&2, U32>}
+          %pstrs_go(ps, acc) : {List.reverse.go(&2, U32, T.flat.strs(Con{T.FdtNode{nm, ps, cs}, t}), acc) == List.reverse.go(&2, U32, T.flat.strs(t), List.reverse.go(&2, U32, T.flat.strs(cs), _)) : List<&2, U32>}
+          %grev_app(U32, T.prop.strs(ps), List.append(&2, U32, T.flat.strs(cs), T.flat.strs(t)), acc) : {_ == List.reverse.go(&2, U32, T.flat.strs(t), List.reverse.go(&2, U32, T.flat.strs(cs), List.reverse.go(&2, U32, T.prop.strs(ps), acc))) : List<&2, U32>}
+          %grev_app(U32, T.flat.strs(cs), T.flat.strs(t), List.reverse.go(&2, U32, T.prop.strs(ps), acc)) : {_ == List.reverse.go(&2, U32, T.flat.strs(t), List.reverse.go(&2, U32, T.flat.strs(cs), List.reverse.go(&2, U32, T.prop.strs(ps), acc))) : List<&2, U32>}
+          {==}
+
+def strs_fast(+ns: List<&2, T.FdtNode>) -> {T.flat.strs(ns) == T.flat.strs.fast(ns) : List<&2, U32>}:
+  %strs_go(ns, Nil{}) : {T.flat.strs(ns) == List.reverse(&2, U32, _) : List<&2, U32>}
+  revrev(U32, T.flat.strs(ns))
+
+def ptoks_go(+ps: List<&2, T.FdtProp>, +off: Nat, +acc: List<&2, S.FdtToken>) -> {List.reverse.go(&2, S.FdtToken, T.prop.toks(ps, off), acc) == T.ptoks.go(ps, off, acc) : List<&2, S.FdtToken>}:
+  match ps:
+    case Nil{}:
+      {==}
+    case Con{p, t}:
+      match p:
+        case T.FdtProp{k, v}:
+          %u32n_fast(off) : {List.reverse.go(&2, S.FdtToken, T.prop.toks(Con{T.FdtProp{k, v}, t}, off), acc) == T.ptoks.go(t, Nat.add(off, B.len(B.append(B.Octets.to_list(k), [0]))), Con{S.FdtTokProp{_, v}, acc}) : List<&2, S.FdtToken>}
+          ptoks_go(t, Nat.add(off, B.len(B.append(B.Octets.to_list(k), [0]))), Con{S.FdtTokProp{L.fdt.u32n(off), v}, acc})
+
+def ftoks_go(+ns: List<&2, T.FdtNode>, +off: Nat, +acc: List<&2, S.FdtToken>) -> {List.reverse.go(&2, S.FdtToken, T.flat.toks(ns, off), acc) == T.ftoks.go(ns, off, acc) : List<&2, S.FdtToken>}:
+  match ns:
+    case Nil{}:
+      {==}
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          %pstrs_fast(ps) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == T.ftoks.go(t, Nat.add(Nat.add(off, B.len.fast(_)), B.len.fast(T.flat.strs.fast(cs))), Con{S.FdtTokEnd{}, T.ftoks.go(cs, Nat.add(off, B.len.fast(_)), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          %BL.len_fast(T.prop.strs(ps)) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == T.ftoks.go(t, Nat.add(Nat.add(off, _), B.len.fast(T.flat.strs.fast(cs))), Con{S.FdtTokEnd{}, T.ftoks.go(cs, Nat.add(off, _), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          %strs_fast(cs) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == T.ftoks.go(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len.fast(_)), Con{S.FdtTokEnd{}, T.ftoks.go(cs, Nat.add(off, B.len(T.prop.strs(ps))), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          %BL.len_fast(T.flat.strs(cs)) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == T.ftoks.go(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), _), Con{S.FdtTokEnd{}, T.ftoks.go(cs, Nat.add(off, B.len(T.prop.strs(ps))), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          %ftoks_go(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))), Con{S.FdtTokEnd{}, T.ftoks.go(cs, Nat.add(off, B.len(T.prop.strs(ps))), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc}))}) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == _ : List<&2, S.FdtToken>}
+          %ftoks_go(cs, Nat.add(off, B.len(T.prop.strs(ps))), T.ptoks.go(ps, off, Con{S.FdtTokBegin{nm}, acc})) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == List.reverse.go(&2, S.FdtToken, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs)))), Con{S.FdtTokEnd{}, _}) : List<&2, S.FdtToken>}
+          %ptoks_go(ps, off, Con{S.FdtTokBegin{nm}, acc}) : {List.reverse.go(&2, S.FdtToken, T.flat.toks(Con{T.FdtNode{nm, ps, cs}, t}, off), acc) == List.reverse.go(&2, S.FdtToken, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs)))), Con{S.FdtTokEnd{}, List.reverse.go(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), _)}) : List<&2, S.FdtToken>}
+          %grev_app(S.FdtToken, T.prop.toks(ps, off), List.append(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))}), Con{S.FdtTokBegin{nm}, acc}) : {_ == List.reverse.go(&2, S.FdtToken, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs)))), Con{S.FdtTokEnd{}, List.reverse.go(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), List.reverse.go(&2, S.FdtToken, T.prop.toks(ps, off), Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          %grev_app(S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))}, List.reverse.go(&2, S.FdtToken, T.prop.toks(ps, off), Con{S.FdtTokBegin{nm}, acc})) : {_ == List.reverse.go(&2, S.FdtToken, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs)))), Con{S.FdtTokEnd{}, List.reverse.go(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), List.reverse.go(&2, S.FdtToken, T.prop.toks(ps, off), Con{S.FdtTokBegin{nm}, acc}))}) : List<&2, S.FdtToken>}
+          {==}
+
+def ftoks_fast(+ns: List<&2, T.FdtNode>, +off: Nat) -> {T.flat.toks(ns, off) == T.flat.toks.fast(ns, off) : List<&2, S.FdtToken>}:
+  %ftoks_go(ns, off, Nil{}) : {T.flat.toks(ns, off) == List.reverse(&2, S.FdtToken, _) : List<&2, S.FdtToken>}
+  revrev(S.FdtToken, T.flat.toks(ns, off))
+
+def pnames_go(+ps: List<&2, T.FdtProp>, +b: Bool) -> {Bool.and(b, T.prop.names_ok(ps)) == T.pnames.go(ps, b) : Bool}:
+  match ps:
+    case Nil{}:
+      and_true(b)
+    case Con{p, t}:
+      match p:
+        case T.FdtProp{k, v}:
+          %pnames_go(t, Bool.and(b, L.fdt.nonul(B.Octets.to_list(k)))) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(k)), T.prop.names_ok(t))) == _ : Bool}
+          Equal.sym(Bool, Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(k))), T.prop.names_ok(t)), Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(k)), T.prop.names_ok(t))), and_assoc(b, L.fdt.nonul(B.Octets.to_list(k)), T.prop.names_ok(t)))
+
+def names_go(+ns: List<&2, T.FdtNode>, +b: Bool) -> {Bool.and(b, T.flat.names_ok(ns)) == T.names.go(ns, b) : Bool}:
+  match ns:
+    case Nil{}:
+      and_true(b)
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          %names_go(t, T.names.go(cs, T.pnames.go(ps, Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm)))))) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))))) == _ : Bool}
+          %names_go(cs, T.pnames.go(ps, Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))))) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))))) == Bool.and(_, T.flat.names_ok(t)) : Bool}
+          %pnames_go(ps, Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm)))) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))))) == Bool.and(Bool.and(_, T.flat.names_ok(cs)), T.flat.names_ok(t)) : Bool}
+          %and_assoc(b, L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t)))) : {_ == Bool.and(Bool.and(Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))), T.prop.names_ok(ps)), T.flat.names_ok(cs)), T.flat.names_ok(t)) : Bool}
+          %and_assoc(Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))), T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))) : {_ == Bool.and(Bool.and(Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))), T.prop.names_ok(ps)), T.flat.names_ok(cs)), T.flat.names_ok(t)) : Bool}
+          %and_assoc(Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))), T.prop.names_ok(ps)), T.flat.names_ok(cs), T.flat.names_ok(t)) : {_ == Bool.and(Bool.and(Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(nm))), T.prop.names_ok(ps)), T.flat.names_ok(cs)), T.flat.names_ok(t)) : Bool}
+          {==}
+
+def names_fast(+root: T.FdtNode) -> {T.names_ok.ref(root) == T.FdtNode.names_ok(root) : Bool}:
+  names_go([root], True{})
+
+def pvalues_go(+ps: List<&2, T.FdtProp>, +b: Bool) -> {Bool.and(b, T.prop.values_ok(ps)) == T.pvalues.go(ps, b) : Bool}:
+  match ps:
+    case Nil{}:
+      and_true(b)
+    case Con{p, t}:
+      match p:
+        case T.FdtProp{k, v}:
+          %Equal.sym(Nat, B.Octets.len(v), B.len(B.Octets.to_list(v)), BL.octets_len_list(v)) : {Bool.and(b, Bool.and(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t))) == T.pvalues.go(t, Bool.and(b, L.fdt.fits.fast(_))) : Bool}
+          %fits_fast(B.len(B.Octets.to_list(v))) : {Bool.and(b, Bool.and(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t))) == T.pvalues.go(t, Bool.and(b, _)) : Bool}
+          %pvalues_go(t, Bool.and(b, L.fdt.fits(B.len(B.Octets.to_list(v))))) : {Bool.and(b, Bool.and(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t))) == _ : Bool}
+          Equal.sym(Bool, Bool.and(Bool.and(b, L.fdt.fits(B.len(B.Octets.to_list(v)))), T.prop.values_ok(t)), Bool.and(b, Bool.and(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t))), and_assoc(b, L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t)))
+
+def values_go(+ns: List<&2, T.FdtNode>, +b: Bool) -> {Bool.and(b, T.flat.values_ok(ns)) == T.values.go(ns, b) : Bool}:
+  match ns:
+    case Nil{}:
+      and_true(b)
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          %values_go(t, T.values.go(cs, T.pvalues.go(ps, b))) : {Bool.and(b, Bool.and(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)))) == _ : Bool}
+          %values_go(cs, T.pvalues.go(ps, b)) : {Bool.and(b, Bool.and(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)))) == Bool.and(_, T.flat.values_ok(t)) : Bool}
+          %pvalues_go(ps, b) : {Bool.and(b, Bool.and(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)))) == Bool.and(Bool.and(_, T.flat.values_ok(cs)), T.flat.values_ok(t)) : Bool}
+          %and_assoc(b, T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t))) : {_ == Bool.and(Bool.and(Bool.and(b, T.prop.values_ok(ps)), T.flat.values_ok(cs)), T.flat.values_ok(t)) : Bool}
+          %and_assoc(Bool.and(b, T.prop.values_ok(ps)), T.flat.values_ok(cs), T.flat.values_ok(t)) : {_ == Bool.and(Bool.and(Bool.and(b, T.prop.values_ok(ps)), T.flat.values_ok(cs)), T.flat.values_ok(t)) : Bool}
+          {==}
+
+def wf_fast(+root: T.FdtNode) -> {T.wf.ref(root) == T.FdtNode.wf(root) : Bool}:
+  %names_fast(root) : {T.wf.ref(root) == Bool.and(_, T.values.go([root], True{})) : Bool}
+  %values_go([root], True{}) : {T.wf.ref(root) == Bool.and(T.names_ok.ref(root), _) : Bool}
+  {==}
+
+def flat_ok_fast(+root: T.FdtNode) -> {T.flat_ok.ref(root) == T.FdtNode.flat_ok(root) : Bool}:
+  %names_fast(root) : {T.flat_ok.ref(root) == Bool.and(_, L.fdt.fits.fast(B.len.fast(T.flat.strs.fast([root])))) : Bool}
+  %strs_fast([root]) : {T.flat_ok.ref(root) == Bool.and(T.names_ok.ref(root), L.fdt.fits.fast(B.len.fast(_))) : Bool}
+  %BL.len_fast(T.flat.strs([root])) : {T.flat_ok.ref(root) == Bool.and(T.names_ok.ref(root), L.fdt.fits.fast(_)) : Bool}
+  %fits_fast(B.len(T.flat.strs([root]))) : {T.flat_ok.ref(root) == Bool.and(T.names_ok.ref(root), _) : Bool}
+  {==}
+
+# The blob: the writer and the reader
+
+def layout_fast(+r: List<&2, U32>, +s: List<&2, U32>, +t: List<&2, U32>, +boot: U32) -> {F.build.layout(r, s, t, boot) == F.build.layout.fast(r, s, t, boot) : List<&2, U32>}:
+  %BL.append_fast(s, t) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, B.len.fast(B.append(r, _)))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len.fast(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(B.len.fast(t)), L.fdt.u32n.fast(B.len.fast(s))}), B.append(r, _)) : List<&2, U32>}
+  %BL.len_fast(B.append(r, B.append(s, t))) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, _)), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len.fast(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(B.len.fast(t)), L.fdt.u32n.fast(B.len.fast(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %BL.len_fast(B.append(r, s)) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, _)), 40, 17, 16, boot, L.fdt.u32n.fast(B.len.fast(t)), L.fdt.u32n.fast(B.len.fast(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %BL.len_fast(t) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(_), L.fdt.u32n.fast(B.len.fast(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %BL.len_fast(s) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(B.len(t)), L.fdt.u32n.fast(_)}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %u32n_fast(Nat.add(40n, B.len(B.append(r, B.append(s, t))))) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), _, L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n.fast(Nat.add(40n, B.len(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n.fast(B.len(t)), L.fdt.u32n.fast(B.len(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %u32n_fast(Nat.add(40n, B.len(B.append(r, s)))) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), _, 40, 17, 16, boot, L.fdt.u32n.fast(B.len(t)), L.fdt.u32n.fast(B.len(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %u32n_fast(B.len(t)) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n(Nat.add(40n, B.len(B.append(r, s)))), 40, 17, 16, boot, _, L.fdt.u32n.fast(B.len(s))}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  %u32n_fast(B.len(s)) : {F.build.layout(r, s, t, boot) == B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(r, B.append(s, t))))), L.fdt.u32n(Nat.add(40n, B.len(r))), L.fdt.u32n(Nat.add(40n, B.len(B.append(r, s)))), 40, 17, 16, boot, L.fdt.u32n(B.len(t)), _}), B.append(r, B.append(s, t))) : List<&2, U32>}
+  {==}
+
+def build_fast(+root: T.FdtNode, +rsv: List<&2, R.FdtRsv>, +boot: U32) -> {F.build.simple(root, rsv, boot) == F.build.fast(root, rsv, boot) : List<&2, U32>}:
+  %ftoks_fast([root], 0n) : {F.build.simple(root, rsv, boot) == F.build.layout.fast(R.rsv.list(rsv), S.toks.fast(_), T.flat.strs.fast([root]), boot) : List<&2, U32>}
+  %toks_fast(T.flat.toks([root], 0n)) : {F.build.simple(root, rsv, boot) == F.build.layout.fast(R.rsv.list(rsv), _, T.flat.strs.fast([root]), boot) : List<&2, U32>}
+  %strs_fast([root]) : {F.build.simple(root, rsv, boot) == F.build.layout.fast(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), _, boot) : List<&2, U32>}
+  layout_fast(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), boot)
+
+def buildable_fast(+root: T.FdtNode, +rsv: List<&2, R.FdtRsv>) -> {F.buildable.ref(root, rsv) == F.Fdt.buildable(root, rsv) : Bool}:
+  %wf_fast(root) : {F.buildable.ref(root, rsv) == Bool.and(_, Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(F.build.rest.fast(root, rsv)))))) : Bool}
+  %ftoks_fast([root], 0n) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(B.append(R.rsv.list(rsv), B.append.fast(S.toks.fast(_), T.flat.strs.fast([root])))))))) : Bool}
+  %toks_fast(T.flat.toks([root], 0n)) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(B.append(R.rsv.list(rsv), B.append.fast(_, T.flat.strs.fast([root])))))))) : Bool}
+  %strs_fast([root]) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(B.append(R.rsv.list(rsv), B.append.fast(S.toks.list(T.flat.toks([root], 0n)), _))))))) : Bool}
+  %BL.append_fast(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, B.len.fast(B.append(R.rsv.list(rsv), _)))))) : Bool}
+  %BL.len_fast(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits.fast(Nat.add(40n, _)))) : Bool}
+  %fits_fast(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))) : {F.buildable.ref(root, rsv) == Bool.and(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), _)) : Bool}
+  {==}
+
+def fstruct_eq(+is17: Bool, +os: Nat, +sst: Nat, +region: List<&2, U32>) -> {F.parse.struct(is17, os, sst, region) == F.parse.fstruct(is17, os, sst, region) : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}:
+  match is17:
+    case True{}:
+      %BL.take_fast(sst, B.drop(os, region)) : {F.parse.struct(True{}, os, sst, region) == S.FdtLexer.finish(True{}, S.lx.go(_, S.FdtLexer.start())) : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
+      {==}
+    case False{}:
+      {==}
+
+def f6_eq(+rules: T.FdtTreeRules, +v: U32, +boot: U32, +region: List<&2, U32>, +orsv: Nat, +os: Nat, +sst: Nat, +ostr: Nat, +sstr: Nat) -> {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.f6(rules, v, boot, region, orsv, os, sst, ostr, sstr) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  %fstruct_eq(U32.is_lt(16, v), os, sst, region) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.p7(R.rsv.read(B.drop(orsv, region)), _, rules, v, boot, B.take.fast(sstr, B.drop(ostr, region))) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  %BL.take_fast(sstr, B.drop(ostr, region)) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.p7(R.rsv.read(B.drop(orsv, region)), F.parse.struct(U32.is_lt(16, v), os, sst, region), rules, v, boot, _) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  {==}
+
+def f5_eq(+r: Result<&2, &2, E.FdtError, Unit>, +rules: T.FdtTreeRules, +h: H.FdtHeader, +xs: List<&2, U32>) -> {F.parse.p5(r, rules, h, xs) == F.parse.f5(r, rules, h, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  match r:
+    case Done{u}:
+      match h:
+        case H.FdtHeader{magic, totalsize, off_dt_struct, off_dt_strings, off_mem_rsvmap, version, last_comp_version, boot_cpuid_phys, size_dt_strings, size_dt_struct}:
+          %BL.take_fast(U32.to_nat(totalsize), xs) : {F.parse.p5(Done{u}, rules, H.FdtHeader{magic, totalsize, off_dt_struct, off_dt_strings, off_mem_rsvmap, version, last_comp_version, boot_cpuid_phys, size_dt_strings, size_dt_struct}, xs) == F.parse.f6(rules, version, boot_cpuid_phys, _, U32.to_nat(off_mem_rsvmap), U32.to_nat(off_dt_struct), U32.to_nat(size_dt_struct), U32.to_nat(off_dt_strings), U32.to_nat(size_dt_strings)) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          f6_eq(rules, version, boot_cpuid_phys, B.take(U32.to_nat(totalsize), xs), U32.to_nat(off_mem_rsvmap), U32.to_nat(off_dt_struct), U32.to_nat(size_dt_struct), U32.to_nat(off_dt_strings), U32.to_nat(size_dt_strings))
+    case Fail{e}:
+      {==}
+
+def f4_eq(+m: Maybe<&2, H.FdtHeader>, +opts: F.FdtOptions, +xs: List<&2, U32>) -> {F.parse.p4(m, opts, xs) == F.parse.f4(m, opts, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  match m:
+    case Some{h}:
+      match opts:
+        case F.FdtOptions{vs, rules}:
+          %BL.len_fast(xs) : {F.parse.p4(Some{h}, F.FdtOptions{vs, rules}, xs) == F.parse.f5(H.FdtHeader.check(vs, h, _), rules, h, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          f5_eq(H.FdtHeader.check(vs, h, B.len(xs)), rules, h, xs)
+    case None{}:
+      {==}
+
+def f3_eq(+ok: Bool, +opts: F.FdtOptions, +xs: List<&2, U32>) -> {F.parse.p3(ok, opts, xs) == F.parse.f3(ok, opts, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  match ok:
+    case True{}:
+      f4_eq(H.hdr.decode(xs), opts, xs)
+    case False{}:
+      {==}
+
+def f2_eq(+m: Maybe<&2, U32>, +opts: F.FdtOptions, +xs: List<&2, U32>) -> {F.parse.p2(m, opts, xs) == F.parse.f2(m, opts, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  match m:
+    case Some{v}:
+      f3_eq(U32.is_eq(v, H.FdtHeader.magic_value()), opts, xs)
+    case None{}:
+      {==}
+
+# the reader the package runs is the reference reader, on every list
+def parse_fast(+opts: F.FdtOptions, +xs: List<&2, U32>) -> {F.parse.p1(opts, xs) == F.parse.f1(opts, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  f2_eq(B.be32_at(xs, 0n), opts, xs)
+
+# Property values: the encoders and the string checks
+
+def nngo(+xs: List<&2, U32>, +b: Bool) -> {Bool.and(b, L.fdt.nonul(xs)) == L.fdt.nonul.go(xs, b) : Bool}:
+  match xs:
+    case Nil{}:
+      and_true(b)
+    case Con{h, t}:
+      %nngo(t, Bool.and(b, Bool.not(U32.is_eq(h, 0)))) : {Bool.and(b, Bool.and(Bool.not(U32.is_eq(h, 0)), L.fdt.nonul(t))) == _ : Bool}
+      Equal.sym(Bool, Bool.and(Bool.and(b, Bool.not(U32.is_eq(h, 0))), L.fdt.nonul(t)), Bool.and(b, Bool.and(Bool.not(U32.is_eq(h, 0)), L.fdt.nonul(t))), and_assoc(b, Bool.not(U32.is_eq(h, 0)), L.fdt.nonul(t)))
+
+def nonul_fast(+xs: List<&2, U32>) -> {L.fdt.nonul(xs) == L.fdt.nonul.fast(xs) : Bool}:
+  nngo(xs, True{})
+
+def slok(+ss: List<&2, B.Octets>, +b: Bool) -> {Bool.and(b, P.pr.strings_ok.ref(ss)) == P.pr.sl.ok(ss, b) : Bool}:
+  match ss:
+    case Nil{}:
+      and_true(b)
+    case Con{s, t}:
+      %nonul_fast(B.Octets.to_list(s)) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t))) == P.pr.sl.ok(t, Bool.and(b, _)) : Bool}
+      %slok(t, Bool.and(b, L.fdt.nonul(B.Octets.to_list(s)))) : {Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t))) == _ : Bool}
+      Equal.sym(Bool, Bool.and(Bool.and(b, L.fdt.nonul(B.Octets.to_list(s))), P.pr.strings_ok.ref(t)), Bool.and(b, Bool.and(L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t))), and_assoc(b, L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t)))
+
+def strings_ok_fast(+ss: List<&2, B.Octets>) -> {P.pr.strings_ok.ref(ss) == P.FdtProp.strings_ok(ss) : Bool}:
+  slok(ss, True{})
+
+def slout(+ss: List<&2, B.Octets>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, P.pr.sl.list(ss), acc) == P.pr.sl.out(ss, acc) : List<&2, U32>}:
+  match ss:
+    case Nil{}:
+      {==}
+    case Con{s, t}:
+      %grev_app(U32, B.Octets.to_list(s), Con{0, P.pr.sl.list(t)}, acc) : {_ == P.pr.sl.out(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(s), acc)}) : List<&2, U32>}
+      slout(t, Con{0, List.reverse.go(&2, U32, B.Octets.to_list(s), acc)})
+
+def sl_fast(+ss: List<&2, B.Octets>) -> {P.pr.sl.list(ss) == P.pr.sl.fast(ss) : List<&2, U32>}:
+  %slout(ss, Nil{}) : {P.pr.sl.list(ss) == List.reverse(&2, U32, _) : List<&2, U32>}
+  revrev(U32, P.pr.sl.list(ss))
+
+def cout(+cs: List<&2, U32>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, P.pr.cells.list(cs), acc) == P.pr.cells.out(cs, acc) : List<&2, U32>}:
+  match cs:
+    case Nil{}:
+      {==}
+    case Con{c, t}:
+      %grev_app(U32, B.be32(c), P.pr.cells.list(t), acc) : {_ == P.pr.cells.out(t, List.reverse.go(&2, U32, B.be32(c), acc)) : List<&2, U32>}
+      cout(t, List.reverse.go(&2, U32, B.be32(c), acc))
+
+def cells_fast(+cs: List<&2, U32>) -> {P.pr.cells.list(cs) == P.pr.cells.fast(cs) : List<&2, U32>}:
+  %cout(cs, Nil{}) : {P.pr.cells.list(cs) == List.reverse(&2, U32, _) : List<&2, U32>}
+  revrev(U32, P.pr.cells.list(cs))
+
 # Sizes: a length below 2^32 survives its 32-bit field. fdt.nbits writes n's
 # bits from the bottom (its parity, then half of it); reading them back
 # rebuilds n once its high part is zero.
@@ -328,6 +735,7 @@ def rd_magic(+m: U32, +r: List<&2, U32>) -> {Some{m} == B.be32_at(B.append(B.mas
       {==}
 
 def Laws.bad_magic(opts, m, ne, rest):
+  %parse_fast(opts, B.Octets.to_list(B.Octets.append(B.Octets.be32(m), rest))) : {_ == Fail{E.FdtBadMagic{}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(B.Octets.be32(m), rest)), B.append(B.Octets.to_list(B.Octets.be32(m)), B.Octets.to_list(rest)), BL.octets_append_list(B.Octets.be32(m), rest)) : {F.parse.p1(opts, _) == Fail{E.FdtBadMagic{}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.be32(m))), B.mask(B.be32(m)), BL.octets_to_of(B.be32(m))) : {F.parse.p1(opts, B.append(_, B.Octets.to_list(rest))) == Fail{E.FdtBadMagic{}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
   %rd_magic(m, B.Octets.to_list(rest)) : {F.parse.p2(_, opts, B.append(B.mask(B.be32(m)), B.Octets.to_list(rest))) == Fail{E.FdtBadMagic{}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
@@ -376,7 +784,7 @@ def scan_rt(+xs: List<&2, U32>, +rest: List<&2, U32>, +acc: List<&2, U32>, +ok: 
 def Laws.string_round_trip(s, ok):
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(s, B.Octets.zeros(1n))), B.append(B.Octets.to_list(s), B.Octets.to_list(B.Octets.zeros(1n))), BL.octets_append_list(s, B.Octets.zeros(1n))) : {P.pr.str(L.fdt.cstr(_)) == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.zeros(1n)), B.zeros(1n), BL.octets_zeros_list(1n)) : {P.pr.str(L.fdt.cstr(B.append(B.Octets.to_list(s), _))) == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
-  %scan_rt(B.Octets.to_list(s), Nil{}, Nil{}, ok) : {P.pr.str(_) == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
+  %scan_rt(B.Octets.to_list(s), Nil{}, Nil{}, Equal.trans(Bool, L.fdt.nonul(B.Octets.to_list(s)), P.FdtProp.string_ok(s), True{}, nonul_fast(B.Octets.to_list(s)), ok)) : {P.pr.str(_) == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
   %revrev(U32, B.Octets.to_list(s)) : {Done{B.Octets.of_list(_)} == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
   %Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(s)), s, BL.octets_of_to(s)) : {Done{_} == Done{s} : Result<&2, &2, E.FdtError, B.Octets>}
   {==}
@@ -526,6 +934,7 @@ def lx_begin(+nb: List<&2, U32>, +acc: List<&2, S.FdtToken>, +ok: {L.fdt.nonul(n
   %go_app(B.be32(1), B.append(nb, Con{0, B.zeros(L.fdt.pad4(1n+B.len(nb)))}), S.FdtLexer{S.lx.tagword(), acc}) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc}} == _ : S.FdtLexer}
   %lx_name(nb, B.zeros(L.fdt.pad4(1n+B.len(nb))), Nil{}, acc, ok) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc}} == _ : S.FdtLexer}
   %revrev(U32, nb) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc}} == S.lx.go(B.zeros(L.fdt.pad4(1n+B.len(nb))), S.lx.name_end(_, acc)) : S.FdtLexer}
+  %BL.len_fast(nb) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc}} == S.lx.go(B.zeros(L.fdt.pad4(1n+B.len(nb))), S.FdtLexer{S.lx.padded(L.fdt.pad4(1n+_)), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc}}) : S.FdtLexer}
   lx_pad(L.fdt.pad4(1n+B.len(nb)), Con{S.FdtTokBegin{B.Octets.of_list(nb)}, acc})
 
 def lx_len(+n: Nat, +acc: List<&2, S.FdtToken>, +e: {L.fdt.over(n) == 0n : Nat}) -> {S.FdtLexer{S.LxWord{S.LxOff{n}, Nil{}}, acc} == S.lx.go(B.be32(L.fdt.u32n(n)), S.FdtLexer{S.LxWord{S.LxLen{}, Nil{}}, acc}) : S.FdtLexer}:
@@ -561,7 +970,7 @@ def lx_prop(+off: U32, +vb: List<&2, U32>, +acc: List<&2, S.FdtToken>, +e: {L.fd
   %lx_off(off, B.len(vb), acc) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokProp{off, B.Octets.of_list(vb)}, acc}} == S.lx.go(B.append(vb, B.zeros(L.fdt.pad4(B.len(vb)))), _) : S.FdtLexer}
   lx_prop_tail(vb, off, acc)
 
-def lx_tok(+t: S.FdtToken, +acc: List<&2, S.FdtToken>, +ok: {S.FdtToken.valid(t) == True{} : Bool}) -> {S.FdtLexer{S.lx.tagword(), Con{t, acc}} == S.lx.go(S.tok.list(t), S.FdtLexer{S.lx.tagword(), acc}) : S.FdtLexer}:
+def lx_tok(+t: S.FdtToken, +acc: List<&2, S.FdtToken>, +ok: {S.tok.valid.ref(t) == True{} : Bool}) -> {S.FdtLexer{S.lx.tagword(), Con{t, acc}} == S.lx.go(S.tok.list(t), S.FdtLexer{S.lx.tagword(), acc}) : S.FdtLexer}:
   match t:
     case S.FdtTokBegin{name}:
       %BL.octets_of_to(name) : {S.FdtLexer{S.lx.tagword(), Con{S.FdtTokBegin{_}, acc}} == S.lx.go(S.tok.list(S.FdtTokBegin{name}), S.FdtLexer{S.lx.tagword(), acc}) : S.FdtLexer}
@@ -574,14 +983,14 @@ def lx_tok(+t: S.FdtToken, +acc: List<&2, S.FdtToken>, +ok: {S.FdtToken.valid(t)
     case S.FdtTokNop{}:
       {==}
 
-def lx_toks(+ts: List<&2, S.FdtToken>, +acc: List<&2, S.FdtToken>, +ok: {S.FdtToken.valid_all(ts) == True{} : Bool}) -> {S.FdtLexer{S.LxEnd{False{}}, List.reverse.go(&2, S.FdtToken, ts, acc)} == S.lx.go(S.toks.list(ts), S.FdtLexer{S.lx.tagword(), acc}) : S.FdtLexer}:
+def lx_toks(+ts: List<&2, S.FdtToken>, +acc: List<&2, S.FdtToken>, +ok: {S.tok.valid_all.ref(ts) == True{} : Bool}) -> {S.FdtLexer{S.LxEnd{False{}}, List.reverse.go(&2, S.FdtToken, ts, acc)} == S.lx.go(S.toks.list(ts), S.FdtLexer{S.lx.tagword(), acc}) : S.FdtLexer}:
   match ts:
     case Nil{}:
       {==}
     case Con{t, r}:
       %go_app(S.tok.list(t), S.toks.list(r), S.FdtLexer{S.lx.tagword(), acc}) : {S.FdtLexer{S.LxEnd{False{}}, List.reverse.go(&2, S.FdtToken, Con{t, r}, acc)} == _ : S.FdtLexer}
-      %lx_tok(t, acc, and_l(S.FdtToken.valid(t), S.FdtToken.valid_all(r), ok)) : {S.FdtLexer{S.LxEnd{False{}}, List.reverse.go(&2, S.FdtToken, Con{t, r}, acc)} == S.lx.go(S.toks.list(r), _) : S.FdtLexer}
-      lx_toks(r, Con{t, acc}, and_r(S.FdtToken.valid(t), S.FdtToken.valid_all(r), ok))
+      %lx_tok(t, acc, and_l(S.tok.valid.ref(t), S.tok.valid_all.ref(r), ok)) : {S.FdtLexer{S.LxEnd{False{}}, List.reverse.go(&2, S.FdtToken, Con{t, r}, acc)} == S.lx.go(S.toks.list(r), _) : S.FdtLexer}
+      lx_toks(r, Con{t, acc}, and_r(S.tok.valid.ref(t), S.tok.valid_all.ref(r), ok))
 
 def mask_tok(+t: S.FdtToken) -> {S.tok.list(t) == B.mask(S.tok.list(t)) : List<&2, U32>}:
   match t:
@@ -601,12 +1010,17 @@ def mask_toks(+ts: List<&2, S.FdtToken>) -> {S.toks.list(ts) == B.mask(S.toks.li
     case Con{t, r}:
       mask_id_app(S.tok.list(t), S.toks.list(r), mask_tok(t), mask_toks(r))
 
-def Laws.tokens_round_trip(ts, ok):
+# the law for the reference encoder and check
+def tokens_rt(+ts: List<&2, S.FdtToken>, +ok: {S.tok.valid_all.ref(ts) == True{} : Bool}) -> {S.FdtLexer.finish(True{}, S.lx.go(B.Octets.to_list(B.Octets.of_list(S.toks.list(ts))), S.FdtLexer.start())) == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}:
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(S.toks.list(ts))), B.mask(S.toks.list(ts)), BL.octets_to_of(S.toks.list(ts))) : {S.FdtLexer.finish(True{}, S.lx.go(_, S.FdtLexer.start())) == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
   %mask_toks(ts) : {S.FdtLexer.finish(True{}, S.lx.go(_, S.FdtLexer.start())) == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
   %lx_toks(ts, Nil{}, ok) : {S.FdtLexer.finish(True{}, _) == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
   %revrev(S.FdtToken, ts) : {Done{_} == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
   {==}
+
+def Laws.tokens_round_trip(ts, ok):
+  %toks_fast(ts) : {S.FdtLexer.finish(True{}, S.lx.go(B.Octets.to_list(B.Octets.of_list(_)), S.FdtLexer.start())) == Done{ts} : Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>}
+  tokens_rt(ts, Equal.trans(Bool, S.tok.valid_all.ref(ts), S.FdtToken.valid_all(ts), True{}, valid_all_fast(ts), ok))
 
 # The tree builder: a fold over the tokens
 
@@ -713,13 +1127,19 @@ def mask_strs(+ns: List<&2, T.FdtNode>) -> {T.flat.strs(ns) == B.mask(T.flat.str
         case T.FdtNode{nm, ps, cs}:
           mask_id_app(T.prop.strs(ps), B.append(T.flat.strs(cs), T.flat.strs(t)), mask_pstrs(ps), mask_id_app(T.flat.strs(cs), T.flat.strs(t), mask_strs(cs), mask_strs(t)))
 
-def Laws.tree_round_trip(rules, root, ok):
+# the law for the reference writer and check
+def tree_rt(+rules: T.FdtTreeRules, +root: T.FdtNode, +ok: {T.flat_ok.ref(root) == True{} : Bool}) -> {T.tb.run(T.flat.toks([root], 0n), rules, B.Octets.to_list(B.Octets.of_list(T.flat.strs([root])))) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}:
   match rules:
     case T.FdtTreeRules{nop, pf}:
       %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(T.flat.strs([root]))), B.mask(T.flat.strs([root])), BL.octets_to_of(T.flat.strs([root]))) : {T.tb.run(T.flat.toks([root], 0n), T.FdtTreeRules{nop, pf}, _) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
       %mask_strs([root]) : {T.tb.run(T.flat.toks([root], 0n), T.FdtTreeRules{nop, pf}, _) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
-      %tb_root(root, nop, pf, T.flat.strs([root]), {==}, zero_t(L.fdt.over(B.len(T.flat.strs([root]))), and_r(T.FdtNode.names_ok(root), L.fdt.fits(B.len(T.flat.strs([root]))), ok)), and_l(T.FdtNode.names_ok(root), L.fdt.fits(B.len(T.flat.strs([root]))), ok)) : {_ == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
+      %tb_root(root, nop, pf, T.flat.strs([root]), {==}, zero_t(L.fdt.over(B.len(T.flat.strs([root]))), and_r(T.names_ok.ref(root), L.fdt.fits(B.len(T.flat.strs([root]))), ok)), and_l(T.names_ok.ref(root), L.fdt.fits(B.len(T.flat.strs([root]))), ok)) : {_ == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
       {==}
+
+def Laws.tree_round_trip(rules, root, ok):
+  %ftoks_fast([root], 0n) : {T.tb.run(_, rules, B.Octets.to_list(B.Octets.of_list(T.flat.strs.fast([root])))) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
+  %strs_fast([root]) : {T.tb.run(T.flat.toks([root], 0n), rules, B.Octets.to_list(B.Octets.of_list(_))) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
+  tree_rt(rules, root, Equal.trans(Bool, T.flat_ok.ref(root), T.FdtNode.flat_ok(root), True{}, flat_ok_fast(root), ok))
 
 # The whole blob
 
@@ -830,39 +1250,40 @@ def hdr_ok(+vs: H.FdtVersions, +rl: List<&2, U32>, +sl: List<&2, U32>, +tl: List
 
 # The tokens of a tree that wf admits are valid tokens
 
-def valid_app(+xs: List<&2, S.FdtToken>, +ys: List<&2, S.FdtToken>, +ex: {S.FdtToken.valid_all(xs) == True{} : Bool}, +ey: {S.FdtToken.valid_all(ys) == True{} : Bool}) -> {S.FdtToken.valid_all(List.append(&2, S.FdtToken, xs, ys)) == True{} : Bool}:
+def valid_app(+xs: List<&2, S.FdtToken>, +ys: List<&2, S.FdtToken>, +ex: {S.tok.valid_all.ref(xs) == True{} : Bool}, +ey: {S.tok.valid_all.ref(ys) == True{} : Bool}) -> {S.tok.valid_all.ref(List.append(&2, S.FdtToken, xs, ys)) == True{} : Bool}:
   match xs:
     case Nil{}:
       ey
     case Con{t, r}:
-      %Equal.sym(Bool, S.FdtToken.valid(t), True{}, and_l(S.FdtToken.valid(t), S.FdtToken.valid_all(r), ex)) : {Bool.and(_, S.FdtToken.valid_all(List.append(&2, S.FdtToken, r, ys))) == True{} : Bool}
-      valid_app(r, ys, and_r(S.FdtToken.valid(t), S.FdtToken.valid_all(r), ex), ey)
+      %Equal.sym(Bool, S.tok.valid.ref(t), True{}, and_l(S.tok.valid.ref(t), S.tok.valid_all.ref(r), ex)) : {Bool.and(_, S.tok.valid_all.ref(List.append(&2, S.FdtToken, r, ys))) == True{} : Bool}
+      valid_app(r, ys, and_r(S.tok.valid.ref(t), S.tok.valid_all.ref(r), ex), ey)
 
-def ptoks_valid(+ps: List<&2, T.FdtProp>, +off: Nat, +ok: {T.prop.values_ok(ps) == True{} : Bool}) -> {S.FdtToken.valid_all(T.prop.toks(ps, off)) == True{} : Bool}:
+def ptoks_valid(+ps: List<&2, T.FdtProp>, +off: Nat, +ok: {T.prop.values_ok(ps) == True{} : Bool}) -> {S.tok.valid_all.ref(T.prop.toks(ps, off)) == True{} : Bool}:
   match ps:
     case Nil{}:
       {==}
     case Con{pp, t}:
       match pp:
         case T.FdtProp{k, v}:
-          %Equal.sym(Bool, L.fdt.fits(B.len(B.Octets.to_list(v))), True{}, and_l(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t), ok)) : {Bool.and(_, S.FdtToken.valid_all(T.prop.toks(t, Nat.add(off, B.len(B.append(B.Octets.to_list(k), [0])))))) == True{} : Bool}
+          %Equal.sym(Bool, L.fdt.fits(B.len(B.Octets.to_list(v))), True{}, and_l(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t), ok)) : {Bool.and(_, S.tok.valid_all.ref(T.prop.toks(t, Nat.add(off, B.len(B.append(B.Octets.to_list(k), [0])))))) == True{} : Bool}
           ptoks_valid(t, Nat.add(off, B.len(B.append(B.Octets.to_list(k), [0]))), and_r(L.fdt.fits(B.len(B.Octets.to_list(v))), T.prop.values_ok(t), ok))
 
 
-def ftoks_valid(+ns: List<&2, T.FdtNode>, +off: Nat, +okn: {T.flat.names_ok(ns) == True{} : Bool}, +okv: {T.flat.values_ok(ns) == True{} : Bool}) -> {S.FdtToken.valid_all(T.flat.toks(ns, off)) == True{} : Bool}:
+def ftoks_valid(+ns: List<&2, T.FdtNode>, +off: Nat, +okn: {T.flat.names_ok(ns) == True{} : Bool}, +okv: {T.flat.values_ok(ns) == True{} : Bool}) -> {S.tok.valid_all.ref(T.flat.toks(ns, off)) == True{} : Bool}:
   match ns:
     case Nil{}:
       {==}
     case Con{n, t}:
       match n:
         case T.FdtNode{nm, ps, cs}:
-          %Equal.sym(Bool, L.fdt.nonul(B.Octets.to_list(nm)), True{}, and_l(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))), okn)) : {Bool.and(_, S.FdtToken.valid_all(List.append(&2, S.FdtToken, T.prop.toks(ps, off), List.append(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))})))) == True{} : Bool}
+          %Equal.sym(Bool, L.fdt.nonul(B.Octets.to_list(nm)), True{}, and_l(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))), okn)) : {Bool.and(_, S.tok.valid_all.ref(List.append(&2, S.FdtToken, T.prop.toks(ps, off), List.append(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))})))) == True{} : Bool}
           valid_app(T.prop.toks(ps, off), List.append(&2, S.FdtToken, T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))}), ptoks_valid(ps, off, and_l(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)), okv)), valid_app(T.flat.toks(cs, Nat.add(off, B.len(T.prop.strs(ps)))), Con{S.FdtTokEnd{}, T.flat.toks(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))))}, ftoks_valid(cs, Nat.add(off, B.len(T.prop.strs(ps))), and_l(T.flat.names_ok(cs), T.flat.names_ok(t), and_r(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t)), and_r(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))), okn))), and_l(T.flat.values_ok(cs), T.flat.values_ok(t), and_r(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)), okv))), ftoks_valid(t, Nat.add(Nat.add(off, B.len(T.prop.strs(ps))), B.len(T.flat.strs(cs))), and_r(T.flat.names_ok(cs), T.flat.names_ok(t), and_r(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t)), and_r(L.fdt.nonul(B.Octets.to_list(nm)), Bool.and(T.prop.names_ok(ps), Bool.and(T.flat.names_ok(cs), T.flat.names_ok(t))), okn))), and_r(T.flat.values_ok(cs), T.flat.values_ok(t), and_r(T.prop.values_ok(ps), Bool.and(T.flat.values_ok(cs), T.flat.values_ok(t)), okv)))))
 
 def mask_lb(+rsv: List<&2, R.FdtRsv>, +root: T.FdtNode, +boot: U32) -> {B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) == B.mask(B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))) : List<&2, U32>}:
   mask_id_app(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))), mask_hdr(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), mask_id_app(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])), mask_rsv(rsv), mask_id_app(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), mask_toks(T.flat.toks([root], 0n)), mask_strs([root]))))
 
-def Laws.parse_build(opts, root, rsv, boot, ok):
+# the law for the reference reader, writer and check
+def parse_build_rt(+opts: F.FdtOptions, +root: T.FdtNode, +rsv: List<&2, R.FdtRsv>, +boot: U32, +ok: {F.buildable.ref(root, rsv) == True{} : Bool}) -> {F.parse.p1(opts, B.Octets.to_list(B.Octets.of_list(F.build.simple(root, rsv, boot)))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}:
   match opts:
     case F.FdtOptions{vs, rules}:
       match rules:
@@ -870,28 +1291,33 @@ def Laws.parse_build(opts, root, rsv, boot, ok):
           %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), B.mask(B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), BL.octets_to_of(B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))) : {F.parse.p1(F.FdtOptions{vs, T.FdtTreeRules{nop, pf}}, _) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %mask_lb(rsv, root, boot) : {F.parse.p1(F.FdtOptions{vs, T.FdtTreeRules{nop, pf}}, _) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %hdr_dec(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p4(_, F.FdtOptions{vs, T.FdtTreeRules{nop, pf}}, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %hdr_ok(vs, R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), boot, zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))), pad_rsv(rsv)) : {F.parse.p5(_, T.FdtTreeRules{nop, pf}, H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %size_rt(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(_, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv))))), U32.to_nat(L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %size_rt(Nat.add(40n, B.len(R.rsv.list(rsv))), f_os(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), _, U32.to_nat(L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %size_rt(B.len(S.toks.list(T.flat.toks([root], 0n))), f_s(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), _, U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %size_rt(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), f_ostr(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), _, U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %size_rt(B.len(T.flat.strs([root])), f_t(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), _) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %hdr_ok(vs, R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), boot, zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))), pad_rsv(rsv)) : {F.parse.p5(_, T.FdtTreeRules{nop, pf}, H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %size_rt(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(_, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv))))), U32.to_nat(L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %size_rt(Nat.add(40n, B.len(R.rsv.list(rsv))), f_os(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), _, U32.to_nat(L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))), U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %size_rt(B.len(S.toks.list(T.flat.toks([root], 0n))), f_s(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), _, U32.to_nat(L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))))), U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %size_rt(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), f_ostr(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), _, U32.to_nat(L.fdt.u32n(B.len(T.flat.strs([root]))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %size_rt(B.len(T.flat.strs([root])), f_t(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.take(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), _) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %hs_take(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, _, U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.len(T.flat.strs([root]))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %take_all(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p6(T.FdtTreeRules{nop, pf}, 17, boot, B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), _), U32.to_nat(40), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.len(T.flat.strs([root]))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %hs_drop(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, 0n, B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p7(R.rsv.read(_), F.parse.struct(U32.is_lt(16, 17), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %rsv_rt(rsv, B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])), Nil{}, and_l(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))) : {F.parse.p7(_, F.parse.struct(U32.is_lt(16, 17), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %rsv_rt(rsv, B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])), Nil{}, and_l(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))) : {F.parse.p7(_, F.parse.struct(U32.is_lt(16, 17), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %revrev(R.FdtRsv, rsv) : {F.parse.p7(Done{_}, F.parse.struct(U32.is_lt(16, 17), Nat.add(40n, B.len(R.rsv.list(rsv))), B.len(S.toks.list(T.flat.toks([root], 0n))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %hs_drop(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.len(R.rsv.list(rsv)), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p7(Done{rsv}, S.FdtLexer.finish(True{}, S.lx.go(B.take(B.len(S.toks.list(T.flat.toks([root], 0n))), _), S.FdtLexer.start())), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %drop_app(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))) : {F.parse.p7(Done{rsv}, S.FdtLexer.finish(True{}, S.lx.go(B.take(B.len(S.toks.list(T.flat.toks([root], 0n))), _), S.FdtLexer.start())), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %take_app(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])) : {F.parse.p7(Done{rsv}, S.FdtLexer.finish(True{}, S.lx.go(_, S.FdtLexer.start())), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %lx_toks(T.flat.toks([root], 0n), Nil{}, ftoks_valid([root], 0n, and_l(T.FdtNode.names_ok(root), T.flat.values_ok([root]), and_l(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)), and_r(T.FdtNode.names_ok(root), T.flat.values_ok([root]), and_l(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))) : {F.parse.p7(Done{rsv}, S.FdtLexer.finish(True{}, _), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %lx_toks(T.flat.toks([root], 0n), Nil{}, ftoks_valid([root], 0n, and_l(T.names_ok.ref(root), T.flat.values_ok([root]), and_l(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)), and_r(T.names_ok.ref(root), T.flat.values_ok([root]), and_l(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))) : {F.parse.p7(Done{rsv}, S.FdtLexer.finish(True{}, _), T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %revrev(S.FdtToken, T.flat.toks([root], 0n)) : {F.parse.p7(Done{rsv}, Done{_}, T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))))), B.append(H.hdr.list(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %hs_drop(H.FdtHeader{H.FdtHeader.magic_value(), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), L.fdt.u32n(Nat.add(40n, B.len(R.rsv.list(rsv)))), L.fdt.u32n(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))))), 40, 17, 16, boot, L.fdt.u32n(B.len(T.flat.strs([root]))), L.fdt.u32n(B.len(S.toks.list(T.flat.toks([root], 0n))))}, B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))), B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))) : {F.parse.p7(Done{rsv}, Done{T.flat.toks([root], 0n)}, T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), _)) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %Equal.sym(List<&2, U32>, B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))), B.append(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))), T.flat.strs([root])), app_assoc(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))) : {F.parse.p7(Done{rsv}, Done{T.flat.toks([root], 0n)}, T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), B.drop(B.len(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)))), _))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %drop_app(B.append(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n))), T.flat.strs([root])) : {F.parse.p7(Done{rsv}, Done{T.flat.toks([root], 0n)}, T.FdtTreeRules{nop, pf}, 17, boot, B.take(B.len(T.flat.strs([root])), _)) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           %take_all(T.flat.strs([root])) : {F.parse.p7(Done{rsv}, Done{T.flat.toks([root], 0n)}, T.FdtTreeRules{nop, pf}, 17, boot, _) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
-          %tb_root(root, nop, pf, T.flat.strs([root]), {==}, f_t(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))), and_l(T.FdtNode.names_ok(root), T.flat.values_ok([root]), and_l(T.FdtNode.wf(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))) : {F.parse.p9(_, 17, boot, rsv) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          %tb_root(root, nop, pf, T.flat.strs([root]), {==}, f_t(R.rsv.list(rsv), S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]), zero_t(L.fdt.over(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root])))))), and_r(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok)))), and_l(T.names_ok.ref(root), T.flat.values_ok([root]), and_l(T.wf.ref(root), Bool.and(R.FdtRsv.valid_all(rsv), L.fdt.fits(Nat.add(40n, B.len(B.append(R.rsv.list(rsv), B.append(S.toks.list(T.flat.toks([root], 0n)), T.flat.strs([root]))))))), ok))) : {F.parse.p9(_, 17, boot, rsv) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
           {==}
+
+def Laws.parse_build(opts, root, rsv, boot, ok):
+  %parse_fast(opts, B.Octets.to_list(B.Octets.of_list(F.build.fast(root, rsv, boot)))) : {_ == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  %build_fast(root, rsv, boot) : {F.parse.p1(opts, B.Octets.to_list(B.Octets.of_list(_))) == Done{F.FdtBlob{17, boot, rsv, root}} : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  parse_build_rt(opts, root, rsv, boot, Equal.trans(Bool, F.buildable.ref(root, rsv), F.Fdt.buildable(root, rsv), True{}, buildable_fast(root, rsv), ok))
 
 # More property values: a string list folds byte by byte
 
@@ -903,15 +1329,15 @@ def sl_one(+sl: List<&2, U32>, +r: List<&2, U32>, +cur: List<&2, U32>, +done: Li
       %Equal.sym(Bool, U32.is_eq(h, 0), False{}, not_t(U32.is_eq(h, 0), and_l(Bool.not(U32.is_eq(h, 0)), L.fdt.nonul(t), ok))) : {P.pr.sl.fold(r, P.FdtStrList{Nil{}, Con{B.Octets.of_list(List.reverse(&2, U32, List.reverse.go(&2, U32, t, Con{h, cur}))), done}}) == P.pr.sl.fold(B.append(t, Con{0, r}), P.pr.sl.byte(_, h, cur, done)) : P.FdtStrList}
       sl_one(t, r, Con{h, cur}, done, and_r(Bool.not(U32.is_eq(h, 0)), L.fdt.nonul(t), ok))
 
-def sl_all(+ss: List<&2, B.Octets>, +done: List<&2, B.Octets>, +ok: {P.FdtProp.strings_ok(ss) == True{} : Bool}) -> {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, ss, done)} == P.pr.sl.fold(P.pr.sl.list(ss), P.FdtStrList{Nil{}, done}) : P.FdtStrList}:
+def sl_all(+ss: List<&2, B.Octets>, +done: List<&2, B.Octets>, +ok: {P.pr.strings_ok.ref(ss) == True{} : Bool}) -> {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, ss, done)} == P.pr.sl.fold(P.pr.sl.list(ss), P.FdtStrList{Nil{}, done}) : P.FdtStrList}:
   match ss:
     case Nil{}:
       {==}
     case Con{s, t}:
-      %sl_one(B.Octets.to_list(s), P.pr.sl.list(t), Nil{}, done, and_l(L.fdt.nonul(B.Octets.to_list(s)), P.FdtProp.strings_ok(t), ok)) : {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, Con{s, t}, done)} == _ : P.FdtStrList}
+      %sl_one(B.Octets.to_list(s), P.pr.sl.list(t), Nil{}, done, and_l(L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t), ok)) : {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, Con{s, t}, done)} == _ : P.FdtStrList}
       %revrev(U32, B.Octets.to_list(s)) : {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, Con{s, t}, done)} == P.pr.sl.fold(P.pr.sl.list(t), P.FdtStrList{Nil{}, Con{B.Octets.of_list(_), done}}) : P.FdtStrList}
       %Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(s)), s, BL.octets_of_to(s)) : {P.FdtStrList{Nil{}, List.reverse.go(&2, B.Octets, Con{s, t}, done)} == P.pr.sl.fold(P.pr.sl.list(t), P.FdtStrList{Nil{}, Con{_, done}}) : P.FdtStrList}
-      sl_all(t, Con{s, done}, and_r(L.fdt.nonul(B.Octets.to_list(s)), P.FdtProp.strings_ok(t), ok))
+      sl_all(t, Con{s, done}, and_r(L.fdt.nonul(B.Octets.to_list(s)), P.pr.strings_ok.ref(t), ok))
 
 def mask_sl(+ss: List<&2, B.Octets>) -> {P.pr.sl.list(ss) == B.mask(P.pr.sl.list(ss)) : List<&2, U32>}:
   match ss:
@@ -921,9 +1347,10 @@ def mask_sl(+ss: List<&2, B.Octets>) -> {P.pr.sl.list(ss) == B.mask(P.pr.sl.list
       mask_id_app(B.Octets.to_list(s), Con{0, P.pr.sl.list(t)}, mask_tl(s), mask_c0(P.pr.sl.list(t), mask_sl(t)))
 
 def Laws.strings_round_trip(ss, ok):
+  %sl_fast(ss) : {P.pr.sl.fin(P.pr.sl.fold(B.Octets.to_list(B.Octets.of_list(_)), P.FdtStrList{Nil{}, Nil{}})) == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(P.pr.sl.list(ss))), B.mask(P.pr.sl.list(ss)), BL.octets_to_of(P.pr.sl.list(ss))) : {P.pr.sl.fin(P.pr.sl.fold(_, P.FdtStrList{Nil{}, Nil{}})) == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
   %mask_sl(ss) : {P.pr.sl.fin(P.pr.sl.fold(_, P.FdtStrList{Nil{}, Nil{}})) == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
-  %sl_all(ss, Nil{}, ok) : {P.pr.sl.fin(_) == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
+  %sl_all(ss, Nil{}, Equal.trans(Bool, P.pr.strings_ok.ref(ss), P.FdtProp.strings_ok(ss), True{}, strings_ok_fast(ss), ok)) : {P.pr.sl.fin(_) == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
   %revrev(B.Octets, ss) : {Done{_} == Done{ss} : Result<&2, &2, E.FdtError, List<&2, B.Octets>>}
   {==}
 
@@ -950,6 +1377,7 @@ def mask_cl(+cs: List<&2, U32>) -> {P.pr.cells.list(cs) == B.mask(P.pr.cells.lis
       mask_id_app(B.be32(c), P.pr.cells.list(t), mask_be32(c), mask_cl(t))
 
 def Laws.cells_round_trip(cs):
+  %cells_fast(cs) : {P.pr.cells.go(B.Octets.to_list(B.Octets.of_list(_)), Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(P.pr.cells.list(cs))), B.mask(P.pr.cells.list(cs)), BL.octets_to_of(P.pr.cells.list(cs))) : {P.pr.cells.go(_, Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
   %mask_cl(cs) : {P.pr.cells.go(_, Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
   %cells_rt(cs, Nil{}) : {_ == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}

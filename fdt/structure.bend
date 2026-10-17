@@ -45,7 +45,7 @@ def tok.list(t: FdtToken) -> List<&2, U32>:
     case FdtTokNop{}:
       B.be32(4)
 
-# the tokens, then FDT_END
+# the tokens, then FDT_END (the reference form: it recurses once per token)
 def toks.list(ts: List<&2, FdtToken>) -> List<&2, U32>:
   match ts:
     case Nil{}:
@@ -53,13 +53,41 @@ def toks.list(ts: List<&2, FdtToken>) -> List<&2, U32>:
     case Con{t, r}:
       B.append(tok.list(t), toks.list(r))
 
+# The same, tail-recursive, for blocks of any size (PROOF.bend: tok_fast,
+# toks_fast): a value's bytes go through bytes' fast list forms, and the
+# tokens' bytes are pushed, reversed, onto an accumulator
+
+def tok.prop.fast(off: U32, +vb: List<&2, U32>) -> List<&2, U32>:
+  B.append(B.be32(3), B.append(B.be32(L.fdt.u32n.fast(B.len.fast(vb))), B.append(B.be32(off), B.append.fast(vb, B.zeros(L.fdt.pad4(B.len.fast(vb)))))))
+
+def tok.list.fast(t: FdtToken) -> List<&2, U32>:
+  match t:
+    case FdtTokBegin{name}:
+      tok.begin(B.Octets.to_list(name))
+    case FdtTokEnd{}:
+      B.be32(2)
+    case FdtTokProp{off, v}:
+      tok.prop.fast(off, B.Octets.to_list(v))
+    case FdtTokNop{}:
+      B.be32(4)
+
+def toks.go(ts: List<&2, FdtToken>, acc: List<&2, U32>) -> List<&2, U32>:
+  match ts:
+    case Nil{}:
+      List.reverse.go(&2, U32, B.be32(9), acc)
+    case Con{t, r}:
+      toks.go(r, List.reverse.go(&2, U32, tok.list.fast(t), acc))
+
+def toks.fast(ts: List<&2, FdtToken>) -> List<&2, U32>:
+  List.reverse(&2, U32, toks.go(ts, Nil{}))
+
 # the structure block holding these tokens, then FDT_END
 def FdtToken.encode_all(ts: List<&2, FdtToken>) -> B.Octets:
-  B.Octets.of_list(toks.list(ts))
+  B.Octets.of_list(toks.fast(ts))
 
-# a token its encoding can carry: a name without a NUL; a value shorter than
-# 2^32 bytes
-def FdtToken.valid(t: FdtToken) -> Bool:
+# The token checks as the proofs state them (reference forms)
+
+def tok.valid.ref(t: FdtToken) -> Bool:
   match t:
     case FdtTokBegin{name}:
       L.fdt.nonul(B.Octets.to_list(name))
@@ -70,12 +98,36 @@ def FdtToken.valid(t: FdtToken) -> Bool:
     case FdtTokNop{}:
       True{}
 
-def FdtToken.valid_all(ts: List<&2, FdtToken>) -> Bool:
+def tok.valid_all.ref(ts: List<&2, FdtToken>) -> Bool:
   match ts:
     case Nil{}:
       True{}
     case Con{t, r}:
-      Bool.and(FdtToken.valid(t), FdtToken.valid_all(r))
+      Bool.and(tok.valid.ref(t), tok.valid_all.ref(r))
+
+# a token its encoding can carry: a name without a NUL; a value shorter than
+# 2^32 bytes (PROOF.bend: valid_fast)
+def FdtToken.valid(t: FdtToken) -> Bool:
+  match t:
+    case FdtTokBegin{name}:
+      L.fdt.nonul(B.Octets.to_list(name))
+    case FdtTokEnd{}:
+      True{}
+    case FdtTokProp{off, v}:
+      L.fdt.fits.fast(B.Octets.len(v))
+    case FdtTokNop{}:
+      True{}
+
+def tok.valid.go(ts: List<&2, FdtToken>, ok: Bool) -> Bool:
+  match ts:
+    case Nil{}:
+      ok
+    case Con{t, r}:
+      tok.valid.go(r, Bool.and(ok, FdtToken.valid(t)))
+
+# every token is valid (PROOF.bend: valid_all_fast)
+def FdtToken.valid_all(ts: List<&2, FdtToken>) -> Bool:
+  tok.valid.go(ts, True{})
 
 # The lexer
 
@@ -185,7 +237,7 @@ def lx.word(p: LxPurpose, got: List<&2, U32>, h: U32, toks: List<&2, FdtToken>) 
       lx.word_done(p, lx.w32(B.be32_at([a, b, c, h], 0n)), toks)
 
 def lx.name_end(+nb: List<&2, U32>, toks: List<&2, FdtToken>) -> FdtLexer:
-  FdtLexer{lx.padded(L.fdt.pad4(1n+B.len(nb))), Con{FdtTokBegin{B.Octets.of_list(nb)}, toks}}
+  FdtLexer{lx.padded(L.fdt.pad4(1n+B.len.fast(nb))), Con{FdtTokBegin{B.Octets.of_list(nb)}, toks}}
 
 def lx.name(nul: Bool, h: U32, acc: List<&2, U32>, toks: List<&2, FdtToken>) -> FdtLexer:
   match nul:

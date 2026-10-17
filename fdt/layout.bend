@@ -66,6 +66,46 @@ def fdt.fits(n: Nat) -> Bool:
 def fdt.le(a: Nat, b: Nat) -> Bool:
   fdt.is_zero(Nat.sub(a, b))
 
+# The same, tail-recursive, for lengths of any size: fdt.half recurses once
+# per two units of n, so it overflows Bend's stack on a length of about
+# 50 KB. The forms above are the reference the proofs compute through;
+# PROOF.bend proves each fast form equal to it (half_fast, u32n_fast,
+# fits_fast).
+
+def fdt.half.go(n: Nat, acc: Nat) -> Nat:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      match p:
+        case 0n:
+          acc
+        case 1n+q:
+          fdt.half.go(q, 1n+acc)
+
+def fdt.half.fast(n: Nat) -> Nat:
+  fdt.half.go(n, 0n)
+
+def fdt.nbits.fast(k: Nat, +n: Nat) -> Word(k):
+  match k:
+    case 0n:
+      WNil{}
+    case 1n+p:
+      WCon{fdt.odd(n), fdt.nbits.fast(p, fdt.half.fast(n))}
+
+def fdt.high.fast(k: Nat, n: Nat) -> Nat:
+  match k:
+    case 0n:
+      n
+    case 1n+p:
+      fdt.high.fast(p, fdt.half.fast(n))
+
+def fdt.u32n.fast(n: Nat) -> U32:
+  U32{fdt.nbits.fast(32n, n)}
+
+def fdt.fits.fast(n: Nat) -> Bool:
+  fdt.is_zero(fdt.high.fast(32n, n))
+
 # Padding and alignment
 
 # the padding that takes a length of n bytes to a multiple of four
@@ -137,6 +177,18 @@ def fdt.nonul(xs: List<&2, U32>) -> Bool:
       True{}
     case Con{h, t}:
       Bool.and(Bool.not(U32.is_eq(h, 0)), fdt.nonul(t))
+
+# the same, tail-recursive, for strings of any length (PROOF.bend:
+# nonul_fast)
+def fdt.nonul.go(xs: List<&2, U32>, ok: Bool) -> Bool:
+  match xs:
+    case Nil{}:
+      ok
+    case Con{h, t}:
+      fdt.nonul.go(t, Bool.and(ok, Bool.not(U32.is_eq(h, 0))))
+
+def fdt.nonul.fast(xs: List<&2, U32>) -> Bool:
+  fdt.nonul.go(xs, True{})
 
 # a byte list cut in two
 type FdtCut is Data:
