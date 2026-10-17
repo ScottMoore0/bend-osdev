@@ -11,8 +11,8 @@ low 8 bits of each element, so a malformed element is masked, never trusted.
 
 Public interfaces in bend-osdev take and answer `Octets`. Its storage is
 internal, so it can change without touching any other package. Today it is a
-list of 8-bit words (`Word(8n)`), so every value of the type is a valid byte
-string: no element can be 256 or more, and converting to a list and back gives
+list of `OctByte` records (eight bits each), so every value of the type is a
+valid byte string: no element can be 256 or more, and converting to a list and back gives
 every `Octets` back unchanged.
 
 | Def | Meaning |
@@ -96,11 +96,13 @@ form for every input in `PROOF.bend`, which is what the laws reason about.
 `split_at`, `is_eq`, `hex` and `to_string` have no length limit.
 `Octets.concat` is tail-recursive too, in the number of pieces and their size.
 
-Measured on the reference machine (native build): a 2,000,000-byte `Octets`
-built, appended, cut and printed in 4 s, peaking at 1.7 GB. Storage is the
-cost now: each byte is an 8-bit `Word`, about 940 bytes of memory per byte,
-against about 57 for an element of a `List<&2, U32>`. Hold images of more
-than a few MB a block at a time (blockdev's `MemDev`).
+Measured on the reference machine: a 2,000,000-byte `Octets` built,
+appended, cut and printed in about 3 s. Storage: each byte is one `OctByte`
+record (eight `Bool` fields), about 150 bytes of memory per byte held (an
+8-bit `Word`, used before, cost about 450; a `List<&2, U32>` element costs
+about 60). A pipeline that builds, copies and reads 1 MB peaks at about
+1 GB. Hold images of more than a few MB a block at a time (blockdev's
+`MemDev`).
 
 The list layer's structural forms (`take`, `append`, `len`, `mask`, `hex`, ...
 on `List<&2, U32>`) stay structural, because other packages' proofs compute

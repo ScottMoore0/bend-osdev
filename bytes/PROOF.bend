@@ -139,18 +139,24 @@ def Laws.octets_be64_round_trip(v):
 
 # Word lists: the lemmas the Octets laws are built from
 
-def bits8_of_bits8(w: Word(8n)) -> {B.bits8(B.of_bits8(w)) == w : Word(8n)}:
+def bits8_of_bits8(w: B.OctByte) -> {B.oct.of(B.oct.to(w)) == w : B.OctByte}:
   match w:
-    case WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WNil{}}}}}}}}}:
+    case B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}:
       {==}
 
-def w8s_of_to(ws: List<&2, Word(8n)>) -> {B.w8s.of_list(B.w8s.to_list(ws)) == ws : List<&2, Word(8n)>}:
+def w8s_of_to(ws: List<&2, B.OctByte>) -> {B.w8s.of_list(B.w8s.to_list(ws)) == ws : List<&2, B.OctByte>}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
-      %bits8_of_bits8(h) : {Con{B.bits8(B.of_bits8(h)), B.w8s.of_list(B.w8s.to_list(t))} == Con{_, t} : List<&2, Word(8n)>}
-      %w8s_of_to(t) : {Con{B.bits8(B.of_bits8(h)), B.w8s.of_list(B.w8s.to_list(t))} == Con{B.bits8(B.of_bits8(h)), _} : List<&2, Word(8n)>}
+      %bits8_of_bits8(h) : {Con{B.oct.of(B.oct.to(h)), B.w8s.of_list(B.w8s.to_list(t))} == Con{_, t} : List<&2, B.OctByte>}
+      %w8s_of_to(t) : {Con{B.oct.of(B.oct.to(h)), B.w8s.of_list(B.w8s.to_list(t))} == Con{B.oct.of(B.oct.to(h)), _} : List<&2, B.OctByte>}
+      {==}
+
+# a word through one OctByte and back is its byte
+def oct_byte(h: U32) -> {B.oct.to(B.oct.of(h)) == B.byte(h) : U32}:
+  match h:
+    case U32{WCon{b0, WCon{b1, WCon{b2, WCon{b3, WCon{b4, WCon{b5, WCon{b6, WCon{b7, WCon{b8, WCon{b9, WCon{b10, WCon{b11, WCon{b12, WCon{b13, WCon{b14, WCon{b15, WCon{b16, WCon{b17, WCon{b18, WCon{b19, WCon{b20, WCon{b21, WCon{b22, WCon{b23, WCon{b24, WCon{b25, WCon{b26, WCon{b27, WCon{b28, WCon{b29, WCon{b30, WCon{b31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
       {==}
 
 def w8s_to_of(xs: List<&2, U32>) -> {B.w8s.to_list(B.w8s.of_list(xs)) == B.mask(xs) : List<&2, U32>}:
@@ -158,55 +164,56 @@ def w8s_to_of(xs: List<&2, U32>) -> {B.w8s.to_list(B.w8s.of_list(xs)) == B.mask(
     case Nil{}:
       {==}
     case Con{h, t}:
-      %w8s_to_of(t) : {Con{B.of_bits8(B.bits8(h)), B.w8s.to_list(B.w8s.of_list(t))} == Con{B.byte(h), _} : List<&2, U32>}
+      %w8s_to_of(t) : {Con{B.oct.to(B.oct.of(h)), B.w8s.to_list(B.w8s.of_list(t))} == Con{B.byte(h), _} : List<&2, U32>}
+      %oct_byte(h) : {Con{B.oct.to(B.oct.of(h)), B.w8s.to_list(B.w8s.of_list(t))} == Con{_, B.w8s.to_list(B.w8s.of_list(t))} : List<&2, U32>}
       {==}
 
-def w8s_to_app(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>) -> {B.w8s.to_list(List.append(&2, Word(8n), xs, ys)) == B.append(B.w8s.to_list(xs), B.w8s.to_list(ys)) : List<&2, U32>}:
+def w8s_to_app(xs: List<&2, B.OctByte>, ys: List<&2, B.OctByte>) -> {B.w8s.to_list(List.append(&2, B.OctByte, xs, ys)) == B.append(B.w8s.to_list(xs), B.w8s.to_list(ys)) : List<&2, U32>}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
-      %w8s_to_app(t, ys) : {Con{B.of_bits8(h), B.w8s.to_list(List.append(&2, Word(8n), t, ys))} == Con{B.of_bits8(h), _} : List<&2, U32>}
+      %w8s_to_app(t, ys) : {Con{B.oct.to(h), B.w8s.to_list(List.append(&2, B.OctByte, t, ys))} == Con{B.oct.to(h), _} : List<&2, U32>}
       {==}
 
-def w8s_len(ws: List<&2, Word(8n)>) -> {List.length(&2, Word(8n), ws) == List.length(&2, U32, B.w8s.to_list(ws)) : Nat}:
+def w8s_len(ws: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, ws) == List.length(&2, U32, B.w8s.to_list(ws)) : Nat}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, Word(8n), t), List.length(&2, U32, B.w8s.to_list(t)), w8s_len(t))
+      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, t), List.length(&2, U32, B.w8s.to_list(t)), w8s_len(t))
 
-def w8s_take_drop(n: Nat, ws: List<&2, Word(8n)>) -> {List.append(&2, Word(8n), B.w8s.take(n, ws), B.w8s.drop(n, ws)) == ws : List<&2, Word(8n)>}:
+def w8s_take_drop(n: Nat, ws: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, B.w8s.take(n, ws), B.w8s.drop(n, ws)) == ws : List<&2, B.OctByte>}:
   match n ws:
     case 0n _:
       {==}
     case 1n+p Nil{}:
       {==}
     case 1n+p Con{h, t}:
-      %w8s_take_drop(p, t) : {Con{h, List.append(&2, Word(8n), B.w8s.take(p, t), B.w8s.drop(p, t))} == Con{h, _} : List<&2, Word(8n)>}
+      %w8s_take_drop(p, t) : {Con{h, List.append(&2, B.OctByte, B.w8s.take(p, t), B.w8s.drop(p, t))} == Con{h, _} : List<&2, B.OctByte>}
       {==}
 
-def w8s_take_app(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>) -> {B.w8s.take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys)) == xs : List<&2, Word(8n)>}:
+def w8s_take_app(xs: List<&2, B.OctByte>, ys: List<&2, B.OctByte>) -> {B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)) == xs : List<&2, B.OctByte>}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
-      %w8s_take_app(t, ys) : {Con{h, B.w8s.take(List.length(&2, Word(8n), t), List.append(&2, Word(8n), t, ys))} == Con{h, _} : List<&2, Word(8n)>}
+      %w8s_take_app(t, ys) : {Con{h, B.w8s.take(List.length(&2, B.OctByte, t), List.append(&2, B.OctByte, t, ys))} == Con{h, _} : List<&2, B.OctByte>}
       {==}
 
-def w8s_drop_app(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>) -> {B.w8s.drop(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys)) == ys : List<&2, Word(8n)>}:
+def w8s_drop_app(xs: List<&2, B.OctByte>, ys: List<&2, B.OctByte>) -> {B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)) == ys : List<&2, B.OctByte>}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
       w8s_drop_app(t, ys)
 
-def w8s_len_app(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>) -> {List.length(&2, Word(8n), List.append(&2, Word(8n), xs, ys)) == Nat.add(List.length(&2, Word(8n), xs), List.length(&2, Word(8n), ys)) : Nat}:
+def w8s_len_app(xs: List<&2, B.OctByte>, ys: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys)) == Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys)) : Nat}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, Word(8n), List.append(&2, Word(8n), t, ys)), Nat.add(List.length(&2, Word(8n), t), List.length(&2, Word(8n), ys)), w8s_len_app(t, ys))
+      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, List.append(&2, B.OctByte, t, ys)), Nat.add(List.length(&2, B.OctByte, t), List.length(&2, B.OctByte, ys)), w8s_len_app(t, ys))
 
 def nat_le_add(n: Nat, m: Nat) -> {Nat.is_le(n, Nat.add(n, m)) == True{} : Bool}:
   match n:
@@ -224,7 +231,7 @@ def nat_le_add(n: Nat, m: Nat) -> {Nat.is_le(n, Nat.add(n, m)) == True{} : Bool}
 # ref == fast, the direction rewrites use) carry every law proved about the
 # structural defs over to them.
 
-def r8_rr(ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>, b: List<&2, Word(8n)>) -> {B.w8s.rev_onto(B.w8s.rev_onto(ws, acc), b) == B.w8s.rev_onto(acc, List.append(&2, Word(8n), ws, b)) : List<&2, Word(8n)>}:
+def r8_rr(ws: List<&2, B.OctByte>, acc: List<&2, B.OctByte>, b: List<&2, B.OctByte>) -> {B.w8s.rev_onto(B.w8s.rev_onto(ws, acc), b) == B.w8s.rev_onto(acc, List.append(&2, B.OctByte, ws, b)) : List<&2, B.OctByte>}:
   match ws:
     case Nil{}:
       {==}
@@ -238,12 +245,12 @@ def ru_rr(xs: List<&2, U32>, acc: List<&2, U32>, b: List<&2, U32>) -> {B.rev_ont
     case Con{h, t}:
       ru_rr(t, Con{h, acc}, b)
 
-def app_nil8(+ws: List<&2, Word(8n)>) -> {List.append(&2, Word(8n), ws, Nil{}) == ws : List<&2, Word(8n)>}:
+def app_nil8(+ws: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, ws, Nil{}) == ws : List<&2, B.OctByte>}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.cong(List<&2, Word(8n)>, List<&2, Word(8n)>, l => Con{h, l}, List.append(&2, Word(8n), t, Nil{}), t, app_nil8(t))
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{h, l}, List.append(&2, B.OctByte, t, Nil{}), t, app_nil8(t))
 
 def app_nilu(+xs: List<&2, U32>) -> {List.append(&2, U32, xs, Nil{}) == xs : List<&2, U32>}:
   match xs:
@@ -252,35 +259,35 @@ def app_nilu(+xs: List<&2, U32>) -> {List.append(&2, U32, xs, Nil{}) == xs : Lis
     case Con{h, t}:
       Equal.cong(List<&2, U32>, List<&2, U32>, l => Con{h, l}, List.append(&2, U32, t, Nil{}), t, app_nilu(t))
 
-def g_of(xs: List<&2, U32>, acc: List<&2, Word(8n)>) -> {B.w8s.of_list.go(xs, acc) == B.w8s.rev_onto(B.w8s.of_list(xs), acc) : List<&2, Word(8n)>}:
+def g_of(xs: List<&2, U32>, acc: List<&2, B.OctByte>) -> {B.w8s.of_list.go(xs, acc) == B.w8s.rev_onto(B.w8s.of_list(xs), acc) : List<&2, B.OctByte>}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
-      g_of(t, Con{B.bits8(h), acc})
+      g_of(t, Con{B.oct.of(h), acc})
 
-def F_of(+xs: List<&2, U32>) -> {B.w8s.of_list(xs) == B.w8s.of_list.fast(xs) : List<&2, Word(8n)>}:
-  Equal.sym(List<&2, Word(8n)>, B.w8s.of_list.fast(xs), B.w8s.of_list(xs),
-    Equal.trans(List<&2, Word(8n)>, B.w8s.of_list.fast(xs), B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), Nil{}), B.w8s.of_list(xs),
-      Equal.cong(List<&2, Word(8n)>, List<&2, Word(8n)>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.of_list.go(xs, Nil{}), B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), g_of(xs, Nil{})),
-      Equal.trans(List<&2, Word(8n)>, B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), Nil{}), List.append(&2, Word(8n), B.w8s.of_list(xs), Nil{}), B.w8s.of_list(xs),
+def F_of(+xs: List<&2, U32>) -> {B.w8s.of_list(xs) == B.w8s.of_list.fast(xs) : List<&2, B.OctByte>}:
+  Equal.sym(List<&2, B.OctByte>, B.w8s.of_list.fast(xs), B.w8s.of_list(xs),
+    Equal.trans(List<&2, B.OctByte>, B.w8s.of_list.fast(xs), B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), Nil{}), B.w8s.of_list(xs),
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.of_list.go(xs, Nil{}), B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), g_of(xs, Nil{})),
+      Equal.trans(List<&2, B.OctByte>, B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.of_list(xs), Nil{}), Nil{}), List.append(&2, B.OctByte, B.w8s.of_list(xs), Nil{}), B.w8s.of_list(xs),
         r8_rr(B.w8s.of_list(xs), Nil{}, Nil{}), app_nil8(B.w8s.of_list(xs)))))
 
-def g_to(ws: List<&2, Word(8n)>, acc: List<&2, U32>) -> {B.w8s.to_list.go(ws, acc) == B.rev_onto(B.w8s.to_list(ws), acc) : List<&2, U32>}:
+def g_to(ws: List<&2, B.OctByte>, acc: List<&2, U32>) -> {B.w8s.to_list.go(ws, acc) == B.rev_onto(B.w8s.to_list(ws), acc) : List<&2, U32>}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
-      g_to(t, Con{B.of_bits8(h), acc})
+      g_to(t, Con{B.oct.to(h), acc})
 
-def F_to(+ws: List<&2, Word(8n)>) -> {B.w8s.to_list(ws) == B.w8s.to_list.fast(ws) : List<&2, U32>}:
+def F_to(+ws: List<&2, B.OctByte>) -> {B.w8s.to_list(ws) == B.w8s.to_list.fast(ws) : List<&2, U32>}:
   Equal.sym(List<&2, U32>, B.w8s.to_list.fast(ws), B.w8s.to_list(ws),
     Equal.trans(List<&2, U32>, B.w8s.to_list.fast(ws), B.rev_onto(B.rev_onto(B.w8s.to_list(ws), Nil{}), Nil{}), B.w8s.to_list(ws),
       Equal.cong(List<&2, U32>, List<&2, U32>, l => B.rev_onto(l, Nil{}), B.w8s.to_list.go(ws, Nil{}), B.rev_onto(B.w8s.to_list(ws), Nil{}), g_to(ws, Nil{})),
       Equal.trans(List<&2, U32>, B.rev_onto(B.rev_onto(B.w8s.to_list(ws), Nil{}), Nil{}), List.append(&2, U32, B.w8s.to_list(ws), Nil{}), B.w8s.to_list(ws),
         ru_rr(B.w8s.to_list(ws), Nil{}, Nil{}), app_nilu(B.w8s.to_list(ws)))))
 
-def g_take(n: Nat, ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> {B.w8s.take.go(n, ws, acc) == B.w8s.rev_onto(B.w8s.take(n, ws), acc) : List<&2, Word(8n)>}:
+def g_take(n: Nat, ws: List<&2, B.OctByte>, acc: List<&2, B.OctByte>) -> {B.w8s.take.go(n, ws, acc) == B.w8s.rev_onto(B.w8s.take(n, ws), acc) : List<&2, B.OctByte>}:
   match n ws:
     case 0n _:
       {==}
@@ -289,15 +296,15 @@ def g_take(n: Nat, ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> {B.w8s.ta
     case 1n+p Con{h, t}:
       g_take(p, t, Con{h, acc})
 
-def F_take(+n: Nat, +ws: List<&2, Word(8n)>) -> {B.w8s.take(n, ws) == B.w8s.take.fast(n, ws) : List<&2, Word(8n)>}:
-  Equal.sym(List<&2, Word(8n)>, B.w8s.take.fast(n, ws), B.w8s.take(n, ws),
-    Equal.trans(List<&2, Word(8n)>, B.w8s.take.fast(n, ws), B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), Nil{}), B.w8s.take(n, ws),
-      Equal.cong(List<&2, Word(8n)>, List<&2, Word(8n)>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.take.go(n, ws, Nil{}), B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), g_take(n, ws, Nil{})),
-      Equal.trans(List<&2, Word(8n)>, B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), Nil{}), List.append(&2, Word(8n), B.w8s.take(n, ws), Nil{}), B.w8s.take(n, ws),
+def F_take(+n: Nat, +ws: List<&2, B.OctByte>) -> {B.w8s.take(n, ws) == B.w8s.take.fast(n, ws) : List<&2, B.OctByte>}:
+  Equal.sym(List<&2, B.OctByte>, B.w8s.take.fast(n, ws), B.w8s.take(n, ws),
+    Equal.trans(List<&2, B.OctByte>, B.w8s.take.fast(n, ws), B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), Nil{}), B.w8s.take(n, ws),
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.take.go(n, ws, Nil{}), B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), g_take(n, ws, Nil{})),
+      Equal.trans(List<&2, B.OctByte>, B.w8s.rev_onto(B.w8s.rev_onto(B.w8s.take(n, ws), Nil{}), Nil{}), List.append(&2, B.OctByte, B.w8s.take(n, ws), Nil{}), B.w8s.take(n, ws),
         r8_rr(B.w8s.take(n, ws), Nil{}, Nil{}), app_nil8(B.w8s.take(n, ws)))))
 
-def F_app(+xs: List<&2, Word(8n)>, +ys: List<&2, Word(8n)>) -> {List.append(&2, Word(8n), xs, ys) == B.w8s.append.fast(xs, ys) : List<&2, Word(8n)>}:
-  Equal.sym(List<&2, Word(8n)>, B.w8s.append.fast(xs, ys), List.append(&2, Word(8n), xs, ys), r8_rr(xs, Nil{}, ys))
+def F_app(+xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, xs, ys) == B.w8s.append.fast(xs, ys) : List<&2, B.OctByte>}:
+  Equal.sym(List<&2, B.OctByte>, B.w8s.append.fast(xs, ys), List.append(&2, B.OctByte, xs, ys), r8_rr(xs, Nil{}, ys))
 
 def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
   match a:
@@ -313,37 +320,37 @@ def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
     case 1n+p:
       Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
 
-def g_len(+ws: List<&2, Word(8n)>, +n: Nat) -> {B.w8s.len.go(ws, n) == Nat.add(List.length(&2, Word(8n), ws), n) : Nat}:
+def g_len(+ws: List<&2, B.OctByte>, +n: Nat) -> {B.w8s.len.go(ws, n) == Nat.add(List.length(&2, B.OctByte, ws), n) : Nat}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.trans(Nat, B.w8s.len.go(t, 1n+n), Nat.add(List.length(&2, Word(8n), t), 1n+n), 1n+Nat.add(List.length(&2, Word(8n), t), n),
-        g_len(t, 1n+n), add_succ(List.length(&2, Word(8n), t), n))
+      Equal.trans(Nat, B.w8s.len.go(t, 1n+n), Nat.add(List.length(&2, B.OctByte, t), 1n+n), 1n+Nat.add(List.length(&2, B.OctByte, t), n),
+        g_len(t, 1n+n), add_succ(List.length(&2, B.OctByte, t), n))
 
-def F_len(+ws: List<&2, Word(8n)>) -> {List.length(&2, Word(8n), ws) == B.w8s.len.fast(ws) : Nat}:
-  Equal.sym(Nat, B.w8s.len.fast(ws), List.length(&2, Word(8n), ws),
-    Equal.trans(Nat, B.w8s.len.go(ws, 0n), Nat.add(List.length(&2, Word(8n), ws), 0n), List.length(&2, Word(8n), ws),
-      g_len(ws, 0n), add_zero(List.length(&2, Word(8n), ws))))
+def F_len(+ws: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, ws) == B.w8s.len.fast(ws) : Nat}:
+  Equal.sym(Nat, B.w8s.len.fast(ws), List.length(&2, B.OctByte, ws),
+    Equal.trans(Nat, B.w8s.len.go(ws, 0n), Nat.add(List.length(&2, B.OctByte, ws), 0n), List.length(&2, B.OctByte, ws),
+      g_len(ws, 0n), add_zero(List.length(&2, B.OctByte, ws))))
 
-def zeros_cons(+p: Nat, +acc: List<&2, Word(8n)>) -> {List.append(&2, Word(8n), B.w8s.zeros(p), Con{Word.zero(8n), acc}) == Con{Word.zero(8n), List.append(&2, Word(8n), B.w8s.zeros(p), acc)} : List<&2, Word(8n)>}:
+def zeros_cons(+p: Nat, +acc: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, B.w8s.zeros(p), Con{B.oct.zero(), acc}) == Con{B.oct.zero(), List.append(&2, B.OctByte, B.w8s.zeros(p), acc)} : List<&2, B.OctByte>}:
   match p:
     case 0n:
       {==}
     case 1n+q:
-      Equal.cong(List<&2, Word(8n)>, List<&2, Word(8n)>, l => Con{Word.zero(8n), l}, List.append(&2, Word(8n), B.w8s.zeros(q), Con{Word.zero(8n), acc}), Con{Word.zero(8n), List.append(&2, Word(8n), B.w8s.zeros(q), acc)}, zeros_cons(q, acc))
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{B.oct.zero(), l}, List.append(&2, B.OctByte, B.w8s.zeros(q), Con{B.oct.zero(), acc}), Con{B.oct.zero(), List.append(&2, B.OctByte, B.w8s.zeros(q), acc)}, zeros_cons(q, acc))
 
-def g_zeros(+n: Nat, +acc: List<&2, Word(8n)>) -> {B.w8s.zeros.go(n, acc) == List.append(&2, Word(8n), B.w8s.zeros(n), acc) : List<&2, Word(8n)>}:
+def g_zeros(+n: Nat, +acc: List<&2, B.OctByte>) -> {B.w8s.zeros.go(n, acc) == List.append(&2, B.OctByte, B.w8s.zeros(n), acc) : List<&2, B.OctByte>}:
   match n:
     case 0n:
       {==}
     case 1n+p:
-      Equal.trans(List<&2, Word(8n)>, B.w8s.zeros.go(p, Con{Word.zero(8n), acc}), List.append(&2, Word(8n), B.w8s.zeros(p), Con{Word.zero(8n), acc}), Con{Word.zero(8n), List.append(&2, Word(8n), B.w8s.zeros(p), acc)},
-        g_zeros(p, Con{Word.zero(8n), acc}), zeros_cons(p, acc))
+      Equal.trans(List<&2, B.OctByte>, B.w8s.zeros.go(p, Con{B.oct.zero(), acc}), List.append(&2, B.OctByte, B.w8s.zeros(p), Con{B.oct.zero(), acc}), Con{B.oct.zero(), List.append(&2, B.OctByte, B.w8s.zeros(p), acc)},
+        g_zeros(p, Con{B.oct.zero(), acc}), zeros_cons(p, acc))
 
-def F_zeros(+n: Nat) -> {B.w8s.zeros(n) == B.w8s.zeros.fast(n) : List<&2, Word(8n)>}:
-  Equal.sym(List<&2, Word(8n)>, B.w8s.zeros.fast(n), B.w8s.zeros(n),
-    Equal.trans(List<&2, Word(8n)>, B.w8s.zeros.go(n, Nil{}), List.append(&2, Word(8n), B.w8s.zeros(n), Nil{}), B.w8s.zeros(n),
+def F_zeros(+n: Nat) -> {B.w8s.zeros(n) == B.w8s.zeros.fast(n) : List<&2, B.OctByte>}:
+  Equal.sym(List<&2, B.OctByte>, B.w8s.zeros.fast(n), B.w8s.zeros(n),
+    Equal.trans(List<&2, B.OctByte>, B.w8s.zeros.go(n, Nil{}), List.append(&2, B.OctByte, B.w8s.zeros(n), Nil{}), B.w8s.zeros(n),
       g_zeros(n, Nil{}), app_nil8(B.w8s.zeros(n))))
 
 def w8s_zeros_list(+n: Nat) -> {B.w8s.to_list(B.w8s.zeros(n)) == B.zeros(n) : List<&2, U32>}:
@@ -360,8 +367,8 @@ def p_octets_take_drop(+n: Nat, +o: B.Octets) -> {B.Octets.append(B.Octets.take(
   match o:
     case B.Octets{+ws}:
       %F_app(B.w8s.take.fast(n, ws), B.w8s.drop(n, ws)) : {B.Octets{_} == B.Octets{ws} : B.Octets}
-      %F_take(n, ws) : {B.Octets{List.append(&2, Word(8n), _, B.w8s.drop(n, ws))} == B.Octets{ws} : B.Octets}
-      Equal.cong(List<&2, Word(8n)>, B.Octets, l => B.Octets{l}, List.append(&2, Word(8n), B.w8s.take(n, ws), B.w8s.drop(n, ws)), ws, w8s_take_drop(n, ws))
+      %F_take(n, ws) : {B.Octets{List.append(&2, B.OctByte, _, B.w8s.drop(n, ws))} == B.Octets{ws} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, List.append(&2, B.OctByte, B.w8s.take(n, ws), B.w8s.drop(n, ws)), ws, w8s_take_drop(n, ws))
 
 def Laws.octets_take_drop(n, o):
   p_octets_take_drop(n, o)
@@ -371,7 +378,7 @@ def p_octets_of_to(+o: B.Octets) -> {B.Octets.of_list(B.Octets.to_list(o)) == o 
     case B.Octets{+ws}:
       %F_of(B.w8s.to_list.fast(ws)) : {B.Octets{_} == B.Octets{ws} : B.Octets}
       %F_to(ws) : {B.Octets{B.w8s.of_list(_)} == B.Octets{ws} : B.Octets}
-      Equal.cong(List<&2, Word(8n)>, B.Octets, l => B.Octets{l}, B.w8s.of_list(B.w8s.to_list(ws)), ws, w8s_of_to(ws))
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.of_list(B.w8s.to_list(ws)), ws, w8s_of_to(ws))
 
 def Laws.octets_of_to(o):
   p_octets_of_to(o)
@@ -420,12 +427,12 @@ def list_eq_self(xs: List<&2, U32>) -> {B.list_eq(xs, xs) == True{} : Bool}:
       %Equal.sym(Bool, U32.is_eq(h, h), True{}, u32_eq_self(h)) : {Bool.and(_, B.list_eq(t, t)) == True{} : Bool}
       list_eq_self(t)
 
-def w8s_eq_self(ws: List<&2, Word(8n)>) -> {B.w8s.eq(ws, ws, True{}) == True{} : Bool}:
+def w8s_eq_self(ws: List<&2, B.OctByte>) -> {B.w8s.eq(ws, ws, True{}) == True{} : Bool}:
   match ws:
     case Nil{}:
       {==}
     case Con{+h, +t}:
-      %Equal.sym(Cmp, Word.cmp(8n, h, h), EQ{}, word_cmp_self(8n, h)) : {B.w8s.eq(t, t, Bool.and(True{}, Cmp.is_eq(_))) == True{} : Bool}
+      %Equal.sym(Bool, U32.is_eq(B.oct.to(h), B.oct.to(h)), True{}, u32_eq_self(B.oct.to(h))) : {B.w8s.eq(t, t, Bool.and(True{}, _)) == True{} : Bool}
       w8s_eq_self(t)
 
 def Laws.octets_is_eq_refl(o):
@@ -444,8 +451,8 @@ def p_octets_append_list(+a: B.Octets, +b: B.Octets) -> {B.Octets.to_list(B.Octe
     case B.Octets{+xs} B.Octets{+ys}:
       %F_to(B.w8s.append.fast(xs, ys)) : {_ == B.append(B.w8s.to_list.fast(xs), B.w8s.to_list.fast(ys)) : List<&2, U32>}
       %F_app(xs, ys) : {B.w8s.to_list(_) == B.append(B.w8s.to_list.fast(xs), B.w8s.to_list.fast(ys)) : List<&2, U32>}
-      %F_to(xs) : {B.w8s.to_list(List.append(&2, Word(8n), xs, ys)) == B.append(_, B.w8s.to_list.fast(ys)) : List<&2, U32>}
-      %F_to(ys) : {B.w8s.to_list(List.append(&2, Word(8n), xs, ys)) == B.append(B.w8s.to_list(xs), _) : List<&2, U32>}
+      %F_to(xs) : {B.w8s.to_list(List.append(&2, B.OctByte, xs, ys)) == B.append(_, B.w8s.to_list.fast(ys)) : List<&2, U32>}
+      %F_to(ys) : {B.w8s.to_list(List.append(&2, B.OctByte, xs, ys)) == B.append(B.w8s.to_list(xs), _) : List<&2, U32>}
       w8s_to_app(xs, ys)
 
 def Laws.octets_append_list(a, b):
@@ -455,7 +462,7 @@ def p_octets_len_list(+o: B.Octets) -> {B.Octets.len(o) == B.len(B.Octets.to_lis
   match o:
     case B.Octets{+ws}:
       %F_len(ws) : {_ == B.len(B.w8s.to_list.fast(ws)) : Nat}
-      %F_to(ws) : {List.length(&2, Word(8n), ws) == B.len(_) : Nat}
+      %F_to(ws) : {List.length(&2, B.OctByte, ws) == B.len(_) : Nat}
       w8s_len(ws)
 
 def Laws.octets_len_list(o):
@@ -466,8 +473,8 @@ def p_octets_take_append(+a: B.Octets, +b: B.Octets) -> {B.Octets.take(B.Octets.
     case B.Octets{+xs} B.Octets{+ys}:
       %F_take(B.w8s.len.fast(xs), B.w8s.append.fast(xs, ys)) : {B.Octets{_} == B.Octets{xs} : B.Octets}
       %F_len(xs) : {B.Octets{B.w8s.take(_, B.w8s.append.fast(xs, ys))} == B.Octets{xs} : B.Octets}
-      %F_app(xs, ys) : {B.Octets{B.w8s.take(List.length(&2, Word(8n), xs), _)} == B.Octets{xs} : B.Octets}
-      Equal.cong(List<&2, Word(8n)>, B.Octets, l => B.Octets{l}, B.w8s.take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys)), xs, w8s_take_app(xs, ys))
+      %F_app(xs, ys) : {B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), _)} == B.Octets{xs} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)), xs, w8s_take_app(xs, ys))
 
 def Laws.octets_take_append(a, b):
   p_octets_take_append(a, b)
@@ -476,8 +483,8 @@ def p_octets_drop_append(+a: B.Octets, +b: B.Octets) -> {B.Octets.drop(B.Octets.
   match a b:
     case B.Octets{+xs} B.Octets{+ys}:
       %F_len(xs) : {B.Octets{B.w8s.drop(_, B.w8s.append.fast(xs, ys))} == B.Octets{ys} : B.Octets}
-      %F_app(xs, ys) : {B.Octets{B.w8s.drop(List.length(&2, Word(8n), xs), _)} == B.Octets{ys} : B.Octets}
-      Equal.cong(List<&2, Word(8n)>, B.Octets, l => B.Octets{l}, B.w8s.drop(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys)), ys, w8s_drop_app(xs, ys))
+      %F_app(xs, ys) : {B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), _)} == B.Octets{ys} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)), ys, w8s_drop_app(xs, ys))
 
 def Laws.octets_drop_append(a, b):
   p_octets_drop_append(a, b)
@@ -486,15 +493,15 @@ def p_octets_split_at_append(+a: B.Octets, +b: B.Octets) -> {B.Octets.split_at(B
   match a b:
     case B.Octets{+xs} B.Octets{+ys}:
       %F_app(xs, ys) : {B.Octets.split_at.pick(Nat.is_le(B.w8s.len.fast(xs), B.w8s.len.fast(_)), B.w8s.len.fast(xs), B.Octets{B.w8s.append.fast(xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %F_app(xs, ys) : {B.Octets.split_at.pick(Nat.is_le(B.w8s.len.fast(xs), B.w8s.len.fast(List.append(&2, Word(8n), xs, ys))), B.w8s.len.fast(xs), B.Octets{_}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %F_len(List.append(&2, Word(8n), xs, ys)) : {B.Octets.split_at.pick(Nat.is_le(B.w8s.len.fast(xs), _), B.w8s.len.fast(xs), B.Octets{List.append(&2, Word(8n), xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(_, List.length(&2, Word(8n), List.append(&2, Word(8n), xs, ys))), B.w8s.len.fast(xs), B.Octets{List.append(&2, Word(8n), xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, Word(8n), xs), List.length(&2, Word(8n), List.append(&2, Word(8n), xs, ys))), _, B.Octets{List.append(&2, Word(8n), xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %Equal.sym(Nat, List.length(&2, Word(8n), List.append(&2, Word(8n), xs, ys)), Nat.add(List.length(&2, Word(8n), xs), List.length(&2, Word(8n), ys)), w8s_len_app(xs, ys)) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, Word(8n), xs), _), List.length(&2, Word(8n), xs), B.Octets{List.append(&2, Word(8n), xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %Equal.sym(Bool, Nat.is_le(List.length(&2, Word(8n), xs), Nat.add(List.length(&2, Word(8n), xs), List.length(&2, Word(8n), ys))), True{}, nat_le_add(List.length(&2, Word(8n), xs), List.length(&2, Word(8n), ys))) : {B.Octets.split_at.pick(_, List.length(&2, Word(8n), xs), B.Octets{List.append(&2, Word(8n), xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %F_take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys)) : {Some{B.OctetsSplit{B.Octets{_}, B.Octets{B.w8s.drop(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}}} == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %w8s_take_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}}} == Some{B.OctetsSplit{B.Octets{_}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %w8s_drop_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}}} == Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, Word(8n), xs), List.append(&2, Word(8n), xs, ys))}, B.Octets{_}}} : Maybe<&2, B.OctetsSplit>}
+      %F_app(xs, ys) : {B.Octets.split_at.pick(Nat.is_le(B.w8s.len.fast(xs), B.w8s.len.fast(List.append(&2, B.OctByte, xs, ys))), B.w8s.len.fast(xs), B.Octets{_}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %F_len(List.append(&2, B.OctByte, xs, ys)) : {B.Octets.split_at.pick(Nat.is_le(B.w8s.len.fast(xs), _), B.w8s.len.fast(xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(_, List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys))), B.w8s.len.fast(xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys))), _, B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %Equal.sym(Nat, List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys)), Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys)), w8s_len_app(xs, ys)) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, B.OctByte, xs), _), List.length(&2, B.OctByte, xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %Equal.sym(Bool, Nat.is_le(List.length(&2, B.OctByte, xs), Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))), True{}, nat_le_add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))) : {B.Octets.split_at.pick(_, List.length(&2, B.OctByte, xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %F_take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)) : {Some{B.OctetsSplit{B.Octets{_}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %w8s_take_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{_}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %w8s_drop_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{_}}} : Maybe<&2, B.OctetsSplit>}
       {==}
 
 def Laws.octets_split_at_append(a, b):
@@ -517,8 +524,9 @@ def Laws.octets_zeros_list(n):
 def p_octets_cons_list(+b: U32, +o: B.Octets) -> {B.Octets.to_list(B.Octets.cons(b, o)) == Con{B.byte(b), B.Octets.to_list(o)} : List<&2, U32>}:
   match o:
     case B.Octets{+ws}:
-      %F_to(Con{B.bits8(b), ws}) : {_ == Con{B.byte(b), B.w8s.to_list.fast(ws)} : List<&2, U32>}
-      %F_to(ws) : {Con{B.of_bits8(B.bits8(b)), B.w8s.to_list(ws)} == Con{B.byte(b), _} : List<&2, U32>}
+      %F_to(Con{B.oct.of(b), ws}) : {_ == Con{B.byte(b), B.w8s.to_list.fast(ws)} : List<&2, U32>}
+      %F_to(ws) : {Con{B.oct.to(B.oct.of(b)), B.w8s.to_list(ws)} == Con{B.byte(b), _} : List<&2, U32>}
+      %oct_byte(b) : {Con{B.oct.to(B.oct.of(b)), B.w8s.to_list(ws)} == Con{_, B.w8s.to_list(ws)} : List<&2, U32>}
       {==}
 
 def Laws.octets_cons_list(b, o):
@@ -706,12 +714,12 @@ def Laws.rev_rev(xs):
   rr_back(xs)
 
 # Octets' text and hex: each word read through bits8/of_bits8 is its byte
-def w_t_go(+ws: List<&2, Word(8n)>, +r: List<&2, Word(8n)>, +acc: String) -> {B.w8s.text.go(B.w8s.rev_onto(ws, r), acc) == B.w8s.text.go(r, B.to_string.cat(B.w8s.to_list(ws), acc)) : String}:
+def w_t_go(+ws: List<&2, B.OctByte>, +r: List<&2, B.OctByte>, +acc: String) -> {B.w8s.text.go(B.w8s.rev_onto(ws, r), acc) == B.w8s.text.go(r, B.to_string.cat(B.w8s.to_list(ws), acc)) : String}:
   match ws:
     case Nil{}:
       {==}
-    case Con{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WNil{}}}}}}}}}, t}:
-      w_t_go(t, Con{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WNil{}}}}}}}}}, r}, acc)
+    case Con{B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}, t}:
+      w_t_go(t, Con{B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}, r}, acc)
 
 def p_octets_to_string_list(+o: B.Octets) -> {B.Octets.to_string(o) == B.to_string(B.Octets.to_list(o)) : String}:
   match o:
@@ -722,12 +730,12 @@ def p_octets_to_string_list(+o: B.Octets) -> {B.Octets.to_string(o) == B.to_stri
 def Laws.octets_to_string_list(o):
   p_octets_to_string_list(o)
 
-def w_h_go(+ws: List<&2, Word(8n)>, +r: List<&2, Word(8n)>, +acc: String) -> {B.w8s.hex.go(B.w8s.rev_onto(ws, r), acc) == B.w8s.hex.go(r, B.hex.cat(B.w8s.to_list(ws), acc)) : String}:
+def w_h_go(+ws: List<&2, B.OctByte>, +r: List<&2, B.OctByte>, +acc: String) -> {B.w8s.hex.go(B.w8s.rev_onto(ws, r), acc) == B.w8s.hex.go(r, B.hex.cat(B.w8s.to_list(ws), acc)) : String}:
   match ws:
     case Nil{}:
       {==}
-    case Con{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WNil{}}}}}}}}}, t}:
-      w_h_go(t, Con{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WNil{}}}}}}}}}, r}, acc)
+    case Con{B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}, t}:
+      w_h_go(t, Con{B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}, r}, acc)
 
 def p_octets_hex_list(+o: B.Octets) -> {B.Octets.hex(o) == B.hex(B.Octets.to_list(o)) : String}:
   match o:
@@ -739,25 +747,25 @@ def Laws.octets_hex_list(o):
   p_octets_hex_list(o)
 
 # concat: pushing each piece's words is reversing the joined words
-def rev_app8(+xs: List<&2, Word(8n)>, +ys: List<&2, Word(8n)>, +acc: List<&2, Word(8n)>) -> {B.w8s.rev_onto(List.append(&2, Word(8n), xs, ys), acc) == B.w8s.rev_onto(ys, B.w8s.rev_onto(xs, acc)) : List<&2, Word(8n)>}:
+def rev_app8(+xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>, +acc: List<&2, B.OctByte>) -> {B.w8s.rev_onto(List.append(&2, B.OctByte, xs, ys), acc) == B.w8s.rev_onto(ys, B.w8s.rev_onto(xs, acc)) : List<&2, B.OctByte>}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
       rev_app8(t, ys, Con{h, acc})
 
-def concat_step(+ws: List<&2, Word(8n)>, +c: B.Octets, +acc: List<&2, Word(8n)>) -> {B.w8s.rev_onto(B.Octets.words(c), B.w8s.rev_onto(ws, acc)) == B.w8s.rev_onto(B.Octets.words(B.Octets.append(B.Octets{ws}, c)), acc) : List<&2, Word(8n)>}:
+def concat_step(+ws: List<&2, B.OctByte>, +c: B.Octets, +acc: List<&2, B.OctByte>) -> {B.w8s.rev_onto(B.Octets.words(c), B.w8s.rev_onto(ws, acc)) == B.w8s.rev_onto(B.Octets.words(B.Octets.append(B.Octets{ws}, c)), acc) : List<&2, B.OctByte>}:
   match c:
     case B.Octets{+zs}:
-      %F_app(ws, zs) : {B.w8s.rev_onto(zs, B.w8s.rev_onto(ws, acc)) == B.w8s.rev_onto(_, acc) : List<&2, Word(8n)>}
-      Equal.sym(List<&2, Word(8n)>, B.w8s.rev_onto(List.append(&2, Word(8n), ws, zs), acc), B.w8s.rev_onto(zs, B.w8s.rev_onto(ws, acc)), rev_app8(ws, zs, acc))
+      %F_app(ws, zs) : {B.w8s.rev_onto(zs, B.w8s.rev_onto(ws, acc)) == B.w8s.rev_onto(_, acc) : List<&2, B.OctByte>}
+      Equal.sym(List<&2, B.OctByte>, B.w8s.rev_onto(List.append(&2, B.OctByte, ws, zs), acc), B.w8s.rev_onto(zs, B.w8s.rev_onto(ws, acc)), rev_app8(ws, zs, acc))
 
-def concat_go(+os: List<&2, B.Octets>, +acc: List<&2, Word(8n)>) -> {B.w8s.concat.go(os, acc) == B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), acc) : List<&2, Word(8n)>}:
+def concat_go(+os: List<&2, B.Octets>, +acc: List<&2, B.OctByte>) -> {B.w8s.concat.go(os, acc) == B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), acc) : List<&2, B.OctByte>}:
   match os:
     case Nil{}:
       {==}
     case Con{B.Octets{+ws}, t}:
-      Equal.trans(List<&2, Word(8n)>, B.w8s.concat.go(t, B.w8s.rev_onto(ws, acc)), B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(t)), B.w8s.rev_onto(ws, acc)), B.w8s.rev_onto(B.Octets.words(B.Octets.append(B.Octets{ws}, B.Octets.concat.ref(t))), acc),
+      Equal.trans(List<&2, B.OctByte>, B.w8s.concat.go(t, B.w8s.rev_onto(ws, acc)), B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(t)), B.w8s.rev_onto(ws, acc)), B.w8s.rev_onto(B.Octets.words(B.Octets.append(B.Octets{ws}, B.Octets.concat.ref(t))), acc),
         concat_go(t, B.w8s.rev_onto(ws, acc)), concat_step(ws, B.Octets.concat.ref(t), acc))
 
 def octets_eta(+o: B.Octets) -> {B.Octets{B.Octets.words(o)} == o : B.Octets}:
@@ -765,14 +773,14 @@ def octets_eta(+o: B.Octets) -> {B.Octets{B.Octets.words(o)} == o : B.Octets}:
     case B.Octets{ws}:
       {==}
 
-def rr8_back(+zs: List<&2, Word(8n)>) -> {B.w8s.rev_onto(B.w8s.rev_onto(zs, Nil{}), Nil{}) == zs : List<&2, Word(8n)>}:
-  Equal.trans(List<&2, Word(8n)>, B.w8s.rev_onto(B.w8s.rev_onto(zs, Nil{}), Nil{}), List.append(&2, Word(8n), zs, Nil{}), zs, r8_rr(zs, Nil{}, Nil{}), app_nil8(zs))
+def rr8_back(+zs: List<&2, B.OctByte>) -> {B.w8s.rev_onto(B.w8s.rev_onto(zs, Nil{}), Nil{}) == zs : List<&2, B.OctByte>}:
+  Equal.trans(List<&2, B.OctByte>, B.w8s.rev_onto(B.w8s.rev_onto(zs, Nil{}), Nil{}), List.append(&2, B.OctByte, zs, Nil{}), zs, r8_rr(zs, Nil{}, Nil{}), app_nil8(zs))
 
 def concat_ref(+os: List<&2, B.Octets>) -> {B.Octets.concat(os) == B.Octets.concat.ref(os) : B.Octets}:
   Equal.trans(B.Octets, B.Octets.concat(os), B.Octets{B.Octets.words(B.Octets.concat.ref(os))}, B.Octets.concat.ref(os),
-    Equal.cong(List<&2, Word(8n)>, B.Octets, l => B.Octets{l}, B.w8s.rev_onto(B.w8s.concat.go(os, Nil{}), Nil{}), B.Octets.words(B.Octets.concat.ref(os)),
-      Equal.trans(List<&2, Word(8n)>, B.w8s.rev_onto(B.w8s.concat.go(os, Nil{}), Nil{}), B.w8s.rev_onto(B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), Nil{}), Nil{}), B.Octets.words(B.Octets.concat.ref(os)),
-        Equal.cong(List<&2, Word(8n)>, List<&2, Word(8n)>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.concat.go(os, Nil{}), B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), Nil{}), concat_go(os, Nil{})),
+    Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.rev_onto(B.w8s.concat.go(os, Nil{}), Nil{}), B.Octets.words(B.Octets.concat.ref(os)),
+      Equal.trans(List<&2, B.OctByte>, B.w8s.rev_onto(B.w8s.concat.go(os, Nil{}), Nil{}), B.w8s.rev_onto(B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), Nil{}), Nil{}), B.Octets.words(B.Octets.concat.ref(os)),
+        Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => B.w8s.rev_onto(l, Nil{}), B.w8s.concat.go(os, Nil{}), B.w8s.rev_onto(B.Octets.words(B.Octets.concat.ref(os)), Nil{}), concat_go(os, Nil{})),
         rr8_back(B.Octets.words(B.Octets.concat.ref(os))))),
     octets_eta(B.Octets.concat.ref(os)))
 
