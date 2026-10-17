@@ -14,6 +14,7 @@
 # cross-check against implementations outside this repository.
 import Base
 import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
 
 type Crc32Spec is Data:
   Crc32Spec{width: Nat, poly: U32, init: U32, reflected: Bool, xorout: U32}
@@ -147,10 +148,10 @@ def Crc32Spec.update.go(reflected: Bool, +width: Nat, poly: U32, c: U32, xs: Lis
       +shift = Nat.sub(width, 8n)
       n32.raw(xs, poly, shift, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)
 
-def Crc32Spec.update(spec: Crc32Spec, c: U32, xs: List<&2, U32>) -> U32:
+def Crc32Spec.update(spec: Crc32Spec, c: U32, o: B.Octets) -> U32:
   match spec:
     case Crc32Spec{+width, poly, init, reflected, xorout}:
-      Crc32Spec.update.go(reflected, width, poly, c, xs)
+      Crc32Spec.update.go(reflected, width, poly, c, B.Octets.to_list(o))
 
 # the register a CRC starts from
 def Crc32Spec.start.go(reflected: Bool, init: U32, width: Nat) -> U32:
@@ -170,7 +171,7 @@ def Crc32Spec.finish(spec: Crc32Spec, c: U32) -> U32:
     case Crc32Spec{width, poly, init, reflected, xorout}:
       U32.xor(c, xorout)
 
-def Crc32Spec.compute(+spec: Crc32Spec, xs: List<&2, U32>) -> U32:
+def Crc32Spec.compute(+spec: Crc32Spec, xs: B.Octets) -> U32:
   Crc32Spec.finish(spec, Crc32Spec.update(spec, Crc32Spec.start(spec), xs))
 
 def Crc64Spec.update.go(reflected: Bool, poly: W.W64, c: W.W64, xs: List<&2, U32>) -> W.W64:
@@ -180,10 +181,10 @@ def Crc64Spec.update.go(reflected: Bool, poly: W.W64, c: W.W64, xs: List<&2, U32
     case False{}:
       n64.raw(xs, poly, c)
 
-def Crc64Spec.update(spec: Crc64Spec, c: W.W64, xs: List<&2, U32>) -> W.W64:
+def Crc64Spec.update(spec: Crc64Spec, c: W.W64, o: B.Octets) -> W.W64:
   match spec:
     case Crc64Spec{poly, init, reflected, xorout}:
-      Crc64Spec.update.go(reflected, poly, c, xs)
+      Crc64Spec.update.go(reflected, poly, c, B.Octets.to_list(o))
 
 def Crc64Spec.start.go(reflected: Bool, init: W.W64) -> W.W64:
   match reflected:
@@ -202,7 +203,7 @@ def Crc64Spec.finish(spec: Crc64Spec, c: W.W64) -> W.W64:
     case Crc64Spec{poly, init, reflected, xorout}:
       W.W64.xor(c, xorout)
 
-def Crc64Spec.compute(+spec: Crc64Spec, xs: List<&2, U32>) -> W.W64:
+def Crc64Spec.compute(+spec: Crc64Spec, xs: B.Octets) -> W.W64:
   Crc64Spec.finish(spec, Crc64Spec.update(spec, Crc64Spec.start(spec), xs))
 
 # The named CRCs (parameters from the reveng catalogue)
@@ -235,23 +236,23 @@ def crc64_xz.spec() -> Crc64Spec:
 def crc64_nvme.spec() -> Crc64Spec:
   Crc64Spec{W.W64.from_parts(2912145973, 2496214617), W.W64.max(), True{}, W.W64.max()}
 
-def crc32c(xs: List<&2, U32>) -> U32:
+def crc32c(xs: B.Octets) -> U32:
   Crc32Spec.compute(crc32c.spec(), xs)
 
-def crc32(xs: List<&2, U32>) -> U32:
+def crc32(xs: B.Octets) -> U32:
   Crc32Spec.compute(crc32.spec(), xs)
 
-def crc16(xs: List<&2, U32>) -> U32:
+def crc16(xs: B.Octets) -> U32:
   Crc32Spec.compute(crc16.spec(), xs)
 
-def crc_t10dif(xs: List<&2, U32>) -> U32:
+def crc_t10dif(xs: B.Octets) -> U32:
   Crc32Spec.compute(crc_t10dif.spec(), xs)
 
-def crc64_ecma(xs: List<&2, U32>) -> W.W64:
+def crc64_ecma(xs: B.Octets) -> W.W64:
   Crc64Spec.compute(crc64_ecma.spec(), xs)
 
-def crc64_xz(xs: List<&2, U32>) -> W.W64:
+def crc64_xz(xs: B.Octets) -> W.W64:
   Crc64Spec.compute(crc64_xz.spec(), xs)
 
-def crc64_nvme(xs: List<&2, U32>) -> W.W64:
+def crc64_nvme(xs: B.Octets) -> W.W64:
   Crc64Spec.compute(crc64_nvme.spec(), xs)

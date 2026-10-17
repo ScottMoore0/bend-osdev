@@ -70,7 +70,7 @@ def ext4_crc32c_cases():
     return out
 
 def bend_list(data):
-    return "[" + ", ".join(str(b) for b in data) + "]"
+    return "B.Octets.of_list([" + ", ".join(str(b) for b in data) + "])"
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
@@ -95,7 +95,7 @@ def main():
         lines.append('    IO.print("ext4_sb %d " ++ U32.show(C.Crc32Spec.update(C.crc32c.spec(), 4294967295, %s)))' % (k, bend_list(sb)))
         expect.append("ext4_sb %d %d" % (k, stored))
     with open(os.path.join(here, "cases.bend"), "w") as f:
-        f.write("import Base\nimport ../../word64/word64.bend as W\nimport ../crc.bend as C\n\n")
+        f.write("import Base\nimport ../../word64/word64.bend as W\nimport ../../bytes/bytes.bend as B\nimport ../crc.bend as C\n\n")
         f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines) + "\n")
     with open(os.path.join(here, "expected.txt"), "w") as f:
         f.write("\n".join(expect) + "\n")

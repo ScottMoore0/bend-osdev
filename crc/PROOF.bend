@@ -2,6 +2,8 @@ import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
 import ./crc.bend as C
+import ../bytes/LAWS.bend as BL
+import ../bytes/PROOF.bend as BP
 import ./LAWS.bend as Laws
 
 # Each engine folds the bytes one at a time, so running it over a ++ b is
@@ -35,23 +37,29 @@ def n64_split(xs: List<&2, U32>, +poly: W.W64, c: W.W64, ys: List<&2, U32>) -> {
     case Con{h, t}:
       n64_split(t, poly, C.n64.bits(8n, poly, W.W64.xor(c, W.W64.from_parts(U32.shln(U32.and(h, 255), 24n), 0))), ys)
 
+# The law over Octets follows from the engines' list lemmas through bytes'
+# interface law octets_append_list, never through how Octets stores bytes.
 def Laws.streaming32(spec, c, a, b):
   match spec:
     case C.Crc32Spec{+width, +poly, init, reflected, xorout}:
       match reflected:
         case True{}:
-          r32_split(a, C.reflect32(poly, width), c, b)
+          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.r32.raw(_, C.reflect32(poly, width), c) == C.r32.raw(B.Octets.to_list(b), C.reflect32(poly, width), C.r32.raw(B.Octets.to_list(a), C.reflect32(poly, width), c)) : U32}
+          r32_split(B.Octets.to_list(a), C.reflect32(poly, width), c, B.Octets.to_list(b))
         case False{}:
-          n32_split(a, poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c, b)
+          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.n32.raw(_, poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c) == C.n32.raw(B.Octets.to_list(b), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), C.n32.raw(B.Octets.to_list(a), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)) : U32}
+          n32_split(B.Octets.to_list(a), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c, B.Octets.to_list(b))
 
 def Laws.streaming64(spec, c, a, b):
   match spec:
     case C.Crc64Spec{+poly, init, reflected, xorout}:
       match reflected:
         case True{}:
-          r64_split(a, C.reflect64(poly), c, b)
+          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.r64.raw(_, C.reflect64(poly), c) == C.r64.raw(B.Octets.to_list(b), C.reflect64(poly), C.r64.raw(B.Octets.to_list(a), C.reflect64(poly), c)) : W.W64}
+          r64_split(B.Octets.to_list(a), C.reflect64(poly), c, B.Octets.to_list(b))
         case False{}:
-          n64_split(a, poly, c, b)
+          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.n64.raw(_, poly, c) == C.n64.raw(B.Octets.to_list(b), poly, C.n64.raw(B.Octets.to_list(a), poly, c)) : W.W64}
+          n64_split(B.Octets.to_list(a), poly, c, B.Octets.to_list(b))
 
 def Laws.check_crc32c():
   {==}

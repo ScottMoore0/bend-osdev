@@ -26,11 +26,11 @@ law be32_round_trip:
   {B.be32_at(B.be32(v), 0n) == Some{v} : Maybe<&2, U32>}
 
 law le64_round_trip:
-  for v: W.W64
+  for +v: W.W64
   {B.le64_at(B.le64(v), 0n) == Some{v} : Maybe<&2, W.W64>}
 
 law be64_round_trip:
-  for v: W.W64
+  for +v: W.W64
   {B.be64_at(B.be64(v), 0n) == Some{v} : Maybe<&2, W.W64>}
 
 law byte_below_256:
@@ -67,3 +67,57 @@ law masks_elements:
 
 law hex_text:
   {B.hex(B.of_string("Bend")) == "42656e64" : String}
+
+# The Octets interface: the same round trips, and slicing, on Octets
+
+law octets_le16_round_trip:
+  for v: U32
+  {B.Octets.le16_at(B.Octets.le16(v), 0n) == Some{B.low16(v)} : Maybe<&2, U32>}
+
+law octets_be16_round_trip:
+  for v: U32
+  {B.Octets.be16_at(B.Octets.be16(v), 0n) == Some{B.low16(v)} : Maybe<&2, U32>}
+
+law octets_le32_round_trip:
+  for v: U32
+  {B.Octets.le32_at(B.Octets.le32(v), 0n) == Some{v} : Maybe<&2, U32>}
+
+law octets_be32_round_trip:
+  for v: U32
+  {B.Octets.be32_at(B.Octets.be32(v), 0n) == Some{v} : Maybe<&2, U32>}
+
+law octets_le64_round_trip:
+  for +v: W.W64
+  {B.Octets.le64_at(B.Octets.le64(v), 0n) == Some{v} : Maybe<&2, W.W64>}
+
+law octets_be64_round_trip:
+  for +v: W.W64
+  {B.Octets.be64_at(B.Octets.be64(v), 0n) == Some{v} : Maybe<&2, W.W64>}
+
+law octets_take_drop:
+  for n: Nat
+  for o: B.Octets
+  {B.Octets.append(B.Octets.take(n, o), B.Octets.drop(n, o)) == o : B.Octets}
+
+# of_list masks once: converting a byte string to a list and back changes nothing
+law octets_of_list_idempotent:
+  for xs: List<&2, U32>
+  {B.Octets.of_list(B.Octets.to_list(B.Octets.of_list(xs))) == B.Octets.of_list(xs) : B.Octets}
+
+law octets_is_eq_refl:
+  for o: B.Octets
+  {B.Octets.is_eq(o, o) == True{} : Bool}
+
+law octets_masks:
+  {B.Octets.hex(B.Octets.of_list([255, 256, 257])) == "ff0001" : String}
+
+law octets_slice:
+  {B.Octets.to_string(B.Octets.slice(2n, 3n, B.Octets.of_string("bend-osdev"))) == "nd-" : String}
+
+# The interface laws other packages' proofs rely on: how Octets relates to
+# lists, without depending on how Octets stores its bytes
+
+law octets_append_list:
+  for a: B.Octets
+  for b: B.Octets
+  {B.Octets.to_list(B.Octets.append(a, b)) == B.append(B.Octets.to_list(a), B.Octets.to_list(b)) : List<&2, U32>}

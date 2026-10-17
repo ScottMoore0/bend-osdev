@@ -4,7 +4,7 @@ Cyclic redundancy checks in the Rocksoft parameter model (Ross Williams, "A
 Painless Guide to CRC Error Detection Algorithms", 1993; parameters from the
 CRC catalogue at reveng.sourceforge.io).
 
-A CRC is fixed by its width, polynomial (normal, most significant bit first),
+Inputs are `Octets` (bend-osdev-bytes). A CRC is fixed by its width, polynomial (normal, most significant bit first),
 initial register value, bit order and final XOR. `Crc32Spec` covers widths 8
 to 32 on `U32`; `Crc64Spec` covers width 64 on `W64` (bend-osdev-word64).
 
@@ -28,13 +28,25 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 `Crc64Spec`. ext4 stores the raw register: its superblock checksum is
 `Crc32Spec.update(crc32c.spec(), 4294967295, bytes)`.
 
+## Extension points
+
+* **Any CRC of width 8 to 32 or 64:** build a `Crc32Spec` or `Crc64Spec` with
+  its catalogue parameters; the named CRCs are just such values. A CRC whose
+  input and output bit orders differ (refin ≠ refout) is not covered yet.
+* **Streaming:** `start`/`update`/`finish` let a caller feed data in pieces
+  (a block at a time, a packet at a time), with the law that pieces give the
+  whole's CRC.
+* **Fast paths** (table-driven, several bytes at a time) can be added behind
+  the same defs, with the bitwise engines kept as the reference.
+
 ## Laws
 
 `LAWS.bend` (a draft, not yet reviewed by the maintainer):
 
 * **for every input, and every parameter set:** a CRC computed in pieces is the
   CRC of the whole: `update(spec, c, a ++ b) == update(spec, update(spec, c, a),
-  b)`, at both word sizes, proved by induction;
+  b)` for all `Octets` `a` and `b`, at both word sizes, proved by induction
+  through bytes' interface law `octets_append_list`;
 * **vectors:** the catalogue's check value for each named CRC, and the empty
   input.
 

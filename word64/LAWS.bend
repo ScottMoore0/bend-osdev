@@ -52,3 +52,9 @@ law lo_from_parts:
   for h: U32
   for l: U32
   {W.W64.lo(W.W64.from_parts(h, l)) == l : U32}
+
+# Interface law: a word is its two halves joined (for every word). Other
+# packages' proofs use this instead of looking inside W64.
+law parts_of:
+  for v: W.W64
+  {W.W64.from_parts(W.W64.hi(v), W.W64.lo(v)) == v : W.W64}

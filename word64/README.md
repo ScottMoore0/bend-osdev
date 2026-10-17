@@ -22,15 +22,25 @@ Base's when that arrives.
 | `W64.show(a)`, `W64.show_hex(a)` | decimal; 16 lower-case hex digits |
 | `W64.bits.lo`, `W64.bits.hi`, `W64.bits.cat` | split a `Word(m + n)` and join it back (used by bend-osdev-bytes) |
 
+## Extension points
+
+* **The representation of `W64` is internal.** It stores bend-kit-int's `U64`
+  today; swapping in Base's native `U64` changes only `word64.bend`. Other
+  packages use only the defs above, and their proofs use only this package's
+  laws (in particular `parts_of`), never the inside of `W64`.
+* **Interface laws for dependents' proofs:** `parts_of` (a word is its halves
+  joined), `hi_from_parts`, `lo_from_parts`, `lo_from_u32`.
+
 ## Laws
 
 `LAWS.bend` (a draft, not yet reviewed by the maintainer) has:
 
 * **vectors** for the edge cases: wrapping at 2^64, shifts across the halves, a
   multiply that overflows, and the text forms;
-* **properties for every input**: `lo(from_u32(a)) == a`, and
-  `hi(from_parts(h, l)) == h` and `lo(from_parts(h, l)) == l` for all `h`, `l`.
-  Each is proved by splitting the words into their 32 bits.
+* **properties for every input**: `lo(from_u32(a)) == a`;
+  `hi(from_parts(h, l)) == h` and `lo(from_parts(h, l)) == l` for all `h`, `l`;
+  and `from_parts(hi(v), lo(v)) == v` for every word `v`. Each is proved by
+  splitting the words into their bits.
 
 The arithmetic itself (`add`, `mul`, …) is bend-kit-int's; its correctness for
 every input is bend-kit-int's to prove, not this package's.
