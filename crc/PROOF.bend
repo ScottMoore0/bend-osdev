@@ -87,3 +87,21 @@ def Laws.empty_crc32c():
 
 def Laws.empty_crc_t10dif():
   {==}
+
+def Laws.fast_crc32c():
+  {==}
+
+def Laws.fast_crc16():
+  {==}
+
+def Laws.fast_crc_t10dif():
+  {==}
+
+def Laws.fast_crc64_ecma():
+  {==}
+
+def Laws.fast_crc64_xz():
+  {==}
+
+def Laws.fast_agrees_crc32c():
+  {==}

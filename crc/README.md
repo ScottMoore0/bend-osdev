@@ -8,6 +8,13 @@ Inputs are `Octets` (bend-osdev-bytes). A CRC is fixed by its width, polynomial 
 initial register value, bit order and final XOR. `Crc32Spec` covers widths 8
 to 32 on `U32`; `Crc64Spec` covers width 64 on `W64` (bend-osdev-word64).
 
+## Files
+
+| File | Holds |
+|---|---|
+| `crc.bend` | the parameter model, the bitwise engines (the reference), the named CRCs, streaming |
+| `table.bend` | the table-driven fast path: `Crc32Spec.update_fast` / `compute_fast` and `Crc64Spec.update_fast` / `compute_fast` |
+
 ## The named CRCs
 
 | Def | CRC | Used by | Check value of "123456789" |
@@ -36,8 +43,9 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 * **Streaming:** `start`/`update`/`finish` let a caller feed data in pieces
   (a block at a time, a packet at a time), with the law that pieces give the
   whole's CRC.
-* **Fast paths** (table-driven, several bytes at a time) can be added behind
-  the same defs, with the bitwise engines kept as the reference.
+* **Fast paths:** `table.bend` is the first, kept beside the bitwise reference.
+  Others (several bytes per step, a table kept between calls) can be added the
+  same way, each tied to the reference.
 
 ## Laws
 
@@ -48,11 +56,16 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
   b)` for all `Octets` `a` and `b`, at both word sizes, proved by induction
   through bytes' interface law `octets_append_list`;
 * **vectors:** the catalogue's check value for each named CRC, and the empty
-  input.
+  input;
+* **the fast path, as vectors:** the check values computed table-driven, and
+  agreement with the reference on a longer input. A law for every input would
+  need lemmas about `Array`'s internals, so the fast path is tied to the
+  reference by these vectors and by the differential test.
 
 ## Tests
 
-`ref/run.sh` compares every CRC on random inputs (140 cases) with:
+`ref/run.sh` compares every CRC, through both the reference and the fast
+path, on random inputs (277 cases) with:
 
 * an independent implementation of the parameter model (`ref/gen.py`);
 * Python's `binascii.crc32` (zlib), for CRC-32;
@@ -62,11 +75,16 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 
 ## Speed
 
-The 32-bit CRCs run bit by bit on native `U32` arithmetic. The 64-bit ones use
-`W64`, which is slow until Base has a native `U64`. Neither is table-driven
-yet.
+The reference engines in `crc.bend` run bit by bit. The fast path in
+`table.bend` looks up one 256-entry table per byte instead of eight bit
+steps: on a native build, CRC32C over 400 KB took 3 ms bit by bit and 1 ms
+table-driven (Bend 2.0.37, WSL2). The 64-bit CRCs use `W64`, which is slow
+until Base has a native `U64`; the table matters most there.
+
+The fast path builds its table once per call (an `Array`, threaded through
+the loop), so it pays off on inputs longer than a few hundred bytes.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 140 cases match.
+`check.bend` passes, `ref/run.sh` 277 cases match, `scripts/deps.sh` passes.

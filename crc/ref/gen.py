@@ -90,12 +90,16 @@ def main():
             show = "W.W64.show_hex" if w == 64 else "U32.show"
             lines.append('    IO.print("%s %d " ++ %s(C.%s(%s)))' % (name, k, show, name, bend_list(data)))
             expect.append("%s %d %s" % (name, k, ("%016x" % v) if w == 64 else str(v)))
+            # the table-driven fast path, on the same input
+            fast = "T.Crc64Spec.compute_fast" if w == 64 else "T.Crc32Spec.compute_fast"
+            lines.append('    IO.print("%s_fast %d " ++ %s(%s(C.%s.spec(), %s)))' % (name, k, show, fast, name, bend_list(data)))
+            expect.append("%s_fast %d %s" % (name, k, ("%016x" % v) if w == 64 else str(v)))
     for k, (sb, stored) in enumerate(ext4_crc32c_cases()):
         assert model(sb, 32, 0x1EDC6F41, 0xFFFFFFFF, True, 0) == stored, "model disagrees with mke2fs"
         lines.append('    IO.print("ext4_sb %d " ++ U32.show(C.Crc32Spec.update(C.crc32c.spec(), 4294967295, %s)))' % (k, bend_list(sb)))
         expect.append("ext4_sb %d %d" % (k, stored))
     with open(os.path.join(here, "cases.bend"), "w") as f:
-        f.write("import Base\nimport ../../word64/word64.bend as W\nimport ../../bytes/bytes.bend as B\nimport ../crc.bend as C\n\n")
+        f.write("import Base\nimport ../../word64/word64.bend as W\nimport ../../bytes/bytes.bend as B\nimport ../crc.bend as C\nimport ../table.bend as T\n\n")
         f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines) + "\n")
     with open(os.path.join(here, "expected.txt"), "w") as f:
         f.write("\n".join(expect) + "\n")

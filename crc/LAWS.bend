@@ -10,6 +10,7 @@ import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
 import ./crc.bend as C
+import ./table.bend as T
 
 law streaming32:
   for spec: C.Crc32Spec
@@ -54,3 +55,25 @@ law empty_crc32c:
 
 law empty_crc_t10dif:
   {C.crc_t10dif(B.Octets.empty()) == 0 : U32}
+
+# The table-driven fast path (table.bend) gives the same check values, and
+# agrees with the reference on a longer input. Vectors only: a law for every
+# input would need lemmas about Array's internals.
+
+law fast_crc32c:
+  {T.Crc32Spec.compute_fast(C.crc32c.spec(), B.Octets.of_string("123456789")) == 3808858755 : U32}
+
+law fast_crc16:
+  {T.Crc32Spec.compute_fast(C.crc16.spec(), B.Octets.of_string("123456789")) == 47933 : U32}
+
+law fast_crc_t10dif:
+  {T.Crc32Spec.compute_fast(C.crc_t10dif.spec(), B.Octets.of_string("123456789")) == 53467 : U32}
+
+law fast_crc64_ecma:
+  {T.Crc64Spec.compute_fast(C.crc64_ecma.spec(), B.Octets.of_string("123456789")) == W.W64.from_parts(1816190815, 189363015) : W.W64}
+
+law fast_crc64_xz:
+  {T.Crc64Spec.compute_fast(C.crc64_xz.spec(), B.Octets.of_string("123456789")) == W.W64.from_parts(2573060539, 3742972410) : W.W64}
+
+law fast_agrees_crc32c:
+  {T.Crc32Spec.compute_fast(C.crc32c.spec(), B.Octets.of_string("bend-osdev: componentised, changeable, proved")) == C.crc32c(B.Octets.of_string("bend-osdev: componentised, changeable, proved")) : U32}
