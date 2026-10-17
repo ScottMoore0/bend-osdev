@@ -214,6 +214,107 @@ def hex(xs: List<&2, U32>) -> String:
       +b = byte(h)
       SCon{hex.digit(U32.shrn(b, 4n)), SCon{hex.digit(U32.and(b, 15)), hex(t)}}
 
+# The list layer, tail-recursive. Bend 2.0.37's runtime overflows its stack
+# at some tens of thousands of nested non-tail calls, so the structural forms
+# above cannot run on long lists; these build their answer in an accumulator
+# (reversed where order matters). Each is proved equal to its structural form
+# for every input (LAWS.bend: *_fast), so code can run these while proofs
+# reason about the structural forms.
+
+def rev_onto(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      rev_onto(t, Con{h, acc})
+
+def rev(xs: List<&2, U32>) -> List<&2, U32>:
+  rev_onto(xs, Nil{})
+
+def len.go(xs: List<&2, U32>, n: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      len.go(t, 1n+n)
+
+def len.fast(xs: List<&2, U32>) -> Nat:
+  len.go(xs, 0n)
+
+def take.go(n: Nat, xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      match xs:
+        case Nil{}:
+          acc
+        case Con{h, t}:
+          take.go(p, t, Con{h, acc})
+
+def take.fast(n: Nat, xs: List<&2, U32>) -> List<&2, U32>:
+  rev(take.go(n, xs, Nil{}))
+
+def append.fast(xs: List<&2, U32>, ys: List<&2, U32>) -> List<&2, U32>:
+  rev_onto(rev(xs), ys)
+
+def zeros.go(n: Nat, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      zeros.go(p, Con{0, acc})
+
+def zeros.fast(n: Nat) -> List<&2, U32>:
+  zeros.go(n, Nil{})
+
+def of_string.go(s: String, acc: List<&2, U32>) -> List<&2, U32>:
+  match s:
+    case SNil{}:
+      acc
+    case SCon{Chr{c}, t}:
+      of_string.go(t, Con{byte(c), acc})
+
+def of_string.fast(s: String) -> List<&2, U32>:
+  rev(of_string.go(s, Nil{}))
+
+# the string of xs's bytes in front of acc (structural; the laws' form)
+def to_string.cat(xs: List<&2, U32>, acc: String) -> String:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      SCon{Chr{byte(h)}, to_string.cat(t, acc)}
+
+def to_string.go(rs: List<&2, U32>, acc: String) -> String:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      to_string.go(t, SCon{Chr{byte(h)}, acc})
+
+def to_string.fast(xs: List<&2, U32>) -> String:
+  to_string.go(rev(xs), SNil{})
+
+def hex.cat(xs: List<&2, U32>, acc: String) -> String:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      +b = byte(h)
+      SCon{hex.digit(U32.shrn(b, 4n)), SCon{hex.digit(U32.and(b, 15)), hex.cat(t, acc)}}
+
+def hex.go(rs: List<&2, U32>, acc: String) -> String:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      +b = byte(h)
+      hex.go(t, SCon{hex.digit(U32.shrn(b, 4n)), SCon{hex.digit(U32.and(b, 15)), acc}})
+
+def hex.fast(xs: List<&2, U32>) -> String:
+  hex.go(rev(xs), SNil{})
+
 # Octets: the byte-string interface
 #
 # Public interfaces take and answer Octets. Its representation is internal:
@@ -242,6 +343,30 @@ def list_eq(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
       Bool.and(U32.is_eq(a, b), list_eq(s, t))
     case _ _:
       False{}
+
+def mask.go(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      mask.go(t, Con{byte(h), acc})
+
+# mask, tail-recursive (LAWS.bend: mask_fast)
+def mask.fast(xs: List<&2, U32>) -> List<&2, U32>:
+  rev(mask.go(xs, Nil{}))
+
+def list_eq.go(xs: List<&2, U32>, ys: List<&2, U32>, ok: Bool) -> Bool:
+  match xs ys:
+    case Nil{} Nil{}:
+      ok
+    case Con{a, s} Con{b, t}:
+      list_eq.go(s, t, Bool.and(ok, U32.is_eq(a, b)))
+    case _ _:
+      False{}
+
+# list_eq, tail-recursive; every element is compared (LAWS.bend: list_eq_fast)
+def list_eq.fast(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
+  list_eq.go(xs, ys, True{})
 
 # Word lists: the operations Octets is built from
 
@@ -309,13 +434,6 @@ def w8s.rev_onto(ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> List<&2, Wo
     case Con{h, t}:
       w8s.rev_onto(t, Con{h, acc})
 
-def u32s.rev_onto(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
-  match xs:
-    case Nil{}:
-      acc
-    case Con{h, t}:
-      u32s.rev_onto(t, Con{h, acc})
-
 def w8s.of_list.go(xs: List<&2, U32>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
   match xs:
     case Nil{}:
@@ -334,7 +452,7 @@ def w8s.to_list.go(ws: List<&2, Word(8n)>, acc: List<&2, U32>) -> List<&2, U32>:
       w8s.to_list.go(t, Con{of_bits8(h), acc})
 
 def w8s.to_list.fast(ws: List<&2, Word(8n)>) -> List<&2, U32>:
-  u32s.rev_onto(w8s.to_list.go(ws, Nil{}), Nil{})
+  rev_onto(w8s.to_list.go(ws, Nil{}), Nil{})
 
 def w8s.take.go(n: Nat, ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
   match n:
@@ -441,12 +559,31 @@ def Octets.append(a: Octets, b: Octets) -> Octets:
     case Octets{xs} Octets{ys}:
       Octets{w8s.append.fast(xs, ys)}
 
-def Octets.concat(os: List<&2, Octets>) -> Octets:
+# concat as the laws state it: each piece in front of the rest
+def Octets.concat.ref(os: List<&2, Octets>) -> Octets:
   match os:
     case Nil{}:
       Octets.empty()
     case Con{h, t}:
-      Octets.append(h, Octets.concat(t))
+      Octets.append(h, Octets.concat.ref(t))
+
+# every piece's words pushed, reversed, onto acc
+def w8s.concat.go(os: List<&2, Octets>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+  match os:
+    case Nil{}:
+      acc
+    case Con{Octets{ws}, t}:
+      w8s.concat.go(t, w8s.rev_onto(ws, acc))
+
+# the pieces joined in order, tail-recursive (LAWS.bend: octets_concat_*)
+def Octets.concat(os: List<&2, Octets>) -> Octets:
+  Octets{w8s.rev_onto(w8s.concat.go(os, Nil{}), Nil{})}
+
+# the words of an Octets (internal; for the proofs)
+def Octets.words(o: Octets) -> List<&2, Word(8n)>:
+  match o:
+    case Octets{ws}:
+      ws
 
 def Octets.len(o: Octets) -> Nat:
   match o:

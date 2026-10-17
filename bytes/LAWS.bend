@@ -166,3 +166,69 @@ law octets_split_short:
 
 law octets_split_text:
   {B.Octets.split_at(2n, B.Octets.of_string("abc")) == Some{B.OctetsSplit{B.Octets.of_string("ab"), B.Octets.of_string("c")}} : Maybe<&2, B.OctetsSplit>}
+
+# The tail-recursive list layer: each fast form equals its structural form,
+# for every input (stated structural == fast, the direction rewrites use, so
+# that `%BL.len_fast(xs) : {... _ ...}` turns a fast form back into the one
+# the other laws are about)
+
+law len_fast:
+  for xs: List<&2, U32>
+  {B.len(xs) == B.len.fast(xs) : Nat}
+
+law take_fast:
+  for n: Nat
+  for xs: List<&2, U32>
+  {B.take(n, xs) == B.take.fast(n, xs) : List<&2, U32>}
+
+law append_fast:
+  for xs: List<&2, U32>
+  for ys: List<&2, U32>
+  {B.append(xs, ys) == B.append.fast(xs, ys) : List<&2, U32>}
+
+law zeros_fast:
+  for n: Nat
+  {B.zeros(n) == B.zeros.fast(n) : List<&2, U32>}
+
+law mask_fast:
+  for xs: List<&2, U32>
+  {B.mask(xs) == B.mask.fast(xs) : List<&2, U32>}
+
+law of_string_fast:
+  for s: String
+  {B.of_string(s) == B.of_string.fast(s) : List<&2, U32>}
+
+law to_string_fast:
+  for xs: List<&2, U32>
+  {B.to_string(xs) == B.to_string.fast(xs) : String}
+
+law hex_fast:
+  for xs: List<&2, U32>
+  {B.hex(xs) == B.hex.fast(xs) : String}
+
+law list_eq_fast:
+  for xs: List<&2, U32>
+  for ys: List<&2, U32>
+  {B.list_eq(xs, ys) == B.list_eq.fast(xs, ys) : Bool}
+
+law rev_rev:
+  for xs: List<&2, U32>
+  {B.rev(B.rev(xs)) == xs : List<&2, U32>}
+
+# Octets' text and hex are the list layer's, and concat joins in order
+
+law octets_hex_list:
+  for o: B.Octets
+  {B.Octets.hex(o) == B.hex(B.Octets.to_list(o)) : String}
+
+law octets_to_string_list:
+  for o: B.Octets
+  {B.Octets.to_string(o) == B.to_string(B.Octets.to_list(o)) : String}
+
+law octets_concat_nil:
+  {B.Octets.concat(Nil{}) == B.Octets.empty() : B.Octets}
+
+law octets_concat_cons:
+  for h: B.Octets
+  for t: List<&2, B.Octets>
+  {B.Octets.concat(Con{h, t}) == B.Octets.append(h, B.Octets.concat(t)) : B.Octets}

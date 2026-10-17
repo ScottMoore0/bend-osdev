@@ -39,6 +39,7 @@ The same operations on `List<&2, U32>` directly. Packages written before
 | `le16_at be16_at le32_at be32_at le64_at be64_at` | read a field at an offset; `None` if the string is too short |
 | `low16(v)` | the low 16 bits of a word |
 | `of_string`, `to_string`, `hex` | text: one byte per character; two hex digits per byte |
+| `len.fast`, `take.fast`, `append.fast`, `zeros.fast`, `mask.fast`, `of_string.fast`, `to_string.fast`, `hex.fast`, `list_eq.fast`, `rev`, `rev_onto` | the same, tail-recursive, for long lists; each equals its structural form by a law |
 
 ## Extension points
 
@@ -69,6 +70,14 @@ The same operations on `List<&2, U32>` directly. Packages written before
   * `octets_take_append`, `octets_drop_append`: `take(len(a), append(a, b)) == a`
     and `drop(len(a), append(a, b)) == b`;
   * `octets_split_at_append`: `split_at(len(a), append(a, b)) == Some{OctetsSplit{a, b}}`;
+  * `octets_hex_list`, `octets_to_string_list`: `Octets.hex` and `to_string` are the
+    list layer's on `to_list(o)`; `octets_concat_nil`, `octets_concat_cons`: `concat`
+    joins its pieces in order;
+* **the tail-recursive list layer, for every input:** `len_fast`, `take_fast`,
+  `append_fast`, `zeros_fast`, `mask_fast`, `of_string_fast`, `to_string_fast`,
+  `hex_fast`, `list_eq_fast` (each stated structural == fast, the direction a
+  rewrite uses to turn running code back into what the other laws are about),
+  and `rev_rev`;
 * **vectors:** the byte orders, reading at an offset, short inputs, masking an
   element above 255, slicing, splitting, and hex text.
 
@@ -85,7 +94,7 @@ and the text and hex builders), and each is proved equal to its structural
 form for every input in `PROOF.bend`, which is what the laws reason about.
 `Octets.of_list`, `to_list`, `append`, `take`, `drop`, `len`, `zeros`,
 `split_at`, `is_eq`, `hex` and `to_string` have no length limit.
-`Octets.concat` recurses on the number of pieces, not their size.
+`Octets.concat` is tail-recursive too, in the number of pieces and their size.
 
 Measured on the reference machine (native build): a 2,000,000-byte `Octets`
 built, appended, cut and printed in 4 s, peaking at 1.7 GB. Storage is the
@@ -93,9 +102,11 @@ cost now: each byte is an 8-bit `Word`, about 940 bytes of memory per byte,
 against about 57 for an element of a `List<&2, U32>`. Hold images of more
 than a few MB a block at a time (blockdev's `MemDev`).
 
-The list layer (`take`, `drop`, `append`, `len`, `mask`, `hex`, ... on
-`List<&2, U32>`) is still structural, because other packages' proofs compute
-through it; use it on header-sized lists, and `Octets` for bulk data.
+The list layer's structural forms (`take`, `append`, `len`, `mask`, `hex`, ...
+on `List<&2, U32>`) stay structural, because other packages' proofs compute
+through them; use them on header-sized lists. For long lists use the `*.fast`
+forms (or `Octets`), and turn them back into the structural forms in proofs
+with the `*_fast` laws.
 
 ## Status
 
