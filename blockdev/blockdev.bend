@@ -54,39 +54,60 @@ def Dev.read_bytes(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Res
 type MemDev is Data:
   MemDev{block_size: Nat, blocks: List<&2, B.Octets>}
 
-def MemDev.split(n: Nat, +bs: Nat, o: B.Octets) -> List<&2, B.Octets>:
+# Block lists are walked by tail calls (an image may have far more blocks
+# than Bend's stack has room for nested calls)
+
+def MemDev.blocks.rev_onto(xs: List<&2, B.Octets>, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      MemDev.blocks.rev_onto(t, Con{h, acc})
+
+# n blocks of bs bytes cut from o, reversed onto acc
+def MemDev.split.go(n: Nat, +bs: Nat, o: B.Octets, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
   match n:
     case 0n:
-      Nil{}
+      acc
     case 1n+p:
       +rest = o
       +blk = B.Octets.take(bs, rest)
-      Con{B.Octets.append(blk, B.Octets.zeros(Nat.sub(bs, B.Octets.len(blk)))), MemDev.split(p, bs, B.Octets.drop(bs, rest))}
+      MemDev.split.go(p, bs, B.Octets.drop(bs, rest), Con{B.Octets.append(blk, B.Octets.zeros(Nat.sub(bs, B.Octets.len(blk)))), acc})
+
+def MemDev.split(n: Nat, +bs: Nat, o: B.Octets) -> List<&2, B.Octets>:
+  MemDev.blocks.rev_onto(MemDev.split.go(n, bs, o, Nil{}), Nil{})
 
 # an image as a device; a final partial block is padded with zeros
 def MemDev.of_octets(+bs: Nat, +o: B.Octets) -> MemDev:
   MemDev{bs, MemDev.split(Nat.div(Nat.add(B.Octets.len(o), Nat.sub(bs, 1n)), bs), bs, o)}
 
 # count zero blocks
-def MemDev.blank.go(n: Nat, +bs: Nat) -> List<&2, B.Octets>:
+def MemDev.blank.go(n: Nat, +bs: Nat, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
   match n:
     case 0n:
-      Nil{}
+      acc
     case 1n+p:
-      Con{B.Octets.zeros(bs), MemDev.blank.go(p, bs)}
+      MemDev.blank.go(p, bs, Con{B.Octets.zeros(bs), acc})
 
 def MemDev.blank(+bs: Nat, count: Nat) -> MemDev:
-  MemDev{bs, MemDev.blank.go(count, bs)}
+  MemDev{bs, MemDev.blank.go(count, bs, Nil{})}
 
 def MemDev.block_size(d: MemDev) -> Nat:
   match d:
     case MemDev{bs, blocks}:
       bs
 
+def MemDev.count.go(blocks: List<&2, B.Octets>, n: Nat) -> Nat:
+  match blocks:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      MemDev.count.go(t, 1n+n)
+
 def MemDev.block_count(d: MemDev) -> Nat:
   match d:
     case MemDev{bs, blocks}:
-      List.length(&2, B.Octets, blocks)
+      MemDev.count.go(blocks, 0n)
 
 def MemDev.nth(i: Nat, blocks: List<&2, B.Octets>, +n: Nat) -> Result<&2, &2, DevError, B.Octets>:
   match i blocks:
@@ -107,15 +128,29 @@ def MemDev.read_block.go(d: MemDev, +n: Nat) -> Result<&2, &2, DevError, B.Octet
 def MemDev.read_block(d: MemDev, n: Nat) -> Result<&2, &2, DevError, B.Octets>:
   MemDev.read_block.go(d, n)
 
-# the blocks with block i replaced by v (unchanged if there is no block i)
-def MemDev.set(i: Nat, blocks: List<&2, B.Octets>, v: B.Octets) -> List<&2, B.Octets>:
+# the blocks with block i replaced by v (unchanged if there is no block i):
+# the structural form the proofs reason about
+def MemDev.set.ref(i: Nat, blocks: List<&2, B.Octets>, v: B.Octets) -> List<&2, B.Octets>:
   match i blocks:
     case 0n Con{h, t}:
       Con{v, t}
     case 1n+p Con{h, t}:
-      Con{h, MemDev.set(p, t, v)}
+      Con{h, MemDev.set.ref(p, t, v)}
     case _ Nil{}:
       Nil{}
+
+# the same by tail calls: the blocks passed are kept, reversed, in acc
+def MemDev.set.go(i: Nat, blocks: List<&2, B.Octets>, v: B.Octets, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
+  match i blocks:
+    case 0n Con{h, t}:
+      MemDev.blocks.rev_onto(acc, Con{v, t})
+    case 1n+p Con{h, t}:
+      MemDev.set.go(p, t, v, Con{h, acc})
+    case _ Nil{}:
+      MemDev.blocks.rev_onto(acc, Nil{})
+
+def MemDev.set(i: Nat, blocks: List<&2, B.Octets>, v: B.Octets) -> List<&2, B.Octets>:
+  MemDev.set.go(i, blocks, v, Nil{})
 
 def MemDev.update.check(ok: Bool, +bs: Nat, blocks: List<&2, B.Octets>, +n: Nat, data: B.Octets) -> MemDev:
   match ok:

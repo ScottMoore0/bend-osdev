@@ -33,7 +33,12 @@ provides the two operations. Errors are `DevError`: `DevOutOfRange{block}`,
 | `MemDev.write_block(d, n, data)` | block `n` replaced, or why not (`Result`) |
 | `MemDev.update(d, n, data)` | the same, total: the device unchanged on a bad write |
 
-`MemDev`'s representation (a list of blocks) is internal.
+`MemDev`'s representation (a list of blocks) is internal. Its block lists
+are built, counted and updated by tail calls, so a device may have any number
+of blocks (a 2 MB image of 131,072 blocks of 16 bytes builds, updates, reads
+and joins back in about 4 s); the proofs reason about the structural
+`MemDev.set.ref` and tie it to the running `MemDev.set` by a lemma. Reading
+block `n` walks `n` list cells, and a write rebuilds the list up to `n`.
 
 ## Extension points
 
@@ -46,6 +51,9 @@ provides the two operations. Errors are `DevError`: `DevOutOfRange{block}`,
 * **Writing:** `MemDev` has writes; a write operation for the interface itself
   (for filesystems that write) can be added the same way, as a third template
   argument.
+* **Faster random access:** a `MemDev` backed by a tree (xarray, or a trie
+  on the block number) would make reads and writes logarithmic in the block
+  count, behind the same interface and laws.
 * **Effects:** this interface is pure. A device backed by a real file needs
   an `IO` version of `read_block`; that belongs in its own package.
 
