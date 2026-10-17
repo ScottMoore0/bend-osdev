@@ -42,34 +42,57 @@ def iso.walk.kids(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Resu
     case False{}:
       Done{Nil{}}
 
-# the items under these entries (of the directory at prefix), depth-first;
-# fuel directory levels deep at most
-def iso.walk.go(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +fuel: Nat, es: List<&2, DR.IsoEntry>, +d: D, +v: V.IsoVolume, +prefix: String) -> Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
-  match fuel:
-    case 0n:
-      match es:
-        case Nil{}:
-          Done{Nil{}}
-        case Con{+e, t}:
-          +path = prefix ++ "/" ++ DR.IsoEntry.name_of(e)
-          Result.map(&2, &2, F.IsoError, List<&2, IsoWalkItem>, List<&2, IsoWalkItem>, rest => Con{IsoWalkItem{path, e}, rest}, iso.walk.go(~D, ~block_size, ~read_block, fuel, t, d, v, prefix))
-    case 1n+f:
-      match es:
-        case Nil{}:
-          Done{Nil{}}
-        case Con{+e, t}:
-          +path = prefix ++ "/" ++ DR.IsoEntry.name_of(e)
-          do Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
-            kids : List<&2, DR.IsoEntry> <- iso.walk.kids(~D, ~block_size, ~read_block, DR.IsoEntry.is_dir_of(e), d, v, e)
-            sub : List<&2, IsoWalkItem> <- iso.walk.go(~D, ~block_size, ~read_block, f, kids, d, v, path)
-            rest : List<&2, IsoWalkItem> <- iso.walk.go(~D, ~block_size, ~read_block, fuel, t, d, v, prefix)
-            return Con{IsoWalkItem{path, e}, List.append(&2, IsoWalkItem, sub, rest)}
+def iso.walk.list(r: Result<&2, &2, F.IsoError, List<&2, DR.IsoEntry>>) -> List<&2, DR.IsoEntry>:
+  match r:
+    case Fail{e}:
+      Nil{}
+    case Done{es}:
+      es
+
+def iso.walk.after(r: Result<&2, &2, F.IsoError, List<&2, DR.IsoEntry>>, acc: Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>) -> Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{es}:
+      acc
+
+def iso.walk.rev(xs: List<&2, IsoWalkItem>, acc: List<&2, IsoWalkItem>) -> List<&2, IsoWalkItem>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      iso.walk.rev(t, Con{h, acc})
+
+# the items under these entries (of the directory at prefix), depth-first,
+# pushed onto r (the items so far, latest first, or the first error);
+# fuel directory levels deep at most. It loops over the entries of a
+# directory and recurses only into subdirectories.
+def iso.walk.go(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +fuel: Nat, es: List<&2, DR.IsoEntry>, +d: D, +v: V.IsoVolume, +prefix: String, r: Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>) -> Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
+  match fuel es r:
+    case _ _ Fail{e}:
+      Fail{e}
+    case _ Nil{} Done{acc}:
+      Done{acc}
+    case 0n Con{+e, t} Done{acc}:
+      +path = prefix ++ "/" ++ DR.IsoEntry.name_of(e)
+      iso.walk.go(~D, ~block_size, ~read_block, fuel, t, d, v, prefix, Done{Con{IsoWalkItem{path, e}, acc}})
+    case 1n+f Con{+e, t} Done{acc}:
+      +path = prefix ++ "/" ++ DR.IsoEntry.name_of(e)
+      +kids = iso.walk.kids(~D, ~block_size, ~read_block, DR.IsoEntry.is_dir_of(e), d, v, e)
+      iso.walk.go(~D, ~block_size, ~read_block, fuel, t, d, v, prefix, iso.walk.go(~D, ~block_size, ~read_block, f, iso.walk.list(kids), d, v, path, iso.walk.after(kids, Done{Con{IsoWalkItem{path, e}, acc}})))
+
+def iso.walk.fin(r: Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>) -> Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{acc}:
+      Done{iso.walk.rev(acc, Nil{})}
 
 # every entry of the volume, depth-first, each directory before its entries
 def Iso.walk(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +d: D, +v: V.IsoVolume) -> Result<&2, &2, F.IsoError, List<&2, IsoWalkItem>>:
   match v:
     case V.IsoVolume{V.IsoOptions{nm, e, s, f, md, mc, +mx}, n, p, r, j, k, b, ds}:
-      Result.bind(&2, &2, F.IsoError, List<&2, DR.IsoEntry>, List<&2, IsoWalkItem>, DR.Iso.list(~D, ~block_size, ~read_block, d, v, DR.Iso.root(v)), es => iso.walk.go(~D, ~block_size, ~read_block, mx, es, d, v, ""))
+      Result.bind(&2, &2, F.IsoError, List<&2, DR.IsoEntry>, List<&2, IsoWalkItem>, DR.Iso.list(~D, ~block_size, ~read_block, d, v, DR.Iso.root(v)), es => iso.walk.fin(iso.walk.go(~D, ~block_size, ~read_block, mx, es, d, v, "", Done{Nil{}})))
 
 # One line per entry: "d" or "f", the path, the size, and " -> target" for a
 # Rock Ridge symbolic link

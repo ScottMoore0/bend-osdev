@@ -34,13 +34,23 @@ def iso.file.nonempty.pick(empty: Bool, x: DR.IsoExtent, rest: List<&2, DR.IsoEx
     case False{}:
       Con{x, rest}
 
-# the extents with the empty ones left out
-def iso.file.nonempty(xs: List<&2, DR.IsoExtent>) -> List<&2, DR.IsoExtent>:
+def iso.file.rev(xs: List<&2, DR.IsoExtent>, acc: List<&2, DR.IsoExtent>) -> List<&2, DR.IsoExtent>:
   match xs:
     case Nil{}:
-      Nil{}
+      acc
+    case Con{h, t}:
+      iso.file.rev(t, Con{h, acc})
+
+def iso.file.nonempty.go(xs: List<&2, DR.IsoExtent>, acc: List<&2, DR.IsoExtent>) -> List<&2, DR.IsoExtent>:
+  match xs:
+    case Nil{}:
+      iso.file.rev(acc, Nil{})
     case Con{DR.IsoExtent{b, +s}, t}:
-      iso.file.nonempty.pick(U32.is_eq(s, 0), DR.IsoExtent{b, s}, iso.file.nonempty(t))
+      iso.file.nonempty.go(t, iso.file.nonempty.pick(U32.is_eq(s, 0), DR.IsoExtent{b, s}, acc))
+
+# the extents with the empty ones left out (a loop: a file may have many)
+def iso.file.nonempty(xs: List<&2, DR.IsoExtent>) -> List<&2, DR.IsoExtent>:
+  iso.file.nonempty.go(xs, Nil{})
 
 # a stream at the start of these extents
 def iso.file.cursor(+xs: List<&2, DR.IsoExtent>) -> IsoCursor:
@@ -107,23 +117,62 @@ def Iso.file_next(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Resu
 def iso.file.dev(r: Result<&2, &2, BD.DevError, B.Octets>) -> Result<&2, &2, F.IsoError, B.Octets>:
   F.iso.dev(r)
 
-# n bytes from byte off of an extent at block b (n and off within it)
-def iso.file.span(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, d: D, b: U32, off: Nat, n: Nat) -> Result<&2, &2, F.IsoError, B.Octets>:
-  iso.file.dev(BD.Dev.read_bytes(~D, ~block_size, ~read_block, d, Nat.add(Nat.mul(U32.to_nat(b), 2048n), off), n))
-
-def iso.file.range(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, xs: List<&2, DR.IsoExtent>, +d: D, +off: Nat, +len: Nat) -> Result<&2, &2, F.IsoError, B.Octets>:
+def iso.file.octets.rev(xs: List<&2, B.Octets>, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
   match xs:
     case Nil{}:
-      Done{B.Octets.empty()}
-    case Con{DR.IsoExtent{b, s}, t}:
+      acc
+    case Con{h, t}:
+      iso.file.octets.rev(t, Con{h, acc})
+
+def iso.file.joined(r: Result<&2, &2, F.IsoError, List<&2, B.Octets>>) -> Result<&2, &2, F.IsoError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{ps}:
+      Done{B.Octets.concat(iso.file.octets.rev(ps, Nil{}))}
+
+def iso.file.piece.add(r: Result<&2, &2, F.IsoError, B.Octets>, acc: List<&2, B.Octets>) -> Result<&2, &2, F.IsoError, List<&2, B.Octets>>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{o}:
+      Done{Con{o, acc}}
+
+# the n bytes at byte pos of the device, read in pieces of at most 64
+# blocks (fuel: pieces left; acc: the pieces so far, latest first, or the
+# first error)
+def iso.file.span.go(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, fuel: Nat, +d: D, +pos: Nat, +n: Nat, acc: Result<&2, &2, F.IsoError, List<&2, B.Octets>>) -> Result<&2, &2, F.IsoError, List<&2, B.Octets>>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{ps}:
+          +k = Nat.min(n, 131072n)
+          iso.file.span.go(~D, ~block_size, ~read_block, p, d, Nat.add(pos, k), Nat.sub(n, k), iso.file.piece.add(iso.file.dev(BD.Dev.read_bytes(~D, ~block_size, ~read_block, d, pos, k)), ps))
+
+# n bytes from byte off of an extent at block b (n and off within it), read
+# in pieces, so that no single device read is long
+def iso.file.span(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, d: D, b: U32, off: Nat, +n: Nat) -> Result<&2, &2, F.IsoError, B.Octets>:
+  iso.file.joined(iso.file.span.go(~D, ~block_size, ~read_block, Nat.div(Nat.add(n, 131071n), 131072n), d, Nat.add(Nat.mul(U32.to_nat(b), 2048n), off), n, Done{Nil{}}))
+
+# the bytes of a range, a loop over the extents xs: r is the piece read from
+# the extent before them (or the first error), acc the pieces before that
+# (latest first); off and len are relative to the first of xs
+def iso.file.range(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, xs: List<&2, DR.IsoExtent>, +d: D, +off: Nat, +len: Nat, r: Result<&2, &2, F.IsoError, B.Octets>, acc: List<&2, B.Octets>) -> Result<&2, &2, F.IsoError, B.Octets>:
+  match xs r:
+    case _ Fail{e}:
+      Fail{e}
+    case Nil{} Done{o}:
+      Done{B.Octets.concat(iso.file.octets.rev(Con{o, acc}, Nil{}))}
+    case Con{DR.IsoExtent{b, s}, t} Done{o}:
       +size = U32.to_nat(s)
       +n = Nat.min(len, Nat.sub(size, off))
-      do Result<&2, &2, F.IsoError, B.Octets>:
-        here : B.Octets <- iso.file.span(~D, ~block_size, ~read_block, d, b, Nat.min(off, size), n)
-        more : B.Octets <- iso.file.range(~D, ~block_size, ~read_block, t, d, Nat.sub(off, size), Nat.sub(len, n))
-        return B.Octets.append(here, more)
+      iso.file.range(~D, ~block_size, ~read_block, t, d, Nat.sub(off, size), Nat.sub(len, n), iso.file.span(~D, ~block_size, ~read_block, d, b, Nat.min(off, size), n), Con{o, acc})
 
 # the bytes from off to off + len of a file, or fewer where the file ends
 # (no byte past its data length is read or answered)
 def Iso.file_read(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +d: D, e: DR.IsoEntry, +off: Nat, +len: Nat) -> Result<&2, &2, F.IsoError, B.Octets>:
-  Result.bind(&2, &2, F.IsoError, DR.IsoEntry, B.Octets, iso.file.check(e), x => iso.file.range(~D, ~block_size, ~read_block, DR.IsoEntry.extents_of(x), d, off, len))
+  Result.bind(&2, &2, F.IsoError, DR.IsoEntry, B.Octets, iso.file.check(e), x => iso.file.range(~D, ~block_size, ~read_block, DR.IsoEntry.extents_of(x), d, off, len, Done{B.Octets.empty()}, Nil{}))

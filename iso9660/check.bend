@@ -1,5 +1,6 @@
 import Base
 import ../bytes/bytes.bend as B
+import ../word64/word64.bend as W
 import ../blockdev/blockdev.bend as BD
 import ./fields.bend as F
 import ./joliet.bend as J
@@ -265,6 +266,153 @@ def susp(r: Result<&2, &2, F.IsoError, List<&2, S.IsoSuspEntry>>) -> String:
     case Fail{e}:
       F.IsoError.show(e)
 
+# A large volume, made up as it is read (its sectors are shared, so it
+# costs little memory): /BIG, a directory of k sectors of 60 records each
+# (all named A: 7200 entries, 240 KB), and /MULTI, km sectors holding one
+# file M of 60 * km extents (2400) of 2 bytes each, all at the data block.
+#   16 primary, 17 terminator, 19 root, then /BIG, /MULTI and the data block
+type IsoBig is Data:
+  IsoBig{pvd: B.Octets, term: B.Octets, root: B.Octets, a: B.Octets, m: B.Octets, last: B.Octets, data: B.Octets}
+
+def big.k() -> U32:
+  120
+
+def big.km() -> U32:
+  40
+
+def big.reps(n: Nat, +r: R.IsoDirRec, acc: List<&2, R.IsoDirRec>) -> List<&2, R.IsoDirRec>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      big.reps(p, r, Con{r, acc})
+
+def big.dev.go(+k: U32, +km: U32) -> IsoBig:
+  +at = U32.add(20, U32.add(k, km))
+  IsoBig{vd(1, 19, F.Iso.both32_encode(U32.add(at, 1))), terminator(), sector([rec(19, 2048, 2, [0], Nil{}), rec(19, 2048, 2, [1], Nil{}), rec(20, U32.mul(k, 2048), 2, B.of_string("BIG"), Nil{}), rec(U32.add(20, k), U32.mul(km, 2048), 2, B.of_string("MULTI"), Nil{})]), sector(big.reps(60n, rec(0, 0, 0, [65], Nil{}), Nil{})), sector(big.reps(60n, rec(at, 2, 128, [77], Nil{}), Nil{})), sector(big.reps(59n, rec(at, 2, 128, [77], Nil{}), [rec(at, 2, 0, [77], Nil{})])), block(B.Octets.of_string("ok"))}
+
+def big.dev() -> IsoBig:
+  big.dev.go(big.k(), big.km())
+
+def IsoBig.block_size(d: IsoBig) -> Nat:
+  2048n
+
+def big.low.go(a: Bool, b: Bool, c: Bool, pv: B.Octets, te: B.Octets, ro: B.Octets) -> B.Octets:
+  match a b c:
+    case True{} _ _:
+      pv
+    case False{} True{} _:
+      te
+    case False{} False{} True{}:
+      ro
+    case False{} False{} False{}:
+      B.Octets.zeros(2048n)
+
+def big.low(+n: Nat, pv: B.Octets, te: B.Octets, ro: B.Octets) -> B.Octets:
+  big.low.go(Nat.is_eq(n, 16n), Nat.is_eq(n, 17n), Nat.is_eq(n, 19n), pv, te, ro)
+
+def big.extents(xs: List<&2, DR.IsoExtent>, n: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      big.extents(t, 1n+n)
+
+def big.read.go(lo: Bool, a: Bool, m: Bool, last: Bool, data: Bool, d: IsoBig, +n: Nat) -> Result<&2, &2, BD.DevError, B.Octets>:
+  match lo a m last data d:
+    case True{} _ _ _ _ IsoBig{pv, te, ro, x, y, z, w}:
+      Done{big.low(n, pv, te, ro)}
+    case False{} True{} _ _ _ IsoBig{pv, te, ro, x, y, z, w}:
+      Done{x}
+    case False{} False{} True{} _ _ IsoBig{pv, te, ro, x, y, z, w}:
+      Done{y}
+    case False{} False{} False{} True{} _ IsoBig{pv, te, ro, x, y, z, w}:
+      Done{z}
+    case False{} False{} False{} False{} True{} IsoBig{pv, te, ro, x, y, z, w}:
+      Done{w}
+    case False{} False{} False{} False{} False{} _:
+      Fail{BD.DevOutOfRange{n}}
+
+def big.read(d: IsoBig, +n: Nat) -> Result<&2, &2, BD.DevError, B.Octets>:
+  +k = Nat.add(20n, U32.to_nat(big.k()))
+  +m = Nat.add(k, U32.to_nat(big.km()))
+  big.read.go(Nat.is_lt(n, 20n), Nat.is_lt(n, k), Nat.is_lt(n, Nat.sub(m, 1n)), Nat.is_lt(n, m), Nat.is_lt(n, Nat.add(m, 1n)), d, n)
+
+def IsoBig.read_block(d: IsoBig, n: Nat) -> Result<&2, &2, BD.DevError, B.Octets>:
+  big.read(d, n)
+
+def big.count(xs: List<&2, I.IsoWalkItem>, n: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      big.count(t, 1n+n)
+
+def big.entries(xs: List<&2, DR.IsoEntry>, n: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      big.entries(t, 1n+n)
+
+def big.walked(r: Result<&2, &2, F.IsoError, List<&2, I.IsoWalkItem>>) -> String:
+  match r:
+    case Done{xs}:
+      Nat.show(big.count(xs, 0n)) ++ " walked"
+    case Fail{e}:
+      F.IsoError.show(e)
+
+def big.listed(r: Result<&2, &2, F.IsoError, List<&2, DR.IsoEntry>>) -> String:
+  match r:
+    case Done{es}:
+      Nat.show(big.entries(es, 0n)) ++ " entries"
+    case Fail{e}:
+      F.IsoError.show(e)
+
+def big.sized(r: Result<&2, &2, F.IsoError, DR.IsoEntry>) -> String:
+  match r:
+    case Done{+e}:
+      DR.IsoEntry.name_of(e) ++ " " ++ W.W64.show(DR.IsoEntry.size_of(e)) ++ " bytes in " ++ Nat.show(big.extents(DR.IsoEntry.extents_of(e), 0n)) ++ " extents"
+    case Fail{e}:
+      F.IsoError.show(e)
+
+def big.read.show(r: Result<&2, &2, F.IsoError, B.Octets>) -> String:
+  match r:
+    case Done{+o}:
+      Nat.show(B.Octets.len(o)) ++ " bytes, from " ++ B.Octets.to_string(B.Octets.take(4n, o))
+    case Fail{e}:
+      F.IsoError.show(e)
+
+# the pieces of a stream and their bytes
+def big.pieces(fuel: Nat, +d: IsoBig, r: Result<&2, &2, F.IsoError, FL.IsoChunk>, +n: Nat, +k: Nat) -> String:
+  match fuel r:
+    case 0n _:
+      "..."
+    case 1n+f Fail{e}:
+      F.IsoError.show(e)
+    case 1n+f Done{FL.IsoChunkEnd{}}:
+      Nat.show(n) ++ " pieces, " ++ Nat.show(k) ++ " bytes"
+    case 1n+f Done{FL.IsoChunkData{+o, c}}:
+      big.pieces(f, d, FL.Iso.file_next(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, c), 1n+n, Nat.add(k, B.Octets.len(o)))
+
+def big.stream(+d: IsoBig, r: Result<&2, &2, F.IsoError, FL.IsoCursor>) -> String:
+  match r:
+    case Done{c}:
+      big.pieces(40000n, d, FL.Iso.file_next(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, c), 0n, 0n)
+    case Fail{e}:
+      F.IsoError.show(e)
+
+def big.run(+d: IsoBig, r: Result<&2, &2, F.IsoError, V.IsoVolume>) -> String:
+  match r:
+    case Fail{e}:
+      "open: " ++ F.IsoError.show(e)
+    case Done{+v}:
+      big.walked(I.Iso.walk(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, v)) ++ ", " ++ found(DR.Iso.find(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, v, "/BIG/B")) ++ ", " ++ big.read.show(I.Iso.read_path(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, v, "/MULTI/M", 0n, 70000n))
+
+def big() -> String:
+  +d = big.dev()
+  big.run(d, V.Iso.open(~IsoBig, ~IsoBig.block_size, ~IsoBig.read_block, d, V.IsoOptions.default()))
+
 def main() -> IO(Unit):
   do IO<Unit>:
     IO.print(descs(V.Iso.descriptors(~BD.MemDev, ~BD.MemDev.read_block, image(), V.IsoOptions.default())))
@@ -294,6 +442,7 @@ def main() -> IO(Unit):
     IO.print(susp(S.Iso.susp_parse(B.Octets.of_list(B.append(px(1, 1), nm("x"))))))
     IO.print(susp(S.Iso.susp_parse(B.Octets.of_list([80, 88, 3, 1]))))
     IO.print(Nat.show(J.Iso.joliet_level(B.Octets.of_list([37, 47, 64]))))
+    IO.print(big())
 
 #|primary, supplementary joliet 3, terminator
 #|rockridge CHECK
@@ -337,3 +486,4 @@ def main() -> IO(Unit):
 #|2 entries
 #|bad system use entry
 #|1
+#|7203 walked, not found: B, 4800 bytes, from okok

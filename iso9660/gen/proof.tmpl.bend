@@ -544,18 +544,95 @@ def fence_in(+d: BD.MemDev, +ext: Nat, +count: Nat, +i: Nat, h: {Nat.is_lt(i, co
   %lt_add_both(ext, i, count, h) : {BD.MemDev.read_block(d, Nat.add(ext, i)) == FN.iso.fence.pick(Bool.and(True{}, _), d, Nat.add(ext, i)) : Result<&2, &2, BD.DevError, B.Octets>}
   {==}
 
-# the walk of k sectors from sector i, inside a fence of count blocks from
-# ext, reads as on the device
-def walk_fenced(+k: Nat, +d: BD.MemDev, +mode: F.IsoEndian, +ext: Nat, +left: Nat, +i: Nat, +count: Nat, +h: {Nat.is_le(Nat.add(i, k), count) == True{} : Bool}) -> {DR.iso.dir.walk(~BD.MemDev, ~BD.MemDev.read_block, k, d, mode, ext, left, i) == DR.iso.dir.walk(~FN.IsoFence, ~FN.IsoFence.read_block, k, FN.IsoFence{d, ext, count}, mode, ext, left, i) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+# the reference walk of k sectors from sector i, inside a fence of count
+# blocks from ext, reads as on the device
+def walk_fenced(+k: Nat, +d: BD.MemDev, +mode: F.IsoEndian, +ext: Nat, +left: Nat, +i: Nat, +count: Nat, +h: {Nat.is_le(Nat.add(i, k), count) == True{} : Bool}) -> {DR.iso.dir.walk.ref(~BD.MemDev, ~BD.MemDev.read_block, k, d, mode, ext, left, i) == DR.iso.dir.walk.ref(~FN.IsoFence, ~FN.IsoFence.read_block, k, FN.IsoFence{d, ext, count}, mode, ext, left, i) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
   match k:
     case 0n:
       {==}
     case 1n+p:
-      %fence_in(d, ext, count, i, le_lt(i, p, count, h)) : {DR.iso.dir.walk(~BD.MemDev, ~BD.MemDev.read_block, 1n+p, d, mode, ext, left, i) == DR.iso.dir.walk.step(F.iso.dev(_), mode, left, DR.iso.dir.walk(~FN.IsoFence, ~FN.IsoFence.read_block, p, FN.IsoFence{d, ext, count}, mode, ext, Nat.sub(left, 2048n), 1n+i)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
-      %walk_fenced(p, d, mode, ext, Nat.sub(left, 2048n), 1n+i, count, le_next(i, p, count, h)) : {DR.iso.dir.walk(~BD.MemDev, ~BD.MemDev.read_block, 1n+p, d, mode, ext, left, i) == DR.iso.dir.walk.step(F.iso.dev(BD.MemDev.read_block(d, Nat.add(ext, i))), mode, left, _) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
+      %fence_in(d, ext, count, i, le_lt(i, p, count, h)) : {DR.iso.dir.walk.ref(~BD.MemDev, ~BD.MemDev.read_block, 1n+p, d, mode, ext, left, i) == DR.iso.dir.walk.step(F.iso.dev(_), mode, left, DR.iso.dir.walk.ref(~FN.IsoFence, ~FN.IsoFence.read_block, p, FN.IsoFence{d, ext, count}, mode, ext, Nat.sub(left, 2048n), 1n+i)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
+      %walk_fenced(p, d, mode, ext, Nat.sub(left, 2048n), 1n+i, count, le_next(i, p, count, h)) : {DR.iso.dir.walk.ref(~BD.MemDev, ~BD.MemDev.read_block, 1n+p, d, mode, ext, left, i) == DR.iso.dir.walk.step(F.iso.dev(BD.MemDev.read_block(d, Nat.add(ext, i))), mode, left, _) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
       {==}
 
+# Iso.dir_records runs the loop iso.dir.walk; it equals the reference
+# iso.dir.walk.ref (on which the fence is proved above) for every device and
+# input: with acc the records of the sectors before (latest first), the loop
+# gives the reference's records with acc reversed in front of them.
+
+def dw_lift(a: List<&2, R.IsoDirRec>, r: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      Done{DR.iso.dir.rev(a, rs)}
+
+def dw_lift2(acc: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, r: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{a}:
+      dw_lift(a, r)
+
+def dw_rr(xs: List<&2, R.IsoDirRec>, acc: List<&2, R.IsoDirRec>, b: List<&2, R.IsoDirRec>) -> {DR.iso.dir.rev(DR.iso.dir.rev(xs, acc), b) == DR.iso.dir.rev(acc, List.append(&2, R.IsoDirRec, xs, b)) : List<&2, R.IsoDirRec>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      dw_rr(t, Con{h, acc}, b)
+
+def dw_more(+recs: List<&2, R.IsoDirRec>, +a: List<&2, R.IsoDirRec>, rest: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> {dw_lift(DR.iso.dir.rev(recs, a), rest) == dw_lift(a, DR.iso.dir.walk.join(Done{recs}, rest)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  match rest:
+    case Fail{e}:
+      {==}
+    case Done{more}:
+      Equal.cong(List<&2, R.IsoDirRec>, Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, l => Done{l}, DR.iso.dir.rev(DR.iso.dir.rev(recs, a), more), DR.iso.dir.rev(a, List.append(&2, R.IsoDirRec, recs, more)), dw_rr(recs, a, more))
+
+def dw_push(rr: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, +a: List<&2, R.IsoDirRec>, +rest: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> {dw_lift2(DR.iso.dir.walk.push(rr, a), rest) == dw_lift(a, DR.iso.dir.walk.join(rr, rest)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  match rr:
+    case Fail{e}:
+      {==}
+    case Done{recs}:
+      dw_more(recs, a, rest)
+
+def dw_add(r: Result<&2, &2, F.IsoError, B.Octets>, +mode: F.IsoEndian, +left: Nat, +a: List<&2, R.IsoDirRec>, +rest: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> {dw_lift2(DR.iso.dir.walk.add(r, mode, left, a), rest) == dw_lift(a, DR.iso.dir.walk.step(r, mode, left, rest)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{blk}:
+      dw_push(DR.iso.dir.records(mode, left, blk), a, rest)
+
+def dw_go(~D: Data, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +k: Nat, +d: D, +mode: F.IsoEndian, +ext: Nat, +left: Nat, +i: Nat, acc: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> {DR.iso.dir.walk(~D, ~read_block, k, d, mode, ext, left, i, acc) == dw_lift2(acc, DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i)) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  match k:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{a}:
+          {==}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+a}:
+          Equal.trans(Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, DR.iso.dir.walk(~D, ~read_block, p, d, mode, ext, Nat.sub(left, 2048n), 1n+i, DR.iso.dir.walk.add(F.iso.read_sector(~D, ~read_block, d, Nat.add(ext, i)), mode, left, a)), dw_lift2(DR.iso.dir.walk.add(F.iso.read_sector(~D, ~read_block, d, Nat.add(ext, i)), mode, left, a), DR.iso.dir.walk.ref(~D, ~read_block, p, d, mode, ext, Nat.sub(left, 2048n), 1n+i)), dw_lift(a, DR.iso.dir.walk.step(F.iso.read_sector(~D, ~read_block, d, Nat.add(ext, i)), mode, left, DR.iso.dir.walk.ref(~D, ~read_block, p, d, mode, ext, Nat.sub(left, 2048n), 1n+i))),
+            dw_go(~D, ~read_block, p, d, mode, ext, Nat.sub(left, 2048n), 1n+i, DR.iso.dir.walk.add(F.iso.read_sector(~D, ~read_block, d, Nat.add(ext, i)), mode, left, a)),
+            dw_add(F.iso.read_sector(~D, ~read_block, d, Nat.add(ext, i)), mode, left, a, DR.iso.dir.walk.ref(~D, ~read_block, p, d, mode, ext, Nat.sub(left, 2048n), 1n+i)))
+
+def dw_nil(r: Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>) -> {r == dw_lift2(Done{Nil{}}, r) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{rs}:
+      {==}
+
+# reference == loop, the direction a rewrite uses
+def dw_eq(~D: Data, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octets>, +k: Nat, +d: D, +mode: F.IsoEndian, +ext: Nat, +left: Nat, +i: Nat) -> {DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i) == DR.iso.dir.walk(~D, ~read_block, k, d, mode, ext, left, i, Done{Nil{}}) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}:
+  Equal.trans(Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i), dw_lift2(Done{Nil{}}, DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i)), DR.iso.dir.walk(~D, ~read_block, k, d, mode, ext, left, i, Done{Nil{}}), dw_nil(DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i)), Equal.sym(Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>, DR.iso.dir.walk(~D, ~read_block, k, d, mode, ext, left, i, Done{Nil{}}), dw_lift2(Done{Nil{}}, DR.iso.dir.walk.ref(~D, ~read_block, k, d, mode, ext, left, i)), dw_go(~D, ~read_block, k, d, mode, ext, left, i, Done{Nil{}})))
+
 def Laws.dir_records_fenced(d, mode, ext, size):
+  %dw_eq(~BD.MemDev, ~BD.MemDev.read_block, R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n) : {_ == DR.iso.dir.walk(~FN.IsoFence, ~FN.IsoFence.read_block, R.Iso.blocks(size), FN.IsoFence{d, U32.to_nat(ext), R.Iso.blocks(size)}, mode, U32.to_nat(ext), U32.to_nat(size), 0n, Done{Nil{}}) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
+  %dw_eq(~FN.IsoFence, ~FN.IsoFence.read_block, R.Iso.blocks(size), FN.IsoFence{d, U32.to_nat(ext), R.Iso.blocks(size)}, mode, U32.to_nat(ext), U32.to_nat(size), 0n) : {DR.iso.dir.walk.ref(~BD.MemDev, ~BD.MemDev.read_block, R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n) == _ : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
   walk_fenced(R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n, R.Iso.blocks(size), le_refl(R.Iso.blocks(size)))
 
 def Laws.stream_step_fenced(d, b, s, t, i, left):

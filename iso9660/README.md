@@ -193,8 +193,9 @@ internal.
   surrogate pairs) belongs in a layer on top.
 * **Streaming**: files stream a block at a time. Directories are read whole
   (`Iso.dir_records` reads a directory's sectors and answers its records),
-  since a directory is a few sectors; a sector-at-a-time walk would be a
-  cursor like `IsoCursor` over `iso.dir.records`.
+  which holds every record in memory (see Speed and size limits); a
+  sector-at-a-time walk would be a cursor like `IsoCursor` over
+  `iso.dir.records`.
 
 Not done yet: SUSP ES (extension selection) and RRIP SF (sparse files) are
 not interpreted; El Torito section entries after the initial entry are not
@@ -224,7 +225,11 @@ directory records are); volume sets of more than one volume are not joined.
     device fenced to the directory's own blocks (so the walk never reads
     outside the directory's extent); a stream step gives the same on a
     device fenced to the one block it is at; the end of a stream reads
-    nothing;
+    nothing. `Iso.dir_records` runs a loop over the sectors
+    (`iso.dir.walk`); the fence is proved on the structural reference
+    (`iso.dir.walk.ref`) and carried over by a lemma, for every device and
+    input, that the two are equal (`dw_eq` in `PROOF.bend`, used for both
+    the `MemDev` and the `IsoFence` side);
 * **vectors**: a root record, a file record with its Rock Ridge entries and
   a creation date taken from an image genisoimage wrote; Joliet levels;
   identifiers; SUSP areas good and bad; SL link text; NM continuation; a
@@ -241,7 +246,10 @@ halves are compared.
   a Joliet hierarchy, SP, ER, PX, NM and SL entries, a two-block file):
   descriptors, the three namings, ranges, a stream, lookups, a both-endian
   mismatch refused and trusted, a blank device, a 512-byte device, dates,
-  records and SUSP areas.
+  records and SUSP areas. Its last line is a large input, a volume made up
+  as it is read: a directory of 7,200 entries (240 KB) walked and searched
+  for a name it lacks, and a file of 2,400 extents read whole (about 1.3 s
+  of the run).
 * `ref/run.sh` (48 cases on 34 images, seed 2026): `ref/gen.py` builds
   images with an independent ISO 9660 / Joliet / Rock Ridge builder written
   from the specifications (long names in several NM entries, symbolic links
@@ -265,19 +273,57 @@ halves are compared.
   must match, and the run reports a skip (exit 77). CI needs the apt packages
   `genisoimage` (which provides isoinfo) and `xorriso`.
 
-## Speed
+## Speed and size limits
 
-Byte strings are lists, read a sector at a time. On a native build (Bend
-2.0.37, WSL2) the differential test (34 images of up to 480 KB, 48 cases,
-every file streamed and CRC'd) runs in about 12 s; `check.bend` in about
-1 s; the proofs check in about 2 s, with `--verdict` in about 4 s. Offsets
-and lengths are `Nat`s (unary). bytes' `Octets` operations no longer have
-a length limit, but this package's own list code has not been re-measured
-against the old 20 KB stack limit: read large files with the stream, not
-one large range.
+Measured with Bend 2.0.37 under bun in WSL2 (not a native build; times are
+whole runs, including loading the test device). Byte strings are `Octets`,
+which cost about 940 bytes of memory per byte held. The differential test
+(34 images of up to 480 KB, 48 cases, every file streamed and CRC'd) runs in
+about 12 s; `check.bend` in about 2.6 s; the proofs check in about 1.5 s,
+with `--verdict` in about 4.3 s.
+
+Large images, read a 2048-byte block at a time from a sparse device (its
+non-zero metadata blocks, and file data computed from the block number):
+
+| Image | Operation | Time, peak memory |
+|---|---|---|
+| plain, `ref/gen.py`'s builder, a directory of 30,000 entries (940 KB) | `Iso.list` | 4.1 s, 874 MB (before: stack overflow) |
+| | `Iso.walk` (30,002 items); `Iso.find` of the last | 7.8 s, 896 MB; 7.1 s |
+| plain, a 40 MB file of 20,481 extents of 2 KB | `Iso.find` | 3.1 s, 548 MB (before: over 3 GB, killed) |
+| | stream it (20,481 pieces) | 91 s, 683 MB |
+| | read 1 MB across 512 extents; 100 KB; its last 5,000 bytes | 6.3 s, 1.9 GB; 3.0 s, 605 MB; 3.1 s |
+| Rock Ridge and Joliet, the builder, a 12 MB file of 3,073 extents | `Iso.find` | 2.8 s, 690 MB (before: 7.0 s, 1.1 GB) |
+| | stream it; read 1 MB across 256 extents | 14 s, 690 MB (before: 34 s, 1.2 GB); 7.1 s, 1.9 GB |
+| `genisoimage -R -J`, 22 MB, a directory of 4,000 Rock Ridge names | `Iso.list` of it; `Iso.walk` | 11 s, 1.2 GB; 8.8 s, 1.2 GB |
+| | stream a 20 MB file (10,241 pieces) | 24 s, 704 MB |
+| | `Iso.read_path` of 1 MB; of 100 KB | 11.7 s, 1.5 GB; 1.0 s, 480 MB |
+
+Before this round a directory listing, a walk, a lookup and a file's extents
+recursed once per record (or per extent, with a quadratic list of pending
+extents), and a directory walk once per sector: a 30,000-entry directory
+overflowed the stack and a 20,481-extent file ran out of memory, while 12,000
+entries and 3,073 extents still worked. They are loops now (the walk of
+sectors keeps its structural form as the reference the proofs use), and a
+byte range is read from the device in pieces of at most 64 blocks, so no
+single read is long. Nothing recurses over a file's size, a directory's
+records or a file's extents; walking a tree recurses once per directory level
+(at most `max_depth`). What is left:
+
+* a range read answers one `Octets`, so its length is bounded by memory:
+  1 MB takes 1.5 to 2 GB. Stream large files (`Iso.file_start` /
+  `Iso.file_next`), which hold one block at a time;
+* a directory is read whole: every record is held, its identifier and
+  system use area as `Octets` (about 30 KB a record with plain names, up to
+  about 250 KB with genisoimage's Rock Ridge entries), so a directory of
+  30,000 plain entries takes about 900 MB and one of 4,000 Rock Ridge
+  entries about 1.2 GB;
+* offsets and lengths are `Nat`s.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 48 cases on 34 images match (with
-genisoimage, xorriso and isoinfo), `scripts/deps.sh` passes.
+`check.bend` passes (its last line a 7,200-entry directory and a
+2,400-extent file), `ref/run.sh` 48 cases on 34 images match (with
+genisoimage, xorriso and isoinfo), `scripts/deps.sh` passes. Large inputs:
+measured to 30,000-entry directories and 40 MB files of 20,481 extents (see
+Speed and size limits).
