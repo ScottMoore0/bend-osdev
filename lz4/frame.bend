@@ -38,7 +38,7 @@ type Lz4Frame is Data:
 # Checksums
 
 def frm.xxh32(xs: List<&2, U32>) -> U32:
-  H.xxh32.str(B.to_string(xs), 0)
+  H.xxh32.str(B.to_string.fast(xs), 0)
 
 # XXH32 with seed 0: the frame format's checksum
 def frame_checksum(o: B.Octets) -> U32:
@@ -185,7 +185,7 @@ def frm.indep(r: Result<&2, &2, K.Lz4Error, K.Lz4Out>, +rb: Nat, acc: List<&2, U
       Fail{e}
     case Done{K.Lz4Out{out, left}}:
       +k = Nat.sub(rb, left)
-      Done{Lz4More{B.append(B.take(k, out), acc), U32.sub(room, U32.from_nat(k)), rest}}
+      Done{Lz4More{B.append.fast(B.take.fast(k, out), acc), U32.sub(room, U32.from_nat(k)), rest}}
 
 def frm.lz4(indep: Bool, +rb: Nat, dict: List<&2, U32>, data: List<&2, U32>, +acc: List<&2, U32>, +room: U32, rest: List<&2, U32>) -> Result<&2, &2, K.Lz4Error, Lz4Blocks>:
   match indep:
@@ -241,8 +241,8 @@ def frm.data(+c: Lz4Cfg, unc: Bool, +n: U32, +acc: List<&2, U32>, +room: U32, +r
       do Result<&2, &2, K.Lz4Error, Lz4Blocks>:
         ok1 : Unit <- frm.check(U32.is_le(n, bmax), K.Lz4BlockTooLarge{})
         +k : Nat = U32.to_nat(n)
-        +data : List<&2, U32> = B.take(k, rest)
-        ok2 : Unit <- frm.check(Nat.is_eq(B.len(data), k), K.Lz4Truncated{})
+        +data : List<&2, U32> = B.take.fast(k, rest)
+        ok2 : Unit <- frm.check(Nat.is_eq(B.len.fast(data), k), K.Lz4Truncated{})
         frm.after(frm.bsum(bsum, verify, data, B.drop(k, rest)), unc, Lz4Cfg{bsum, indep, bmax, verify, dict}, n, data, acc, room)
 
 # the block size field: 0 is the end mark; the high bit marks an uncompressed
@@ -316,7 +316,7 @@ def frm.csize(m: Maybe<&2, W.W64>, out: List<&2, U32>) -> Result<&2, &2, K.Lz4Er
     case None{}:
       Done{Unit{}}
     case Some{s}:
-      frm.check(W.W64.is_eq(s, W.W64.from_nat(B.len(out))), K.Lz4BadContentSize{})
+      frm.check(W.W64.is_eq(s, W.W64.from_nat(B.len.fast(out))), K.Lz4BadContentSize{})
 
 def frm.ended(b: Lz4Blocks, +k: Nat, verify: Bool, csum: Bool, size: Maybe<&2, W.W64>) -> Result<&2, &2, K.Lz4Error, Lz4Got>:
   match b:
@@ -337,7 +337,7 @@ def frm.frame.go(r: Result<&2, &2, K.Lz4Error, Lz4Hd>, +verify: Bool, +dict: Lis
       Fail{e}
     case Done{Lz4Hd{Lz4FrameInfo{indep, bsum, csum, size, did, bmax}, +rest}}:
       +rdict = K.blk.rev(dict)
-      frm.ended(frm.blocks(Nat.add(B.len(rest), 1n), Lz4More{rdict, room, rest}, Lz4Cfg{bsum, indep, bmax, verify, rdict}), B.len(dict), verify, csum, size)
+      frm.ended(frm.blocks(Nat.add(B.len.fast(rest), 1n), Lz4More{rdict, room, rest}, Lz4Cfg{bsum, indep, bmax, verify, rdict}), B.len.fast(dict), verify, csum, size)
 
 # the LZ4 frame at the start of xs, after the dictionary dict, with room
 # bytes of output at most

@@ -11,6 +11,7 @@ import ../bytes/bytes.bend as B
 import ./block.bend as K
 import ./frame.bend as F
 
+# out: the content so far, reversed
 type Lz4Stream is Data:
   Lz4Go{out: List<&2, U32>, room: U32, rest: List<&2, U32>}
   Lz4Stop{out: List<&2, U32>}
@@ -21,7 +22,7 @@ def lz4.got(r: Result<&2, &2, K.Lz4Error, F.Lz4Got>, out: List<&2, U32>) -> Lz4S
     case Fail{e}:
       Lz4Err{e}
     case Done{F.Lz4Got{o, room, rest}}:
-      Lz4Go{B.append(out, o), room, rest}
+      Lz4Go{B.rev_onto(o, out), room, rest}
 
 def lz4.skip.fits(ok: Bool, +k: Nat, out: List<&2, U32>, room: U32, +rest: List<&2, U32>) -> Lz4Stream:
   match ok:
@@ -37,7 +38,7 @@ def lz4.skip(m: Maybe<&2, U32>, out: List<&2, U32>, room: U32, +rest: List<&2, U
       Lz4Err{K.Lz4Truncated{}}
     case Some{n}:
       +k = Nat.add(8n, U32.to_nat(n))
-      lz4.skip.fits(Nat.is_le(k, B.len(rest)), k, out, room, rest)
+      lz4.skip.fits(Nat.is_le(k, B.len.fast(rest)), k, out, room, rest)
 
 def lz4.next.skip(skip: Bool, out: List<&2, U32>, room: U32, +rest: List<&2, U32>) -> Lz4Stream:
   match skip:
@@ -87,7 +88,7 @@ def lz4.stream(fuel: Nat, s: Lz4Stream, +verify: Bool, +dict: List<&2, U32>) -> 
 def lz4.result(s: Lz4Stream) -> Result<&2, &2, K.Lz4Error, B.Octets>:
   match s:
     case Lz4Stop{out}:
-      Done{B.Octets.of_list(out)}
+      Done{B.Octets.of_list(B.rev(out))}
     case Lz4Err{e}:
       Fail{e}
     case Lz4Go{out, room, rest}:
@@ -99,7 +100,7 @@ def lz4.start(xs: List<&2, U32>, max: U32, +verify: Bool, +dict: List<&2, U32>) 
       Fail{K.Lz4Truncated{}}
     case Con{h, t}:
       +s = {Con{h, t} : List<&2, U32>}
-      lz4.result(lz4.stream(Nat.add(B.len(s), 1n), Lz4Go{Nil{}, max, s}, verify, dict))
+      lz4.result(lz4.stream(Nat.add(B.len.fast(s), 1n), Lz4Go{Nil{}, max, s}, verify, dict))
 
 # The public interface
 

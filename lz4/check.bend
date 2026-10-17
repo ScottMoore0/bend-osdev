@@ -26,6 +26,26 @@ def show_info(r: Result<&2, &2, K.Lz4Error, F.Lz4FrameInfo>) -> String:
     case Done{F.Lz4FrameInfo{indep, bsum, csum, size, did, bmax}}:
       "indep " ++ Bool.show(indep) ++ ", block checksums " ++ Bool.show(bsum) ++ ", content checksum " ++ Bool.show(csum) ++ ", block max " ++ U32.show(bmax)
 
+# 70 KB of pseudo-random text over 8 letters: a block past the decoder's
+# 64 KB window, with matches reaching back up to 64 KB
+def big.go(n: Nat, +s: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      +t = U32.add(U32.mul(s, 1103515245), 12345)
+      big.go(p, t, Con{U32.add(97, U32.and(U32.shrn(t, 16n), 7)), acc})
+
+def big() -> B.Octets:
+  B.Octets.of_list(big.go(71680n, 11, Nil{}))
+
+def show_same(r: Result<&2, &2, K.Lz4Error, B.Octets>, +o: B.Octets) -> String:
+  match r:
+    case Fail{e}:
+      "fail " ++ K.Lz4Error.show(e)
+    case Done{+d}:
+      "done, " ++ Nat.show(B.Octets.len(d)) ++ " bytes, the input " ++ Bool.show(B.Octets.is_eq(d, o))
+
 # what the lz4 tool writes for empty input
 def empty_frame() -> B.Octets:
   B.Octets.of_list([4, 34, 77, 24, 100, 64, 167, 0, 0, 0, 0, 5, 93, 204, 2])
@@ -35,6 +55,7 @@ def abc_frame() -> B.Octets:
   B.Octets.of_list([4, 34, 77, 24, 92, 64, 24, 0, 0, 0, 0, 0, 0, 0, 146, 12, 0, 0, 0, 60, 97, 98, 99, 3, 0, 80, 98, 99, 97, 98, 99, 8, 58, 99, 182, 0, 0, 0, 0, 254, 224, 41, 171])
 
 def main() -> IO(Unit):
+  +o = big()
   do IO<Unit>:
     IO.print(B.Octets.hex(K.block_literals(B.Octets.of_string("hello"))))
     IO.print(show(K.block_decompress(K.block_literals(B.Octets.of_string("hello")), 5n)))
@@ -57,6 +78,7 @@ def main() -> IO(Unit):
     IO.print(show(L.decompress(C.compress(B.Octets.of_string("compressed, then decompressed")))))
     IO.print(show(L.decompress(C.frame_stream(C.Lz4FrameOptions{C.Lz4Max64KB{}, 8, False{}, True{}, True{}, False{}}, [B.Octets.of_string("fed "), B.Octets.of_string("in pieces, fed in pieces")]))))
     IO.print(show_len(K.block_decompress(C.block_compress(B.Octets.zeros(1000n)), 1000n)))
+    IO.print(show_same(K.block_decompress(C.block_compress(o), 71680n), o))
 
 #|5068656c6c6f
 #|done [hello]
@@ -79,3 +101,4 @@ def main() -> IO(Unit):
 #|done [compressed, then decompressed]
 #|done [fed in pieces, fed in pieces]
 #|done, 1000 bytes
+#|done, 71680 bytes, the input True

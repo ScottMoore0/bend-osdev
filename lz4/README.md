@@ -110,11 +110,14 @@ constructors are part of the interface. `Lz4Writer` is opaque.
   true whatever the matcher writes, so a new matcher needs no new proof, only
   the differential test.
 * **Speed:** `block_compress` decodes every block it writes, to check it;
-  `block_compress_unchecked` skips that, without the law. The decoder is the
-  reference, written to be proved about: it keeps its output as a reversed
-  list, so a match costs a walk back of its offset per byte. An array-based
-  decoder can be added beside it, held to it by a law or by the differential
-  test.
+  `block_compress_unchecked` skips that, without the law. The decoder is
+  written to be proved about: it keeps its output as a reversed list, and a
+  window over the last 64 KB (a binary trie keyed by position, depth 16) that
+  matches read from, so a match costs a few steps per byte however far back
+  it reads. The laws hold whatever the window answers (they follow lengths,
+  literals and failures, not the bytes a match copies), so the window can be
+  replaced by any structure that answers the byte at an offset; the vectors
+  and the differential test check the bytes.
 * **Streaming:** the writer streams (`frame_start`, `frame_feed`,
   `frame_finish`), but keeps the content for the content checksum, since
   XXH32 here is one-shot; a streaming XXH32 would let it forget each block
@@ -217,20 +220,47 @@ in both directions.
 Seeds 1 to 5 also pass. Without the lz4 tool, `run.sh` runs the checks that
 need no tool and exits 77 (a skip).
 
+`check.bend` also compresses and decompresses a 70 KB block, past the
+decoder's 64 KB window (see Speed and limits). The 1 MB round trips in Speed
+and limits were run by hand against the lz4 tool, not in CI.
+
 ## Speed and limits
 
-* The decoder works on lists, one byte at a time; a match costs a walk back
-  of its offset per byte copied. The compressor's table is an array, but it
-  decodes each block it writes (see Extension points).
-* Bend 2.0.37's runtime overflows its stack on non-tail recursion deeper than
-  about 20,000 to 30,000 calls. The decoder's own loops are tail calls, and
-  decode 200 KB blocks, and bytes' `Octets` operations are tail-recursive and
-  have no length limit. But some of this package's own code, and its use of
-  bytes' structural list layer on whole inputs, is not tail-recursive: a
-  100 KB compress-then-decompress round trip still overflows the stack, so
-  keep inputs and outputs to about 20 KB until that code is converted. (List literals of a few thousand elements overflow it too, which is
-  why `ref/gen.py` joins long inputs from pieces, and the tests stay under
-  12 KB.)
+* Nothing recurses over the data's length except as a tail call: the
+  decoder, the matcher, the frame reader and writer, the stream reader and
+  the length bytes of a literal run (`lit.ext`, tail-recursive, proved equal
+  to the structural `lit.ext.ref` the proofs follow) all run in constant
+  stack, and use bytes' tail-recursive list forms (`len.fast`,
+  `append.fast`, `take.fast`, `to_string.fast`, `rev_onto`). What still
+  recurses is bounded: the window trie (depth 16), a frame header's fields.
+* Measured with Bend 2.0.37 (one process each, checked against `lz4` 1.9.4):
+
+  | 1 MB (1,048,576 bytes) | time | peak memory |
+  |---|---|---|
+  | `compress`, text (lz4 -d gives it back) | 11 s | 2.2 GB |
+  | `decompress` of `lz4 -1`'s frame, text | 14 s | 2.3 GB |
+  | `decompress` of `lz4 -9 -BD -BX -B7 --content-size`'s frame (linked 4 MB blocks, block checksums) | 17 s | 2.5 GB |
+  | `frame_compress`, linked 4 MB blocks, every checksum and the size | 12 s | 2.2 GB |
+  | `frame_stream`, 256 KB blocks of 100,000 bytes, fed in two pieces | 15 s | 2.8 GB |
+  | `block_compress`, one 1 MB block (lz4 -d gives it back) | 17 s | 2.0 GB |
+  | `block_decompress` of `lz4 -1 -B7`'s 1 MB block | 11 s | 1.8 GB |
+  | random bytes (stored blocks): `compress`, `decompress`, `block_compress` | 11, 13, 20 s | 2.8, 2.6, 2.9 GB |
+
+  These include reading the input from a file and writing the output (the
+  text is this repository's sources). At 256 KB, `compress` takes 3.9 s and
+  660 MB, `decompress` 3.4 s and 720 MB; at 100 KB, 1.5 s and 400 MB, and
+  1.7 s and 380 MB. Before this release, 100 KB overflowed the stack.
+* The limit now is memory, not the stack: an `Octets` costs about 940 bytes
+  of memory per byte in bytes today, and a 1 MB input and its 1 MB output
+  are almost 2 GB between them, so keep a single call to a few MB, or work a
+  block at a time (`block_decompress_dict`, the streaming writer), until
+  bytes' storage is compact. Time is mostly that too: converting 1 MB to and
+  from `Octets` takes about 4 s.
+* List literals of a few thousand elements overflow the stack, which is why
+  `ref/gen.py` joins long inputs from pieces, and its cases stay under 12 KB.
+  `check.bend` holds one large case, a 70 KB block (past the decoder's 64 KB
+  window, with matches reaching back up to 64 KB) compressed and decompressed
+  (about 2 s and 400 MB with the rest of the file).
 * Block and frame sizes in the writer are `U32` counts, not `Nat`: the Lean
   kernel (`--verdict`) fails on Nat computations tens of thousands of
   successors long.
@@ -239,4 +269,7 @@ need no tool and exits 77 (a skip).
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 427 decoding cases match and 68
-compressed blocks and frames decode back (with `lz4` 1.9.4 installed).
+compressed blocks and frames decode back (with `lz4` 1.9.4 installed; seeds
+2026 and 1 to 5). 1 MB round trips, block and frame, compressed and stored,
+pass against `lz4` 1.9.4 (by hand); inputs are limited by `Octets` memory,
+not by the stack.

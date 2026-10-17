@@ -76,18 +76,18 @@ def cmp.ext(+n: Nat) -> List<&2, U32>:
 # a sequence (literals, then a match at offset off of length ml), pushed onto
 # the reversed output
 def cmp.seq(+lits: List<&2, U32>, +off: U32, +ml: Nat, out: List<&2, U32>) -> List<&2, U32>:
-  +l = B.len(lits)
+  +l = B.len.fast(lits)
   +m = Nat.sub(ml, 4n)
   +tok = U32.or(U32.shln(cmp.nib(l), 4n), cmp.nib(m))
   K.blk.push(cmp.ext(m), Con{U32.shrn(off, 8n), Con{U32.and(off, 255), K.blk.push(lits, K.blk.push(cmp.ext(l), Con{tok, out}))}})
 
 # the last sequence: literals only
 def cmp.last(+lits: List<&2, U32>, out: List<&2, U32>) -> List<&2, U32>:
-  +l = B.len(lits)
+  +l = B.len.fast(lits)
   K.blk.push(lits, K.blk.push(cmp.ext(l), Con{U32.shln(cmp.nib(l), 4n), out}))
 
 def cmp.done(lits: List<&2, U32>, cur: List<&2, U32>, out: List<&2, U32>) -> Lz4Enc:
-  Lz4EncDone{cmp.last(B.append(K.blk.rev(lits), cur), out)}
+  Lz4EncDone{cmp.last(B.rev_onto(lits, cur), out)}
 
 # a match of ml bytes, or (shorter than 4) one more literal
 def cmp.emit(ok: Bool, tab: Array<Lz4Cand>, +cur: List<&2, U32>, +i: U32, +ml: Nat, +off: U32, lim: U32, end: U32, +lits: List<&2, U32>, out: List<&2, U32>) -> Lz4Enc:
@@ -137,7 +137,7 @@ def cmp.loop(fuel: Nat, st: Lz4Enc) -> List<&2, U32>:
     case 0n:
       match st:
         case Lz4EncGo{tab, cur, i, lim, end, lits, out}:
-          K.blk.rev(cmp.last(B.append(K.blk.rev(lits), cur), out))
+          K.blk.rev(cmp.last(B.rev_onto(lits, cur), out))
         case Lz4EncDone{out}:
           K.blk.rev(out)
     case 1n+f:
@@ -162,17 +162,17 @@ def cmp.seed(n: Nat, tab: Array<Lz4Cand>, +xs: List<&2, U32>, +i: U32) -> Array<
 def cmp.start(big: Bool, +dict: List<&2, U32>, +xs: List<&2, U32>, +total: U32) -> List<&2, U32>:
   match big:
     case True{}:
-      +all = B.append(dict, xs)
-      +base = B.len(dict)
+      +all = B.append.fast(dict, xs)
+      +base = B.len.fast(dict)
       tab = cmp.seed(base, Array.new(Lz4Cand, 12n, Lz4Cand{0, Nil{}}), all, 0)
-      cmp.loop(Nat.add(B.len(xs), 1n), Lz4EncGo{tab, B.drop(base, all), U32.from_nat(base), U32.sub(total, 12), U32.sub(total, 5), Nil{}, Nil{}})
+      cmp.loop(Nat.add(B.len.fast(xs), 1n), Lz4EncGo{tab, B.drop(base, all), U32.from_nat(base), U32.sub(total, 12), U32.sub(total, 5), Nil{}, Nil{}})
     case False{}:
       K.blk.rev(cmp.last(xs, Nil{}))
 
 # the block for xs, after the history dict (at most its last 65535 bytes)
 def cmp.block(+dict: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
-  +d = B.drop(Nat.sub(B.len(dict), 65535n), dict)
-  +total = U32.from_nat(Nat.add(B.len(d), B.len(xs)))
+  +d = B.drop(Nat.sub(B.len.fast(dict), 65535n), dict)
+  +total = U32.from_nat(Nat.add(B.len.fast(d), B.len.fast(xs)))
   cmp.start(U32.is_le(13, total), d, xs, total)
 
 # Checking a block: decode it and compare
@@ -191,15 +191,19 @@ def cmp.u32_eq(a: U32, b: U32) -> Bool:
     case U32{x} U32{y}:
       cmp.weq(32n, x, y)
 
-# the same bytes, in the same order
-def cmp.same(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
+# the same bytes, in the same order; live: the bytes so far agree (a tail
+# call, so it runs on lists of any length)
+def cmp.same.go(xs: List<&2, U32>, ys: List<&2, U32>, live: Bool) -> Bool:
   match xs ys:
     case Nil{} Nil{}:
-      True{}
+      live
     case Con{a, s} Con{b, t}:
-      Bool.and(cmp.u32_eq(a, b), cmp.same(s, t))
+      cmp.same.go(s, t, Bool.and(live, cmp.u32_eq(a, b)))
     case _ _:
       False{}
+
+def cmp.same(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
+  cmp.same.go(xs, ys, True{})
 
 def cmp.keep(ok: Bool, +c: B.Octets, +o: B.Octets) -> B.Octets:
   match ok:
@@ -208,20 +212,24 @@ def cmp.keep(ok: Bool, +c: B.Octets, +o: B.Octets) -> B.Octets:
     case False{}:
       K.block_literals(o)
 
-# the block c if it decodes to o, else the literal-only block
-def cmp.check(r: Result<&2, &2, K.Lz4Error, B.Octets>, +c: B.Octets, +o: B.Octets) -> B.Octets:
+# the block c if it decodes to o, else the literal-only block. r is the
+# decoder's own answer (its output list), compared with o as it comes out,
+# without building the decoded bytes as Octets
+def cmp.check(r: Result<&2, &2, K.Lz4Error, K.Lz4Out>, +c: B.Octets, +o: B.Octets) -> B.Octets:
   match r:
     case Fail{e}:
       K.block_literals(o)
-    case Done{d}:
-      cmp.keep(cmp.same(B.Octets.to_list(d), B.Octets.to_list(o)), c, o)
+    case Done{K.Lz4Out{acc, room}}:
+      cmp.keep(cmp.same(K.blk.rev(acc), B.Octets.to_list(o)), c, o)
 
-def cmp.check_dict(r: Result<&2, &2, K.Lz4Error, B.Octets>, +c: B.Octets, +o: B.Octets) -> B.Octets:
+# the same after a dictionary of k bytes, which the decoder's output starts
+# with
+def cmp.check_dict(r: Result<&2, &2, K.Lz4Error, K.Lz4Out>, +k: Nat, +c: B.Octets, +o: B.Octets) -> B.Octets:
   match r:
     case Fail{e}:
       K.block_literals(o)
-    case Done{d}:
-      cmp.keep(cmp.same(B.Octets.to_list(d), B.Octets.to_list(o)), c, o)
+    case Done{K.Lz4Out{acc, room}}:
+      cmp.keep(cmp.same(B.drop(k, K.blk.rev(acc)), B.Octets.to_list(o)), c, o)
 
 # The public interface: blocks
 
@@ -232,12 +240,12 @@ def block_compress_unchecked(o: B.Octets) -> B.Octets:
 # a block for o: the matcher's, checked by decoding it
 def block_compress(+o: B.Octets) -> B.Octets:
   +c = block_compress_unchecked(o)
-  cmp.check(K.block_decompress(c, B.Octets.len(o)), c, o)
+  cmp.check(K.blk.run(B.Octets.to_list(c), Nil{}, B.Octets.len(o)), c, o)
 
 # a block for o that may refer back into dict (the bytes before it), checked
 def block_compress_dict(+dict: B.Octets, +o: B.Octets) -> B.Octets:
   +c = B.Octets.of_list(cmp.block(B.Octets.to_list(dict), B.Octets.to_list(o)))
-  cmp.check_dict(K.block_decompress_dict(dict, c, B.Octets.len(o)), c, o)
+  cmp.check_dict(K.blk.run(B.Octets.to_list(c), K.blk.rev(B.Octets.to_list(dict)), B.Octets.len(o)), B.Octets.len(dict), c, o)
 
 # The frame writer
 
@@ -316,26 +324,49 @@ def wr.sum(on: Bool, data: List<&2, U32>) -> List<&2, U32>:
 def wr.stored(small: Bool, +bsum: Bool, +comp: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
   match small:
     case True{}:
-      B.append(B.le32(U32.from_nat(B.len(comp))), B.append(comp, wr.sum(bsum, comp)))
+      B.append(B.le32(U32.from_nat(B.len.fast(comp))), B.append.fast(comp, wr.sum(bsum, comp)))
     case False{}:
-      B.append(B.le32(U32.or(U32.from_nat(B.len(raw)), 2147483648)), B.append(raw, wr.sum(bsum, raw)))
+      B.append(B.le32(U32.or(U32.from_nat(B.len.fast(raw)), 2147483648)), B.append.fast(raw, wr.sum(bsum, raw)))
+
+# block_compress_dict on lists: the same bytes, without the conversions to
+# and from Octets (which cost memory on large blocks)
+def wr.literals(+xs: List<&2, U32>) -> List<&2, U32>:
+  B.append.fast(K.lit.h0(B.len.fast(xs)), xs)
+
+def wr.pick(ok: Bool, +c: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
+  match ok:
+    case True{}:
+      c
+    case False{}:
+      wr.literals(xs)
+
+def wr.checked.at(r: Result<&2, &2, K.Lz4Error, K.Lz4Out>, +k: Nat, +c: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
+  match r:
+    case Fail{e}:
+      wr.literals(xs)
+    case Done{K.Lz4Out{acc, room}}:
+      wr.pick(cmp.same(B.drop(k, K.blk.rev(acc)), xs), c, xs)
+
+def wr.checked(+hist: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
+  +c = cmp.block(hist, xs)
+  wr.checked.at(K.blk.run(c, K.blk.rev(hist), B.len.fast(xs)), B.len.fast(hist), c, xs)
 
 def wr.comp(indep: Bool, +hist: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
   match indep:
     case True{}:
-      B.Octets.to_list(block_compress(B.Octets.of_list(raw)))
+      wr.checked(Nil{}, raw)
     case False{}:
-      B.Octets.to_list(block_compress_dict(B.Octets.of_list(hist), B.Octets.of_list(raw)))
+      wr.checked(hist, raw)
 
 # the bytes of one block of raw, after the history hist
 def wr.block(+opts: Lz4FrameOptions, +hist: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
   match opts:
     case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
       +comp = wr.comp(indep, hist, raw)
-      wr.stored(Nat.is_lt(B.len(comp), B.len(raw)), bsum, comp, raw)
+      wr.stored(Nat.is_lt(B.len.fast(comp), B.len.fast(raw)), bsum, comp, raw)
 
 def wr.keep(+xs: List<&2, U32>) -> List<&2, U32>:
-  B.drop(Nat.sub(B.len(xs), 65535n), xs)
+  B.drop(Nat.sub(B.len.fast(xs), 65535n), xs)
 
 # the first n bytes of a list, the rest, and whether there were n of them
 # (counted in U32: a Nat block size would be a long chain of successors)
@@ -357,7 +388,7 @@ def wr.split(xs: List<&2, U32>, +n: U32) -> Lz4Cut:
   wr.split.go(xs, U32.is_lt(0, n), n, Nil{})
 
 # blocks of the block size, the last one shorter; c: the next block and
-# the rest; acc: the frame's bytes so far
+# the rest; acc: the frame's bytes so far, reversed
 def wr.blocks(fuel: Nat, c: Lz4Cut, +opts: Lz4FrameOptions, +bsz: U32, +hist: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
   match fuel:
     case 0n:
@@ -369,7 +400,7 @@ def wr.blocks(fuel: Nat, c: Lz4Cut, +opts: Lz4FrameOptions, +bsz: U32, +hist: Li
             case Nil{}:
               acc
             case Con{h, t}:
-              wr.blocks(f, wr.split(rest, bsz), opts, bsz, wr.keep(B.append(hist, raw)), B.append(acc, wr.block(opts, hist, raw)))
+              wr.blocks(f, wr.split(rest, bsz), opts, bsz, wr.keep(B.append.fast(hist, raw)), B.rev_onto(wr.block(opts, hist, raw), acc))
 
 def wr.end(opts: Lz4FrameOptions, content: List<&2, U32>) -> List<&2, U32>:
   match opts:
@@ -379,7 +410,7 @@ def wr.end(opts: Lz4FrameOptions, content: List<&2, U32>) -> List<&2, U32>:
 def wr.size_of(on: Bool, +xs: List<&2, U32>) -> Maybe<&2, Nat>:
   match on:
     case True{}:
-      Some{B.len(xs)}
+      Some{B.len.fast(xs)}
     case False{}:
       None{}
 
@@ -412,7 +443,7 @@ def frame_compress(+opts: Lz4FrameOptions, o: B.Octets) -> B.Octets:
   +xs = B.Octets.to_list(o)
   +hd = wr.header(opts, wr.size_of(wr.opts.csize(opts), xs))
   +bsz = wr.opts.bmax(opts)
-  B.Octets.of_list(B.append(hd, B.append(wr.blocks(Nat.add(B.len(xs), 1n), wr.split(xs, bsz), opts, bsz, Nil{}, Nil{}), wr.end(opts, xs))))
+  B.Octets.of_list(B.append(hd, B.rev_onto(wr.blocks(Nat.add(B.len.fast(xs), 1n), wr.split(xs, bsz), opts, bsz, Nil{}, Nil{}), wr.end(opts, xs))))
 
 # a frame holding o, with the default options
 def compress(o: B.Octets) -> B.Octets:
@@ -444,35 +475,35 @@ type Lz4Flushed is Data:
   Lz4Flushed{pending: List<&2, U32>, hist: List<&2, U32>, bytes: List<&2, U32>}
 
 # the full blocks go out; fewer than a block's bytes stay. c: the next
-# block, if full, and the rest
+# block, if full, and the rest; acc: the bytes out so far, reversed
 def wr.flush(fuel: Nat, c: Lz4Cut, +opts: Lz4FrameOptions, +bsz: U32, +hist: List<&2, U32>, acc: List<&2, U32>) -> Lz4Flushed:
   match fuel:
     case 0n:
       match c:
         case Lz4Cut{raw, rest, full}:
-          Lz4Flushed{B.append(raw, rest), hist, acc}
+          Lz4Flushed{B.append.fast(raw, rest), hist, acc}
     case 1n+f:
       match c:
         case Lz4Cut{+raw, rest, full}:
           match full:
             case True{}:
-              wr.flush(f, wr.split(rest, bsz), opts, bsz, wr.keep(B.append(hist, raw)), B.append(acc, wr.block(opts, hist, raw)))
+              wr.flush(f, wr.split(rest, bsz), opts, bsz, wr.keep(B.append.fast(hist, raw)), B.rev_onto(wr.block(opts, hist, raw), acc))
             case False{}:
-              Lz4Flushed{B.append(raw, rest), hist, acc}
+              Lz4Flushed{B.append.fast(raw, rest), hist, acc}
 
 def wr.fed(r: Lz4Flushed, opts: Lz4FrameOptions, content: List<&2, U32>) -> Lz4Written:
   match r:
     case Lz4Flushed{pending, hist, bytes}:
-      Lz4Written{Lz4Writer{opts, pending, hist, content}, B.Octets.of_list(bytes)}
+      Lz4Written{Lz4Writer{opts, pending, hist, content}, B.Octets.of_list(B.rev(bytes))}
 
 # feed the next piece of the content
 def frame_feed(w: Lz4Writer, o: B.Octets) -> Lz4Written:
   match w:
     case Lz4Writer{+opts, pending, hist, content}:
       +xs = B.Octets.to_list(o)
-      +p = B.append(pending, xs)
+      +p = B.append.fast(pending, xs)
       +bsz = wr.opts.bmax(opts)
-      wr.fed(wr.flush(Nat.add(B.len(p), 1n), wr.split(p, bsz), opts, bsz, hist, Nil{}), opts, K.blk.push(xs, content))
+      wr.fed(wr.flush(Nat.add(B.len.fast(p), 1n), wr.split(p, bsz), opts, bsz, hist, Nil{}), opts, K.blk.push(xs, content))
 
 def wr.tail(empty: Bool, +opts: Lz4FrameOptions, +hist: List<&2, U32>, +pending: List<&2, U32>) -> List<&2, U32>:
   match empty:
@@ -485,7 +516,7 @@ def wr.tail(empty: Bool, +opts: Lz4FrameOptions, +hist: List<&2, U32>, +pending:
 def frame_finish(w: Lz4Writer) -> B.Octets:
   match w:
     case Lz4Writer{+opts, +pending, hist, content}:
-      B.Octets.of_list(B.append(wr.tail(List.is_empty(&2, U32, pending), opts, hist, pending), wr.end(opts, K.blk.rev(content))))
+      B.Octets.of_list(B.append.fast(wr.tail(List.is_empty(&2, U32, pending), opts, hist, pending), wr.end(opts, K.blk.rev(content))))
 
 def wr.feed_all(ps: List<&2, B.Octets>, r: Lz4Written, acc: B.Octets) -> B.Octets:
   match ps:
