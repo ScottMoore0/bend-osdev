@@ -155,7 +155,11 @@ the differential test below, said plainly here.
 
 `check.bend`: one case per failure (each `XzError` the container can
 answer, the unsupported check and filter, the output limit), a file fed one
-byte at a time, raw LZMA2, the delta filter, and the tables.
+byte at a time, raw LZMA2, the delta filter, the tables, and two large
+inputs, beyond what a decoder recursing once per byte could reach: an
+820-byte `.xz` file decoding to 100 KiB, and a 100 KiB raw LZMA2 stream of
+two uncompressed chunks (64 KiB and 36 KiB), each checked by its length and
+CRC32 (about 0.7 s and 0.2 GB more than the rest of the file).
 
 `ref/run.sh` (needs `python3` with `lzma`, and `xz`) generates 229 cases
 (`ref/gen.py`) and compares the decoder's output (length and SHA-256) with
@@ -182,18 +186,52 @@ the expected one:
 
 ## Speed and limits
 
-Decoding runs natively at roughly 300 KB/s of output (16 KB from a preset-6
-file in about 50 ms). The test inputs are kept small (a few KB compressed,
-at most 16 KB of output) because byte strings are slow and, today, lists of
-more than about 20 000 bytes have overflowed the runtime's stack. bytes'
-`Octets` operations are now tail-recursive with no length limit, but this
-package's own list code has not been re-measured since, so treat about
-20 KB of input or output as the limit until it is. The streaming decoder buffers at most one LZMA2 chunk (64 KiB
-compressed) and re-checks whether it is complete on each `feed`, so tiny
-pieces cost time quadratic in the chunk's size; the index is likewise
-re-parsed until it is complete.
+Every loop over the input or the output is a tail call: the buffered input
+(appended and counted with bytes' `B.append.fast` and `B.len.fast`), the
+LZMA2 chunks (taken with `B.take.fast`), the range decoder, the dictionary,
+the output (gathered in a list, then made `Octets` once per feed; a single
+piece is not copied again), the delta filter, the checks and the index (its
+records compared by a tail call). So there is no length limit from the
+runtime's stack. Before this, a 38 KB `.xz` file (100 KB of output) and a
+raw LZMA2 stream of 100 KB overflowed it; a small file with a large output
+(100 KB from 820 bytes) did not.
+
+Measured with `bend` (Bend 2.0.37, JavaScript backend), one run at a time,
+on files made by Python's `lzma` (random-word text, which compresses about
+3:1) and the `xz` tool; every output matched the original's length and
+CRC32 exactly:
+
+| Input | Output | Time | Peak memory |
+|---|---|---|---|
+| `xz_decode`, CRC64 | 100 KB | 3.3 s | 0.47 GB |
+| `xz_decode`, random data (uncompressed chunks), CRC32 | 100 KB | 2.3 s | 0.58 GB |
+| `xz_decode`, CRC32 | 1 MB | 5.9 s | 1.9 GB |
+| `xz_decode`, CRC64 | 1 MB | 27 s | 2.0 GB |
+| `xz_decode`, SHA-256 | 1 MB | 7.0 s | 2.6 GB |
+| `xz_decode`, 256 blocks of 4 KiB (`xz --block-size=4096`) | 1 MB | 6.7 s | 2.1 GB |
+| `xz_decode`, two streams with padding | 1 MB | 6.5 s | 2.6 GB |
+| `xz_decode`, delta (distance 4) then LZMA2 | 512 KB | 6.9 s | 2.1 GB |
+| `XzDecoder.feed` in 64 KiB pieces, CRC64 | 1 MB | 23 s | 1.9 GB |
+| `XzDecoder.feed` in 4 KiB pieces, CRC32 | 1 MB | 12 s | 1.8 GB |
+
+(The times include reading the file, and the test's own CRC32 of the
+output.) What limits size now is memory, not the stack: an `Octets` costs
+about 1 KB of memory per byte today, and the decoder holds its input and
+its output, so a 1 MB output needs about 2 GB. A 1 MB file with a delta
+filter (660 KB compressed) used more than 3 GB, and 4 MB was not tried for
+that reason (it would need about 8 GB). That limit goes when `Octets`
+storage becomes compact; nothing in this package depends on how `Octets`
+stores its bytes. CRC64 is the slow check: the CRC-64 of 1 MB takes about
+19 s in `crc` on its own.
+
+The streaming decoder buffers at most one LZMA2 chunk (64 KiB compressed)
+and re-checks whether it is complete on each `feed`, so tiny pieces cost
+time quadratic in the chunk's size; the index is likewise re-parsed until it
+is complete.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 229 cases match.
+`check.bend` passes (with its 100 KiB cases), `ref/run.sh` 229 cases match;
+1 MB outputs decode exactly, within about 2 GB of memory (see Speed and
+limits).

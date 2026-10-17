@@ -215,7 +215,7 @@ def XzLzma2.raw.have(ok: Bool, +size: U32, +reset: Bool, +data: List<&2, U32>, +
       +regs2 = XzLzma2.dict_reset_if(reset, regs)
       +nd = XzLzma2.want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), size)
       +ctl2 = XzL2Ctl.chunk(ctl, Bool.or(XzL2Ctl.need_props(ctl), reset), Nat.add(3n, U32.to_nat(size)), size, nd)
-      XzLzma2.raw.done(L.XzLzma.copy_in(B.take(U32.to_nat(size), data), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc), probs, ctl2, B.drop(U32.to_nat(size), data))
+      XzLzma2.raw.done(L.XzLzma.copy_in(B.take.fast(U32.to_nat(size), data), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc), probs, ctl2, B.drop(U32.to_nat(size), data))
 
 def XzLzma2.raw.room(over: Bool, +size: U32, +reset: Bool, +data: List<&2, U32>, +buf: List<&2, U32>, probs: Array<U32>, dict: Array<U32>, regs: L.XzLzRegs, +ctl: XzL2Ctl, acc: List<&2, U32>) -> XzL2Step:
   match over:
@@ -258,7 +258,7 @@ def XzLzma2.lz.have(ok: Bool, +mode: U32, +u: U32, +p: Nat, +hl: Nat, +data: Lis
       +regs2 = XzLzma2.state_reset_if(sreset, XzLzma2.dict_reset_if(U32.is_eq(mode, 3), regs))
       +nd = XzLzma2.want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), u)
       +ctl2 = XzL2Ctl.chunk(ctl, False{}, Nat.add(hl, p), u, nd)
-      XzLzma2.lz.done(L.XzLzma.chunk(U32.to_nat(u), XzLzma2.probs_if(sreset, probs), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc, B.take(p, data)), ctl2, B.drop(p, data))
+      XzLzma2.lz.done(L.XzLzma.chunk(U32.to_nat(u), XzLzma2.probs_if(sreset, probs), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc, B.take.fast(p, data)), ctl2, B.drop(p, data))
 
 def XzLzma2.lz.room(over: Bool, +mode: U32, +u: U32, +p: Nat, +hl: Nat, +data: List<&2, U32>, +buf: List<&2, U32>, probs: Array<U32>, dict: Array<U32>, regs: L.XzLzRegs, +ctl: XzL2Ctl, acc: List<&2, U32>) -> XzL2Step:
   match over:
@@ -373,26 +373,46 @@ def XzLzma2.feed.fin(r: XzL2Step) -> Result<&2, &1, E.XzError, XzLzma2Fed>:
     case XzL2Fail{e}:
       Fail{e}
 
+# Streaming, on a byte list (internal: the .xz decoder feeds its own buffer
+# without making it Octets). Every element of xs is a byte (0 to 255).
+def XzLzma2.feed.list(d: XzLzma2, xs: List<&2, U32>) -> Result<&2, &1, E.XzError, XzLzma2Fed>:
+  XzLzma2{probs, dict, regs, ctl, buf} = d
+  +buf2 = B.append.fast(buf, xs)
+  XzLzma2.feed.fin(XzLzma2.loop(1n+B.len.fast(buf2), XzL2Go{XzLzma2{probs, dict, regs, ctl, buf2}, Nil{}}))
+
 # Streaming: more input; the answer holds the output of every chunk completed
 def XzLzma2.feed(d: XzLzma2, input: B.Octets) -> Result<&2, &1, E.XzError, XzLzma2Fed>:
-  XzLzma2{probs, dict, regs, ctl, buf} = d
-  +buf2 = B.append(buf, B.Octets.to_list(input))
-  XzLzma2.feed.fin(XzLzma2.loop(1n+B.len(buf2), XzL2Go{XzLzma2{probs, dict, regs, ctl, buf2}, Nil{}}))
+  XzLzma2.feed.list(d, B.Octets.to_list(input))
 
-# The end of the input: the bytes after the end marker and the stream's size,
-# or XzTruncated if the end marker has not been read
-def XzLzma2.finish.go(ended: Bool, +consumed: Nat, +room: U32, buf: List<&2, U32>) -> Result<&2, &2, E.XzError, XzLzma2End>:
+# What finish.list answers (internal): finish's answer, with the bytes after
+# the end marker as a list
+type XzL2Rest is Data:
+  XzL2Rest{rest: List<&2, U32>, consumed: Nat, room: U32}
+
+def XzLzma2.finish.go(ended: Bool, +consumed: Nat, +room: U32, buf: List<&2, U32>) -> Result<&2, &2, E.XzError, XzL2Rest>:
   match ended:
     case True{}:
-      Done{XzLzma2End{B.Octets.of_list(buf), consumed, room}}
+      Done{XzL2Rest{buf, consumed, room}}
     case False{}:
       Fail{E.XzTruncated{}}
 
-def XzLzma2.finish(d: XzLzma2) -> Result<&2, &2, E.XzError, XzLzma2End>:
+def XzLzma2.finish.list(d: XzLzma2) -> Result<&2, &2, E.XzError, XzL2Rest>:
   XzLzma2{probs, dict, regs, ctl, buf} = d
   match ctl:
     case XzL2Ctl{need_reset, need_props, ended, +room, +consumed, depth, maxdepth}:
       XzLzma2.finish.go(ended, consumed, room, buf)
+
+def XzLzma2.finish.oct(r: Result<&2, &2, E.XzError, XzL2Rest>) -> Result<&2, &2, E.XzError, XzLzma2End>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{XzL2Rest{rest, consumed, room}}:
+      Done{XzLzma2End{B.Octets.of_list(rest), consumed, room}}
+
+# The end of the input: the bytes after the end marker and the stream's size,
+# or XzTruncated if the end marker has not been read
+def XzLzma2.finish(d: XzLzma2) -> Result<&2, &2, E.XzError, XzLzma2End>:
+  XzLzma2.finish.oct(XzLzma2.finish.list(d))
 
 # One-shot: a whole LZMA2 stream, and nothing after it
 def XzLzma2.decode.empty(n: Nat, out: B.Octets) -> Result<&2, &2, E.XzError, B.Octets>:

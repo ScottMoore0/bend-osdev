@@ -304,19 +304,19 @@ def Xz.data.sized(ok: Bool, +hdr: C.XzBlockHeader, chk: I.XzCheck, +csize: Nat, 
     case True{}:
       XzGo{XzDecoder{XzPhTail{hdr, chk, csize, usize}, run, rest}, acc}
 
-def Xz.data.end(r: Result<&2, &2, E.XzError, L2.XzLzma2End>, +hdr: C.XzBlockHeader, chk: I.XzCheck, +usize: Nat, run: XzRun, acc: List<&2, B.Octets>) -> XzStep:
+def Xz.data.end(r: Result<&2, &2, E.XzError, L2.XzL2Rest>, +hdr: C.XzBlockHeader, chk: I.XzCheck, +usize: Nat, run: XzRun, acc: List<&2, B.Octets>) -> XzStep:
   match r:
     case Fail{e}:
       XzStop{e}
-    case Done{L2.XzLzma2End{rest, +consumed, +room}}:
-      Xz.data.sized(Xz.sizes_ok(hdr, consumed, usize), hdr, chk, consumed, usize, XzRun.set_room(run, room), B.Octets.to_list(rest), acc)
+    case Done{L2.XzL2Rest{rest, +consumed, +room}}:
+      Xz.data.sized(Xz.sizes_ok(hdr, consumed, usize), hdr, chk, consumed, usize, XzRun.set_room(run, room), rest, acc)
 
 def Xz.data.more(ended: Bool, +hdr: C.XzBlockHeader, l2: L2.XzLzma2, ds: List<&1, D.XzDelta>, chk: I.XzCheck, +usize: Nat, run: XzRun, acc: List<&2, B.Octets>) -> XzStep:
   match ended:
     case False{}:
       XzWait{XzDecoder{XzPhData{hdr, l2, ds, chk, usize}, run, Nil{}}, acc}
     case True{}:
-      Xz.data.end(L2.XzLzma2.finish(l2), hdr, chk, usize, run, acc)
+      Xz.data.end(L2.XzLzma2.finish.list(l2), hdr, chk, usize, run, acc)
 
 def Xz.data.out(r: XzDeltas, +hdr: C.XzBlockHeader, l2: L2.XzLzma2, ended: Bool, chk: I.XzCheck, +usize: Nat, run: XzRun, acc: List<&2, B.Octets>) -> XzStep:
   XzDeltas{ds, +o} = r
@@ -335,7 +335,7 @@ def Xz.data(buf: List<&2, U32>, +hdr: C.XzBlockHeader, l2: L2.XzLzma2, ds: List<
     case Nil{}:
       XzWait{XzDecoder{XzPhData{hdr, l2, ds, chk, usize}, run, Nil{}}, acc}
     case Con{h, t}:
-      Xz.data.fed(L2.XzLzma2.feed(l2, B.Octets.of_list(Con{h, t})), hdr, ds, chk, usize, run, acc)
+      Xz.data.fed(L2.XzLzma2.feed.list(l2, Con{h, t}), hdr, ds, chk, usize, run, acc)
 
 # A block's padding and check; then its record
 
@@ -364,14 +364,18 @@ def Xz.tail(+buf: List<&2, U32>, +hdr: C.XzBlockHeader, chk: I.XzCheck, +csize: 
 
 # The index: its records must be the blocks', in order
 
-def Xz.records_eq(xs: List<&2, C.XzRecord>, ys: List<&2, C.XzRecord>) -> Bool:
+# (a tail call per record, so an index of any length is compared)
+def Xz.records_eq.go(xs: List<&2, C.XzRecord>, ys: List<&2, C.XzRecord>, ok: Bool) -> Bool:
   match xs ys:
     case Nil{} Nil{}:
-      True{}
+      ok
     case Con{C.XzRecord{a, b}, s} Con{C.XzRecord{c, d}, t}:
-      Bool.and(Bool.and(Nat.is_eq(a, c), Nat.is_eq(b, d)), Xz.records_eq(s, t))
+      Xz.records_eq.go(s, t, Bool.and(ok, Bool.and(Nat.is_eq(a, c), Nat.is_eq(b, d))))
     case _ _:
       False{}
+
+def Xz.records_eq(xs: List<&2, C.XzRecord>, ys: List<&2, C.XzRecord>) -> Bool:
+  Xz.records_eq.go(xs, ys, True{})
 
 def Xz.index.ok(ok: Bool, +isize: Nat, run: XzRun, rest: List<&2, U32>, acc: List<&2, B.Octets>) -> XzStep:
   match ok:
@@ -461,12 +465,23 @@ def XzDecoder.loop(n: Nat, r: XzStep) -> XzStep:
         case XzStop{e}:
           XzStop{e}
 
+# the pieces of output (most recent first) joined; a single piece (a whole
+# block decoded in one feed) is answered as it is, not copied
+def XzDecoder.out(acc: List<&2, B.Octets>) -> B.Octets:
+  match acc:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{o, Nil{}}:
+      o
+    case Con{o, t}:
+      B.Octets.concat(List.reverse(&2, B.Octets, Con{o, t}))
+
 def XzDecoder.feed.fin(r: XzStep) -> Result<&2, &1, E.XzError, XzFed>:
   match r:
     case XzGo{d, acc}:
-      Done{XzFed{d, B.Octets.concat(List.reverse(&2, B.Octets, acc))}}
+      Done{XzFed{d, XzDecoder.out(acc)}}
     case XzWait{d, acc}:
-      Done{XzFed{d, B.Octets.concat(List.reverse(&2, B.Octets, acc))}}
+      Done{XzFed{d, XzDecoder.out(acc)}}
     case XzStop{e}:
       Fail{e}
 
@@ -479,8 +494,8 @@ def XzDecoder.start(+p: XzParams) -> XzDecoder:
 # will, so 2 * (bytes buffered) + 4 steps is enough.
 def XzDecoder.feed(d: XzDecoder, input: B.Octets) -> Result<&2, &1, E.XzError, XzFed>:
   XzDecoder{ph, run, buf} = d
-  +buf2 = B.append(buf, B.Octets.to_list(input))
-  XzDecoder.feed.fin(XzDecoder.loop(1n+Nat.add(Nat.mul(2n, B.len(buf2)), 3n), XzGo{XzDecoder{ph, run, buf2}, Nil{}}))
+  +buf2 = B.append.fast(buf, B.Octets.to_list(input))
+  XzDecoder.feed.fin(XzDecoder.loop(1n+Nat.add(Nat.mul(2n, B.len.fast(buf2)), 3n), XzGo{XzDecoder{ph, run, buf2}, Nil{}}))
 
 def XzDecoder.finish.pad(n: Nat, out: B.Octets) -> Result<&2, &2, E.XzError, B.Octets>:
   match n:
@@ -527,12 +542,21 @@ def Xz.bound(+max: U32, r: Result<&2, &2, E.XzError, B.Octets>) -> Result<&2, &2
     case Done{+o}:
       Xz.bound.pick(Nat.is_le(B.Octets.len(o), U32.to_nat(max)), o)
 
+# (finish's output is normally empty: then out is answered as it is, not
+# copied)
+def xz_decode.join.pick(n: Nat, out: B.Octets, o: B.Octets) -> Result<&2, &2, E.XzError, B.Octets>:
+  match n:
+    case 0n:
+      Done{out}
+    case 1n+k:
+      Done{B.Octets.append(out, o)}
+
 def xz_decode.join(r: Result<&2, &2, E.XzError, B.Octets>, out: B.Octets) -> Result<&2, &2, E.XzError, B.Octets>:
   match r:
     case Fail{e}:
       Fail{e}
-    case Done{o}:
-      Done{B.Octets.append(out, o)}
+    case Done{+o}:
+      xz_decode.join.pick(B.Octets.len(o), out, o)
 
 def xz_decode.fin(r: Result<&2, &1, E.XzError, XzFed>) -> Result<&2, &2, E.XzError, B.Octets>:
   match r:

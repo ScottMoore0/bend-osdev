@@ -35,10 +35,13 @@ def Laws.empty_input(p):
   {==}
 
 # A first chunk that does not reset the dictionary: the input is read through
-# bytes' law octets_to_of (as in bad_magic below), then the rest computes.
+# bytes' law octets_to_of (as in bad_magic below), the loop's bound through
+# len_fast (the feed counts its buffer with B.len.fast), then the rest
+# computes.
 def Laws.lzma2_needs_reset(d, m, xs):
   +k = L2.XzLzma2.start.depth(d, m)
-  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{2, xs})), B.mask(Con{2, xs}), BL.octets_to_of(Con{2, xs})) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(L2.XzLzma2.loop(1n+B.len(B.append(Nil{}, _)), L2.XzL2Go{L2.XzLzma2{Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), L2.XzL2Ctl{True{}, True{}, False{}, m, 0n, Nat.min(k, 12n), k}, B.append(Nil{}, _)}, Nil{}}))) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{2, xs})), B.mask(Con{2, xs}), BL.octets_to_of(Con{2, xs})) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(L2.XzLzma2.loop(1n+B.len.fast(B.append.fast(Nil{}, _)), L2.XzL2Go{L2.XzLzma2{Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), L2.XzL2Ctl{True{}, True{}, False{}, m, 0n, Nat.min(k, 12n), k}, B.append.fast(Nil{}, _)}, Nil{}}))) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %BL.len_fast(B.mask(Con{2, xs})) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(L2.XzLzma2.loop(1n+_, L2.XzL2Go{L2.XzLzma2{Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), L2.XzL2Ctl{True{}, True{}, False{}, m, 0n, Nat.min(k, 12n), k}, B.mask(Con{2, xs})}, Nil{}}))) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
   {==}
 
 def Laws.lzma2_end_only(d, m):
@@ -89,8 +92,8 @@ def xz_loop_bad(n: Nat, +run: X.XzRun, +h: U32, +t: List<&2, U32>, +acc: List<&2
 # into Octets and back is the list masked), so the first byte it sees is
 # B.byte(b), whatever Octets stores.
 def Laws.bad_magic(p, b, xs, e):
-  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{b, xs})), B.mask(Con{b, xs}), BL.octets_to_of(Con{b, xs})) : {X.Xz.bound(X.XzParams.max_out(p), X.xz_decode.fin(X.XzDecoder.feed.fin(X.XzDecoder.loop(1n+Nat.add(Nat.mul(2n, B.len(B.append(Nil{}, _))), 3n), X.XzGo{X.XzDecoder{X.XzPhHeader{}, X.XzRun{0, Nil{}, X.XzParams.max_out(p)}, B.append(Nil{}, _)}, Nil{}})))) == Fail{E.XzBadMagic{}} : Result<&2, &2, E.XzError, B.Octets>}
-  %xz_loop_bad(Nat.add(Nat.mul(2n, B.len(Con{B.byte(b), B.mask(xs)})), 3n), X.XzRun{0, Nil{}, X.XzParams.max_out(p)}, B.byte(b), B.mask(xs), Nil{}, Equal.sym(Bool, U32.is_eq(B.byte(b), 253), False{}, e)) : {X.Xz.bound(X.XzParams.max_out(p), X.xz_decode.fin(X.XzDecoder.feed.fin(_))) == Fail{E.XzBadMagic{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{b, xs})), B.mask(Con{b, xs}), BL.octets_to_of(Con{b, xs})) : {X.Xz.bound(X.XzParams.max_out(p), X.xz_decode.fin(X.XzDecoder.feed.fin(X.XzDecoder.loop(1n+Nat.add(Nat.mul(2n, B.len.fast(B.append.fast(Nil{}, _))), 3n), X.XzGo{X.XzDecoder{X.XzPhHeader{}, X.XzRun{0, Nil{}, X.XzParams.max_out(p)}, B.append.fast(Nil{}, _)}, Nil{}})))) == Fail{E.XzBadMagic{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %xz_loop_bad(Nat.add(Nat.mul(2n, B.len.fast(Con{B.byte(b), B.mask(xs)})), 3n), X.XzRun{0, Nil{}, X.XzParams.max_out(p)}, B.byte(b), B.mask(xs), Nil{}, Equal.sym(Bool, U32.is_eq(B.byte(b), 253), False{}, e)) : {X.Xz.bound(X.XzParams.max_out(p), X.xz_decode.fin(X.XzDecoder.feed.fin(_))) == Fail{E.XzBadMagic{}} : Result<&2, &2, E.XzError, B.Octets>}
   {==}
 
 # Reserved control bytes: the control byte is at least 3, so not a stream end
@@ -112,6 +115,6 @@ def xz_loop_control_bad(n: Nat, -probs: Array<U32>, -dict: Array<U32>, +regs: L.
 
 def Laws.lzma2_reserved_control(d, m, c, xs, e1, e2):
   +k = L2.XzLzma2.start.depth(d, m)
-  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{c, xs})), B.mask(Con{c, xs}), BL.octets_to_of(Con{c, xs})) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(L2.XzLzma2.loop(1n+B.len(B.append(Nil{}, _)), L2.XzL2Go{L2.XzLzma2{Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), L2.XzL2Ctl{True{}, True{}, False{}, m, 0n, Nat.min(k, 12n), k}, B.append(Nil{}, _)}, Nil{}}))) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
-  %xz_loop_control_bad(B.len(Con{B.byte(c), B.mask(xs)}), Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), True{}, True{}, m, 0n, Nat.min(k, 12n), k, B.byte(c), B.mask(xs), Nil{}, Equal.sym(Bool, U32.is_lt(B.byte(c), 3), False{}, e1), Equal.sym(Bool, U32.is_lt(B.byte(c), 128), True{}, e2)) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(_)) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(Con{c, xs})), B.mask(Con{c, xs}), BL.octets_to_of(Con{c, xs})) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(L2.XzLzma2.loop(1n+B.len.fast(B.append.fast(Nil{}, _)), L2.XzL2Go{L2.XzLzma2{Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), L2.XzL2Ctl{True{}, True{}, False{}, m, 0n, Nat.min(k, 12n), k}, B.append.fast(Nil{}, _)}, Nil{}}))) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
+  %xz_loop_control_bad(B.len.fast(Con{B.byte(c), B.mask(xs)}), Array.new(U32, 0n, 1024), Array.new(U32, Nat.min(k, 12n), 0), L2.XzLzma2.start.regs(d, k), True{}, True{}, m, 0n, Nat.min(k, 12n), k, B.byte(c), B.mask(xs), Nil{}, Equal.sym(Bool, U32.is_lt(B.byte(c), 3), False{}, e1), Equal.sym(Bool, U32.is_lt(B.byte(c), 128), True{}, e2)) : {L2.XzLzma2.decode.fin(L2.XzLzma2.feed.fin(_)) == Fail{E.XzCorruptLzma{}} : Result<&2, &2, E.XzError, B.Octets>}
   {==}

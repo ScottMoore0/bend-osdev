@@ -334,13 +334,13 @@ def XzC.records(n: Nat, xs: List<&2, U32>) -> Result<&2, &2, E.XzError, XzGot<Li
 # after the records: null padding to a multiple of four bytes, and the CRC32
 # of everything from the indicator on
 def XzC.index.end(+xs: List<&2, U32>, recs: List<&2, XzRecord>, +rest: List<&2, U32>) -> Result<&2, &2, E.XzError, XzGot<XzIndex>>:
-  +used = Nat.sub(B.len(xs), B.len(rest))
+  +used = Nat.sub(B.len.fast(xs), B.len.fast(rest))
   +pad = Nat.mod(Nat.sub(4n, Nat.mod(used, 4n)), 4n)
   do Result<&2, &2, E.XzError, XzGot<XzIndex>>:
     +p : XzGot<List<&2, U32>> <- XzC.take(pad, rest)
     XzC.require(XzC.all_zero(XzGot.value(List<&2, U32>, p)), E.XzBadPadding{})
     +c : XzGot<List<&2, U32>> <- XzC.take(4n, XzGot.rest(List<&2, U32>, p))
-    XzC.require(U32.is_eq(XzC.crc32(B.take(Nat.add(used, pad), xs)), XzC.le32(XzGot.value(List<&2, U32>, c))), E.XzBadIndexCrc{})
+    XzC.require(U32.is_eq(XzC.crc32(B.take.fast(Nat.add(used, pad), xs)), XzC.le32(XzGot.value(List<&2, U32>, c))), E.XzBadIndexCrc{})
     return XzGot{XzIndex{recs, Nat.add(Nat.add(used, pad), 4n)}, XzGot.rest(List<&2, U32>, c)}
 
 def XzC.index.recs(+xs: List<&2, U32>, +g: XzGot<List<&2, XzRecord>>) -> Result<&2, &2, E.XzError, XzGot<XzIndex>>:
