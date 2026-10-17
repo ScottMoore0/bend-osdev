@@ -216,14 +216,17 @@ def hex(xs: List<&2, U32>) -> String:
 
 # Octets: the byte-string interface
 #
-# Public interfaces take and answer Octets. Its representation (today a
-# List<&2, U32> of bytes, each already masked to 8 bits) is internal: other
-# packages use only the Octets.* defs below, never the constructor, so the
-# storage can change without touching them.
+# Public interfaces take and answer Octets. Its representation is internal:
+# other packages use only the Octets.* defs below and, in proofs, this
+# package's laws, never the constructor. Today an Octets is a list of 8-bit
+# words, so every value of the type is a valid byte string (no element can
+# be 256 or more), which is what makes laws like of_list(to_list(o)) == o
+# hold for every o.
 
 type Octets is Data:
-  Octets{list: List<&2, U32>}
+  Octets{words: List<&2, Word(8n)>}
 
+# masking every element of a list to 8 bits (the list layer's view)
 def mask(xs: List<&2, U32>) -> List<&2, U32>:
   match xs:
     case Nil{}:
@@ -240,27 +243,76 @@ def list_eq(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
     case _ _:
       False{}
 
+# Word lists: the operations Octets is built from
+
+def w8s.of_list(xs: List<&2, U32>) -> List<&2, Word(8n)>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{h, t}:
+      Con{bits8(h), w8s.of_list(t)}
+
+def w8s.to_list(ws: List<&2, Word(8n)>) -> List<&2, U32>:
+  match ws:
+    case Nil{}:
+      Nil{}
+    case Con{h, t}:
+      Con{of_bits8(h), w8s.to_list(t)}
+
+def w8s.take(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+  match n:
+    case 0n:
+      Nil{}
+    case 1n+p:
+      match ws:
+        case Nil{}:
+          Nil{}
+        case Con{h, t}:
+          Con{h, w8s.take(p, t)}
+
+def w8s.drop(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+  match n:
+    case 0n:
+      ws
+    case 1n+p:
+      match ws:
+        case Nil{}:
+          Nil{}
+        case Con{h, t}:
+          w8s.drop(p, t)
+
+def w8s.zeros(n: Nat) -> List<&2, Word(8n)>:
+  match n:
+    case 0n:
+      Nil{}
+    case 1n+p:
+      Con{Word.zero(8n), w8s.zeros(p)}
+
+def w8s.at(ws: List<&2, Word(8n)>) -> Maybe<&2, U32>:
+  match ws:
+    case Con{h, t}:
+      Some{of_bits8(h)}
+    case Nil{}:
+      None{}
+
 # Conversions: of_list masks every element to 8 bits
+
 def Octets.of_list(xs: List<&2, U32>) -> Octets:
-  Octets{mask(xs)}
+  Octets{w8s.of_list(xs)}
 
 def Octets.to_list(o: Octets) -> List<&2, U32>:
   match o:
-    case Octets{xs}:
-      xs
+    case Octets{ws}:
+      w8s.to_list(ws)
 
 def Octets.of_string(s: String) -> Octets:
-  Octets{of_string(s)}
+  Octets.of_list(of_string(s))
 
 def Octets.to_string(o: Octets) -> String:
-  match o:
-    case Octets{xs}:
-      to_string(xs)
+  to_string(Octets.to_list(o))
 
 def Octets.hex(o: Octets) -> String:
-  match o:
-    case Octets{xs}:
-      hex(xs)
+  hex(Octets.to_list(o))
 
 # Building and slicing
 
@@ -268,18 +320,18 @@ def Octets.empty() -> Octets:
   Octets{Nil{}}
 
 def Octets.zeros(n: Nat) -> Octets:
-  Octets{zeros(n)}
+  Octets{w8s.zeros(n)}
 
 # a byte (the low 8 bits of b) in front of o
 def Octets.cons(b: U32, o: Octets) -> Octets:
   match o:
-    case Octets{xs}:
-      Octets{Con{byte(b), xs}}
+    case Octets{ws}:
+      Octets{Con{bits8(b), ws}}
 
 def Octets.append(a: Octets, b: Octets) -> Octets:
   match a b:
     case Octets{xs} Octets{ys}:
-      Octets{append(xs, ys)}
+      Octets{List.append(&2, Word(8n), xs, ys)}
 
 def Octets.concat(os: List<&2, Octets>) -> Octets:
   match os:
@@ -290,79 +342,84 @@ def Octets.concat(os: List<&2, Octets>) -> Octets:
 
 def Octets.len(o: Octets) -> Nat:
   match o:
-    case Octets{xs}:
-      len(xs)
+    case Octets{ws}:
+      List.length(&2, Word(8n), ws)
 
 def Octets.take(n: Nat, o: Octets) -> Octets:
   match o:
-    case Octets{xs}:
-      Octets{take(n, xs)}
+    case Octets{ws}:
+      Octets{w8s.take(n, ws)}
 
 def Octets.drop(n: Nat, o: Octets) -> Octets:
   match o:
-    case Octets{xs}:
-      Octets{drop(n, xs)}
+    case Octets{ws}:
+      Octets{w8s.drop(n, ws)}
 
 # the n bytes at offset i (fewer if o ends first)
 def Octets.slice(+i: Nat, n: Nat, o: Octets) -> Octets:
   Octets.take(n, Octets.drop(i, o))
 
+# a byte string cut in two
+type OctetsSplit is Data:
+  OctetsSplit{head: Octets, rest: Octets}
+
+def Octets.split_at.pick(fits: Bool, +n: Nat, +o: Octets) -> Maybe<&2, OctetsSplit>:
+  match fits:
+    case True{}:
+      Some{OctetsSplit{Octets.take(n, o), Octets.drop(n, o)}}
+    case False{}:
+      None{}
+
+# the first n bytes and the rest, or None if o has fewer than n bytes
+def Octets.split_at(+n: Nat, +o: Octets) -> Maybe<&2, OctetsSplit>:
+  Octets.split_at.pick(Nat.is_le(n, Octets.len(o)), n, o)
+
 def Octets.is_eq(a: Octets, b: Octets) -> Bool:
-  match a b:
-    case Octets{xs} Octets{ys}:
-      list_eq(xs, ys)
+  list_eq(Octets.to_list(a), Octets.to_list(b))
 
 def Octets.at(o: Octets, i: Nat) -> Maybe<&2, U32>:
   match o:
-    case Octets{xs}:
-      at(xs, i)
+    case Octets{ws}:
+      w8s.at(w8s.drop(i, ws))
 
-# Fields
+# Fields: written as bytes, read through the list layer over just the
+# bytes a field needs (a read walks to its offset, never past it)
 
 def Octets.le16(v: U32) -> Octets:
-  Octets{le16(v)}
+  Octets.of_list(le16(v))
 
 def Octets.be16(v: U32) -> Octets:
-  Octets{be16(v)}
+  Octets.of_list(be16(v))
 
 def Octets.le32(v: U32) -> Octets:
-  Octets{le32(v)}
+  Octets.of_list(le32(v))
 
 def Octets.be32(v: U32) -> Octets:
-  Octets{be32(v)}
+  Octets.of_list(be32(v))
 
 def Octets.le64(v: W.W64) -> Octets:
-  Octets{le64(v)}
+  Octets.of_list(le64(v))
 
 def Octets.be64(v: W.W64) -> Octets:
-  Octets{be64(v)}
+  Octets.of_list(be64(v))
 
-def Octets.le16_at(o: Octets, i: Nat) -> Maybe<&2, U32>:
-  match o:
-    case Octets{xs}:
-      le16_at(xs, i)
+def Octets.field(+i: Nat, n: Nat, o: Octets) -> List<&2, U32>:
+  Octets.to_list(Octets.slice(i, n, o))
 
-def Octets.be16_at(o: Octets, i: Nat) -> Maybe<&2, U32>:
-  match o:
-    case Octets{xs}:
-      be16_at(xs, i)
+def Octets.le16_at(o: Octets, +i: Nat) -> Maybe<&2, U32>:
+  le16.head(Octets.field(i, 2n, o))
 
-def Octets.le32_at(o: Octets, i: Nat) -> Maybe<&2, U32>:
-  match o:
-    case Octets{xs}:
-      le32_at(xs, i)
+def Octets.be16_at(o: Octets, +i: Nat) -> Maybe<&2, U32>:
+  be16.head(Octets.field(i, 2n, o))
 
-def Octets.be32_at(o: Octets, i: Nat) -> Maybe<&2, U32>:
-  match o:
-    case Octets{xs}:
-      be32_at(xs, i)
+def Octets.le32_at(o: Octets, +i: Nat) -> Maybe<&2, U32>:
+  le32.head(Octets.field(i, 4n, o))
+
+def Octets.be32_at(o: Octets, +i: Nat) -> Maybe<&2, U32>:
+  be32.head(Octets.field(i, 4n, o))
 
 def Octets.le64_at(o: Octets, +i: Nat) -> Maybe<&2, W.W64>:
-  match o:
-    case Octets{+xs}:
-      le64_at(xs, i)
+  le64_at(Octets.field(i, 8n, o), 0n)
 
 def Octets.be64_at(o: Octets, +i: Nat) -> Maybe<&2, W.W64>:
-  match o:
-    case Octets{+xs}:
-      be64_at(xs, i)
+  be64_at(Octets.field(i, 8n, o), 0n)

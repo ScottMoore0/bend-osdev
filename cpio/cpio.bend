@@ -507,13 +507,11 @@ def Cpio.parse(+o: B.Octets) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
 
 # The entries Cpio.build can hold, so that Cpio.parse gives them back: the
 # data, and the name with its NUL, fit in a 32-bit size field; the name is
-# not the trailer's; and name and data are canonical Octets (converting to a
-# list and back gives them back, as every Octets that bytes' own defs build
-# is).
+# not the trailer's.
 def CpioEntry.valid(e: CpioEntry) -> Type:
   match e:
     case CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, +name, +data}:
-      {size.over(B.len(B.Octets.to_list(data))) == 0n : Nat} & {size.over(1n+B.len(B.Octets.to_list(name))) == 0n : Nat} & {Cpio.is_trailer_name(name) == False{} : Bool} & {B.Octets.of_list(B.Octets.to_list(name)) == name : B.Octets} & {B.Octets.of_list(B.Octets.to_list(data)) == data : B.Octets}
+      {size.over(B.len(B.Octets.to_list(data))) == 0n : Nat} & {size.over(1n+B.len(B.Octets.to_list(name))) == 0n : Nat} & {Cpio.is_trailer_name(name) == False{} : Bool}
 
 def CpioEntry.valid_all(es: List<&2, CpioEntry>) -> Type:
   match es:

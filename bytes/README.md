@@ -9,9 +9,11 @@ low 8 bits of each element, so a malformed element is masked, never trusted.
 
 ## Octets: the byte-string interface
 
-Public interfaces in bend-osdev take and answer `Octets`. Its storage (today a
-list of masked bytes) is internal, so it can change without touching any other
-package.
+Public interfaces in bend-osdev take and answer `Octets`. Its storage is
+internal, so it can change without touching any other package. Today it is a
+list of 8-bit words (`Word(8n)`), so every value of the type is a valid byte
+string: no element can be 256 or more, and converting to a list and back gives
+every `Octets` back unchanged.
 
 | Def | Meaning |
 |---|---|
@@ -19,7 +21,9 @@ package.
 | `Octets.of_string`, `Octets.to_string`, `Octets.hex` | text |
 | `Octets.empty`, `Octets.zeros(n)`, `Octets.cons(b, o)`, `Octets.append`, `Octets.concat` | building |
 | `Octets.len`, `Octets.take`, `Octets.drop`, `Octets.slice(i, n, o)`, `Octets.at`, `Octets.is_eq` | slicing and reading |
-| `Octets.le16 … be64`, `Octets.le16_at … be64_at` | fields, written and read |
+| `Octets.split_at(n, o)` | `Some{OctetsSplit{head, rest}}` (the first `n` bytes and the rest), or `None` if `o` is shorter than `n` |
+| `mask(xs)` | each element of a list masked to 8 bits (what `of_list` keeps) |
+| `Octets.le16` to `Octets.be64`, `Octets.le16_at` to `Octets.be64_at` | fields, written and read (a reader walks to its offset and reads only the field's bytes) |
 
 ## The list layer
 
@@ -40,8 +44,9 @@ The same operations on `List<&2, U32>` directly. Packages written before
 
 * **The storage of `Octets` is internal.** Only `bytes.bend` knows it; other
   packages use the `Octets.*` defs, and their proofs use this package's laws
-  (in particular `octets_append_list`), never the inside of `Octets`. Packed
-  words or arrays can replace the list without changing any other package.
+  (the interface laws below), never the inside of `Octets`. Packed words, or
+  chunks of an `Array`, can replace the list of words without changing any
+  other package, as long as the interface laws still hold.
 * **Fast paths can be added behind the same defs,** with a law (or a
   differential test) tying each to the bit-slicing reference.
 
@@ -52,19 +57,33 @@ The same operations on `List<&2, U32>` directly. Packages written before
 * **for every value:** each of the five field formats reads back what was
   written (16-bit reads give `low16(v)`); `byte(b)` is below 256; and
   `append(take(n, xs), drop(n, xs)) == xs` for every `n` and `xs`;
-* **the same round trips and slicing on `Octets`**, plus: `of_list` masks
-  once (converting back and forth changes nothing), and `Octets.is_eq` is
+* **the same round trips and slicing on `Octets`**, and `Octets.is_eq` is
   reflexive;
-* **an interface law for dependents' proofs:** `octets_append_list`, how
-  `append` and `to_list` relate;
+* **interface laws, for every input, for dependents' proofs** (how `Octets`
+  relates to lists, whatever its storage):
+  * `octets_of_to`: `of_list(to_list(o)) == o`;
+  * `octets_to_of`: `to_list(of_list(xs)) == mask(xs)`;
+  * `octets_append_list`: `to_list(append(a, b)) == append(to_list(a), to_list(b))`;
+  * `octets_len_list`: `len(o) == len(to_list(o))`;
+  * `octets_zeros_list`, `octets_cons_list`: `zeros` and `cons` as lists;
+  * `octets_take_append`, `octets_drop_append`: `take(len(a), append(a, b)) == a`
+    and `drop(len(a), append(a, b)) == b`;
+  * `octets_split_at_append`: `split_at(len(a), append(a, b)) == Some{OctetsSplit{a, b}}`;
 * **vectors:** the byte orders, reading at an offset, short inputs, masking an
-  element above 255, slicing, and hex text.
+  element above 255, slicing, splitting, and hex text.
 
 ## Speed
 
 The field readers and writers are built from bit slicing, not shifts and
 masks, so their round trips can be proved for every value. That costs speed:
 use them for header fields, not bulk data.
+
+The list operations (`take`, `append`, `len`, `of_list`, `to_list`) are not
+tail-recursive, and Bend 2.0.37's runtime overflows its stack at a depth of
+about 20,000 to 30,000 calls, so a single `Octets` of more than about 20 KB
+fails today. Read large images a block at a time (blockdev's `MemDev` holds an
+image as a list of blocks). Tail-recursive versions, tied to these by laws,
+are the next step.
 
 ## Status
 

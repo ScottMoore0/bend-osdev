@@ -121,3 +121,48 @@ law octets_append_list:
   for a: B.Octets
   for b: B.Octets
   {B.Octets.to_list(B.Octets.append(a, b)) == B.append(B.Octets.to_list(a), B.Octets.to_list(b)) : List<&2, U32>}
+
+# every Octets is a valid byte string: to a list and back changes nothing
+law octets_of_to:
+  for o: B.Octets
+  {B.Octets.of_list(B.Octets.to_list(o)) == o : B.Octets}
+
+# a list becomes Octets by masking each element to its low 8 bits
+law octets_to_of:
+  for xs: List<&2, U32>
+  {B.Octets.to_list(B.Octets.of_list(xs)) == B.mask(xs) : List<&2, U32>}
+
+law octets_zeros_list:
+  for n: Nat
+  {B.Octets.to_list(B.Octets.zeros(n)) == B.zeros(n) : List<&2, U32>}
+
+law octets_cons_list:
+  for b: U32
+  for o: B.Octets
+  {B.Octets.to_list(B.Octets.cons(b, o)) == Con{B.byte(b), B.Octets.to_list(o)} : List<&2, U32>}
+
+law octets_len_list:
+  for o: B.Octets
+  {B.Octets.len(o) == B.len(B.Octets.to_list(o)) : Nat}
+
+# a joined string splits back exactly where it was joined
+law octets_take_append:
+  for +a: B.Octets
+  for b: B.Octets
+  {B.Octets.take(B.Octets.len(a), B.Octets.append(a, b)) == a : B.Octets}
+
+law octets_drop_append:
+  for a: B.Octets
+  for +b: B.Octets
+  {B.Octets.drop(B.Octets.len(a), B.Octets.append(a, b)) == b : B.Octets}
+
+law octets_split_at_append:
+  for +a: B.Octets
+  for +b: B.Octets
+  {B.Octets.split_at(B.Octets.len(a), B.Octets.append(a, b)) == Some{B.OctetsSplit{a, b}} : Maybe<&2, B.OctetsSplit>}
+
+law octets_split_short:
+  {B.Octets.split_at(4n, B.Octets.of_string("abc")) == None{} : Maybe<&2, B.OctetsSplit>}
+
+law octets_split_text:
+  {B.Octets.split_at(2n, B.Octets.of_string("abc")) == Some{B.OctetsSplit{B.Octets.of_string("ab"), B.Octets.of_string("c")}} : Maybe<&2, B.OctetsSplit>}

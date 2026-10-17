@@ -99,10 +99,9 @@ Everything else in the two files (the list-level `fields.*`, `hdr.*`,
     `CpioEntry.valid_all` admits, `Cpio.parse(Cpio.build(fmt, es)) ==
     Done{es}`, proved by induction on the list. `CpioEntry.valid` asks that
     the data, and the name with its NUL, are shorter than 2^32 bytes (they
-    must fit their size fields); that the name is not `TRAILER!!!`; and that
-    name and data are canonical `Octets`, `of_list(to_list(o)) == o`. Every
-    `Octets` built through bytes' defs is canonical, but bytes has no law that
-    says so yet, so the law carries it as a hypothesis (see Limitations).
+    must fit their size fields); and that the name is not `TRAILER!!!`.
+    Reading the name and data back as `Octets` uses bytes' interface law
+    `octets_of_to` (`of_list(to_list(o)) == o` for every `o`).
   * `valid_example`: the hypothesis is satisfiable (an ordinary one-file
     archive meets it), so `parse_build` is not vacuous;
 * **vectors:** hex digits in both cases, a non-digit and a short field
@@ -134,15 +133,12 @@ checked by hand against cpio(5).
 
 ## Limitations
 
-* `parse_build` needs name and data to be canonical `Octets`. The proof
-  reaches the entries' bytes only through bytes' interface law
-  `octets_append_list`, and turning the parsed lists back into `Octets` needs
-  `of_list(to_list(o)) == o`, which bytes does not state (and, while `Octets`
-  stores a plain list, cannot prove for every value of the type). The
-  hexfield and header laws compute through `Octets.of_list` and
-  `Octets.to_list` on lists of known length, so their proofs would need
-  revisiting if `Octets` changed representation; the laws themselves would
-  not change.
+* The proof of `parse_build` reaches the entries' bytes only through bytes'
+  interface laws (`octets_append_list`, `octets_zeros_list`,
+  `octets_of_to`). The hexfield and header laws compute through
+  `Octets.of_list` and `Octets.to_list` on lists of known length, so their
+  proofs would need revisiting if `Octets` changed representation again; the
+  laws themselves would not change.
 * Sizes are computed on `Nat`, and lengths are counted by walking the lists:
   fine for an initramfs's files, slow for very large ones.
 * `Cpio.build` does not refuse an entry whose data is 2^32 bytes or longer, or
