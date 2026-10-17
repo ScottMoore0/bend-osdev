@@ -146,9 +146,9 @@ def FatFile.read.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat ->
         return B.Octets.drop(skip, B.Octets.concat(pieces))
 
 # the bytes of a file from offset off, at most len of them and never past its
-# size (fewer, or none, near or past the end). The result is one Octets:
-# keep len to a few KB (see README.md, Speed), or read a piece at a time with
-# FatFile.open and FatFile.next.
+# size (fewer, or none, near or past the end). The result is one Octets, so
+# its length is bounded by memory (see README.md, Speed and size limits);
+# read a large file a piece at a time with FatFile.open and FatFile.next.
 def FatFile.read(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, +node: Q.FatNode, +off: Nat, +len: Nat) -> Result<&2, &2, E.FatError, B.Octets>:
   +size = U32.to_nat(Q.FatNode.size(node))
   +start = Nat.min(off, size)

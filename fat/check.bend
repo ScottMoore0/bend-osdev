@@ -195,6 +195,80 @@ def chk.pieces.mount(+d: D.MemDev, path: String, r: Result<&2, &2, E.FatError, M
 def chk.pieces(+d: D.MemDev, path: String) -> String:
   chk.pieces.mount(d, path, chk.mount(d))
 
+# A large volume, made up as it is read (so it costs no memory): FAT16,
+# 512-byte sectors, one per cluster, one reserved sector, one FAT of 196
+# sectors, a root directory of 16 entries, 50000 clusters, each linked to
+# the next: one file, BIG.BIN, of 25,600,000 bytes from cluster 2. The device
+# answers 2-byte blocks (so a FAT entry is one read): the boot sector, the
+# FAT entries and the root entry, zeros elsewhere. Its chain is longer than
+# the structural walk could follow (about 40,000 clusters).
+type ChkBig is Data:
+  ChkBig{boot: B.Octets, root: B.Octets}
+
+def chk.big.bpb() -> P.FatBpb:
+  P.FatBpb{B.Octets.of_list([235, 60, 144]), B.Octets.of_string("BENDOSDV"), 512, 1, 1, 1, 16, 50198, 248, 196, 63, 255, 0, 0, 0, 0, 0, 0, 0, 0, 43605}
+
+def chk.big() -> ChkBig:
+  ChkBig{P.FatBpb.build(P.Fat16{}, chk.big.bpb(), P.FatBootExt{128, 41, 1, B.Octets.of_string("BIG VOL"), B.Octets.of_string("FAT16")}), R.FatDirent.encode(chk.entry("BIG     BIN", 32, 2, 25600000))}
+
+def ChkBig.block_size(d: ChkBig) -> Nat:
+  2n
+
+# the FAT entry of cluster k: the media and end marks, k + 1 up to the last
+# cluster (50001), the end there, free after
+def chk.big.entry.pick(low: Bool, more: Bool, last: Bool, +k: U32) -> U32:
+  match low more last:
+    case True{} _ _:
+      U32.sub(65535, U32.mul(7, U32.sub(1, k)))
+    case False{} True{} _:
+      U32.add(k, 1)
+    case False{} False{} True{}:
+      65535
+    case False{} False{} False{}:
+      0
+
+def chk.big.entry(+k: U32) -> U32:
+  chk.big.entry.pick(U32.is_lt(k, 2), U32.is_lt(k, 50001), U32.is_eq(k, 50001), k)
+
+def chk.big.read.go(boot: Bool, fat: Bool, root: Bool, d: ChkBig, +n: Nat) -> Result<&2, &2, D.DevError, B.Octets>:
+  match boot fat root d:
+    case True{} _ _ ChkBig{b, r}:
+      Done{B.Octets.slice(Nat.mul(n, 2n), 2n, b)}
+    case False{} True{} _ _:
+      Done{B.Octets.of_list(B.le16(chk.big.entry(U32.from_nat(Nat.sub(n, 256n)))))}
+    case False{} False{} True{} ChkBig{b, r}:
+      Done{B.Octets.slice(Nat.mul(Nat.sub(n, 50432n), 2n), 2n, r)}
+    case False{} False{} False{} _:
+      Done{B.Octets.zeros(2n)}
+
+def chk.big.read(d: ChkBig, +n: Nat) -> Result<&2, &2, D.DevError, B.Octets>:
+  chk.big.read.go(Nat.is_lt(n, 256n), Nat.is_lt(n, 50432n), Nat.is_lt(n, 50448n), d, n)
+
+def ChkBig.read_block(d: ChkBig, n: Nat) -> Result<&2, &2, D.DevError, B.Octets>:
+  chk.big.read(d, n)
+
+def chk.big.count(xs: List<&2, U32>, n: Nat) -> Nat:
+  match xs:
+    case Nil{}:
+      n
+    case Con{h, t}:
+      chk.big.count(t, 1n+n)
+
+def chk.big.show_walk(r: Result<&2, &2, E.FatError, List<&2, U32>>) -> String:
+  match r:
+    case Done{cs}:
+      Nat.show(chk.big.count(cs, 0n)) ++ " clusters"
+    case Fail{e}:
+      chk.err(e)
+
+# the walk of BIG.BIN's chain, and 100 KB of it near its end
+def chk.big.run(+d: ChkBig) -> String:
+  chk.big.show_walk(do Result<&2, &2, E.FatError, List<&2, U32>>:
+    +fs : M.FatFs <- M.Fat.mount(~ChkBig, ~ChkBig.block_size, ~ChkBig.read_block, d, P.FatOptions.default())
+    T.FatChain.walk(~ChkBig, ~ChkBig.block_size, ~ChkBig.read_block, d, M.FatFs.volume(fs), 2)) ++ ", " ++ chk.show_len(do Result<&2, &2, E.FatError, B.Octets>:
+    +fs : M.FatFs <- M.Fat.mount(~ChkBig, ~ChkBig.block_size, ~ChkBig.read_block, d, P.FatOptions.default())
+    M.Fat.read(~ChkBig, ~ChkBig.block_size, ~ChkBig.read_block, d, fs, "/big.bin", 25000000n, 102400n))
+
 def main() -> IO(Unit):
   do IO<Unit>:
     IO.print(chk.show_mount(chk.mount(chk.dev())))
@@ -220,6 +294,7 @@ def main() -> IO(Unit):
     IO.print(chk.show_len(chk.read(chk.image([CheckLink{0, 4088}, CheckLink{1, 4095}, CheckLink{2, 4095}], 512), "/README.TXT", 0n, 600n)))
     IO.print(chk.show_len(chk.read(chk.image([CheckLink{0, 4088}, CheckLink{1, 4095}, CheckLink{2, 4000}], 512), "/README.TXT", 0n, 600n)))
     IO.print(chk.show_mount(chk.mount(chk.image(chk.links(), 500))))
+    IO.print(chk.big.run(chk.big()))
 
 #|FAT12, 20 clusters
 #|README.TXT, EFI/, Long File Name.txt
@@ -244,3 +319,4 @@ def main() -> IO(Unit):
 #|error: chain shorter than file
 #|error: cluster out of range 4000
 #|error: bad bytes per sector 500
+#|50000 clusters, 102400 bytes

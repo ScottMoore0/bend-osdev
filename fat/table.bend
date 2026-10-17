@@ -302,8 +302,11 @@ def FatChain.cons(c: U32, r: Result<&2, &2, E.FatError, List<&2, U32>>) -> Resul
     case Done{cs}:
       Done{Con{c, cs}}
 
-# the chain from cluster c, whose link is l, in at most fuel clusters
-def FatChain.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, FatLink>) -> Result<&2, &2, E.FatError, List<&2, U32>>:
+# The reference walk, structural: the chain from cluster c, whose link is
+# l, in at most fuel clusters. It recurses once per cluster; FatChain.go
+# below is the same as a loop (PROOF.bend proves the two equal for every
+# input, and the chain bound is proved on this one).
+def FatChain.go.ref(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, FatLink>) -> Result<&2, &2, E.FatError, List<&2, U32>>:
   match fuel:
     case 0n:
       Fail{E.FatChainLoop{}}
@@ -314,7 +317,30 @@ def FatChain.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Res
         case Done{FatLinkEnd{}}:
           Done{[c]}
         case Done{FatLinkNext{+n}}:
-          FatChain.cons(c, FatChain.go(~Dv, ~block_size, ~read_block, d, vol, p, n, FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n)))
+          FatChain.cons(c, FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, p, n, FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n)))
+
+# xs reversed onto acc
+def FatChain.rev(xs: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      FatChain.rev(t, Con{h, acc})
+
+# the chain from cluster c, whose link is l, in at most fuel clusters, as a
+# loop: acc holds the clusters before c, latest first
+def FatChain.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, FatLink>, acc: List<&2, U32>) -> Result<&2, &2, E.FatError, List<&2, U32>>:
+  match fuel:
+    case 0n:
+      Fail{E.FatChainLoop{}}
+    case 1n+p:
+      match l:
+        case Fail{e}:
+          Fail{e}
+        case Done{FatLinkEnd{}}:
+          Done{FatChain.rev(Con{c, acc}, Nil{})}
+        case Done{FatLinkNext{+n}}:
+          FatChain.go(~Dv, ~block_size, ~read_block, d, vol, p, n, FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n), Con{c, acc})
 
 def FatChain.walk.from(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, empty: Bool, ok: Bool, +d: Dv, +vol: P.FatVolume, +start: U32) -> Result<&2, &2, E.FatError, List<&2, U32>>:
   match empty ok:
@@ -323,7 +349,7 @@ def FatChain.walk.from(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat
     case False{} False{}:
       Fail{E.FatBadCluster{start}}
     case False{} True{}:
-      FatChain.go(~Dv, ~block_size, ~read_block, d, vol, U32.to_nat(P.FatVolume.clusters(vol)), start, FatChain.next(~Dv, ~block_size, ~read_block, d, vol, start))
+      FatChain.go(~Dv, ~block_size, ~read_block, d, vol, U32.to_nat(P.FatVolume.clusters(vol)), start, FatChain.next(~Dv, ~block_size, ~read_block, d, vol, start), Nil{})
 
 # the clusters of the chain that starts at start (none when start is 0, an
 # empty file's first cluster). A chain longer than the volume's count of

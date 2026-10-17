@@ -204,7 +204,7 @@ def cons_le(+c: U32, r: Result<&2, &2, E.FatError, List<&2, U32>>, +p: Nat, ih: 
     case Done{cs}:
       ih
 
-def go_bound(+d: D.MemDev, +vol: P.FatVolume, +fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, T.FatLink>) -> {Nat.is_le(Laws.chain_count(T.FatChain.go(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, fuel, c, l)), fuel) == True{} : Bool}:
+def go_bound(+d: D.MemDev, +vol: P.FatVolume, +fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, T.FatLink>) -> {Nat.is_le(Laws.chain_count(T.FatChain.go.ref(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, fuel, c, l)), fuel) == True{} : Bool}:
   match fuel:
     case 0n:
       {==}
@@ -215,7 +215,54 @@ def go_bound(+d: D.MemDev, +vol: P.FatVolume, +fuel: Nat, +c: U32, l: Result<&2,
         case Done{T.FatLinkEnd{}}:
           zero_le(p)
         case Done{T.FatLinkNext{+n}}:
-          cons_le(c, T.FatChain.go(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, p, n, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, n)), p, go_bound(d, vol, p, n, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, n)))
+          cons_le(c, T.FatChain.go.ref(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, p, n, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, n)), p, go_bound(d, vol, p, n, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, n)))
+
+# The walk runs the loop FatChain.go; it equals the reference FatChain.go.ref
+# (on which the bound is proved) for every device, fuel, cluster and link:
+# with acc the clusters before, the loop gives the reference's chain with
+# acc reversed in front of it.
+
+def chain_lift(acc: List<&2, U32>, r: Result<&2, &2, E.FatError, List<&2, U32>>) -> Result<&2, &2, E.FatError, List<&2, U32>>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{cs}:
+      Done{T.FatChain.rev(acc, cs)}
+
+def chain_lift_cons(+c: U32, +acc: List<&2, U32>, r: Result<&2, &2, E.FatError, List<&2, U32>>) -> {chain_lift(Con{c, acc}, r) == chain_lift(acc, T.FatChain.cons(c, r)) : Result<&2, &2, E.FatError, List<&2, U32>>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{cs}:
+      {==}
+
+def chain_lift_nil(r: Result<&2, &2, E.FatError, List<&2, U32>>) -> {r == chain_lift(Nil{}, r) : Result<&2, &2, E.FatError, List<&2, U32>>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{cs}:
+      {==}
+
+def chain_go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, +fuel: Nat, +c: U32, l: Result<&2, &2, E.FatError, T.FatLink>, +acc: List<&2, U32>) -> {T.FatChain.go(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l, acc) == chain_lift(acc, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l)) : Result<&2, &2, E.FatError, List<&2, U32>>}:
+  match fuel:
+    case 0n:
+      {==}
+    case 1n+p:
+      match l:
+        case Fail{e}:
+          {==}
+        case Done{T.FatLinkEnd{}}:
+          {==}
+        case Done{T.FatLinkNext{+n}}:
+          Equal.trans(Result<&2, &2, E.FatError, List<&2, U32>>, T.FatChain.go(~Dv, ~block_size, ~read_block, d, vol, p, n, T.FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n), Con{c, acc}), chain_lift(Con{c, acc}, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, p, n, T.FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n))), chain_lift(acc, T.FatChain.cons(c, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, p, n, T.FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n)))),
+            chain_go(~Dv, ~block_size, ~read_block, d, vol, p, n, T.FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n), Con{c, acc}),
+            chain_lift_cons(c, acc, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, p, n, T.FatChain.next(~Dv, ~block_size, ~read_block, d, vol, n))))
+
+# reference == loop, the direction a rewrite uses
+def chain_eq(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +vol: P.FatVolume, +fuel: Nat, +c: U32, +l: Result<&2, &2, E.FatError, T.FatLink>) -> {T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l) == T.FatChain.go(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l, Nil{}) : Result<&2, &2, E.FatError, List<&2, U32>>}:
+  Equal.trans(Result<&2, &2, E.FatError, List<&2, U32>>, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l), chain_lift(Nil{}, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l)), T.FatChain.go(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l, Nil{}),
+    chain_lift_nil(T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l)),
+    Equal.sym(Result<&2, &2, E.FatError, List<&2, U32>>, T.FatChain.go(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l, Nil{}), chain_lift(Nil{}, T.FatChain.go.ref(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l)), chain_go(~Dv, ~block_size, ~read_block, d, vol, fuel, c, l, Nil{})))
 
 def walk_bound(empty: Bool, ok: Bool, +d: D.MemDev, +vol: P.FatVolume, +start: U32) -> {Nat.is_le(Laws.chain_count(T.FatChain.walk.from(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, empty, ok, d, vol, start)), U32.to_nat(P.FatVolume.clusters(vol))) == True{} : Bool}:
   match empty ok:
@@ -224,6 +271,7 @@ def walk_bound(empty: Bool, ok: Bool, +d: D.MemDev, +vol: P.FatVolume, +start: U
     case False{} False{}:
       zero_le(U32.to_nat(P.FatVolume.clusters(vol)))
     case False{} True{}:
+      %chain_eq(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, U32.to_nat(P.FatVolume.clusters(vol)), start, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, start)) : {Nat.is_le(Laws.chain_count(_), U32.to_nat(P.FatVolume.clusters(vol))) == True{} : Bool}
       go_bound(d, vol, U32.to_nat(P.FatVolume.clusters(vol)), start, T.FatChain.next(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, vol, start))
 
 def Laws.chain_bound(d, vol, start):

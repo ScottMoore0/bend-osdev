@@ -191,7 +191,10 @@ file's size); directories' `FatNotLongEntry`, `FatLfnBadChecksum`,
     the bad value, not above it), with witnesses that the hypotheses hold
     (cluster 2 on every type);
   * `FatChain.walk` returns at most the volume's count of clusters, for every
-    in-memory device (`MemDev`), volume and start cluster;
+    in-memory device (`MemDev`), volume and start cluster. The walk runs as
+    a loop (`FatChain.go`); the bound is proved on the structural reference
+    (`FatChain.go.ref`) and carried over by a lemma that the two are equal
+    for every device, fuel, cluster and link (`chain_eq` in `PROOF.bend`);
 * **vectors:** the FAT type at 4084, 4085, 65524 and 65525 clusters; the
   checksum of `BOOTX64 EFI`; a hand-built entry's cluster, size, date, time
   and a short read refused; a long name's two entries and an entry's round
@@ -211,7 +214,11 @@ nested directory, a long name) and checks 23 results: mounting, listings,
 case-insensitive paths through long and short names, ranges across a cluster
 boundary, the pieces of a streamed file, a chain walk, lookups that fail, a
 loop, a free cluster and an early end in a chain, an out-of-range cluster,
-and a bad BPB.
+and a bad BPB. A 24th is a large input: a FAT16 volume of 50,000 clusters
+made up as it is read (a device of 2-byte blocks computing the FAT), whose
+25.6 MB file's chain of 50,000 clusters is walked, and 100 KB of it read
+near its end (about 0.8 s and under 300 MB; the structural walk overflowed
+the stack on it).
 
 `ref/run.sh` compares 956 results on 39 images with `ref/gen.py`'s reader:
 
@@ -244,21 +251,54 @@ and lookups that fail. FAT32 needs at least 65525 clusters (about 34 MB at
 non-zero 512-byte blocks) and are read a block at a time. CI needs the apt
 packages `dosfstools mtools` (run.sh exits 77 without them).
 
-## Speed
+## Speed and size limits
 
-`check.bend` runs in about 0.5 s. The reference test's generated program
+Measured with Bend 2.0.37 under bun in WSL2 (not a native build; times are
+whole runs, including loading the test device). Every operation reads
+through `Octets`, which costs about 940 bytes of memory per byte held.
+
+`check.bend` runs in about 1.3 s. The reference test's generated program
 (1.8 MB, 956 operations on 39 images) checks in 0.5 s and runs in about 17 s
 with about 2 GB of memory: about 18 ms an operation, each of which mounts the
-volume again (Bend 2.0.37 under bun in WSL2, without clang, so not a native
-build). Every operation reads through `Octets`, a list of bytes: a sector is
-a 512- to 4096-element list, and a FAT entry costs a block read. A range read
-(`Fat.read`) answers one `Octets`; bytes no longer limits its length, but
-this package's own list code has not been re-measured, so keep a range read
-to a few KB and stream larger files with `Fat.open` / `Fat.next`. A cache
-of FAT sectors would be the first speed-up.
+volume again.
+
+Large images, read a 512-byte block at a time from a sparse device (its
+non-zero metadata blocks, and file data computed from the block number):
+
+| Image | Operation | Time, peak memory |
+|---|---|---|
+| FAT16, 32 MB, `mkfs.fat` + `mcopy`, 512-byte clusters | walk of a 20 MB file's chain (40,962 clusters) | 9.6 s, 395 MB (before: stack overflow) |
+| | stream the 20 MB file (`Fat.open` / `Fat.next`, 40,962 pieces) | 28 s, 480 MB |
+| | `Fat.read` of a whole 1 MB file | 6 s, 1.8 GB |
+| | `Fat.read` of 100 KB; of the last 5,000 bytes of the 20 MB file | 0.9 s, 340 MB; 9.7 s, 370 MB |
+| | list a directory of 3,000 long names (12,001 entries) | 1.7 s, 310 MB |
+| FAT32, 40 MB, `mkfs.fat` + `mcopy`, 512-byte clusters | walk of a 30 MB file's chain (61,442 clusters) | 22 s, 456 MB |
+| | stream the 30 MB file | 56 s, 494 MB |
+| | list the root: 2,000 long names | 1.7 s, 316 MB |
+| FAT12, 16 MB, 8 KB clusters | stream a 12 MB file; walk its 1,537 clusters | 24 s, 345 MB; 1.3 s |
+| FAT16, 30 MB, `ref/gen.py`'s builder, fragmented chains | list a directory of 42,000 entries (40,000 8.3 and 2,000 long names, 1.4 MB) | 9.4 s, 748 MB |
+| | find its last entry; walk a fragmented 40,962-cluster chain | 3.7 s; 12 s, 547 MB |
+
+Before this round only the chain walk failed (the stack overflowed between
+about 10,000 and 40,000 clusters); directory scans, streams, range reads and
+cluster skips were already loops. Nothing in the package now recurses over a
+file's size, a directory's entries or a chain's length; what is left:
+
+* a range read (`Fat.read`) answers one `Octets`, so its length is bounded by
+  memory: 1 MB takes about 1.8 GB. Stream large files with `Fat.open` /
+  `Fat.next`, which hold one sector at a time;
+* a listing (`Fat.list`) holds every entry it returns, about 15 KB each (the
+  11-byte name is an `Octets`): the specification's largest directory, 65,536
+  entries, would take about 1 GB. A path lookup (`Fat.stat`) stops at the
+  entry it finds;
+* every FAT entry is a block read (there is no cache), so a walk, a stream or
+  a skip to an offset costs a read per cluster. A cache of FAT sectors would
+  be the first speed-up.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 956 cases on 39 images match,
-`scripts/deps.sh` passes.
+`check.bend` passes (24 results, one a 50,000-cluster volume),
+`ref/run.sh` 956 cases on 39 images match, `scripts/deps.sh` passes. Large
+inputs: measured to 61,442-cluster chains, 30 MB files and 42,000-entry
+directories (see Speed and size limits).
