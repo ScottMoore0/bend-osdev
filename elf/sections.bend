@@ -1,0 +1,314 @@
+# bend-osdev-elf, sections.bend: section headers (gABI, "Sections"; ELF-64
+# Object File Format, section 5), the section header table, the counts that
+# section 0 holds when they do not fit the ELF header, section contents, and
+# names through string tables (gABI, "String Table").
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+
+# A section header. sh_flags, sh_addr, sh_offset, sh_size, sh_addralign and
+# sh_entsize are 32 bits in ELF32, widened to W64.
+type ElfShdr is Data:
+  ElfShdr{sh_name: U32, sh_type: U32, sh_flags: W.W64, sh_addr: W.W64, sh_offset: W.W64, sh_size: W.W64, sh_link: U32, sh_info: U32, sh_addralign: W.W64, sh_entsize: W.W64}
+
+# the fields of an ElfShdr
+
+def ElfShdr.sh_name(r: ElfShdr) -> U32:
+  match r:
+    case ElfShdr{x, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfShdr.sh_type(r: ElfShdr) -> U32:
+  match r:
+    case ElfShdr{_, x, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfShdr.sh_flags(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, x, _, _, _, _, _, _, _}:
+      x
+
+def ElfShdr.sh_addr(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, _, x, _, _, _, _, _, _}:
+      x
+
+def ElfShdr.sh_offset(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, _, _, x, _, _, _, _, _}:
+      x
+
+def ElfShdr.sh_size(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, _, _, _, x, _, _, _, _}:
+      x
+
+def ElfShdr.sh_link(r: ElfShdr) -> U32:
+  match r:
+    case ElfShdr{_, _, _, _, _, _, x, _, _, _}:
+      x
+
+def ElfShdr.sh_info(r: ElfShdr) -> U32:
+  match r:
+    case ElfShdr{_, _, _, _, _, _, _, x, _, _}:
+      x
+
+def ElfShdr.sh_addralign(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, _, _, _, _, _, _, x, _}:
+      x
+
+def ElfShdr.sh_entsize(r: ElfShdr) -> W.W64:
+  match r:
+    case ElfShdr{_, _, _, _, _, _, _, _, _, x}:
+      x
+
+
+# a section header's size: 64 bytes in ELF64, 40 in ELF32
+def ElfShdr.size(is64: Bool) -> U32:
+  match is64:
+    case True{}:
+      64
+    case False{}:
+      40
+
+# Internal: reading from a list
+
+def ElfShdr.parse.s64(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  do Result<&2, &2, F.ElfError, ElfShdr>:
+    sh_name : U32 <- F.elf_r32(big, xs, 0n)
+    sh_type : U32 <- F.elf_r32(big, xs, 4n)
+    sh_flags : W.W64 <- F.elf_r64(big, xs, 8n)
+    sh_addr : W.W64 <- F.elf_r64(big, xs, 16n)
+    sh_offset : W.W64 <- F.elf_r64(big, xs, 24n)
+    sh_size : W.W64 <- F.elf_r64(big, xs, 32n)
+    sh_link : U32 <- F.elf_r32(big, xs, 40n)
+    sh_info : U32 <- F.elf_r32(big, xs, 44n)
+    sh_addralign : W.W64 <- F.elf_r64(big, xs, 48n)
+    sh_entsize : W.W64 <- F.elf_r64(big, xs, 56n)
+    return ElfShdr{sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize}
+
+def ElfShdr.parse.s32(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  do Result<&2, &2, F.ElfError, ElfShdr>:
+    sh_name : U32 <- F.elf_r32(big, xs, 0n)
+    sh_type : U32 <- F.elf_r32(big, xs, 4n)
+    sh_flags : W.W64 <- F.elf_r32w(big, xs, 8n)
+    sh_addr : W.W64 <- F.elf_r32w(big, xs, 12n)
+    sh_offset : W.W64 <- F.elf_r32w(big, xs, 16n)
+    sh_size : W.W64 <- F.elf_r32w(big, xs, 20n)
+    sh_link : U32 <- F.elf_r32(big, xs, 24n)
+    sh_info : U32 <- F.elf_r32(big, xs, 28n)
+    sh_addralign : W.W64 <- F.elf_r32w(big, xs, 32n)
+    sh_entsize : W.W64 <- F.elf_r32w(big, xs, 36n)
+    return ElfShdr{sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize}
+
+def ElfShdr.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  match is64:
+    case True{}:
+      ElfShdr.parse.s64(big, xs)
+    case False{}:
+      ElfShdr.parse.s32(big, xs)
+
+# n entries, step bytes apart
+def ElfShdr.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfShdr, ElfShdr.parse.list(is64, big, xs), ElfShdr.table.list(p, is64, big, step, B.drop(step, xs)))
+
+# Public: one entry, and a table
+
+# the section header at the start of o (ElfTruncated if o is too short)
+def ElfShdr.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  ElfShdr.parse.list(is64, big, B.Octets.to_list(o))
+
+# n section headers, step bytes apart, from the start of o
+def ElfShdr.read_table(is64: Bool, big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+  ElfShdr.table.list(n, is64, big, step, B.Octets.to_list(o))
+
+def ElfShdr.write(+is64: Bool, +big: Bool, s: ElfShdr) -> B.Octets:
+  match s:
+    case ElfShdr{sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize}:
+      B.Octets.concat([F.elf_w32(big, sh_name), F.elf_w32(big, sh_type), F.elf_wword(is64, big, sh_flags), F.elf_wword(is64, big, sh_addr), F.elf_wword(is64, big, sh_offset), F.elf_wword(is64, big, sh_size), F.elf_w32(big, sh_link), F.elf_w32(big, sh_info), F.elf_wword(is64, big, sh_addralign), F.elf_wword(is64, big, sh_entsize)])
+
+# the section header as the file stores it (ELF32 keeps the low 32 bits of
+# its 32-bit fields)
+def ElfShdr.normal(+is64: Bool, s: ElfShdr) -> ElfShdr:
+  match s:
+    case ElfShdr{sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize}:
+      ElfShdr{sh_name, sh_type, F.elf_fit(is64, sh_flags), F.elf_fit(is64, sh_addr), F.elf_fit(is64, sh_offset), F.elf_fit(is64, sh_size), sh_link, sh_info, F.elf_fit(is64, sh_addralign), F.elf_fit(is64, sh_entsize)}
+
+# a table's bytes, its entries packed
+def ElfShdr.write_table(+is64: Bool, +big: Bool, ss: List<&2, ElfShdr>) -> B.Octets:
+  match ss:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{s, t}:
+      B.Octets.append(ElfShdr.write(is64, big, s), ElfShdr.write_table(is64, big, t))
+
+def ElfShdr.normal_table(+is64: Bool, ss: List<&2, ElfShdr>) -> List<&2, ElfShdr>:
+  match ss:
+    case Nil{}:
+      Nil{}
+    case Con{s, t}:
+      Con{ElfShdr.normal(is64, s), ElfShdr.normal_table(is64, t)}
+
+# Section 0, and the counts it holds when they do not fit the ELF header
+# (gABI, "Sections": e_shnum 0 with the count in sh_size, e_shstrndx
+# SHN_XINDEX with the index in sh_link, e_phnum PN_XNUM with the count in
+# sh_info)
+
+def ElfShdr.zero.list.go(none: Bool, +xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  match none:
+    case True{}:
+      Fail{F.ElfNoSectionTable{}}
+    case False{}:
+      +is64 = H.ElfHeader.is64(h)
+      do Result<&2, &2, F.ElfError, ElfShdr>:
+        ok : Unit <- F.elf_check(U32.is_ge(H.ElfHeader.e_shentsize(h), ElfShdr.size(is64)), F.ElfBadEntrySize{})
+        r : List<&2, U32> <- F.elf_seek(xs, H.ElfHeader.e_shoff(h))
+        s : ElfShdr <- ElfShdr.parse.list(is64, H.ElfHeader.big(h), r)
+        return s
+
+def ElfShdr.zero.list(+xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, ElfShdr>:
+  ElfShdr.zero.list.go(W.W64.is_zero(H.ElfHeader.e_shoff(h)), xs, h)
+
+def ElfShdr.count.ext(none: Bool, +xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  match none:
+    case True{}:
+      Done{0}
+    case False{}:
+      do Result<&2, &2, F.ElfError, U32>:
+        s : ElfShdr <- ElfShdr.zero.list(xs, h)
+        n : U32 <- F.elf_small(ElfShdr.sh_size(s))
+        return n
+
+def ElfShdr.count.go(zero: Bool, +xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  match zero:
+    case True{}:
+      ElfShdr.count.ext(W.W64.is_zero(H.ElfHeader.e_shoff(h)), xs, h)
+    case False{}:
+      Done{H.ElfHeader.e_shnum(h)}
+
+def ElfShdr.count.list(+xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.count.go(U32.is_eq(H.ElfHeader.e_shnum(h), 0), xs, h)
+
+def ElfShdr.phnum.go(ext: Bool, +xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  match ext:
+    case True{}:
+      do Result<&2, &2, F.ElfError, U32>:
+        s : ElfShdr <- ElfShdr.zero.list(xs, h)
+        return ElfShdr.sh_info(s)
+    case False{}:
+      Done{H.ElfHeader.e_phnum(h)}
+
+def ElfShdr.phnum.list(+xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.phnum.go(U32.is_eq(H.ElfHeader.e_phnum(h), 65535), xs, h)
+
+def ElfShdr.strndx.go(ext: Bool, +xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  match ext:
+    case True{}:
+      do Result<&2, &2, F.ElfError, U32>:
+        s : ElfShdr <- ElfShdr.zero.list(xs, h)
+        return ElfShdr.sh_link(s)
+    case False{}:
+      Done{H.ElfHeader.e_shstrndx(h)}
+
+def ElfShdr.strndx.list(+xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.strndx.go(U32.is_eq(H.ElfHeader.e_shstrndx(h), 65535), xs, h)
+
+# Public: the counts, for the file o whose header is h
+
+# the number of section headers
+def ElfShdr.count(o: B.Octets, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.count.list(B.Octets.to_list(o), h)
+
+# the number of program headers
+def ElfShdr.phnum(o: B.Octets, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.phnum.list(B.Octets.to_list(o), h)
+
+# the index of the section-name string table
+def ElfShdr.shstrndx(o: B.Octets, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, U32>:
+  ElfShdr.strndx.list(B.Octets.to_list(o), h)
+
+# The section header table
+
+def ElfShdr.all.go(+xs: List<&2, U32>, +h: H.ElfHeader, +n: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+  +is64 = H.ElfHeader.is64(h)
+  +entsize = H.ElfHeader.e_shentsize(h)
+  do Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+    ok : Unit <- F.elf_check(F.elf_table_ok(n, entsize, ElfShdr.size(is64)), F.ElfBadEntrySize{})
+    r : List<&2, U32> <- F.elf_region(xs, H.ElfHeader.e_shoff(h), n)
+    ss : List<&2, ElfShdr> <- ElfShdr.table.list(U32.to_nat(n), is64, H.ElfHeader.big(h), U32.to_nat(entsize), r)
+    return ss
+
+def ElfShdr.all.list(+xs: List<&2, U32>, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+    n : U32 <- ElfShdr.count.list(xs, h)
+    ss : List<&2, ElfShdr> <- ElfShdr.all.go(xs, h, n)
+    return ss
+
+# the section headers of the file o, whose header is h
+def ElfShdr.all(o: B.Octets, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, List<&2, ElfShdr>>:
+  ElfShdr.all.list(B.Octets.to_list(o), h)
+
+# Section contents
+
+def ElfShdr.bytes.go(nobits: Bool, +xs: List<&2, U32>, +s: ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, U32>>:
+  match nobits:
+    case True{}:
+      Done{Nil{}}
+    case False{}:
+      do Result<&2, &2, F.ElfError, List<&2, U32>>:
+        n : U32 <- F.elf_small(ElfShdr.sh_size(s))
+        r : List<&2, U32> <- F.elf_seek(xs, ElfShdr.sh_offset(s))
+        d : List<&2, U32> <- F.elf_need(List<&2, U32>, F.elf_take(U32.to_nat(n), r), F.ElfOffsetOutOfRange{})
+        return d
+
+def ElfShdr.bytes.list(+xs: List<&2, U32>, +s: ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, U32>>:
+  ElfShdr.bytes.go(U32.is_eq(ElfShdr.sh_type(s), 8), xs, s)
+
+# The bytes of section s in the file o: sh_size bytes at sh_offset, none for
+# SHT_NOBITS (which occupies no space in the file). ElfOffsetOutOfRange if they
+# run past the end.
+def ElfShdr.bytes(o: B.Octets, +s: ElfShdr) -> Result<&2, &2, F.ElfError, B.Octets>:
+  do Result<&2, &2, F.ElfError, B.Octets>:
+    d : List<&2, U32> <- ElfShdr.bytes.list(B.Octets.to_list(o), s)
+    return B.Octets.of_list(d)
+
+# Strings
+
+def ElfShdr.string.list(strtab: List<&2, U32>, i: U32) -> Result<&2, &2, F.ElfError, List<&2, U32>>:
+  do Result<&2, &2, F.ElfError, List<&2, U32>>:
+    r : List<&2, U32> <- F.elf_need(List<&2, U32>, F.elf_skip(U32.to_nat(i), strtab), F.ElfBadString{})
+    s : List<&2, U32> <- F.elf_need(List<&2, U32>, F.elf_cstr(r), F.ElfBadString{})
+    return s
+
+# the NUL-terminated string at offset i of a string table's bytes (without its
+# NUL); ElfBadString if i is past the end or the NUL is missing
+def ElfShdr.string(strtab: B.Octets, i: U32) -> Result<&2, &2, F.ElfError, B.Octets>:
+  do Result<&2, &2, F.ElfError, B.Octets>:
+    s : List<&2, U32> <- ElfShdr.string.list(B.Octets.to_list(strtab), i)
+    return B.Octets.of_list(s)
+
+# the bytes of section i of the table shdrs (ElfBadIndex past its end)
+def ElfShdr.bytes_at(o: B.Octets, shdrs: List<&2, ElfShdr>, i: U32) -> Result<&2, &2, F.ElfError, B.Octets>:
+  do Result<&2, &2, F.ElfError, B.Octets>:
+    s : ElfShdr <- F.elf_need(ElfShdr, List.get(&2, ElfShdr, shdrs, U32.to_nat(i)), F.ElfBadIndex{})
+    d : B.Octets <- ElfShdr.bytes(o, s)
+    return d
+
+# the bytes of the section-name string table of the file o, whose header is h
+# and section headers shdrs
+def ElfShdr.shstrtab(+o: B.Octets, +h: H.ElfHeader, shdrs: List<&2, ElfShdr>) -> Result<&2, &2, F.ElfError, B.Octets>:
+  do Result<&2, &2, F.ElfError, B.Octets>:
+    i : U32 <- ElfShdr.shstrndx(o, h)
+    d : B.Octets <- ElfShdr.bytes_at(o, shdrs, i)
+    return d
+
+# a section's name, given the bytes of the section-name string table
+def ElfShdr.name(shstrtab: B.Octets, s: ElfShdr) -> Result<&2, &2, F.ElfError, B.Octets>:
+  ElfShdr.string(shstrtab, ElfShdr.sh_name(s))

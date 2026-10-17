@@ -1,0 +1,164 @@
+# bend-osdev-elf, segments.bend: program headers (gABI, "Program Header";
+# ELF-64 Object File Format, section 6), one by one and as the program header
+# table of a file.
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+import ./sections.bend as S
+
+# A program header. p_offset, p_vaddr, p_paddr, p_filesz, p_memsz and p_align
+# are 32 bits in ELF32, widened to W64.
+type ElfPhdr is Data:
+  ElfPhdr{p_type: U32, p_flags: U32, p_offset: W.W64, p_vaddr: W.W64, p_paddr: W.W64, p_filesz: W.W64, p_memsz: W.W64, p_align: W.W64}
+
+# the fields of an ElfPhdr
+
+def ElfPhdr.p_type(r: ElfPhdr) -> U32:
+  match r:
+    case ElfPhdr{x, _, _, _, _, _, _, _}:
+      x
+
+def ElfPhdr.p_flags(r: ElfPhdr) -> U32:
+  match r:
+    case ElfPhdr{_, x, _, _, _, _, _, _}:
+      x
+
+def ElfPhdr.p_offset(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, x, _, _, _, _, _}:
+      x
+
+def ElfPhdr.p_vaddr(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, _, x, _, _, _, _}:
+      x
+
+def ElfPhdr.p_paddr(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, _, _, x, _, _, _}:
+      x
+
+def ElfPhdr.p_filesz(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, _, _, _, x, _, _}:
+      x
+
+def ElfPhdr.p_memsz(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, _, _, _, _, x, _}:
+      x
+
+def ElfPhdr.p_align(r: ElfPhdr) -> W.W64:
+  match r:
+    case ElfPhdr{_, _, _, _, _, _, _, x}:
+      x
+
+
+# a program header's size: 56 bytes in ELF64, 32 in ELF32
+def ElfPhdr.size(is64: Bool) -> U32:
+  match is64:
+    case True{}:
+      56
+    case False{}:
+      32
+
+# Internal: reading from a list
+
+def ElfPhdr.parse.p64(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfPhdr>:
+  do Result<&2, &2, F.ElfError, ElfPhdr>:
+    p_type : U32 <- F.elf_r32(big, xs, 0n)
+    p_flags : U32 <- F.elf_r32(big, xs, 4n)
+    p_offset : W.W64 <- F.elf_r64(big, xs, 8n)
+    p_vaddr : W.W64 <- F.elf_r64(big, xs, 16n)
+    p_paddr : W.W64 <- F.elf_r64(big, xs, 24n)
+    p_filesz : W.W64 <- F.elf_r64(big, xs, 32n)
+    p_memsz : W.W64 <- F.elf_r64(big, xs, 40n)
+    p_align : W.W64 <- F.elf_r64(big, xs, 48n)
+    return ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}
+
+def ElfPhdr.parse.p32(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfPhdr>:
+  do Result<&2, &2, F.ElfError, ElfPhdr>:
+    p_type : U32 <- F.elf_r32(big, xs, 0n)
+    p_offset : W.W64 <- F.elf_r32w(big, xs, 4n)
+    p_vaddr : W.W64 <- F.elf_r32w(big, xs, 8n)
+    p_paddr : W.W64 <- F.elf_r32w(big, xs, 12n)
+    p_filesz : W.W64 <- F.elf_r32w(big, xs, 16n)
+    p_memsz : W.W64 <- F.elf_r32w(big, xs, 20n)
+    p_flags : U32 <- F.elf_r32(big, xs, 24n)
+    p_align : W.W64 <- F.elf_r32w(big, xs, 28n)
+    return ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}
+
+def ElfPhdr.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfPhdr>:
+  match is64:
+    case True{}:
+      ElfPhdr.parse.p64(big, xs)
+    case False{}:
+      ElfPhdr.parse.p32(big, xs)
+
+# n entries, step bytes apart
+def ElfPhdr.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfPhdr, ElfPhdr.parse.list(is64, big, xs), ElfPhdr.table.list(p, is64, big, step, B.drop(step, xs)))
+
+# Public: one entry, and a table
+
+# the program header at the start of o (ElfTruncated if o is too short)
+def ElfPhdr.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfPhdr>:
+  ElfPhdr.parse.list(is64, big, B.Octets.to_list(o))
+
+# n program headers, step bytes apart, from the start of o
+def ElfPhdr.read_table(is64: Bool, big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+  ElfPhdr.table.list(n, is64, big, step, B.Octets.to_list(o))
+
+def ElfPhdr.write(is64: Bool, +big: Bool, p: ElfPhdr) -> B.Octets:
+  match is64 p:
+    case True{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, p_flags), F.elf_w64(big, p_offset), F.elf_w64(big, p_vaddr), F.elf_w64(big, p_paddr), F.elf_w64(big, p_filesz), F.elf_w64(big, p_memsz), F.elf_w64(big, p_align)])
+    case False{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, W.W64.lo(p_offset)), F.elf_w32(big, W.W64.lo(p_vaddr)), F.elf_w32(big, W.W64.lo(p_paddr)), F.elf_w32(big, W.W64.lo(p_filesz)), F.elf_w32(big, W.W64.lo(p_memsz)), F.elf_w32(big, p_flags), F.elf_w32(big, W.W64.lo(p_align))])
+
+# the program header as the file stores it (ELF32 keeps the low 32 bits of its
+# 32-bit fields)
+def ElfPhdr.normal(+is64: Bool, p: ElfPhdr) -> ElfPhdr:
+  match p:
+    case ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      ElfPhdr{p_type, p_flags, F.elf_fit(is64, p_offset), F.elf_fit(is64, p_vaddr), F.elf_fit(is64, p_paddr), F.elf_fit(is64, p_filesz), F.elf_fit(is64, p_memsz), F.elf_fit(is64, p_align)}
+
+# a table's bytes, its entries packed
+def ElfPhdr.write_table(+is64: Bool, +big: Bool, ps: List<&2, ElfPhdr>) -> B.Octets:
+  match ps:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{p, t}:
+      B.Octets.append(ElfPhdr.write(is64, big, p), ElfPhdr.write_table(is64, big, t))
+
+def ElfPhdr.normal_table(+is64: Bool, ps: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
+  match ps:
+    case Nil{}:
+      Nil{}
+    case Con{p, t}:
+      Con{ElfPhdr.normal(is64, p), ElfPhdr.normal_table(is64, t)}
+
+# The program header table
+
+def ElfPhdr.all.go(+xs: List<&2, U32>, +h: H.ElfHeader, +n: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+  +is64 = H.ElfHeader.is64(h)
+  +entsize = H.ElfHeader.e_phentsize(h)
+  do Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+    ok : Unit <- F.elf_check(F.elf_table_ok(n, entsize, ElfPhdr.size(is64)), F.ElfBadEntrySize{})
+    r : List<&2, U32> <- F.elf_region(xs, H.ElfHeader.e_phoff(h), n)
+    ps : List<&2, ElfPhdr> <- ElfPhdr.table.list(U32.to_nat(n), is64, H.ElfHeader.big(h), U32.to_nat(entsize), r)
+    return ps
+
+# the program headers of the file o, whose header is h (e_phnum of them, or
+# section 0's sh_info if e_phnum is PN_XNUM)
+def ElfPhdr.all(+o: B.Octets, +h: H.ElfHeader) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
+    n : U32 <- S.ElfShdr.phnum(o, h)
+    ps : List<&2, ElfPhdr> <- ElfPhdr.all.go(B.Octets.to_list(o), h, n)
+    return ps

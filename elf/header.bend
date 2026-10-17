@@ -1,0 +1,267 @@
+# bend-osdev-elf, header.bend: the ELF header (gABI, "ELF Header"; ELF-64
+# Object File Format, section 4), read and written, in both classes and both
+# byte orders.
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+
+# The ELF header. is64: ELFCLASS64 (else ELFCLASS32); big: ELFDATA2MSB (else
+# ELFDATA2LSB). osabi and abiversion are e_ident's EI_OSABI and EI_ABIVERSION;
+# EI_VERSION is EV_CURRENT. The 16-bit fields are U32s; in ELF32, e_entry,
+# e_phoff and e_shoff are widened to W64.
+type ElfHeader is Data:
+  ElfHeader{is64: Bool, big: Bool, osabi: U32, abiversion: U32, e_type: U32, e_machine: U32, e_version: U32, e_entry: W.W64, e_phoff: W.W64, e_shoff: W.W64, e_flags: U32, e_ehsize: U32, e_phentsize: U32, e_phnum: U32, e_shentsize: U32, e_shnum: U32, e_shstrndx: U32}
+
+# How strictly to read. check_version: reject an EI_VERSION other than
+# EV_CURRENT (the gABI's only version).
+type ElfOptions is Data:
+  ElfOptions{check_version: Bool}
+
+# the usual choice: the gABI's rules, strictly
+def ElfOptions.default() -> ElfOptions:
+  ElfOptions{True{}}
+
+# the fields of an ElfHeader
+
+def ElfHeader.is64(r: ElfHeader) -> Bool:
+  match r:
+    case ElfHeader{x, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.big(r: ElfHeader) -> Bool:
+  match r:
+    case ElfHeader{_, x, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.osabi(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, x, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.abiversion(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, x, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_type(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, x, _, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_machine(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, x, _, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_version(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, x, _, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_entry(r: ElfHeader) -> W.W64:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, x, _, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_phoff(r: ElfHeader) -> W.W64:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, x, _, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_shoff(r: ElfHeader) -> W.W64:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, x, _, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_flags(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, x, _, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_ehsize(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, x, _, _, _, _, _}:
+      x
+
+def ElfHeader.e_phentsize(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, _, x, _, _, _, _}:
+      x
+
+def ElfHeader.e_phnum(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, _, _, x, _, _, _}:
+      x
+
+def ElfHeader.e_shentsize(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, _, _, _, x, _, _}:
+      x
+
+def ElfHeader.e_shnum(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, x, _}:
+      x
+
+def ElfHeader.e_shstrndx(r: ElfHeader) -> U32:
+  match r:
+    case ElfHeader{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, x}:
+      x
+
+
+# the header's size: 64 bytes in ELF64, 52 in ELF32
+def ElfHeader.size(is64: Bool) -> U32:
+  match is64:
+    case True{}:
+      64
+    case False{}:
+      52
+
+# Internal: reading
+
+# 1 and 2 are ELFCLASS32 and ELFCLASS64, and ELFDATA2LSB and ELFDATA2MSB:
+# False and True
+def ElfHeader.one_two.two(is2: Bool, e: F.ElfError) -> Result<&2, &2, F.ElfError, Bool>:
+  match is2:
+    case True{}:
+      Done{True{}}
+    case False{}:
+      Fail{e}
+
+def ElfHeader.one_two.go(is1: Bool, +c: U32, e: F.ElfError) -> Result<&2, &2, F.ElfError, Bool>:
+  match is1:
+    case True{}:
+      Done{False{}}
+    case False{}:
+      ElfHeader.one_two.two(U32.is_eq(c, 2), e)
+
+def ElfHeader.one_two(+c: U32, e: F.ElfError) -> Result<&2, &2, F.ElfError, Bool>:
+  ElfHeader.one_two.go(U32.is_eq(c, 1), c, e)
+
+def ElfHeader.two_one(b: Bool) -> U32:
+  match b:
+    case True{}:
+      2
+    case False{}:
+      1
+
+def ElfHeader.version_ok(check: Bool, +v: U32) -> Result<&2, &2, F.ElfError, Unit>:
+  match check:
+    case True{}:
+      F.elf_check(U32.is_eq(v, 1), F.ElfBadVersion{})
+    case False{}:
+      Done{Unit{}}
+
+def ElfHeader.has_magic.list(xs: List<&2, U32>) -> Bool:
+  match xs:
+    case Con{a, Con{b, Con{c, Con{d, t}}}}:
+      Bool.and(U32.is_eq(B.byte(a), 127), Bool.and(U32.is_eq(B.byte(b), 69), Bool.and(U32.is_eq(B.byte(c), 76), U32.is_eq(B.byte(d), 70))))
+    case _:
+      False{}
+
+def ElfHeader.parse.h64(+big: Bool, osabi: U32, abiv: U32, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  do Result<&2, &2, F.ElfError, ElfHeader>:
+    e_type : U32 <- F.elf_r16(big, xs, 16n)
+    e_machine : U32 <- F.elf_r16(big, xs, 18n)
+    e_version : U32 <- F.elf_r32(big, xs, 20n)
+    e_entry : W.W64 <- F.elf_r64(big, xs, 24n)
+    e_phoff : W.W64 <- F.elf_r64(big, xs, 32n)
+    e_shoff : W.W64 <- F.elf_r64(big, xs, 40n)
+    e_flags : U32 <- F.elf_r32(big, xs, 48n)
+    e_ehsize : U32 <- F.elf_r16(big, xs, 52n)
+    e_phentsize : U32 <- F.elf_r16(big, xs, 54n)
+    e_phnum : U32 <- F.elf_r16(big, xs, 56n)
+    e_shentsize : U32 <- F.elf_r16(big, xs, 58n)
+    e_shnum : U32 <- F.elf_r16(big, xs, 60n)
+    e_shstrndx : U32 <- F.elf_r16(big, xs, 62n)
+    return ElfHeader{True{}, big, osabi, abiv, e_type, e_machine, e_version, e_entry, e_phoff, e_shoff, e_flags, e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx}
+
+def ElfHeader.parse.h32(+big: Bool, osabi: U32, abiv: U32, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  do Result<&2, &2, F.ElfError, ElfHeader>:
+    e_type : U32 <- F.elf_r16(big, xs, 16n)
+    e_machine : U32 <- F.elf_r16(big, xs, 18n)
+    e_version : U32 <- F.elf_r32(big, xs, 20n)
+    e_entry : W.W64 <- F.elf_r32w(big, xs, 24n)
+    e_phoff : W.W64 <- F.elf_r32w(big, xs, 28n)
+    e_shoff : W.W64 <- F.elf_r32w(big, xs, 32n)
+    e_flags : U32 <- F.elf_r32(big, xs, 36n)
+    e_ehsize : U32 <- F.elf_r16(big, xs, 40n)
+    e_phentsize : U32 <- F.elf_r16(big, xs, 42n)
+    e_phnum : U32 <- F.elf_r16(big, xs, 44n)
+    e_shentsize : U32 <- F.elf_r16(big, xs, 46n)
+    e_shnum : U32 <- F.elf_r16(big, xs, 48n)
+    e_shstrndx : U32 <- F.elf_r16(big, xs, 50n)
+    return ElfHeader{False{}, big, osabi, abiv, e_type, e_machine, e_version, e_entry, e_phoff, e_shoff, e_flags, e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx}
+
+def ElfHeader.parse.fields(is64: Bool, big: Bool, osabi: U32, abiv: U32, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  match is64:
+    case True{}:
+      ElfHeader.parse.h64(big, osabi, abiv, xs)
+    case False{}:
+      ElfHeader.parse.h32(big, osabi, abiv, xs)
+
+def ElfHeader.parse.ident(check: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  do Result<&2, &2, F.ElfError, ElfHeader>:
+    c : U32 <- F.elf_r8(xs, 4n)
+    is64 : Bool <- ElfHeader.one_two(c, F.ElfBadClass{})
+    d : U32 <- F.elf_r8(xs, 5n)
+    big : Bool <- ElfHeader.one_two(d, F.ElfBadData{})
+    v : U32 <- F.elf_r8(xs, 6n)
+    ok : Unit <- ElfHeader.version_ok(check, v)
+    osabi : U32 <- F.elf_r8(xs, 7n)
+    abiv : U32 <- F.elf_r8(xs, 8n)
+    h : ElfHeader <- ElfHeader.parse.fields(is64, big, osabi, abiv, xs)
+    return h
+
+def ElfHeader.parse.sized(long: Bool, check: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  match long:
+    case True{}:
+      ElfHeader.parse.ident(check, xs)
+    case False{}:
+      Fail{F.ElfTruncated{}}
+
+def ElfHeader.parse.magic(magic: Bool, check: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  match magic:
+    case True{}:
+      ElfHeader.parse.sized(F.elf_at_least(52n, xs), check, xs)
+    case False{}:
+      Fail{F.ElfBadMagic{}}
+
+def ElfHeader.parse.list(opts: ElfOptions, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  match opts:
+    case ElfOptions{check}:
+      ElfHeader.parse.magic(ElfHeader.has_magic.list(xs), check, xs)
+
+# Public: reading
+
+# whether the bytes start with the magic number 0x7f 'E' 'L' 'F'
+def ElfHeader.has_magic(o: B.Octets) -> Bool:
+  ElfHeader.has_magic.list(B.Octets.to_list(o))
+
+# The ELF header at the start of a file. Fails with ElfBadMagic without the
+# magic number, ElfTruncated if there are fewer than 52 bytes (the smallest
+# header) or fewer than the header of the file's class, ElfBadClass,
+# ElfBadData or (if checked) ElfBadVersion for an unknown e_ident value.
+def ElfHeader.parse_with(opts: ElfOptions, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  ElfHeader.parse.list(opts, B.Octets.to_list(o))
+
+def ElfHeader.parse(o: B.Octets) -> Result<&2, &2, F.ElfError, ElfHeader>:
+  ElfHeader.parse_with(ElfOptions.default(), o)
+
+# Public: writing
+
+# The header's bytes: 52 for ELF32, 64 for ELF64; e_ident's padding is zero.
+def ElfHeader.write(h: ElfHeader) -> B.Octets:
+  match h:
+    case ElfHeader{+is64, +big, osabi, abiv, e_type, e_machine, e_version, e_entry, e_phoff, e_shoff, e_flags, e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx}:
+      ident = B.Octets.of_list([127, 69, 76, 70, ElfHeader.two_one(is64), ElfHeader.two_one(big), 1, osabi, abiv, 0, 0, 0, 0, 0, 0, 0])
+      B.Octets.concat([ident, F.elf_w16(big, e_type), F.elf_w16(big, e_machine), F.elf_w32(big, e_version), F.elf_wword(is64, big, e_entry), F.elf_wword(is64, big, e_phoff), F.elf_wword(is64, big, e_shoff), F.elf_w32(big, e_flags), F.elf_w16(big, e_ehsize), F.elf_w16(big, e_phentsize), F.elf_w16(big, e_phnum), F.elf_w16(big, e_shentsize), F.elf_w16(big, e_shnum), F.elf_w16(big, e_shstrndx)])
+
+# The header as the file stores it: osabi and abiversion keep their low 8
+# bits, the 16-bit fields their low 16, and an ELF32 header the low 32 bits of
+# e_entry, e_phoff and e_shoff. Reading what write wrote gives this.
+def ElfHeader.normal(h: ElfHeader) -> ElfHeader:
+  match h:
+    case ElfHeader{+is64, big, osabi, abiv, e_type, e_machine, e_version, e_entry, e_phoff, e_shoff, e_flags, e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx}:
+      ElfHeader{is64, big, B.byte(osabi), B.byte(abiv), B.low16(e_type), B.low16(e_machine), e_version, F.elf_fit(is64, e_entry), F.elf_fit(is64, e_phoff), F.elf_fit(is64, e_shoff), e_flags, B.low16(e_ehsize), B.low16(e_phentsize), B.low16(e_phnum), B.low16(e_shentsize), B.low16(e_shnum), B.low16(e_shstrndx)}
