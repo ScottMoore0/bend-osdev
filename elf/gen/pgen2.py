@@ -198,22 +198,24 @@ def Laws.rejects_bad_magic(o, e):
   %Equal.sym(Bool, H.ElfHeader.has_magic(o), False{}, e) : {H.ElfHeader.parse.magic(_, True{}, B.Octets.to_list(o)) == Fail{F.ElfBadMagic{}} : Result<&2, &2, F.ElfError, H.ElfHeader>}
   {==}
 
-# a list shorter than n does not have n bytes
-def short_lemma(n: Nat, xs: List<&2, U32>, e: {Nat.is_lt(List.length(&2, U32, xs), n) == True{} : Bool}) -> {False{} == F.elf_at_least(n, B.Octets.to_list(B.Octets.of_list(xs))) : Bool}:
+# a list shorter than n does not have n bytes (stated on bytes' mask, which
+# is what to_list(of_list(xs)) is, by bytes' law octets_to_of)
+def short_lemma(n: Nat, xs: List<&2, U32>, e: {Nat.is_lt(List.length(&2, U32, xs), n) == True{} : Bool}) -> {False{} == F.elf_at_least(n, B.mask(xs)) : Bool}:
   match n xs:
     case 0n Nil{}:
-      Empty.absurd({False{} == F.elf_at_least(0n, B.Octets.to_list(B.Octets.of_list(Nil{}))) : Bool}, bool_absurd(e))
+      Empty.absurd({False{} == F.elf_at_least(0n, B.mask(Nil{})) : Bool}, bool_absurd(e))
     case 0n Con{h, t}:
-      Empty.absurd({False{} == F.elf_at_least(0n, B.Octets.to_list(B.Octets.of_list(Con{h, t}))) : Bool}, bool_absurd(e))
+      Empty.absurd({False{} == F.elf_at_least(0n, B.mask(Con{h, t})) : Bool}, bool_absurd(e))
     case 1n+p Nil{}:
       {==}
     case 1n+p Con{h, t}:
       short_lemma(p, t, e)
 
 # whether or not the magic is there, a list that short fails
-def short_magic(b: Bool, xs: List<&2, U32>, e: {Nat.is_lt(List.length(&2, U32, xs), 52n) == True{} : Bool}) -> {Result.is_fail(&2, &2, F.ElfError, H.ElfHeader, H.ElfHeader.parse.magic(b, True{}, B.Octets.to_list(B.Octets.of_list(xs)))) == True{} : Bool}:
+def short_magic(b: Bool, +xs: List<&2, U32>, e: {Nat.is_lt(List.length(&2, U32, xs), 52n) == True{} : Bool}) -> {Result.is_fail(&2, &2, F.ElfError, H.ElfHeader, H.ElfHeader.parse.magic(b, True{}, B.Octets.to_list(B.Octets.of_list(xs)))) == True{} : Bool}:
   match b:
     case True{}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(xs)), B.mask(xs), BL.octets_to_of(xs)) : {Result.is_fail(&2, &2, F.ElfError, H.ElfHeader, H.ElfHeader.parse.sized(F.elf_at_least(52n, _), True{}, B.Octets.to_list(B.Octets.of_list(xs)))) == True{} : Bool}
       %short_lemma(52n, xs, e) : {Result.is_fail(&2, &2, F.ElfError, H.ElfHeader, H.ElfHeader.parse.sized(_, True{}, B.Octets.to_list(B.Octets.of_list(xs)))) == True{} : Bool}
       {==}
     case False{}:

@@ -78,12 +78,24 @@ The field readers and writers are built from bit slicing, not shifts and
 masks, so their round trips can be proved for every value. That costs speed:
 use them for header fields, not bulk data.
 
-The list operations (`take`, `append`, `len`, `of_list`, `to_list`) are not
-tail-recursive, and Bend 2.0.37's runtime overflows its stack at a depth of
-about 20,000 to 30,000 calls, so a single `Octets` of more than about 20 KB
-fails today. Read large images a block at a time (blockdev's `MemDev` holds an
-image as a list of blocks). Tail-recursive versions, tied to these by laws,
-are the next step.
+Bend 2.0.37's runtime overflows its own fixed stack (raising `ulimit -s`
+does not help) somewhere between 10,000 and 40,000 nested non-tail calls.
+So `Octets` runs tail-recursive forms (`w8s.*.fast`, `w8s.len.go`, `w8s.eq`,
+and the text and hex builders), and each is proved equal to its structural
+form for every input in `PROOF.bend`, which is what the laws reason about.
+`Octets.of_list`, `to_list`, `append`, `take`, `drop`, `len`, `zeros`,
+`split_at`, `is_eq`, `hex` and `to_string` have no length limit.
+`Octets.concat` recurses on the number of pieces, not their size.
+
+Measured on the reference machine (native build): a 2,000,000-byte `Octets`
+built, appended, cut and printed in 4 s, peaking at 1.7 GB. Storage is the
+cost now: each byte is an 8-bit `Word`, about 940 bytes of memory per byte,
+against about 57 for an element of a `List<&2, U32>`. Hold images of more
+than a few MB a block at a time (blockdev's `MemDev`).
+
+The list layer (`take`, `drop`, `append`, `len`, `mask`, `hex`, ... on
+`List<&2, U32>`) is still structural, because other packages' proofs compute
+through it; use it on header-sized lists, and `Octets` for bulk data.
 
 ## Status
 

@@ -79,3 +79,27 @@ package: copy its shape.
   pure main is normalised by the checker, which is slow.
 - **Imports:** siblings by relative path (`import ../bytes/bytes.bend as B`);
   hub packages by name (`import bend-kit-int@0.2.0.0/int.bend as Int`).
+
+## Runtime and checker limits (Bend 2.0.37)
+
+- **Recursion depth:** the runtime overflows its own fixed stack ("memory
+  fault (machine stack overflow?)") somewhere between 10,000 and 40,000 nested
+  non-tail calls; `ulimit -s` does not help. Write loops over long data as tail
+  calls with an accumulator. If a proof needs the structural form, keep it as
+  the reference and prove the tail form equal to it, as bytes does
+  (`PROOF.bend`, the `F_*` lemmas). `Octets` operations have no length limit;
+  the `List<&2, U32>` list layer in bytes is structural.
+- **Octets memory:** about 940 bytes of memory per byte (each byte is an
+  8-bit `Word`). Hold images of more than a few MB a block at a time.
+- **List literals** of more than about 3,000 elements overflow: build long
+  test inputs in pieces or with a generator function.
+- **Native builds:** a record with four or more `W64` fields fails to compile
+  to C ("an arity over 247"); `bend file.bend` still runs it. Group `W64`
+  fields into sub-records.
+- **`--verdict`:** it cannot model a template parameter whose type is a
+  proposition (`~inv: {...}`); a large `Nat` literal (about 2^24 and up)
+  bound to a reused `+` parameter trips a kernel mismatch
+  (bendlang/bend#1322), so use `U32` for limits and sizes; and very long
+  closed `Nat` computations run out of kernel fuel.
+- **Checker memory:** a check process is killed at about 3 GB; keep each
+  generated proof or case file to a few hundred KB.

@@ -224,11 +224,11 @@ need no tool and exits 77 (a skip).
   decodes each block it writes (see Extension points).
 * Bend 2.0.37's runtime overflows its stack on non-tail recursion deeper than
   about 20,000 to 30,000 calls. The decoder's own loops are tail calls, and
-  decode 200 KB blocks, but converting to and from `Octets` and bytes' list
-  helpers (`take`, `append`, `len`, which is Base's `List.length`) are not, so
-  inputs and outputs past about 20 KB overflow the stack today. Making those
-  helpers tail-recursive in bend-osdev-bytes lifts the limit without a change
-  here. (List literals of a few thousand elements overflow it too, which is
+  decode 200 KB blocks, and bytes' `Octets` operations are tail-recursive and
+  have no length limit. But some of this package's own code, and its use of
+  bytes' structural list layer on whole inputs, is not tail-recursive: a
+  100 KB compress-then-decompress round trip still overflows the stack, so
+  keep inputs and outputs to about 20 KB until that code is converted. (List literals of a few thousand elements overflow it too, which is
   why `ref/gen.py` joins long inputs from pieces, and the tests stay under
   12 KB.)
 * Block and frame sizes in the writer are `U32` counts, not `Nat`: the Lean

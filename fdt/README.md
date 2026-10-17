@@ -290,9 +290,10 @@ needs the apt package `device-tree-compiler`.
 
 ## Speed and size
 
-The package works on `Octets`, whose list operations are not
-tail-recursive, so a blob of more than about 20 KB overflows Bend 2.0.37's
-stack (a 160-node tree, 18 KB with the simple strings block and 15 KB
+The package works on `Octets`. bytes' `Octets` operations are now
+tail-recursive with no length limit, but this package's own list code has
+not been re-measured since; before that change a blob of more than about
+20 KB overflowed Bend 2.0.37's stack (a 160-node tree, 18 KB with the simple strings block and 15 KB
 deduplicated, builds and parses; a 300-node tree does not). Real DTBs are
 mostly smaller than that. Building and parsing the 15 and 18 KB blobs
 twice each took about 0.6 s in all, checking included (`bend file.bend`,

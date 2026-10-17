@@ -185,11 +185,10 @@ the expected one:
 Decoding runs natively at roughly 300 KB/s of output (16 KB from a preset-6
 file in about 50 ms). The test inputs are kept small (a few KB compressed,
 at most 16 KB of output) because byte strings are slow and, today, lists of
-more than about 20 000 bytes overflow the runtime's stack when converted to
-and from `Octets` (`bytes` converts element by element, not in a loop):
-an input or output of that size makes the program stop with a stack
-overflow rather than answer. This lifts when faster storage lands in
-`bytes`. The streaming decoder buffers at most one LZMA2 chunk (64 KiB
+more than about 20 000 bytes have overflowed the runtime's stack. bytes'
+`Octets` operations are now tail-recursive with no length limit, but this
+package's own list code has not been re-measured since, so treat about
+20 KB of input or output as the limit until it is. The streaming decoder buffers at most one LZMA2 chunk (64 KiB
 compressed) and re-checks whether it is complete on each `feed`, so tiny
 pieces cost time quadratic in the chunk's size; the index is likewise
 re-parsed until it is complete.

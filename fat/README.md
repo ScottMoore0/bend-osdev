@@ -252,8 +252,9 @@ with about 2 GB of memory: about 18 ms an operation, each of which mounts the
 volume again (Bend 2.0.37 under bun in WSL2, without clang, so not a native
 build). Every operation reads through `Octets`, a list of bytes: a sector is
 a 512- to 4096-element list, and a FAT entry costs a block read. A range read
-(`Fat.read`) answers one `Octets`, so keep it to a few KB (bytes' stack limit
-is about 20 KB); stream larger files with `Fat.open` / `Fat.next`. A cache
+(`Fat.read`) answers one `Octets`; bytes no longer limits its length, but
+this package's own list code has not been re-measured, so keep a range read
+to a few KB and stream larger files with `Fat.open` / `Fat.next`. A cache
 of FAT sectors would be the first speed-up.
 
 ## Status

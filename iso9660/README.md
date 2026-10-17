@@ -271,9 +271,10 @@ Byte strings are lists, read a sector at a time. On a native build (Bend
 2.0.37, WSL2) the differential test (34 images of up to 480 KB, 48 cases,
 every file streamed and CRC'd) runs in about 12 s; `check.bend` in about
 1 s; the proofs check in about 2 s, with `--verdict` in about 4 s. Offsets
-and lengths are `Nat`s (unary), and one `Octets` of more than about 20 KB
-overflows Bend 2.0.37's stack: read large files with the stream, not one
-large range.
+and lengths are `Nat`s (unary). bytes' `Octets` operations no longer have
+a length limit, but this package's own list code has not been re-measured
+against the old 20 KB stack limit: read large files with the stream, not
+one large range.
 
 ## Status
 
