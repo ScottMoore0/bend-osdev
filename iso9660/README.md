@@ -47,6 +47,7 @@ bend-osdev-word64 (a file's total size, which several extents can take past
 | `fence.bend` | `IsoFence`, an in-memory device answering only a range of blocks (the laws use it) |
 | `iso9660.bend` | the entry concern: mounting, reading and walking by path |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `gen/genproof.py`, `gen/proof.tmpl.bend` | `PROOF.bend` is generated: the template writes each 32-bit split pattern as `{U32:x}`, and `python3 gen/genproof.py` expands them into `PROOF.bend` (LF line endings) |
 | `check.bend` | a runnable check on an image built with the package's own writers |
 | `ref/gen.py`, `ref/harness.bend`, `ref/run.sh` | the differential test |
 
