@@ -16,8 +16,9 @@
 # CrMac.verify_tag is the named default ~verify: it compares the computed
 # tag with every byte of the given one (no early exit; Octets.is_eq), and
 # satisfies both laws for every ~compute (LAWS.bend: mac_verify_tag_*). The
-# instances: HMAC over any hash (hmac.bend) and CMAC over any 128-bit block
-# cipher (cipher-modes' Cmac.mac).
+# instances: HMAC over any hash (hmac.bend), CMAC over any 128-bit block
+# cipher (cipher-modes' Cmac.mac) and Michael (inst_michael.bend). PBKDF2
+# (pbkdf2.bend) takes any MAC as its PRF.
 import Base
 import ../bytes/bytes.bend as B
 import ./crypto.bend as Cr

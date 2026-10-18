@@ -39,6 +39,17 @@ import ./inst_ccm.bend as CC
 import ./inst_cmac.bend as CMI
 import ./inst_crc.bend as CR
 import ./inst_sha2.bend as SH
+import ./inst_michael.bend as MIC
+import ./pbkdf2.bend as Pb
+import ./inst_pbkdf2.bend as PbI
+import ../hashes/hashes.bend as Hs
+import ../hashes/md4.bend as HM4
+import ../hashes/md5.bend as HM5
+import ../hashes/sha1.bend as HS1
+import ../hashes/ripemd160.bend as HRM
+import ../hashes/sm3.bend as HSM
+import ../hashes/streebog.bend as HST
+import ../hashes/michael.bend as HMI
 
 def cat(a: String, b: String) -> String:
   a ++ b
@@ -57,6 +68,8 @@ def err(e: Cr.CrError) -> String:
       "tag mismatch"
     case Cr.CrBadOutputLength{n}:
       cat("bad output length ", Nat.show(n))
+    case Cr.CrTooShort{n}:
+      cat("too short ", Nat.show(n))
     case _:
       "other error"
 
@@ -273,6 +286,52 @@ def hmac_sha256_pieces(+k: B.Octets, +a: B.Octets, +b: B.Octets) -> String:
 def hkdf_sha256(+ikm: B.Octets, +salt: B.Octets, +info: B.Octets, n: Nat) -> String:
   show(Hk.CrHkdf.derive(~64n, ~32n, ~SH.CrSha2.sha256, ikm, salt, info, n))
 
+def cr.check.first.of(m: Maybe<&2, U32>) -> U32:
+  match m:
+    case Some{b}:
+      b
+    case None{}:
+      0
+
+def cr.check.first(+o: B.Octets) -> U32:
+  cr.check.first.of(B.Octets.at(o, 0n))
+
+# The hashes package's hashes through the hash interface: the one-shot
+# digest, and the digest of three pieces through init / update / final
+def hs_hash(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +a: B.Octets, +b: B.Octets, +c: B.Octets) -> String:
+  cat(B.Octets.hex(digest(B.Octets.append(a, B.Octets.append(b, c)))), cat(" ", B.Octets.hex(H.CrHash.of_pieces(~H, ~init, ~update, ~final, [a, b, c]))))
+
+# HMAC over a hash of the hashes package, in one call and in two pieces,
+# and verify of the tag
+def hs_hmac(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +k: B.Octets, +a: B.Octets, +b: B.Octets) -> String:
+  +kk = Hm.CrHmac.key(~bsize, ~digest, k)
+  +t = Hm.CrHmac.mac(~digest, kk, B.Octets.append(a, b))
+  +t2 = Hm.CrHmac.finish(~H, ~init, ~update, ~final, Hm.CrHmac.update(~H, ~update, Hm.CrHmac.update(~H, ~update, Hm.CrHmac.start(~H, ~init, ~update, kk), a), b))
+  cat(B.Octets.hex(t), cat(" ", cat(B.Octets.hex(t2), cat(" ", yes_no(Hm.CrHmac.verify(~digest, kk, B.Octets.append(a, b), t))))))
+
+# Michael through the MAC interface: the tag, verify of it, and of it with
+# its first byte changed
+def michael_mac.of(r: Result<&2, &2, Cr.CrError, Hs.HsW2>, +m: B.Octets) -> String:
+  match r:
+    case Fail{e}:
+      err(e)
+    case Done{+k}:
+      +t = HMI.HsMichael.mic(k, m)
+      cat(B.Octets.hex(t), cat(" ", cat(yes_no(MIC.CrMichael.verify(k, m, t)), cat(" ", yes_no(MIC.CrMichael.verify(k, m, B.Octets.append(B.Octets.of_list([U32.xor(cr.check.first(t), 1)]), B.Octets.drop(1n, t))))))))
+
+def michael_mac(k: B.Octets, +m: B.Octets) -> String:
+  michael_mac.of(MIC.CrMichael.key(k), m)
+
+def pbkdf2_sha1(+p: B.Octets, +s: B.Octets, c: U32, n: Nat) -> String:
+  show(PbI.CrPbkdf2.hmac_sha1(p, s, c, n))
+
+def pbkdf2_sha256(+p: B.Octets, +s: B.Octets, c: U32, n: Nat) -> String:
+  show(PbI.CrPbkdf2.hmac_sha256(p, s, c, n))
+
+# PBKDF2 over HMAC-MD5 through the KDF interface (info ignored)
+def pbkdf2_md5_kdf(+p: B.Octets, +s: B.Octets, n: Nat) -> String:
+  show(Pb.CrPbkdf2.derive(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~64n, ~HM5.HsMd5.digest), ~Hm.CrHmac.mac(~HM5.HsMd5.digest), ~16n, ~1000, p, s, B.Octets.of_string("ignored"), n))
+
 def main() -> IO(Unit):
   +k16 = hx("0123456789abcdeffedcba9876543210")
   +z16 = B.Octets.zeros(16n)
@@ -342,6 +401,38 @@ def main() -> IO(Unit):
     IO.print(hkdf_sha256(hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), hx("000102030405060708090a0b0c"), hx("f0f1f2f3f4f5f6f7f8f9"), 42n))
     IO.print(hkdf_sha256(hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f"), hx("606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf"), hx("b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"), 82n))
     IO.print(hkdf_sha256(hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), hx(""), hx(""), 42n))
+    IO.print(hs_hash(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, ~HM4.HsMd4.digest, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, ~HM5.HsMd5.final, ~HM5.HsMd5.digest, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, ~HS1.HsSha1.final, ~HS1.HsSha1.digest, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.init(), ~HRM.HsRipemd160.update, ~HRM.HsRipemd160.final, ~HRM.HsRipemd160.digest, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.init(), ~HSM.HsSm3.update, ~HSM.HsSm3.final, ~HSM.HsSm3.digest, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init256(), ~HST.HsStreebog.update, ~HST.HsStreebog.final256, ~HST.HsStreebog.digest256, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hash(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init512(), ~HST.HsStreebog.update, ~HST.HsStreebog.final512, ~HST.HsStreebog.digest512, B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound"), B.Octets.of_string("ary.")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW4>, ~64n, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, ~HM5.HsMd5.final, ~HM5.HsMd5.digest, hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), B.Octets.of_string("Hi Th"), B.Octets.of_string("ere")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW4>, ~64n, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, ~HM5.HsMd5.final, ~HM5.HsMd5.digest, B.Octets.of_string("Jefe"), B.Octets.of_string("what "), B.Octets.of_string("do ya want for nothing?")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW5>, ~64n, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, ~HS1.HsSha1.final, ~HS1.HsSha1.digest, hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), B.Octets.of_string("Hi Th"), B.Octets.of_string("ere")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW5>, ~64n, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, ~HS1.HsSha1.final, ~HS1.HsSha1.digest, B.Octets.of_string("Jefe"), B.Octets.of_string("what "), B.Octets.of_string("do ya want for nothing?")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW4>, ~64n, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, ~HM4.HsMd4.digest, hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445"), B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW5>, ~64n, ~HRM.HsRipemd160.init(), ~HRM.HsRipemd160.update, ~HRM.HsRipemd160.final, ~HRM.HsRipemd160.digest, hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445"), B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound")))
+    IO.print(hs_hmac(~Hs.HsMdState<Hs.HsW8>, ~64n, ~HSM.HsSm3.init(), ~HSM.HsSm3.update, ~HSM.HsSm3.final, ~HSM.HsSm3.digest, hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445"), B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound")))
+    IO.print(hs_hmac(~Hs.HsMdState<HST.HsStbCv>, ~64n, ~HST.HsStreebog.init256(), ~HST.HsStreebog.update, ~HST.HsStreebog.final256, ~HST.HsStreebog.digest256, hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445"), B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound")))
+    IO.print(hs_hmac(~Hs.HsMdState<HST.HsStbCv>, ~64n, ~HST.HsStreebog.init512(), ~HST.HsStreebog.update, ~HST.HsStreebog.final512, ~HST.HsStreebog.digest512, hx("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445"), B.Octets.of_string("The quick brown fox "), B.Octets.of_string("jumps over the lazy dog, and then some more bytes to cross a block bound")))
+    IO.print(michael_mac(hx("0000000000000000"), B.Octets.empty()))
+    IO.print(michael_mac(hx("82925c1ca1d130b8"), B.Octets.of_string("M")))
+    IO.print(michael_mac(hx("434721ca40639b3f"), B.Octets.of_string("Mi")))
+    IO.print(michael_mac(hx("e8f9becae97e5d29"), B.Octets.of_string("Mic")))
+    IO.print(michael_mac(hx("90038fc6cf13c1db"), B.Octets.of_string("Mich")))
+    IO.print(michael_mac(hx("d55e100510128986"), B.Octets.of_string("Michael")))
+    IO.print(michael_mac(hx("00000000000000"), B.Octets.empty()))
+    IO.print(pbkdf2_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 1, 20n))
+    IO.print(pbkdf2_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 2, 20n))
+    IO.print(pbkdf2_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 4096, 20n))
+    IO.print(pbkdf2_sha1(B.Octets.of_string("passwordPASSWORDpassword"), B.Octets.of_string("saltSALTsaltSALTsaltSALTsaltSALTsalt"), 4096, 25n))
+    IO.print(pbkdf2_sha1(hx("7061737300776f7264"), hx("7361006c74"), 4096, 16n))
+    IO.print(pbkdf2_sha256(B.Octets.of_string("passwd"), B.Octets.of_string("salt"), 1, 64n))
+    IO.print(pbkdf2_sha256(B.Octets.of_string("Password"), B.Octets.of_string("NaCl"), 80000, 64n))
+    IO.print(pbkdf2_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 0, 20n))
+    IO.print(pbkdf2_md5_kdf(B.Octets.of_string("secret"), B.Octets.of_string("NaCl"), 40n))
 #|69c4e0d86a7b0430d8cdb78070b4c55a 00112233445566778899aabbccddeeff
 #|8ea2b7ca516745bfeafc49904b496089 00112233445566778899aabbccddeeff
 #|95f8a5e5dd31d900 8000000000000000
@@ -403,3 +494,35 @@ def main() -> IO(Unit):
 #|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865
 #|b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87
 #|8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8
+#|0e34edd5b6b0d2b2510b41778edbb55f 0e34edd5b6b0d2b2510b41778edbb55f
+#|3cccac4e66f006326480005db0d2a3e2 3cccac4e66f006326480005db0d2a3e2
+#|2ea0e6ab3d94c0fd3c194a7494e0abdcc0ccc695 2ea0e6ab3d94c0fd3c194a7494e0abdcc0ccc695
+#|bd2a22b8c69ba0d6f097f7b49691145fbd037cb1 bd2a22b8c69ba0d6f097f7b49691145fbd037cb1
+#|2711d8fc556a4f9b99b94f1ac53f99ee36cb0afacb54f9ad4893d2735aee6729 2711d8fc556a4f9b99b94f1ac53f99ee36cb0afacb54f9ad4893d2735aee6729
+#|3bf13498f37b52a9031a80da3dc2d8fbd415a4d2ae6797edcdd702cf3ffcc475 3bf13498f37b52a9031a80da3dc2d8fbd415a4d2ae6797edcdd702cf3ffcc475
+#|b55e2710272d1ce45d7f0db9b140e542f5933cdf7a9283833eba0cd9935e29c6264b8c1acc36e817bf6835aef9258c6f5554b72083f61c571c708b40d4f5dc44 b55e2710272d1ce45d7f0db9b140e542f5933cdf7a9283833eba0cd9935e29c6264b8c1acc36e817bf6835aef9258c6f5554b72083f61c571c708b40d4f5dc44
+#|9294727a3638bb1c13f48ef8158bfc9d 9294727a3638bb1c13f48ef8158bfc9d accepted
+#|750c783e6ab0b503eaa86e310a5db738 750c783e6ab0b503eaa86e310a5db738 accepted
+#|b617318655057264e28bc0b6fb378c8ef146be00 b617318655057264e28bc0b6fb378c8ef146be00 accepted
+#|effcdf6ae5eb2fa2d27416d5f184df9c259a7c79 effcdf6ae5eb2fa2d27416d5f184df9c259a7c79 accepted
+#|958116dab5453b79b67b3531bdeed436 958116dab5453b79b67b3531bdeed436 accepted
+#|98ae3a62b8802d3b3ee409fc95f551744a535260 98ae3a62b8802d3b3ee409fc95f551744a535260 accepted
+#|bef3b0e1dac8f822e28b679f47398e5c2b448534ca13154a3c4bd4a6bce59018 bef3b0e1dac8f822e28b679f47398e5c2b448534ca13154a3c4bd4a6bce59018 accepted
+#|99b296aed68e48f4c9c301e2dd8d37dab203e2c3008b27ab76f283b67b0b6279 99b296aed68e48f4c9c301e2dd8d37dab203e2c3008b27ab76f283b67b0b6279 accepted
+#|bf03620da36670fb84857280987a834947cc9e4fa0393078d37a6935ad1bb507b2e42a114da3aabf790451719235b127691acbada691bebb4140741ae3b55a87 bf03620da36670fb84857280987a834947cc9e4fa0393078d37a6935ad1bb507b2e42a114da3aabf790451719235b127691acbada691bebb4140741ae3b55a87 accepted
+#|82925c1ca1d130b8 accepted refused
+#|434721ca40639b3f accepted refused
+#|e8f9becae97e5d29 accepted refused
+#|90038fc6cf13c1db accepted refused
+#|d55e100510128986 accepted refused
+#|0a942b124ecaa546 accepted refused
+#|bad key length 7
+#|0c60c80f961f0e71f3a9b524af6012062fe037a6
+#|ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957
+#|4b007901b765489abead49d926f721d065a429c1
+#|3d2eec4fe41c849b80c8d83662c0e44a8b291a964cf2f07038
+#|56fa6aa75548099dcc37d7f03425e0c3
+#|55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783
+#|4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d
+#|too short 0
+#|da3ca5acd6e25d1847064b1c7724b2e1dfb7cf1f6d13a180a8654e6f0ab45d9027de54dfb40426ce
