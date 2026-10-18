@@ -52,9 +52,11 @@ Everything not listed here is internal.
 | `BpfOp` | a decoded instruction (open type): `BpfLdAbs{size, k}`, `BpfLdInd{size, k}`, `BpfLdImm{k}`, `BpfLdLen{}`, `BpfLdMem{k}`, `BpfLdxImm{k}`, `BpfLdxMem{k}`, `BpfLdxLen{}`, `BpfLdxMsh{k}`, `BpfSt{k}`, `BpfStx{k}`, `BpfAlu{op, src}`, `BpfNeg{}`, `BpfJa{k}`, `BpfJmp{cond, src, jt, jf}`, `BpfRet{rval}`, `BpfTax{}`, `BpfTxa{}` |
 | `BpfSize` (`BpfW` `BpfH` `BpfB`), `BpfAluOp` (`BpfAdd` … `BpfXor`), `BpfCond` (`BpfJeq` `BpfJgt` `BpfJge` `BpfJset`), `BpfSrc` (`BpfK{k}`, `BpfX{}`), `BpfRval` (`BpfRetK{k}`, `BpfRetA{}`) | the parts of an instruction (open types) |
 | `BpfOp.encode(op)`, `BpfRaw.decode(r)` | one instruction; `decode` answers `None` for an opcode classic BPF does not define |
-| `bpf_encode(ops)`, `bpf_decode(raws)` | a program; `bpf_decode` fails with `BpfErrBadCode{pc, code}` |
+| `bpf_encode(ops)`, `bpf_decode(raws)` | a program; `bpf_decode` fails with `BpfErrBadCode{pc, code}` (the first such instruction) |
 | `BpfOrder` (`BpfBig{}`, `BpfLittle{}`) | a byte order |
-| `bpf_to_octets(order, raws)`, `bpf_of_octets(order, o)` | a stored program, 8 bytes per instruction |
+| `bpf_to_octets(order, raws)` | a stored program, 8 bytes per instruction |
+| `bpf_of_octets_with(max, order, o)` | a stored program's instructions: `BpfErrStoredTooLong{max}` if `o` has more than `max` bytes (checked first, by looking for the byte at offset `max`, so the rest of a longer input is never read), then `BpfErrTruncated{len}` if its length is not a multiple of 8 |
+| `bpf_of_octets(order, o)`, `bpf_octets_max()` | the same with the default limit, `bpf_octets_max()` = 32768 bytes (8 × `bpf_maxinsns()`, the longest program the default validation accepts) |
 | `bpf_memwords()` | 16, the size of the scratch memory |
 | `BpfError`, `BpfError.show` | every failure, one constructor each (open type) |
 
@@ -126,12 +128,21 @@ Everything not listed here is internal.
   with another limit. `SeccompLimits` with `seccomp_limits()`.
 * **The byte order** of stored programs and of seccomp data is a parameter
   (`BpfOrder`), with `seccomp_order()` the usual host's.
+* **The size limit on stored programs** is a parameter of
+  `bpf_of_octets_with`, with `bpf_of_octets` using the default
+  `bpf_octets_max()` (8 × `bpf_maxinsns()` bytes). A caller that raises the
+  instruction limit of validation raises this one to match.
 * **Programs can be built either way:** as raw `BpfRaw` lines (the C
   macros) or as `BpfOp` values; `bpf_decode`/`bpf_encode` convert, with a law
   that they round-trip.
 * **A fast interpreter** (or a JIT) can be added beside `bpf_run`, kept to it
   by a law or the differential test. The interpreter is the reference: one
   pass over the instructions, each visited at most once.
+* **Reference and tail forms.** `bpf_encode`, `bpf_decode` and the
+  validator's instruction checks run as tail calls; their structural forms
+  (`bpf_encode.ref`, `bpf_decode.ref`, `bpf_check.all`, internal) are what
+  the proofs reason about, and `PROOF.bend` proves each pair equal for every
+  input (`F_encode`, `F_decode`, `F_check`, with `F_count` for the length).
 * **Streaming:** none. A filter reads its input at any offset, so it needs
   the whole input, as BPF itself does.
 
@@ -153,6 +164,9 @@ Everything not listed here is internal.
   (`JEQ #0`, over `jt` instructions) and not taken (`JEQ #1`, over `jf`).
 * `insn_round_trip`, `program_round_trip`: decoding the encoding of any
   instruction or program gives it back.
+* `octets_over_limit`: for every limit, byte order and input with a byte at
+  offset `max` (so more than `max` bytes), `bpf_of_octets_with` answers
+  `BpfErrStoredTooLong{max}`, whatever the input's bytes.
 * `most_restrictive`: for every pair of actions, the combined precedence is
   the higher of the two (`rank` is the minimum); `combine_newer` and
   `combine_older` characterise `seccomp_combine` completely (the newer wins
@@ -165,19 +179,26 @@ filter (execve, write and preadv as on the page, another architecture, an x32
 call), each validation error including the scratch-memory rule (on a path,
 after a jump, after a return, and turned off), a bad opcode, the stored
 bytes, filter stacking (ties, precedence, the empty stack), an unnamed
-action, and the path limit.
+action, the path limit, and stored programs over and at a limit
+(`octets_limit_refuses`, `octets_limit_accepts`), with
+`octets_max_default` tying `bpf_octets_max()` to 8 × `bpf_maxinsns()`.
 
 Witnesses: every hypothesis of a law holds for some input, so no law is
 vacuous: `witness_skip_length` (a three-instruction `skipped` list of length
 `to_nat(3)`, the form of the hypotheses of `ja_skips`, `jeq_taken_skips` and
 `jeq_not_taken_skips`), `witness_rank_le` (for `combine_newer`),
-`witness_rank_lt` (for `combine_older`), and `validate_accepts`,
+`witness_rank_lt` (for `combine_older`), `witness_octets_over` (for
+`octets_over_limit`), and `validate_accepts`,
 `validate_permissive` and `seccomp_example_valid` (for the validation
 hypotheses).
 
 ## Tests
 
-`check.bend` prints the documentation's examples. `ref/run.sh` runs
+`check.bend` prints the documentation's examples, a 4096-instruction
+program stored, read back, prepared and run on 64 KB, and, as a regression
+test for untrusted input, a 32,768-instruction program (256 KB): refused by
+`bpf_of_octets` at its default limit, and, read with a limit of 1 MB,
+decoded and refused by validation as too long. `ref/run.sh` runs
 `ref/gen.py` (seed 2026), which writes 1070 cases to `ref/cases.bend` and the
 answers of an independent Python implementation, written from the same
 documents, to `ref/expected.txt` (both generated and not kept: see
@@ -204,34 +225,57 @@ installing a filter is not permitted, the rest runs and `run.sh` exits 77.
 
 ## Sizes
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
+**Lanes.** Measured on Bend 2.0.37 (WSL2, 16 threads) natively
+(`bend file.bend -o prog`, clang 22) and on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process: a small stack,
+several times the memory, and a 3 GB cap on the process; see AGENTS.md,
+"Runtime and checker limits"). Times and peaks include building the input.
 
 A packet is read only at the offsets a program loads from (through bytes'
 tail-recursive `Octets` operations), so its size has no limit beyond memory.
-Measured on Bend 2.0.37's JavaScript lane (WSL2): a 4096-instruction program
-(`BPF_MAXINSNS`: loads, ALU, scratch memory, jumps), written as 32 KB of
-`Octets` with `bpf_to_octets`, read back with `bpf_of_octets`, prepared
-(decoded and validated) and run on a 64 KB packet, the answer checked
-against `ref/gen.py`'s model: 0.7 s, 240 MB peak. `check.bend` runs it as a
-regression test.
+A 4096-instruction program (`BPF_MAXINSNS`: loads, ALU, scratch memory,
+jumps), written as 32 KB of `Octets` with `bpf_to_octets`, read back with
+`bpf_of_octets`, prepared (decoded and validated) and run on a 64 KB packet,
+the answer checked against `ref/gen.py`'s model, with the rest of
+`check.bend`: 0.5 s and 35 MB natively, 1.4 s and 390 MB on the JavaScript
+lane.
 
-The program-wide loops (`bpf_encode`, `bpf_decode`, `bpf_to_octets`,
-`bpf_of_octets`, validation and its scratch-memory pass) recurse once per
-instruction without being tail calls; that is fine for the 4096
-instructions a filter may have (and a seccomp path is checked filter by
-filter). A stored program of 16,384 instructions still decodes and is
-refused as too long (`BpfErrTooLong`), but at 32,768 instructions (256 KB)
-Bend 2.0.37's JavaScript lane overflows its stack: a caller handed untrusted bytes
-should refuse more than `8 * bpf_maxinsns()` of them before decoding.
+**Long and untrusted programs.** Every program-wide loop is a tail call over
+an accumulator, reversed at the end where order matters: `bpf_encode`,
+`bpf_decode`, `bpf_to_octets`, `bpf_of_octets`, the validator's instruction
+checks (which count the instructions once, instead of once per instruction)
+and its scratch-memory pass, and seccomp's checks. So a program's length is
+limited by memory alone, on both lanes. Validation runs each pass only once
+the ones before it hold, so a program over the instruction limit is refused
+after one count. `bpf_of_octets` refuses more than `bpf_octets_max()` bytes
+before decoding anything, by looking for the byte at offset 32768, so its
+cost does not grow with the input: refusing the same 8 MB input ten times
+costs 0.01 s more than refusing it once natively (0.1 s a refusal on the
+JavaScript lane).
+
+| Input | Path | Answer | Native | JavaScript lane |
+|---|---|---|---|---|
+| 32,768 instructions (256 KB, the regression filter) | `bpf_of_octets` | `BpfErrStoredTooLong{32768}` | 0.22 s, 29 MB | 0.8 s, 245 MB |
+| | `bpf_of_octets_with` (256 KB), `bpf_prepare(4096, …)` | `BpfErrTooLong{32768}` | 0.41 s, 29 MB | 1.2 s, 400 MB |
+| | the same, `bpf_prepare(32768, …)` (every check, the scratch-memory pass) | `Done` | 0.43 s, 29 MB | 1.3 s, 420 MB |
+| 200,000 `ld #0` (1.6 MB) | `bpf_of_octets_with`, `bpf_prepare(4096, …)` | `BpfErrTooLong{200000}` | 1.2 s, 58 MB | 4.1 s, 1.1 GB |
+| | the same, `bpf_prepare(200000, …)` | `BpfErrNoReturn{199999}` | 1.3 s, 58 MB | 6.4 s, 1.0 GB |
+| 1,000,000 `ld #0` (8 MB) | `bpf_of_octets` | `BpfErrStoredTooLong{32768}` | 0.31 s, 250 MB | 4.5 s, 1.4 GB |
+| | `bpf_of_octets_with` (8 MB), `bpf_prepare(4096, …)` | `BpfErrTooLong{1000000}` | 5.9 s, 280 MB | over the 3 GB cap |
+| | the same, `bpf_prepare(1000000, …)` | `BpfErrNoReturn{999999}` | 5.8 s, 280 MB | over the 3 GB cap |
+
+Building the 8 MB input alone takes 0.1 s and 130 MB natively, 3.7 s and
+1.4 GB on the JavaScript lane, so a million decoded instructions do not fit
+under the JavaScript lane's 3 GB cap; that is memory, not the stack. Before
+these loops were tail calls, the 32,768-instruction regression filter
+overflowed the JavaScript lane's stack ("memory fault (machine stack
+overflow?)"), and natively took 1.9 s, the instruction checks counting the
+rest of the program at every instruction.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 1070 cases match and the kernel agrees
-(80 stacks, 320 system calls, 181 validation cases; WSL2 kernel 6.6).
+Bend 2.0.37, `VERDICT=1 scripts/check.sh bpf` with native builds:
+`PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
+passes (natively), `ref/run.sh` 1070 cases match and the kernel agrees (80
+stacks, 320 system calls, 181 validation cases; WSL2 kernel 6.6);
+`scripts/deps.sh bpf` passes.

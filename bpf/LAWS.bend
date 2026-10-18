@@ -8,6 +8,7 @@
 #   * RET k answers k;
 #   * jumps move forward over exactly the instructions they skip;
 #   * decoding an encoded instruction or program gives it back;
+#   * a stored program longer than the limit is refused, whatever its bytes;
 #   * stacked seccomp filters answer the most restrictive action, the newer
 #     filter's on a tie, and the grouping does not matter.
 #
@@ -74,6 +75,16 @@ law insn_round_trip:
 law program_round_trip:
   for +prog: List<&2, I.BpfOp>
   {I.bpf_decode(I.bpf_encode(prog)) == Done{prog} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
+
+# a stored program with a byte at offset max (so more than max bytes) is
+# refused, whatever its bytes
+law octets_over_limit:
+  for +max: Nat
+  for +order: I.BpfOrder
+  for +o: B.Octets
+  for b: U32
+  for e: {B.Octets.at(o, max) == Some{b} : Maybe<&2, U32>}
+  {I.bpf_of_octets_with(max, order, o) == Fail{I.BpfErrStoredTooLong{max}} : Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>}
 
 law most_restrictive:
   for a: S.SeccompAction
@@ -229,6 +240,17 @@ law program_bytes:
 law program_bytes_back:
   {I.bpf_of_octets(I.BpfBig{}, I.bpf_to_octets(I.BpfBig{}, rarp())) == Done{rarp()} : Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>}
 
+# the default limit on stored programs: 8 bytes for each of BPF_MAXINSNS
+# instructions (compared as U32, which holds both)
+law octets_max_default:
+  {U32.from_nat(I.bpf_octets_max()) == U32.mul(8, U32.from_nat(V.bpf_maxinsns())) : U32}
+
+law octets_limit_refuses:
+  {I.bpf_of_octets_with(16n, I.BpfBig{}, B.Octets.zeros(17n)) == Fail{I.BpfErrStoredTooLong{16n}} : Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>}
+
+law octets_limit_accepts:
+  {I.bpf_of_octets_with(16n, I.BpfLittle{}, I.bpf_to_octets(I.BpfLittle{}, [I.bpf_stmt(6, 1), I.bpf_stmt(22, 0)])) == Done{[I.bpf_stmt(6, 1), I.bpf_stmt(22, 0)]} : Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>}
+
 # seccomp(2), EXAMPLES, install_filter(syscall_nr, t_arch, f_errno) with
 # t_arch = AUDIT_ARCH_X86_64, so upper_nr_limit = X32_SYSCALL_BIT - 1: the
 # call syscall_nr fails with f_errno, other calls are allowed, and another
@@ -318,10 +340,13 @@ law validate_permissive:
 
 # Witnesses: each hypothesis of a law above holds for some input (the
 # validation hypotheses: validate_accepts, validate_permissive and
-# seccomp_example_valid)
+# seccomp_example_valid; octets_over_limit: witness_octets_over)
 
 law witness_skip_length:
   {List.length(&2, I.BpfOp, [I.BpfTax{}, I.BpfTxa{}, I.BpfNeg{}]) == U32.to_nat(3) : Nat}
+
+law witness_octets_over:
+  {B.Octets.at(B.Octets.zeros(9n), 8n) == Some{0} : Maybe<&2, U32>}
 
 law witness_rank_le:
   {Nat.is_le(S.SeccompAction.rank(S.SeccompErrno{1}), S.SeccompAction.rank(S.SeccompErrno{2})) == True{} : Bool}

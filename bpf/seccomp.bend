@@ -220,17 +220,29 @@ def seccomp_check.op(op: I.BpfOp, +pc: Nat) -> Result<&2, &2, I.BpfError, Unit>:
     case other:
       Done{Unit{}}
 
-def seccomp_check.all(xs: List<&2, I.BpfOp>, +pc: Nat) -> Result<&2, &2, I.BpfError, Unit>:
+# ok is the verdict so far; the loop stops at the instruction after a failure
+def seccomp_check.go(xs: List<&2, I.BpfOp>, +pc: Nat, ok: Result<&2, &2, I.BpfError, Unit>) -> Result<&2, &2, I.BpfError, Unit>:
   match xs:
     case Nil{}:
-      Done{Unit{}}
+      ok
     case Con{op, t}:
-      V.bpf_both(seccomp_check.op(op, pc), seccomp_check.all(t, 1n+pc))
+      match ok:
+        case Fail{e}:
+          Fail{e}
+        case Done{u}:
+          seccomp_check.go(t, 1n+pc, seccomp_check.op(op, pc))
+
+def seccomp_validate.go(v: Result<&2, &2, I.BpfError, Unit>, +prog: List<&2, I.BpfOp>) -> Result<&2, &2, I.BpfError, Unit>:
+  match v:
+    case Fail{e}:
+      Fail{e}
+    case Done{u}:
+      seccomp_check.go(prog, 0n, Done{Unit{}})
 
 # bpf_validate's rules, only aligned 32-bit loads inside seccomp_data, and
-# no BPF_MOD
+# no BPF_MOD (checked once bpf_validate's rules hold)
 def seccomp_validate_with(opts: V.BpfValidateOptions, +prog: List<&2, I.BpfOp>) -> Result<&2, &2, I.BpfError, Unit>:
-  V.bpf_both(V.bpf_validate_with(opts, prog), seccomp_check.all(prog, 0n))
+  seccomp_validate.go(V.bpf_validate_with(opts, prog), prog)
 
 # the default options (what Linux checks), with this instruction limit
 def seccomp_validate(limit: Nat, +prog: List<&2, I.BpfOp>) -> Result<&2, &2, I.BpfError, Unit>:
@@ -285,7 +297,7 @@ def seccomp_path_len(stack: List<&2, List<&2, I.BpfOp>>) -> Nat:
     case Nil{}:
       0n
     case Con{f, rest}:
-      Nat.add(Nat.add(List.length(&2, I.BpfOp, f), 4n), seccomp_path_len(rest))
+      Nat.add(Nat.add(V.bpf_count(f), 4n), seccomp_path_len(rest))
 
 def seccomp_install.fit(fits: Bool, total: Nat, ops: List<&2, I.BpfOp>, stack: List<&2, List<&2, I.BpfOp>>) -> Result<&2, &2, I.BpfError, List<&2, List<&2, I.BpfOp>>>:
   match fits:
@@ -299,7 +311,7 @@ def seccomp_install.ok(v: Result<&2, &2, I.BpfError, Unit>, path: Nat, +ops: Lis
     case Fail{e}:
       Fail{e}
     case Done{u}:
-      +total = Nat.add(List.length(&2, I.BpfOp, ops), seccomp_path_len(stack))
+      +total = Nat.add(V.bpf_count(ops), seccomp_path_len(stack))
       seccomp_install.fit(Nat.is_le(total, path), total, ops, stack)
 
 def seccomp_install.go(lim: SeccompLimits, d: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, stack: List<&2, List<&2, I.BpfOp>>) -> Result<&2, &2, I.BpfError, List<&2, List<&2, I.BpfOp>>>:

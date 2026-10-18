@@ -185,18 +185,99 @@ def go_ok(xs: List<&2, I.BpfOp>, cur: R.BpfStep, +inp: R.BpfInput, +pc: Nat, +v:
         case R.BpfFault{e}:
           Empty.absurd({Result.is_done(&2, &2, I.BpfError, U32, R.bpf_run.go(Con{op, t}, R.BpfFault{e}, inp)) == True{} : Bool}, absurd.ft(p))
 
+# The validator runs tail calls: bpf_count for the length and bpf_check.go
+# for the instructions' checks. They equal the structural forms the proofs
+# above use, for every program (F_count, F_check).
+
+def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+n), 1n+Nat.add(p, n), add_succ(p, n))
+
+def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
+
+def g_count(+xs: List<&2, I.BpfOp>, +n: Nat) -> {V.bpf_count.go(xs, n) == Nat.add(List.length(&2, I.BpfOp, xs), n) : Nat}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.trans(Nat, V.bpf_count.go(t, 1n+n), Nat.add(List.length(&2, I.BpfOp, t), 1n+n), 1n+Nat.add(List.length(&2, I.BpfOp, t), n),
+        g_count(t, 1n+n), add_succ(List.length(&2, I.BpfOp, t), n))
+
+def F_count(+xs: List<&2, I.BpfOp>) -> {List.length(&2, I.BpfOp, xs) == V.bpf_count(xs) : Nat}:
+  Equal.sym(Nat, V.bpf_count(xs), List.length(&2, I.BpfOp, xs),
+    Equal.trans(Nat, V.bpf_count.go(xs, 0n), Nat.add(List.length(&2, I.BpfOp, xs), 0n), List.length(&2, I.BpfOp, xs),
+      g_count(xs, 0n), add_zero(List.length(&2, I.BpfOp, xs))))
+
+# the tail form, from any verdict so far, with n the length
+def g_check(xs: List<&2, I.BpfOp>, +pc: Nat, ok: Result<&2, &2, I.BpfError, Unit>) -> {V.bpf_check.go(xs, pc, ok, List.length(&2, I.BpfOp, xs)) == V.bpf_both(ok, V.bpf_check.all(xs, pc)) : Result<&2, &2, I.BpfError, Unit>}:
+  match xs:
+    case Nil{}:
+      match ok:
+        case Fail{e}:
+          {==}
+        case Done{u}:
+          match u:
+            case Unit{}:
+              {==}
+    case Con{op, +t}:
+      match ok:
+        case Fail{e}:
+          {==}
+        case Done{u}:
+          g_check(t, 1n+pc, V.bpf_check.op(op, pc, List.length(&2, I.BpfOp, t)))
+
+def F_check(+xs: List<&2, I.BpfOp>) -> {V.bpf_check.all(xs, 0n) == V.bpf_check.go(xs, 0n, Done{Unit{}}, V.bpf_count(xs)) : Result<&2, &2, I.BpfError, Unit>}:
+  %F_count(xs) : {V.bpf_check.all(xs, 0n) == V.bpf_check.go(xs, 0n, Done{Unit{}}, _) : Result<&2, &2, I.BpfError, Unit>}
+  Equal.sym(Result<&2, &2, I.BpfError, Unit>, V.bpf_check.go(xs, 0n, Done{Unit{}}, List.length(&2, I.BpfOp, xs)), V.bpf_check.all(xs, 0n), g_check(xs, 0n, Done{Unit{}}))
+
+# each pass of bpf_validate_with runs only once the one before it holds
+def ops_l(v: Result<&2, &2, I.BpfError, Unit>, -n: Nat, -need: Bool, -prog: List<&2, I.BpfOp>, h: {V.bpf_validate.ops(v, n, need, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {v == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}:
+  match v:
+    case Fail{e}:
+      Empty.absurd({Fail{e} == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}, absurd.fd(e, h))
+    case Done{u}:
+      match u:
+        case Unit{}:
+          {==}
+
+def ops_r(v: Result<&2, &2, I.BpfError, Unit>, -n: Nat, -need: Bool, -prog: List<&2, I.BpfOp>, h: {V.bpf_validate.ops(v, n, need, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {V.bpf_validate.mem(V.bpf_check.go(prog, 0n, Done{Unit{}}, n), need, n, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}:
+  match v:
+    case Fail{e}:
+      Empty.absurd({V.bpf_validate.mem(V.bpf_check.go(prog, 0n, Done{Unit{}}, n), need, n, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}, absurd.fd(e, h))
+    case Done{u}:
+      h
+
+def mem_l(v: Result<&2, &2, I.BpfError, Unit>, -need: Bool, -n: Nat, -prog: List<&2, I.BpfOp>, h: {V.bpf_validate.mem(v, need, n, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {v == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}:
+  match v:
+    case Fail{e}:
+      Empty.absurd({Fail{e} == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}, absurd.fd(e, h))
+    case Done{u}:
+      match u:
+        case Unit{}:
+          {==}
+
 # what bpf_validate's success gives a run: the checks of every instruction,
 # and at least one instruction
 def valid_all(opts: V.BpfValidateOptions, +prog: List<&2, I.BpfOp>, ok: {V.bpf_validate_with(opts, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {V.bpf_check.all(prog, 0n) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}:
   match opts:
     case V.BpfValidateOptions{+max, +need}:
-      both_l(V.bpf_check.all(prog, 0n), V.bpf_check.mem_init(need, prog), both_r(V.bpf_check.len(List.length(&2, I.BpfOp, prog), max), V.bpf_both(V.bpf_check.all(prog, 0n), V.bpf_check.mem_init(need, prog)), ok))
+      Equal.trans(Result<&2, &2, I.BpfError, Unit>, V.bpf_check.all(prog, 0n), V.bpf_check.go(prog, 0n, Done{Unit{}}, V.bpf_count(prog)), Done{Unit{}}, F_check(prog),
+        mem_l(V.bpf_check.go(prog, 0n, Done{Unit{}}, V.bpf_count(prog)), need, V.bpf_count(prog), prog, ops_r(V.bpf_check.len(V.bpf_count(prog), max), V.bpf_count(prog), need, prog, ok)))
 
 def valid_nonempty(opts: V.BpfValidateOptions, +prog: List<&2, I.BpfOp>, ok: {V.bpf_validate_with(opts, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {Nat.is_lt(0n, List.length(&2, I.BpfOp, prog)) == True{} : Bool}:
   match opts:
     case V.BpfValidateOptions{+max, +need}:
-      +n = List.length(&2, I.BpfOp, prog)
-      need_ok(Nat.is_lt(0n, n), I.BpfErrEmpty{}, both_l(V.bpf_chk(Nat.is_lt(0n, n), I.BpfErrEmpty{}), V.bpf_chk(Nat.is_le(n, max), I.BpfErrTooLong{n}), both_l(V.bpf_check.len(n, max), V.bpf_both(V.bpf_check.all(prog, 0n), V.bpf_check.mem_init(need, prog)), ok)))
+      +n = V.bpf_count(prog)
+      %Equal.sym(Nat, List.length(&2, I.BpfOp, prog), V.bpf_count(prog), F_count(prog)) : {Nat.is_lt(0n, _) == True{} : Bool}
+      need_ok(Nat.is_lt(0n, n), I.BpfErrEmpty{}, both_l(V.bpf_chk(Nat.is_lt(0n, n), I.BpfErrEmpty{}), V.bpf_chk(Nat.is_le(n, max), I.BpfErrTooLong{n}), ops_l(V.bpf_check.len(n, max), n, need, prog, ok)))
 
 def Laws.validated_returns(opts, prog, inp, ok):
   go_ok(prog, R.BpfNext{0n, R.bpf_init()}, inp, 0n, valid_all(opts, prog, ok), valid_nonempty(opts, prog, ok))
@@ -403,20 +484,116 @@ def Laws.insn_round_trip(op):
         case I.BpfRetA{}:
           {==}
 
-def decode_go(prog: List<&2, I.BpfOp>, +pc: Nat) -> {I.bpf_decode.go(I.bpf_encode(prog), pc) == Done{prog} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
+def decode_go(prog: List<&2, I.BpfOp>, +pc: Nat) -> {I.bpf_decode.ref.go(I.bpf_encode.ref(prog), pc) == Done{prog} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
   match prog:
     case Nil{}:
       {==}
     case Con{+op, +t}:
-      %Equal.sym(Maybe<&2, I.BpfOp>, I.BpfRaw.decode(I.BpfOp.encode(op)), Some{op}, Laws.insn_round_trip(op)) : {I.bpf_decode.cons(_, I.BpfErrBadCode{pc, I.BpfRaw.code(I.BpfOp.encode(op))}, I.bpf_decode.go(I.bpf_encode(t), 1n+pc)) == Done{Con{op, t}} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
-      %Equal.sym(Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, I.bpf_decode.go(I.bpf_encode(t), 1n+pc), Done{t}, decode_go(t, 1n+pc)) : {I.bpf_decode.cons(Some{op}, I.BpfErrBadCode{pc, I.BpfRaw.code(I.BpfOp.encode(op))}, _) == Done{Con{op, t}} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
+      %Equal.sym(Maybe<&2, I.BpfOp>, I.BpfRaw.decode(I.BpfOp.encode(op)), Some{op}, Laws.insn_round_trip(op)) : {I.bpf_decode.cons(_, I.BpfErrBadCode{pc, I.BpfRaw.code(I.BpfOp.encode(op))}, I.bpf_decode.ref.go(I.bpf_encode.ref(t), 1n+pc)) == Done{Con{op, t}} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
+      %Equal.sym(Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, I.bpf_decode.ref.go(I.bpf_encode.ref(t), 1n+pc), Done{t}, decode_go(t, 1n+pc)) : {I.bpf_decode.cons(Some{op}, I.BpfErrBadCode{pc, I.BpfRaw.code(I.BpfOp.encode(op))}, _) == Done{Con{op, t}} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
       {==}
 
+# bpf_encode and bpf_decode are tail calls over an accumulator, reversed at
+# the end; they equal the structural forms above for every input (F_encode,
+# F_decode)
+
+def rev_rr(-A: Data, xs: List<&2, A>, acc: List<&2, A>, b: List<&2, A>) -> {List.reverse.go(&2, A, List.reverse.go(&2, A, xs, acc), b) == List.reverse.go(&2, A, acc, List.append(&2, A, xs, b)) : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      rev_rr(A, t, Con{h, acc}, b)
+
+def app_nil(-A: Data, +xs: List<&2, A>) -> {List.append(&2, A, xs, Nil{}) == xs : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(List<&2, A>, List<&2, A>, l => Con{h, l}, List.append(&2, A, t, Nil{}), t, app_nil(A, t))
+
+# reversing twice gives the list back
+def rev_twice(-A: Data, +xs: List<&2, A>) -> {List.reverse.go(&2, A, List.reverse.go(&2, A, xs, Nil{}), Nil{}) == xs : List<&2, A>}:
+  Equal.trans(List<&2, A>, List.reverse.go(&2, A, List.reverse.go(&2, A, xs, Nil{}), Nil{}), List.append(&2, A, xs, Nil{}), xs, rev_rr(A, xs, Nil{}, Nil{}), app_nil(A, xs))
+
+def g_encode(ops: List<&2, I.BpfOp>, acc: List<&2, I.BpfRaw>) -> {I.bpf_encode.go(ops, acc) == List.reverse.go(&2, I.BpfRaw, I.bpf_encode.ref(ops), acc) : List<&2, I.BpfRaw>}:
+  match ops:
+    case Nil{}:
+      {==}
+    case Con{op, t}:
+      g_encode(t, Con{I.BpfOp.encode(op), acc})
+
+def F_encode(+ops: List<&2, I.BpfOp>) -> {I.bpf_encode.ref(ops) == I.bpf_encode(ops) : List<&2, I.BpfRaw>}:
+  Equal.sym(List<&2, I.BpfRaw>, I.bpf_encode(ops), I.bpf_encode.ref(ops),
+    Equal.trans(List<&2, I.BpfRaw>, I.bpf_encode(ops), List.reverse.go(&2, I.BpfRaw, List.reverse.go(&2, I.BpfRaw, I.bpf_encode.ref(ops), Nil{}), Nil{}), I.bpf_encode.ref(ops),
+      Equal.cong(List<&2, I.BpfRaw>, List<&2, I.BpfRaw>, l => List.reverse.go(&2, I.BpfRaw, l, Nil{}), I.bpf_encode.go(ops, Nil{}), List.reverse.go(&2, I.BpfRaw, I.bpf_encode.ref(ops), Nil{}), g_encode(ops, Nil{})),
+      rev_twice(I.BpfRaw, I.bpf_encode.ref(ops))))
+
+# what the tail form ends with, given the instructions decoded so far (acc,
+# last first) and what the structural form answers for the rest
+def dec.after(acc: List<&2, I.BpfOp>, r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>:
+  match r:
+    case Fail{f}:
+      Fail{f}
+    case Done{ops}:
+      Done{List.reverse.go(&2, I.BpfOp, acc, ops)}
+
+def dec.after2(a: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>:
+  match a:
+    case Fail{e}:
+      Fail{e}
+    case Done{acc}:
+      dec.after(acc, r)
+
+def dec_step(m: Maybe<&2, I.BpfOp>, -e: I.BpfError, -acc: List<&2, I.BpfOp>, r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> {dec.after2(I.bpf_decode.push(m, e, acc), r) == dec.after(acc, I.bpf_decode.cons(m, e, r)) : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
+  match m:
+    case None{}:
+      {==}
+    case Some{op}:
+      match r:
+        case Fail{f}:
+          {==}
+        case Done{ops}:
+          {==}
+
+def g_decode(rs: List<&2, I.BpfRaw>, +pc: Nat, a: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> {I.bpf_decode.go(rs, pc, a) == dec.after2(a, I.bpf_decode.ref.go(rs, pc)) : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
+  match rs:
+    case Nil{}:
+      match a:
+        case Fail{e}:
+          {==}
+        case Done{acc}:
+          {==}
+    case Con{+r, +t}:
+      match a:
+        case Fail{e}:
+          {==}
+        case Done{+acc}:
+          Equal.trans(Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, I.bpf_decode.go(t, 1n+pc, I.bpf_decode.push(I.BpfRaw.decode(r), I.BpfErrBadCode{pc, I.BpfRaw.code(r)}, acc)), dec.after2(I.bpf_decode.push(I.BpfRaw.decode(r), I.BpfErrBadCode{pc, I.BpfRaw.code(r)}, acc), I.bpf_decode.ref.go(t, 1n+pc)), dec.after(acc, I.bpf_decode.cons(I.BpfRaw.decode(r), I.BpfErrBadCode{pc, I.BpfRaw.code(r)}, I.bpf_decode.ref.go(t, 1n+pc))),
+            g_decode(t, 1n+pc, I.bpf_decode.push(I.BpfRaw.decode(r), I.BpfErrBadCode{pc, I.BpfRaw.code(r)}, acc)), dec_step(I.BpfRaw.decode(r), I.BpfErrBadCode{pc, I.BpfRaw.code(r)}, acc, I.bpf_decode.ref.go(t, 1n+pc)))
+
+def dec_nil(r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> {dec.after(Nil{}, r) == r : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
+  match r:
+    case Fail{f}:
+      {==}
+    case Done{ops}:
+      {==}
+
+def F_decode(+rs: List<&2, I.BpfRaw>) -> {I.bpf_decode.ref(rs) == I.bpf_decode(rs) : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}:
+  Equal.sym(Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, I.bpf_decode(rs), I.bpf_decode.ref(rs),
+    Equal.trans(Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, I.bpf_decode(rs), dec.after(Nil{}, I.bpf_decode.ref.go(rs, 0n)), I.bpf_decode.ref.go(rs, 0n),
+      g_decode(rs, 0n, Done{Nil{}}), dec_nil(I.bpf_decode.ref.go(rs, 0n))))
+
 def Laws.program_round_trip(prog):
+  %F_encode(prog) : {I.bpf_decode(_) == Done{prog} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
+  %F_decode(I.bpf_encode.ref(prog)) : {_ == Done{prog} : Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>}
   decode_go(prog, 0n)
 
 
 # Seccomp actions, by cases
+
+def Laws.octets_over_limit(max, order, o, b, e):
+  %Equal.sym(Maybe<&2, U32>, B.Octets.at(o, max), Some{b}, e) : {I.bpf_of_octets.fits(_, max, order, o) == Fail{I.BpfErrStoredTooLong{max}} : Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>}
+  {==}
 
 def Laws.most_restrictive(a, b):
   match a:
@@ -1784,8 +1961,17 @@ def fin_done(r: Result<&2, &2, I.BpfError, U32>, e: {Result.is_done(&2, &2, I.Bp
     case Done{v}:
       {==}
 
+def sc_l(v: Result<&2, &2, I.BpfError, Unit>, -prog: List<&2, I.BpfOp>, h: {S.seccomp_validate.go(v, prog) == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}) -> {v == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}:
+  match v:
+    case Fail{e}:
+      Empty.absurd({Fail{e} == Done{Unit{}} : Result<&2, &2, I.BpfError, Unit>}, absurd.fd(e, h))
+    case Done{u}:
+      match u:
+        case Unit{}:
+          {==}
+
 def Laws.seccomp_validated_acts(opts, order, prog, d, ok):
-  fin_done(R.bpf_run(S.SeccompData.input(order, d), prog), Laws.validated_returns(opts, prog, S.SeccompData.input(order, d), both_l(V.bpf_validate_with(opts, prog), S.seccomp_check.all(prog, 0n), ok)))
+  fin_done(R.bpf_run(S.SeccompData.input(order, d), prog), Laws.validated_returns(opts, prog, S.SeccompData.input(order, d), sc_l(V.bpf_validate_with(opts, prog), prog, ok)))
 
 # Vectors, by computation
 
@@ -1933,3 +2119,14 @@ def Laws.validate_mem_after_jump():
 def Laws.validate_mem_after_return():
   {==}
 
+def Laws.octets_max_default():
+  {==}
+
+def Laws.octets_limit_refuses():
+  {==}
+
+def Laws.octets_limit_accepts():
+  {==}
+
+def Laws.witness_octets_over():
+  {==}

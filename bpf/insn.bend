@@ -85,12 +85,13 @@ type BpfOrder is Data:
   BpfBig{}
   BpfLittle{}
 
-# Every failure: decoding (BadCode, Truncated), validation (Empty to
-# SeccompInsn), installing seccomp filters (PathTooLong), and running a
-# program that was not validated (FellOff, BadScratch).
+# Every failure: decoding (BadCode, Truncated, StoredTooLong), validation
+# (Empty to SeccompInsn), installing seccomp filters (PathTooLong), and
+# running a program that was not validated (FellOff, BadScratch).
 type BpfError is Data:
   BpfErrBadCode{pc: Nat, code: U32}
   BpfErrTruncated{len: Nat}
+  BpfErrStoredTooLong{max: Nat}
   BpfErrEmpty{}
   BpfErrTooLong{len: Nat}
   BpfErrJump{pc: Nat}
@@ -292,14 +293,29 @@ def BpfRaw.decode(r: BpfRaw) -> Maybe<&2, BpfOp>:
       BpfRaw.decode.pick(U32.is_eq(code, 7), BpfTax{},
       BpfRaw.decode.pick(U32.is_eq(code, 135), BpfTxa{},
       None{})))))))))))))))))))))))))))))))))))))))))))))))))
-# Programs
+# Programs. Each program-wide loop is a tail call over an accumulator,
+# reversed at the end, so a program of any length runs on both lanes. The
+# structural forms (*.ref) are the references the proofs reason about;
+# PROOF.bend proves each equal to its tail form for every input (F_encode,
+# F_decode).
 
-def bpf_encode(ops: List<&2, BpfOp>) -> List<&2, BpfRaw>:
+def bpf_encode.ref(ops: List<&2, BpfOp>) -> List<&2, BpfRaw>:
   match ops:
     case Nil{}:
       Nil{}
     case Con{op, t}:
-      Con{BpfOp.encode(op), bpf_encode(t)}
+      Con{BpfOp.encode(op), bpf_encode.ref(t)}
+
+# the encoded instructions, last first, onto acc
+def bpf_encode.go(ops: List<&2, BpfOp>, acc: List<&2, BpfRaw>) -> List<&2, BpfRaw>:
+  match ops:
+    case Nil{}:
+      acc
+    case Con{op, t}:
+      bpf_encode.go(t, Con{BpfOp.encode(op), acc})
+
+def bpf_encode(ops: List<&2, BpfOp>) -> List<&2, BpfRaw>:
+  List.reverse(&2, BpfRaw, bpf_encode.go(ops, Nil{}))
 
 def bpf_decode.cons(m: Maybe<&2, BpfOp>, e: BpfError, rest: Result<&2, &2, BpfError, List<&2, BpfOp>>) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
   match m:
@@ -312,16 +328,44 @@ def bpf_decode.cons(m: Maybe<&2, BpfOp>, e: BpfError, rest: Result<&2, &2, BpfEr
         case Done{ops}:
           Done{Con{op, ops}}
 
-def bpf_decode.go(rs: List<&2, BpfRaw>, +pc: Nat) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
+def bpf_decode.ref.go(rs: List<&2, BpfRaw>, +pc: Nat) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
   match rs:
     case Nil{}:
       Done{Nil{}}
     case Con{+r, t}:
-      bpf_decode.cons(BpfRaw.decode(r), BpfErrBadCode{pc, BpfRaw.code(r)}, bpf_decode.go(t, 1n+pc))
+      bpf_decode.cons(BpfRaw.decode(r), BpfErrBadCode{pc, BpfRaw.code(r)}, bpf_decode.ref.go(t, 1n+pc))
+
+def bpf_decode.ref(rs: List<&2, BpfRaw>) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
+  bpf_decode.ref.go(rs, 0n)
+
+# one decoded instruction pushed onto the instructions so far (last first)
+def bpf_decode.push(m: Maybe<&2, BpfOp>, e: BpfError, acc: List<&2, BpfOp>) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
+  match m:
+    case None{}:
+      Fail{e}
+    case Some{op}:
+      Done{Con{op, acc}}
+
+# a: the instructions before pc, last first, or the first failure; the loop
+# stops at the instruction after a failure
+def bpf_decode.go(rs: List<&2, BpfRaw>, +pc: Nat, a: Result<&2, &2, BpfError, List<&2, BpfOp>>) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
+  match rs:
+    case Nil{}:
+      match a:
+        case Fail{e}:
+          Fail{e}
+        case Done{acc}:
+          Done{List.reverse(&2, BpfOp, acc)}
+    case Con{+r, t}:
+      match a:
+        case Fail{e}:
+          Fail{e}
+        case Done{acc}:
+          bpf_decode.go(t, 1n+pc, bpf_decode.push(BpfRaw.decode(r), BpfErrBadCode{pc, BpfRaw.code(r)}, acc))
 
 # every instruction decoded, or the first one that is not classic BPF
 def bpf_decode(rs: List<&2, BpfRaw>) -> Result<&2, &2, BpfError, List<&2, BpfOp>>:
-  bpf_decode.go(rs, 0n)
+  bpf_decode.go(rs, 0n, Done{Nil{}})
 
 # Stored programs: 8 bytes per instruction, in the given byte order
 
@@ -336,12 +380,16 @@ def BpfRaw.to_octets(order: BpfOrder, r: BpfRaw) -> B.Octets:
         case BpfRaw{code, jt, jf, k}:
           B.Octets.concat([B.Octets.be16(code), B.Octets.of_list([jt, jf]), B.Octets.be32(k)])
 
-def bpf_to_octets(+order: BpfOrder, rs: List<&2, BpfRaw>) -> B.Octets:
+# each instruction's 8 bytes, last first, onto acc
+def bpf_to_octets.go(rs: List<&2, BpfRaw>, +order: BpfOrder, acc: List<&2, B.Octets>) -> List<&2, B.Octets>:
   match rs:
     case Nil{}:
-      B.Octets.empty()
+      acc
     case Con{r, t}:
-      B.Octets.append(BpfRaw.to_octets(order, r), bpf_to_octets(order, t))
+      bpf_to_octets.go(t, order, Con{BpfRaw.to_octets(order, r), acc})
+
+def bpf_to_octets(+order: BpfOrder, rs: List<&2, BpfRaw>) -> B.Octets:
+  B.Octets.concat(List.reverse(&2, B.Octets, bpf_to_octets.go(rs, order, Nil{})))
 
 def bpf_field(m: Maybe<&2, U32>) -> U32:
   Maybe.default(&2, U32, m, 0)
@@ -353,17 +401,18 @@ def BpfRaw.of_octets(order: BpfOrder, +o: B.Octets) -> BpfRaw:
     case BpfBig{}:
       BpfRaw{bpf_field(B.Octets.be16_at(o, 0n)), bpf_field(B.Octets.at(o, 2n)), bpf_field(B.Octets.at(o, 3n)), bpf_field(B.Octets.be32_at(o, 4n))}
 
-def bpf_of_octets.go(n: Nat, +order: BpfOrder, +o: B.Octets) -> List<&2, BpfRaw>:
+# the next n instructions, onto acc (last first), then all of them in order
+def bpf_of_octets.go(n: Nat, +order: BpfOrder, +o: B.Octets, acc: List<&2, BpfRaw>) -> List<&2, BpfRaw>:
   match n:
     case 0n:
-      Nil{}
+      List.reverse(&2, BpfRaw, acc)
     case 1n+p:
-      Con{BpfRaw.of_octets(order, o), bpf_of_octets.go(p, order, B.Octets.drop(8n, o))}
+      bpf_of_octets.go(p, order, B.Octets.drop(8n, o), Con{BpfRaw.of_octets(order, B.Octets.take(8n, o)), acc})
 
 def bpf_of_octets.rem(r: Nat, q: Nat, +order: BpfOrder, +o: B.Octets, +len: Nat) -> Result<&2, &2, BpfError, List<&2, BpfRaw>>:
   match r:
     case 0n:
-      Done{bpf_of_octets.go(q, order, o)}
+      Done{bpf_of_octets.go(q, order, o, Nil{})}
     case 1n+p:
       Fail{BpfErrTruncated{len}}
 
@@ -371,10 +420,29 @@ def bpf_of_octets.fin(+order: BpfOrder, +o: B.Octets, +len: Nat, qr: Nat & Nat) 
   (q, r) = qr
   bpf_of_octets.rem(r, q, order, o, len)
 
-# a stored program's instructions; its length must be a multiple of 8
-def bpf_of_octets(+order: BpfOrder, +o: B.Octets) -> Result<&2, &2, BpfError, List<&2, BpfRaw>>:
-  +len = B.Octets.len(o)
-  bpf_of_octets.fin(order, o, len, Nat.divmod(len, 8n))
+# over: the input's byte at offset max, if it has one
+def bpf_of_octets.fits(over: Maybe<&2, U32>, max: Nat, +order: BpfOrder, +o: B.Octets) -> Result<&2, &2, BpfError, List<&2, BpfRaw>>:
+  match over:
+    case Some{b}:
+      Fail{BpfErrStoredTooLong{max}}
+    case None{}:
+      +len = B.Octets.len(o)
+      bpf_of_octets.fin(order, o, len, Nat.divmod(len, 8n))
+
+# 8 * BPF_MAXINSNS: the bytes of the longest program validation accepts by
+# default (LAWS.bend: octets_max_default ties it to bpf_maxinsns)
+def bpf_octets_max() -> Nat:
+  32768n
+
+# a stored program's instructions: at most max bytes, a multiple of 8. The
+# limit is checked first, by looking for the byte at offset max, so a longer
+# input costs max steps whatever its length
+def bpf_of_octets_with(+max: Nat, +order: BpfOrder, +o: B.Octets) -> Result<&2, &2, BpfError, List<&2, BpfRaw>>:
+  bpf_of_octets.fits(B.Octets.at(o, max), max, order, o)
+
+# the same, with the default limit, bpf_octets_max()
+def bpf_of_octets(+order: BpfOrder, o: B.Octets) -> Result<&2, &2, BpfError, List<&2, BpfRaw>>:
+  bpf_of_octets_with(bpf_octets_max(), order, o)
 
 # Text
 
@@ -384,6 +452,8 @@ def BpfError.show(e: BpfError) -> String:
       "bad opcode " ++ U32.show(code) ++ " at " ++ Nat.show(pc)
     case BpfErrTruncated{len}:
       "truncated program of " ++ Nat.show(len) ++ " bytes"
+    case BpfErrStoredTooLong{max}:
+      "stored program over " ++ Nat.show(max) ++ " bytes"
     case BpfErrEmpty{}:
       "empty program"
     case BpfErrTooLong{len}:

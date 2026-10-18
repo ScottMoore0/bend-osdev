@@ -109,12 +109,13 @@ def big.block(+j: U32, last: Bool, acc: List<&2, I.BpfRaw>) -> List<&2, I.BpfRaw
   +m = U32.mod(j, 16)
   Con{I.bpf_stmt(32, U32.mod(U32.mul(4, j), 65532)), Con{I.bpf_stmt(4, j), Con{I.bpf_stmt(2, m), Con{I.bpf_stmt(97, m), Con{I.bpf_stmt(1, U32.mod(U32.mul(j, 7), 65000)), Con{I.bpf_stmt(80, 3), Con{I.bpf_jump(21, j, 0, 0), Con{big.last(last), acc}}}}}}}}
 
-def big.prog(n: Nat, +j: U32, acc: List<&2, I.BpfRaw>) -> List<&2, I.BpfRaw>:
+# blocks 0 to j, the last ending in ret a (top is the last block's j)
+def big.prog(n: Nat, +j: U32, +top: U32, acc: List<&2, I.BpfRaw>) -> List<&2, I.BpfRaw>:
   match n:
     case 0n:
       acc
     case 1n+p:
-      big.prog(p, U32.sub(j, 1), big.block(j, U32.is_eq(j, 511), acc))
+      big.prog(p, U32.sub(j, 1), top, big.block(j, U32.is_eq(j, top), acc))
 
 def big.packet(n: Nat, +s: U32, acc: List<&2, U32>) -> List<&2, U32>:
   match n:
@@ -131,6 +132,13 @@ def big.run(r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, pk: B.Octets) -> S
     case Fail{e}:
       "error: " ++ I.BpfError.show(e)
 
+def big.prep(r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>) -> Result<&2, &2, I.BpfError, Unit>:
+  match r:
+    case Done{ops}:
+      Done{Unit{}}
+    case Fail{e}:
+      Fail{e}
+
 def big.read(r: Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>, pk: B.Octets) -> String:
   match r:
     case Done{raws}:
@@ -138,8 +146,19 @@ def big.read(r: Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>, pk: B.Octets) ->
     case Fail{e}:
       "error: " ++ I.BpfError.show(e)
 
+# Untrusted input of 32768 instructions (256 KB): refused by bpf_of_octets
+# at its default limit (8 * BPF_MAXINSNS bytes) before the rest is read, and,
+# read with a higher limit, decoded and refused by validation as too long
+def huge.read(r: Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>) -> String:
+  match r:
+    case Done{raws}:
+      show_ok(big.prep(V.bpf_prepare(V.bpf_maxinsns(), raws)))
+    case Fail{e}:
+      "error: " ++ I.BpfError.show(e)
+
 def main() -> IO(Unit):
-  +big = I.bpf_to_octets(I.BpfBig{}, big.prog(512n, 511, Nil{}))
+  +big = I.bpf_to_octets(I.BpfBig{}, big.prog(512n, 511, 511, Nil{}))
+  +huge = I.bpf_to_octets(I.BpfLittle{}, big.prog(4096n, 4095, 4095, Nil{}))
   do IO<Unit>:
     IO.print("rarp " ++ show_run(run_raw(pkt_rarp(), rarp())) ++ " " ++ show_run(run_raw(pkt_arp(), rarp())))
     IO.print("hosts " ++ pkt_run(pkt_ip([128, 3, 112, 15], [128, 3, 112, 35]), hosts()) ++ " " ++ pkt_run(pkt_ip([128, 3, 112, 35], [128, 3, 112, 15]), hosts()) ++ " " ++ pkt_run(pkt_ip([128, 3, 112, 15], [10, 0, 0, 1]), hosts()) ++ " " ++ pkt_run(pkt_arp(), hosts()))
@@ -157,6 +176,7 @@ def main() -> IO(Unit):
     IO.print("stack " ++ show_act(S.seccomp_eval([deny(39, 1), deny(39, 2), deny(110, 3)], S.seccomp_order(), sc_call(39, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([deny(39, 1), ret_only(S.SeccompTrap{5}), deny(110, 3)], S.seccomp_order(), sc_call(39, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([deny(39, 1), deny(110, 3)], S.seccomp_order(), sc_call(110, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([], S.seccomp_order(), sc_call(110, S.seccomp_arch_x86_64()))))
     IO.print("action " ++ S.SeccompAction.show(S.SeccompAction.of_u32(196613)) ++ " " ++ S.SeccompAction.show(S.SeccompAction.of_u32(65536)) ++ " " ++ S.SeccompAction.show(S.SeccompAction.of_u32(0)) ++ " " ++ U32.show(S.SeccompAction.to_u32(S.SeccompErrno{65549})))
     IO.print("big " ++ Nat.show(B.Octets.len(big)) ++ " bytes, answer " ++ big.read(I.bpf_of_octets(I.BpfBig{}, big), B.Octets.of_list(big.packet(65536n, 7, Nil{}))))
+    IO.print("huge " ++ Nat.show(B.Octets.len(huge)) ++ " bytes: " ++ huge.read(I.bpf_of_octets(I.BpfLittle{}, huge)) ++ "; with a limit of 1 MB: " ++ huge.read(I.bpf_of_octets_with(1048576n, I.BpfLittle{}, huge)))
 
 #|rarp 42 0
 #|hosts 4294967295 4294967295 0 0
@@ -174,3 +194,4 @@ def main() -> IO(Unit):
 #|stack ERRNO(1) TRAP(5) ERRNO(3) ALLOW
 #|action TRAP(5) KILL_PROCESS KILL_THREAD 327693
 #|big 32768 bytes, answer 180
+#|huge 262144 bytes: error: stored program over 32768 bytes; with a limit of 1 MB: error: program too long: 32768
