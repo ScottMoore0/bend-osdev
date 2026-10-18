@@ -1,11 +1,12 @@
 # bend-osdev-lz4, compression: the high-compression matcher (LZ4HC), a
 # hash-chain search whose depth the level sets.
 #
-# Written from the LZ4 Block Format Description (lz4_Block_format.md) and the
-# published description of LZ4HC's strategy (the LZ4 project's documentation:
-# LZ4HC writes ordinary LZ4 blocks, finding its matches through hash chains,
-# searched more deeply the higher the level, over levels 3 to 12). No LZ4
-# source was read; the depths below are this package's own.
+# Written from the LZ4 Block Format Description (lz4_Block_format.md) and
+# the LZ4 project's documentation of LZ4HC (README.md cites it): LZ4HC writes
+# ordinary LZ4 blocks, searching harder for matches, at levels 3 to 12 (9
+# recommended, above 12 the same as 12). How it searches is not documented;
+# the hash chains, their table sizes and each level's depth, nice length and
+# laziness below are this package's own. No LZ4 source was read.
 #
 # Every position goes into two tables: a head table, keyed by a 15-bit hash
 # of the next four bytes, holds the latest position with that hash; a chain
@@ -33,7 +34,7 @@ import ./seq.bend as S
 type Lz4HcParams is Data:
   Lz4HcParams{depth: U32, nice: U32, lazy: Bool}
 
-# LZ4HC's documented levels: 3 to 12, 9 by default
+# LZ4HC's documented levels: 3 to 12; 9, the recommended one, by default
 def lz4hc_level_min() -> U32:
   3
 

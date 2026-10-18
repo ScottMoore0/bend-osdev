@@ -8,15 +8,47 @@ decode back to their input, which is proved for every input.
 
 Written from the LZ4 project's specifications (BSD-licensed documentation):
 
-* the LZ4 Block Format Description (`lz4_Block_format.md`);
-* the LZ4 Frame Format Description (`lz4_Frame_format.md`);
-* for LZ4HC, the LZ4 project's published description of its strategy: the
-  output is the ordinary block format, the matches are found through hash
-  chains searched more deeply the higher the level, and the levels run from
-  3 to 12, 9 being the recommended one and those above 12 the same as 12 (the
-  `lz4` tool's help, `lz4 -H`, and its manual, lz4(1)). No LZ4 source was
-  read, for LZ4HC or anything else; the depths each level sets are this
-  package's own.
+* the LZ4 Block Format Description, `doc/lz4_Block_format.md`
+  (<https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md>): the
+  sequences ("Compressed block format"), the end-of-block rules ("End of
+  block conditions": the last 5 bytes are literals, the last match starts 12
+  bytes or more before the end), and, under "Implementation notes",
+  "Compression techniques": the format makes no assumption about how a
+  compressor searches for and selects matches;
+* the LZ4 Frame Format Description, `doc/lz4_Frame_format.md`, version
+  1.6.4 (<https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md>):
+  the frame, its descriptor, data blocks, skippable frames;
+* for LZ4HC, documentation only (no LZ4 source was read, for LZ4HC or
+  anything else):
+  * the lz4 README (<https://github.com/lz4/lz4/blob/dev/README.md>): LZ4_HC
+    is a high-compression derivative, trading CPU time for compression
+    ratio, with the same decompression speed;
+  * the lz4(1) manual, lz4 1.10.0
+    (<https://manpages.debian.org/unstable/lz4/lz4.1.en.html>), "Operation
+    modifiers": `-#` takes levels 1 to 12, values above 12 are the same as
+    12, 9 is the recommended level for high compression, and `--best` is
+    12;
+  * the LZ4 frame API manual, `doc/lz4frame_manual.html`
+    (<https://github.com/lz4/lz4/blob/dev/doc/lz4frame_manual.html>,
+    `LZ4F_preferences_t`): levels above the maximum count as the maximum,
+    currently 12;
+  * the `lz4` tool's own help, `lz4 -H` (1.9.4, observed as a black box):
+    "-0 ... -2" are fast compression, all identical, and "-3 ... -12" high
+    compression;
+  * Yann Collet, "LZ4 explained" (RealTime Data Compression, 2011-05-26,
+    <http://fastcompression.blogspot.com/2011/05/lz4-explained.html>): there
+    is no restriction on how matches are found (full search with hash
+    chains, MMC or BSTs, a fast scan), and LZ4-HC keeps full format
+    compatibility.
+
+  So the documents fix LZ4HC's output format (ordinary blocks), its levels
+  (3 to 12 are high compression, 9 recommended, above 12 the same as 12)
+  and that it searches harder for matches. They do not fix how: the
+  hash-chain search here, its table sizes (a 2^15-slot head table, a
+  65536-slot chain table) and every level's `depth`, `nice` and `lazy` (the
+  table under LZ4HC below) are this package's own choices, as is mapping a
+  level below 3 to 3 (the tool's levels 1 and 2 are its fast mode, which is
+  `Lz4MatchFast` here).
 
 Checksums are XXH32 (seed 0), from `bend-kit-hash@0.2.0.0`. The reference
 test (`ref/gen.py`) has its own XXH32, written from the xxHash specification
@@ -159,10 +191,10 @@ interface. `Lz4Writer` is opaque. `Lz4FrameOptions` gained its last field,
   `block_compress_with` checks every block by decoding it, whatever the
   matcher wrote, so the proof is the two lines `lz4hc_round_trip`'s is; its
   quality needs the differential test.
-* **LZ4HC's tables** are fixed by the format rather than by taste: the chain
-  table is the 64 KB window, and the head table's 15 bits follow the
-  published description; both are inside `hc.bend`, so a different hash or
-  table size changes that file alone.
+* **LZ4HC's tables:** the chain table's 65536 slots are the 64 KB window the
+  format allows offsets to reach; the head table's 15 bits are this
+  package's choice. Both are inside `hc.bend`, so a different hash or table
+  size changes that file alone.
 * **Speed:** `block_compress` decodes every block it writes, to check it;
   `block_compress_unchecked` skips that, without the law. The decoder is
   written to be proved about: it keeps its output as a reversed list, and a
