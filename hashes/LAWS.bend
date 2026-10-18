@@ -401,26 +401,26 @@ law michael_mic_length:
 law michael_short_key:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, Unit, k => Unit{}, MI.HsMichael.key(B.Octets.zeros(7n))) == Fail{Hs.HsBadKeyLength{7n}} : Result<&2, &2, Hs.HsError, Unit>}
 
-# Michael (IEEE 802.11i): the standard's test vector 1 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 1 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_1:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("")), MI.HsMichael.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0]))) == Done{B.Octets.of_list([130, 146, 92, 28, 161, 209, 48, 184])} : Result<&2, &2, Hs.HsError, B.Octets>}
 
-# Michael (IEEE 802.11i): the standard's test vector 2 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 2 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_2:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("M")), MI.HsMichael.key(B.Octets.of_list([130, 146, 92, 28, 161, 209, 48, 184]))) == Done{B.Octets.of_list([67, 71, 33, 202, 64, 99, 155, 63])} : Result<&2, &2, Hs.HsError, B.Octets>}
 
-# Michael (IEEE 802.11i): the standard's test vector 3 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 3 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_3:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("Mi")), MI.HsMichael.key(B.Octets.of_list([67, 71, 33, 202, 64, 99, 155, 63]))) == Done{B.Octets.of_list([232, 249, 190, 202, 233, 126, 93, 41])} : Result<&2, &2, Hs.HsError, B.Octets>}
 
-# Michael (IEEE 802.11i): the standard's test vector 4 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 4 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_4:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("Mic")), MI.HsMichael.key(B.Octets.of_list([232, 249, 190, 202, 233, 126, 93, 41]))) == Done{B.Octets.of_list([144, 3, 143, 198, 207, 19, 193, 219])} : Result<&2, &2, Hs.HsError, B.Octets>}
 
-# Michael (IEEE 802.11i): the standard's test vector 5 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 5 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_5:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("Mich")), MI.HsMichael.key(B.Octets.of_list([144, 3, 143, 198, 207, 19, 193, 219]))) == Done{B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134])} : Result<&2, &2, Hs.HsError, B.Octets>}
 
-# Michael (IEEE 802.11i): the standard's test vector 6 (each key the previous tag)
+# Michael (IEEE 802.11i): test vector 6 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_6:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("Michael")), MI.HsMichael.key(B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134]))) == Done{B.Octets.of_list([10, 148, 43, 18, 78, 202, 165, 70])} : Result<&2, &2, Hs.HsError, B.Octets>}

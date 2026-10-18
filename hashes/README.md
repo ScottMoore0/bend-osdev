@@ -36,11 +36,36 @@ Written from the public specifications only; no GPL source was read.
   34.11-2012: Hash Function* (August 2013): sections 6 (Pi', tau, A, C_1 to
   C_12), 7 (X, S, P, L), 8 (g_N), 9 (the procedure) and 10 (examples 1 and
   2, with their intermediate values).
-* **Michael:** IEEE Std 802.11i-2004, clause 8.3.2.3 (TKIP's MIC), as
-  carried into IEEE Std 802.11-2020, 12.5.2.3, and the standard's six
-  Michael test vectors (each key the previous tag). The clause numbers were
-  not checked against a copy of the standard here; the algorithm and the
-  vectors were (the six chained vectors and `ref/model.py` agree).
+* **Michael:** defined by IEEE Std 802.11i-2004 (TKIP's MIC), whose Annex
+  H.2 holds a Michael reference implementation and test vectors (so says
+  the Wi-Fi Alliance's *Wi-Fi Protected Access (WPA): Enhanced Security
+  Implementation Based on IEEE P802.11i standard*, version 3.1, August
+  2004, Appendix B, https://www.wi-fi.org/system/files/WPA_80211_v3_1_090922.pdf). No copy of 802.11i or of a
+  later 802.11 edition could be read here (the copies found were
+  unreachable, refused the fetch, or were larger than the fetch limit), so
+  the algorithm was checked instead against two published descriptions:
+  A. Wool, "A Note on the Fragility of the 'Michael' Message Integrity
+  Code", *IEEE Transactions on Wireless Communications* 3(5), pp.
+  1459–1462, September 2004, section II-B and Fig. 1; and J. Huang, J.
+  Seberry, W. Susilo and M. Bunder, "Security Analysis of Michael: the IEEE
+  802.11i Message Integrity Code", EUC 2005 Workshops, LNCS 3823, pp.
+  423–432, section 2, Algorithms 2.1 and 2.2 and Fig. 2
+  (https://documents.uow.edu.au/~jennie/WEB/WEB05/Michael.pdf). Both agree with
+  `michael.bend`: the key as two 32-bit words (K0, K1); the message padded
+  with 0x5a and four to seven zero bytes to a multiple of four; per word
+  l ^= M_i, then b(l, r); b as R ^= L <<< 17, L += R, R ^= XSWAP(L),
+  L += R, R ^= L <<< 3, L += R, R ^= L >>> 2, L += R, with XSWAP(ABCD) =
+  BADC; the tag (l, r). **Neither states the byte order** (key bytes into
+  K0 and K1, message bytes into words, the tag's bytes): the little-endian
+  order used here is not checked against a published source.
+  **The six test vectors are unverified.** No published copy of them could
+  be read; they were written from memory (as the standard's chained
+  vectors: key 0, message ""; then each key the previous tag, messages "M",
+  "Mi", "Mic", "Mich", "Michael"), and `ref/model.py` was written from the
+  same memory, so the model's agreement with them is not independent
+  evidence. They are laws (`michael_vector_1` to `_6`), which proves that
+  `michael.bend` computes those values, not that the values are the
+  standard's.
 
 **SM3 and bend-collections.** bend-collections-laws-crypto@1.0.0.0 (an
 allowed hub package) was searched file by file for SM3 (and MD4, MD5,
@@ -157,7 +182,8 @@ suites (`md4_rfc1320_1` to `_7`, `md5_rfc1321_1` to `_7`); FIPS 180-4's
 two SHA-1 examples; the eight values of the RIPEMD-160 page (all but the
 million "a"); SM3's two examples; Streebog's LPS(0), and the first two
 compressions of RFC 6986's example 1 (g_N(h, m) and g_0(h, N), as the RFC
-prints them); Michael's six vectors and the refusal of a 7-byte key.
+prints them); Michael's six vectors (unverified against a published
+copy: Specifications above) and the refusal of a 7-byte key.
 
 **Not laws, and why.** Streebog's whole digests: one compression runs within
 `--verdict`'s kernel fuel and two do not, and a digest is at least three;
@@ -174,8 +200,8 @@ does).
   above through the public interface, the digest in one call and in three
   pieces through init/update/final, including Streebog's four RFC 6986
   digests and the intermediate values, a million bytes "a" through SHA-1
-  and RIPEMD-160, Michael's six vectors (whole and in pieces) and its short
-  key refused. The expected lines are the specifications' values.
+  and RIPEMD-160, Michael's six vectors (whole and in pieces; unverified,
+  above) and its short key refused. The expected lines are the specifications' values.
 * `ref/run.sh` (216 cases with the default seed): each hash on 27 message
   lengths (around every block boundary up to three blocks, and 1000 and
   4103 bytes), whole and cut into three pieces at random points, and
@@ -185,7 +211,8 @@ does).
     hashlib lacks it here), Streebog-256, Streebog-512 and Michael (Python
     has neither). **The model shares an author with the package**: it is
     checked first against every specification vector above (RFC 1320's,
-    RFC 6986's digests and intermediate values, the six Michael vectors),
+    RFC 6986's digests and intermediate values, and the six Michael
+    vectors, which are themselves unverified: Specifications above),
     and its MD5, SHA-1, RIPEMD-160 and SM3 against hashlib, but where
     Python lacks an algorithm the differential test is against that model
     alone. Its tables are `gen/spec.py`'s, so a wrong table would show in

@@ -4,7 +4,8 @@
 # the digest in one call, then the same message fed in three pieces
 # (init, three updates, final). Then Streebog's transformations on RFC
 # 6986's example 1, a million bytes "a" through SHA-1 and RIPEMD-160, and
-# Michael on the standard's six vectors (each key the previous tag) with a
+# Michael on the six vectors recalled as the standard's (each key the
+# previous tag; unverified, README.md) with a
 # short key refused. The values are the specifications' (the #| lines).
 import Base
 import ../bytes/bytes.bend as B

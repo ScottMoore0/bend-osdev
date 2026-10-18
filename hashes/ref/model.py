@@ -231,8 +231,11 @@ STB_EX1 = ["b383fc2eced4a574" * 8,
            "2754f6908cbbbac5d3ed0f522c50815c954135793fb1f5d905fee4736b3bdae2",
            "5c881fd924695cf196c2e4fec20d14b642026f2a0b1716ebaabb7067d4d59752"
            "3d2db69d6d3794622147a14f19a66e7f9037e1d662d34501a8901a5de7771d7c"]
-# IEEE 802.11i (802.11-2016, Annex J.4.4): the Michael test vectors, each
-# key the previous MIC
+# Michael's test vectors, each key the previous MIC: written from memory as
+# IEEE 802.11i's (its Annex H.2), NOT checked against a published copy (none
+# could be read; README.md, Specifications), and michael() above was
+# written from the same memory, so their agreement is no independent
+# evidence
 MICHAEL_V = [("0000000000000000", b"", "82925c1ca1d130b8"), ("82925c1ca1d130b8", b"M", "434721ca40639b3f"),
              ("434721ca40639b3f", b"Mi", "e8f9becae97e5d29"), ("e8f9becae97e5d29", b"Mic", "90038fc6cf13c1db"),
              ("90038fc6cf13c1db", b"Mich", "d55e100510128986"), ("d55e100510128986", b"Michael", "0a942b124ecaa546")]

@@ -44,7 +44,11 @@ Written from the public specifications only:
   for HMAC-MD5 and HMAC-SHA-1* (1997), test cases 1 and 2.
 * **The hashes package's hashes and Michael:** the specifications
   hashes/README.md cites (RFC 1320, RFC 1321, FIPS 180-4, the RIPEMD-160
-  paper, GB/T 32905, RFC 6986, IEEE 802.11i).
+  paper, GB/T 32905, RFC 6986, IEEE 802.11i). Michael's algorithm is
+  checked against Wool (IEEE Trans. Wireless Commun. 3(5), 2004, Fig. 1)
+  and Huang, Seberry, Susilo and Bunder (LNCS 3823, 2005, section 2); its
+  byte order and its six test vectors are not checked against a published
+  copy of the standard, which could not be read (hashes/README.md).
 * **AEAD:** the shape of RFC 5116, *An Interface and Algorithms for
   Authenticated Encryption* (2008).
 * The instances follow their own packages' specifications (FIPS 197, FIPS
@@ -267,7 +271,7 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | HKDF over each hash above (HKDF-SHA-256 the named one) | KDF | the refusal of more than 255 digests (over CRC-32 and SHA-256) | RFC 5869 A.1 to A.3; length; vs cryptography's HKDF over SHA-256 and SHA-512, and RFC 5869 on Python's hmac over the CRCs |
 | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256, Streebog-512 (hashes; `Hs.HsMdState<C>`) | hash | streaming for every state, split, split3, length for every state (from hashes' laws, `gen/instances.py`'s `hs_row`s); their vectors in hashes | the specifications' vectors in hashes; one-shot and in pieces through the interface (check.bend); vs hashlib (MD5, SHA-1, RIPEMD-160, SM3) and hashes' models (MD4, Streebog) |
 | HMAC over each of those | MAC | accepts, agrees; streaming of HMAC's state and split (in pieces equals one call), for each | RFC 2202 test cases 1 and 2 for HMAC-MD5 and HMAC-SHA-1, in pieces with verify; HMAC over the others vs Python's hmac (over hashlib or hashes' models), keys of 0 to 100 bytes |
-| Michael (hashes; `Hs.HsW2`, `CrMichael.key`) | MAC | accepts (for every key and message), agrees (the named default verify), the refusal of a 16-byte key; the standard's sixth vector through `CrMac.compute_with` | the six vectors through the interface, verify accepting and refusing a changed tag, a 7-byte key refused; vs hashes' model |
+| Michael (hashes; `Hs.HsW2`, `CrMichael.key`) | MAC | accepts (for every key and message), agrees (the named default verify), the refusal of a 16-byte key; the sixth vector through `CrMac.compute_with` (the vectors are unverified against a published copy of 802.11i: hashes/README.md) | the six vectors through the interface, verify accepting and refusing a changed tag, a 7-byte key refused; vs hashes' model |
 | PBKDF2 over any MAC (`CrPbkdf2.pbkdf2`, `.derive`; PBKDF2-HMAC-SHA-256 and -SHA-1 the named ones) | KDF | length (a derivation that succeeds has the length asked, for every MAC and input); the stream's length and prefix laws (for every MAC and input); the refusal of 0 iterations; RFC 6070 test cases 1 and 2, the first 32 bytes of RFC 7914's c = 1 | RFC 6070 cases 1 to 3, 5 and 6 and RFC 7914's two in full (c = 80000 among them); PBKDF2 over HMAC-MD5 through the KDF interface; vs hashlib.pbkdf2_hmac over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3, and cryptography's PBKDF2HMAC for SHA-1 and SHA-256 |
 
 **CCM.** cipher-modes proves `ccm_round_trip` for every cipher, key, tag

@@ -289,7 +289,7 @@ def michael_laws():
     PROOFS.append("def Laws.michael_short_key():\n  {==}\n")
     for i, (k, m, v) in enumerate(model.MICHAEL_V, 1):
         res = "Result<&2, &2, Hs.HsError, B.Octets>"
-        law("michael_vector_%d" % i, "%s: the standard's test vector %d (each key the previous tag)" % (t, i), [],
+        law("michael_vector_%d" % i, "%s: test vector %d as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)" % (t, i), [],
             "{Result.map(&2, &2, Hs.HsError, %s, B.Octets, k => %s, MI.HsMichael.key(%s)) == Done{%s} : %s}"
             % (K, D(octets(m)), digest_lit(k), digest_lit(v), res))
         PROOFS.append("def Laws.michael_vector_%d():\n  {==}\n" % i)

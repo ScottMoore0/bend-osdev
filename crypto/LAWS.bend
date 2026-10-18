@@ -402,8 +402,9 @@ law hmac_sha256_rfc4231_2:
 
 # Michael as a MAC (inst_michael.bend): it accepts what it computes, for
 # every key and message (it uses the named default verify); a key of
-# another length than 8 bytes is refused; the standard's sixth test vector
-# through the MAC interface
+# another length than 8 bytes is refused; the sixth test vector recalled as
+# IEEE 802.11i's, through the MAC interface (not checked against a published
+# copy: hashes/README.md)
 law michael_accepts:
   for +k: Hs.HsW2
   for +m: B.Octets
