@@ -1,7 +1,7 @@
 # bend-osdev-lzo, the lzop file container, written from the lzop file-format
 # notes (the layout of a .lzo file: magic, header, blocks, checksums); no
 # lzop or LZO source code was read (see README.md for what each field rests
-# on, and what is not yet checked against the lzop tool).
+# on, and what was checked against the lzop tool).
 #
 # A file is a header, then blocks, then four zero bytes. All numbers are
 # big-endian.
@@ -278,6 +278,15 @@ type LzopWriteOptions is Data:
 def LzopWriteOptions.default() -> LzopWriteOptions:
   LzopWriteOptions{262144, True{}, False{}, False{}, False{}, False{}, 1, 1, B.Octets.empty(), 0, 0, C.LzoCompressOptions.default()}
 
+# the options as written: a checksum of the compressed bytes comes with the
+# same checksum of the uncompressed bytes (adler_c sets adler_d, crc_c sets
+# crc_d), since the lzop tool refuses a file whose flags ask for one
+# without the other
+def LzopWriteOptions.normal(opts: LzopWriteOptions) -> LzopWriteOptions:
+  match opts:
+    case LzopWriteOptions{bs, ad, cd, +ac, +cc, hc, method, level, name, mode, mtime, lzo}:
+      LzopWriteOptions{bs, Bool.or(ad, ac), Bool.or(cd, cc), ac, cc, hc, method, level, name, mode, mtime, lzo}
+
 def lzp.bit(on: Bool, v: U32) -> U32:
   match on:
     case True{}:
@@ -387,12 +396,13 @@ def lzp.flushed.bytes(r: LzopFlushed) -> List<&2, U32>:
 
 # The public interface: writing
 
-# an lzop file holding o
-def lzop_compress(+opts: LzopWriteOptions, o: B.Octets) -> B.Octets:
+# an lzop file holding o (written with LzopWriteOptions.normal(opts))
+def lzop_compress(opts: LzopWriteOptions, o: B.Octets) -> B.Octets:
+  +n = LzopWriteOptions.normal(opts)
   +xs = B.Octets.to_list(o)
-  +bsz = lzp.bsize(opts)
-  +body = lzp.flushed.bytes(lzp.blocks(1n+B.len.fast(xs), lzp.split.go(bsz, xs, Nil{}), True{}, True{}, opts, bsz, Nil{}))
-  B.Octets.of_list(B.append.fast(lzp.whead(opts), B.append.fast(body, [0, 0, 0, 0])))
+  +bsz = lzp.bsize(n)
+  +body = lzp.flushed.bytes(lzp.blocks(1n+B.len.fast(xs), lzp.split.go(bsz, xs, Nil{}), True{}, True{}, n, bsz, Nil{}))
+  B.Octets.of_list(B.append.fast(lzp.whead(n), B.append.fast(body, [0, 0, 0, 0])))
 
 # Streaming: start, then feed the content in pieces, then finish; each
 # answers the file's next bytes. Blocks are independent, and their
@@ -405,8 +415,9 @@ type LzopWriter is Data:
 type LzopWritten is Data:
   LzopWritten{writer: LzopWriter, bytes: B.Octets}
 
-def lzop_start(+opts: LzopWriteOptions) -> LzopWritten:
-  LzopWritten{LzopWriter{opts, Nil{}}, B.Octets.of_list(lzp.whead(opts))}
+def lzop_start(opts: LzopWriteOptions) -> LzopWritten:
+  +n = LzopWriteOptions.normal(opts)
+  LzopWritten{LzopWriter{n, Nil{}}, B.Octets.of_list(lzp.whead(n))}
 
 def lzp.fed(r: LzopFlushed, opts: LzopWriteOptions) -> LzopWritten:
   match r:

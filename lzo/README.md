@@ -18,8 +18,9 @@ document says it is "not a specification". The package follows these
 documents, and only these. There was no network while it was written, so it
 was written from what its author knows of their content (they could not be
 re-read while writing); the reference test (below) checks it against a
-second implementation of the same reading, by the same author, and will
-check it against the lzop tool once that is installed.
+second implementation of the same reading, by the same author, and against
+the lzop tool (1.04, run as a black box: its files and its answers, never
+its source).
 
 1. **The Linux kernel's `Documentation/staging/lzo.rst`**, "LZO stream format
    as understood by Linux's LZO decompressor" (a prose description of the
@@ -105,13 +106,22 @@ check it against the lzop tool once that is installed.
   always checked; block checksums when `verify` is set, the compressed
   bytes' before decompressing, the uncompressed bytes' after.
 * **What the writer records.** Version 0x1030, library version 0x2080,
-  version needed 0x0940, mtime high 0. These are choices, not yet checked
-  against `lzop -d`.
+  version needed 0x0940, mtime high 0. These are choices; `lzop -d` reads
+  the files.
+* **Checksums of the compressed bytes need the uncompressed ones.** The
+  format notes describe the four block checksum flags separately, but the
+  lzop tool refuses a file with 0x2 (Adler-32 of the compressed bytes)
+  and not 0x1, or 0x200 (CRC-32) and not 0x100: `lzop -d` and `lzop -t`
+  stop on an internal assertion. So the writer writes the uncompressed
+  bytes' checksum whenever the compressed bytes' is asked for
+  (`LzopWriteOptions.normal`: `adler_c` sets `adler_d`, `crc_c` sets
+  `crc_d`). The reader still accepts such files.
 
-**Not yet checked against the lzop tool.** The tool is not installed here,
-and nothing about the container has been observed from it. The container
-code rests on the format notes alone; `ref/run.sh` decodes the tool's files
-and has the tool decode the package's as soon as `lzop` is installed.
+**Checked against the lzop tool.** `ref/run.sh` decodes files the tool
+writes (`-1`, `-3`, `-7`, `-9`) and has `lzop -d` decode every file the
+package writes. That is how the checksum-flag rule above was found: before
+it, six of the package's files (asked for a compressed bytes' checksum
+alone) were refused by the tool.
 
 ## Files
 
@@ -158,9 +168,10 @@ answers `Result<&2, &2, LzoError, A>`.
 | `lzop_decompress(opts, src)` | the content of the lzop file `src` |
 | `LzopOptions{max, verify}`, `LzopOptions.default()` | the most bytes to produce (`U32`); whether to check the block checksums. Default: 64 MiB, checked |
 | `lzop_header(src)` | the header: `LzopHeader{version, lib_version, need, method, level, flags, mode, mtime_low, mtime_high, name}` |
-| `lzop_compress(opts, o)` | an lzop file holding `o` |
+| `lzop_compress(opts, o)` | an lzop file holding `o`, written with `LzopWriteOptions.normal(opts)` |
+| `LzopWriteOptions.normal(opts)` | the options as written: `adler_c` sets `adler_d`, `crc_c` sets `crc_d` (the lzop tool refuses a compressed bytes' checksum without the uncompressed bytes') |
 | `LzopWriteOptions{block_size, adler_d, crc_d, adler_c, crc_c, header_crc, method, level, name, mode, mtime, lzo}`, `LzopWriteOptions.default()` | where blocks are cut (1 to 64 MiB; else 256 KiB); which checksums to write (of the uncompressed and the compressed bytes; CRC-32 for the header); the method and level to record; the name, mode and mtime; the compressor's options. Default: 256 KiB blocks, Adler-32 of the uncompressed bytes, method 1, level 1, no name |
-| `lzop_start(opts)`, `lzop_feed(w, o)`, `lzop_finish(w)` | streaming writing: each answers the file's next bytes (`LzopWritten{writer, bytes}`, or the last bytes) |
+| `lzop_start(opts)`, `lzop_feed(w, o)`, `lzop_finish(w)` | streaming writing (with `LzopWriteOptions.normal(opts)`): each answers the file's next bytes (`LzopWritten{writer, bytes}`, or the last bytes) |
 | `lzop_stream(opts, pieces)` | the file the streaming writer gives for content fed in these pieces |
 
 ### Adler-32 (`adler32.bend`)
@@ -228,7 +239,7 @@ does not write M1 (which only pays for 2- and 3-byte matches). Matches are
 
 ## Laws
 
-`LAWS.bend` has 64 laws: 8 properties, 3 witnesses and 53 vectors.
+`LAWS.bend` has 65 laws: 8 properties, 3 witnesses and 54 vectors.
 
 **For every input** (properties, proved by induction):
 
@@ -270,7 +281,7 @@ fields' bit arithmetic followed for unknown bytes. `first_match_rejected`
 covers the case with no output, and vectors and the differential test the
 rest.
 
-**Vectors** (proved by computation; 53): a stream for each encoding the
+**Vectors** (proved by computation; 54): a stream for each encoding the
 kernel document describes, built by hand from its description (the
 first-byte runs of 1, 4 and 238 literals, the long literal run and its
 length bytes, M1 after a few literals and after many, M2 of both lengths,
@@ -286,8 +297,11 @@ and compressed; every checksum flag and a CRC-32 header; the header's
 fields; a bad header checksum, a bad block checksum, unverified, bad magic,
 a filter, a bad method, an old version, a block stored larger than it is,
 trailing bytes, a file cut short); the writer's empty file, its file with
-every checksum (the very bytes built by hand), and a streamed file read
-back.
+every checksum (the very bytes built by hand), a streamed file read back,
+and the header it writes when asked for the compressed bytes' checksums
+alone (flags 0x303: the uncompressed bytes' too;
+`lzop_write_compressed_checksums`, added on 2026-10-18 and marked DRAFT
+until the maintainer reviews it).
 
 A successful M4 needs more than 16 KiB of output, so the vectors cover it
 only as a failure (`first_m4`);
@@ -312,29 +326,32 @@ writer whose checksums come from Python's zlib. **It shares an author with
 this package**, so it checks the package against a second reading of the
 documents, not against LZO's reference implementation. When the `lzop`
 tool is installed, the test also decodes the tool's files (`-1`, `-3`,
-`-7`, `-9`) and has `lzop -d` decode every file the package writes.
+`-7`, `-9`) and has `lzop -d` decode every file the package writes; a file
+the tool refuses is reported with the tool's complaint.
 
 `ref/run.sh` (seed 2026) checks:
 
-* **decoding, 224 cases:** 42 streams written by `gen.py` (up to 20 KB, two
+* **decoding, 244 cases:** 42 streams written by `gen.py` (up to 20 KB, two
   with M4 distances), the output limit one byte below the size (6),
   streaming in random pieces, some corrupted (10), 110 corrupted streams
   (bytes changed, deleted, inserted or cut off: the package must answer
   exactly what the Python decoder answers, the same bytes or the same
   failure), 16 lzop files across the flags, methods, names and block sizes,
-  and 40 corrupted lzop files, verified or not;
+  20 files from the lzop tool (up to 12 KB, levels 1, 3, 7 and 9), and 40
+  corrupted lzop files of both kinds, verified or not;
 * **compression, 38 cases:** 26 streams (random, text, repetitive and mixed
   inputs up to 20 KB, over several hash sizes and distance limits), 9 lzop
   files over the writer's options and 3 streamed ones. Each must decode back
-  to its input with `gen.py`'s decoder (and `lzop -d`, when installed);
+  to its input with `gen.py`'s decoder, and the 12 lzop files with `lzop -d`
+  too;
   `lzo1x_compress_with` must equal `lzo1x_compress_unchecked` (no
   fallback); repetitive inputs must shrink to under a quarter.
 
-The run takes about 75 s (two native builds). Seeds 1 to 5 also pass
-(each with lzop missing: the tool's checks have not run).
+The run takes about 75 s (two native builds). Seeds 1 to 5 also pass,
+with the tool's checks.
 
 Without python3, `run.sh` exits 77 (a skip). Without the lzop tool it runs
-everything else and says so; **CI needs the apt package `lzop`** for the
+everything else and says so; CI installs the apt package `lzop` for the
 tool's checks.
 
 ## Speed and limits
@@ -369,8 +386,7 @@ hand (one run each), not in CI.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 224 decoding cases match and 38
-compressed streams and lzop files decode back (seeds 2026 and 1 to 5),
-`scripts/deps.sh` passes. The lzop tool is not installed, so nothing has
-been checked against it yet: the container rests on the format notes alone,
-and its interoperation with lzop is unverified until CI installs `lzop`.
+`check.bend` passes, `ref/run.sh` 244 decoding cases match (20 of them
+the lzop tool's files) and 38 compressed streams and lzop files decode back
+(the 12 lzop files through `lzop -d` 1.04 too; seeds 2026 and 1 to 5),
+`scripts/deps.sh` passes.

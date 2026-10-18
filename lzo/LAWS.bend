@@ -318,6 +318,13 @@ law lzop_write_empty:
 law lzop_write_every_checksum:
   {P.lzop_compress(P.LzopWriteOptions{262144, True{}, True{}, True{}, True{}, True{}, 1, 5, B.Octets.empty(), 0, 0, C.LzoCompressOptions.default()}, B.Octets.of_string("hello hello hello hello hello")) == B.Octets.of_list([137, 76, 90, 79, 0, 13, 10, 26, 10, 16, 48, 32, 128, 9, 64, 1, 5, 0, 0, 19, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 219, 254, 93, 0, 0, 0, 29, 0, 0, 0, 13, 163, 16, 10, 229, 56, 83, 210, 246, 24, 160, 2, 166, 162, 20, 181, 82, 23, 104, 101, 108, 108, 111, 32, 53, 20, 0, 17, 0, 0, 0, 0, 0, 0]) : B.Octets}
 
+# the writer asked for checksums of the compressed bytes only writes the
+# same checksums of the uncompressed bytes too (flags 0x303), as the lzop
+# tool needs (LzopWriteOptions.normal)
+# DRAFT: not yet reviewed by the maintainer
+law lzop_write_compressed_checksums:
+  {P.lzop_header(P.lzop_compress(P.LzopWriteOptions{262144, False{}, False{}, True{}, True{}, False{}, 1, 5, B.Octets.empty(), 0, 0, C.LzoCompressOptions.default()}, B.Octets.of_string("hello hello hello hello hello"))) == Done{P.LzopHeader{4144, 8320, 2368, 1, 5, 771, 0, 0, 0, B.Octets.empty()}} : Result<&2, &2, E.LzoError, P.LzopHeader>}
+
 # streamed in pieces, with 8-byte blocks, then read back
 law lzop_stream_round_trip:
   {P.lzop_decompress(P.LzopOptions.default(), P.lzop_stream(P.LzopWriteOptions{8, True{}, False{}, True{}, False{}, False{}, 1, 5, B.Octets.of_string("s"), 0, 0, C.LzoCompressOptions.default()}, [B.Octets.of_string("stream"), B.Octets.of_string("ed in three "), B.Octets.of_string("pieces, pieces, pieces")])) == Done{B.Octets.of_string("streamed in three pieces, pieces, pieces")} : Result<&2, &2, E.LzoError, B.Octets>}
