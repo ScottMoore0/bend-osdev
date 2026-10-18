@@ -72,23 +72,11 @@ def XzLzma2.dict_size.pick(ok: Bool, top: Bool, +b: U32) -> Maybe<&2, U32>:
 def XzLzma2.dict_size(+b: U32) -> Maybe<&2, U32>:
   XzLzma2.dict_size.pick(U32.is_le(b, 40), U32.is_eq(b, 40), b)
 
-# The dictionary array holds 2^k bytes for the least k with 2^k at least
-# need (k at most 31)
-def XzLzma2.depth.pick(small: Bool, +need: U32) -> Nat:
-  match small:
-    case True{}:
-      0n
-    case False{}:
-      1n+U32.log2(U32.sub(need, 1))
-
-def XzLzma2.depth(+need: U32) -> Nat:
-  XzLzma2.depth.pick(U32.is_le(need, 1), need)
-
 # A decoder for an LZMA2 stream with dictionary size dict_size, which may
 # output at most max_out bytes. The dictionary array is the smaller of the
 # two (and at most 2^31 bytes), so memory follows max_out as well.
 def XzLzma2.start.depth(+dict_size: U32, +max_out: U32) -> Nat:
-  XzLzma2.depth(U32.min(U32.min(dict_size, max_out), 2147483648))
+  L.XzLzma.dict_depth(U32.min(U32.min(dict_size, max_out), 2147483648))
 
 def XzLzma2.start.regs(+dict_size: U32, +k: Nat) -> L.XzLzRegs:
   L.XzLzRegs.start(U32.min(dict_size, U32.shln(1, k)))
@@ -142,33 +130,6 @@ def XzL2Ctl.maxdepth(+c: XzL2Ctl) -> Nat:
     case XzL2Ctl{need_reset, need_props, ended, room, consumed, depth, maxdepth}:
       maxdepth
 
-# The dictionary array grows (doubling at least) as the output does, up to
-# 2^maxdepth bytes. It grows only before positions wrap, so slot i keeps
-# position i.
-def XzLzma2.grow.copy(n: Nat, r: Array<U32> & U32, new: Array<U32>, +i: U32) -> Array<U32>:
-  match n:
-    case 0n:
-      (old, +v) = r
-      Array.set(U32, new, i, v)
-    case 1n+p:
-      (old, +v) = r
-      +j = U32.add(i, 1)
-      XzLzma2.grow.copy(p, Array.get(U32, old, j), Array.set(U32, new, i, v), j)
-
-def XzLzma2.grow.pick(more: Bool, dict: Array<U32>, +cur: Nat, +want: Nat) -> Array<U32>:
-  match more:
-    case True{}:
-      XzLzma2.grow.copy(U32.to_nat(U32.sub(U32.shln(1, cur), 1)), Array.get(U32, dict, 0), Array.new(U32, want, 0), 0)
-    case False{}:
-      dict
-
-# the depth for writing u more bytes at position pos
-def XzLzma2.want(+cur: Nat, +max: Nat, +pos: U32, +u: U32) -> Nat:
-  Nat.max(cur, Nat.min(max, XzLzma2.depth(U32.min(U32.add(pos, u), 2147483648))))
-
-def XzLzma2.grow(dict: Array<U32>, +cur: Nat, +want: Nat) -> Array<U32>:
-  XzLzma2.grow.pick(Nat.is_lt(cur, want), dict, cur, want)
-
 # Whether xs has at least n bytes
 def XzLzma2.has(n: Nat, xs: List<&2, U32>) -> Bool:
   match n:
@@ -213,9 +174,9 @@ def XzLzma2.raw.have(ok: Bool, +size: U32, +reset: Bool, +data: List<&2, U32>, +
       XzL2Wait{XzLzma2{probs, dict, regs, ctl, buf}, acc}
     case True{}:
       +regs2 = XzLzma2.dict_reset_if(reset, regs)
-      +nd = XzLzma2.want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), size)
+      +nd = L.XzLzma.dict_want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), size)
       +ctl2 = XzL2Ctl.chunk(ctl, Bool.or(XzL2Ctl.need_props(ctl), reset), Nat.add(3n, U32.to_nat(size)), size, nd)
-      XzLzma2.raw.done(L.XzLzma.copy_in(B.take.fast(U32.to_nat(size), data), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc), probs, ctl2, B.drop(U32.to_nat(size), data))
+      XzLzma2.raw.done(L.XzLzma.copy_in(B.take.fast(U32.to_nat(size), data), L.XzLzma.dict_grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc), probs, ctl2, B.drop(U32.to_nat(size), data))
 
 def XzLzma2.raw.room(over: Bool, +size: U32, +reset: Bool, +data: List<&2, U32>, +buf: List<&2, U32>, probs: Array<U32>, dict: Array<U32>, regs: L.XzLzRegs, +ctl: XzL2Ctl, acc: List<&2, U32>) -> XzL2Step:
   match over:
@@ -256,9 +217,9 @@ def XzLzma2.lz.have(ok: Bool, +mode: U32, +u: U32, +p: Nat, +hl: Nat, +data: Lis
     case True{}:
       +sreset = U32.is_ge(mode, 1)
       +regs2 = XzLzma2.state_reset_if(sreset, XzLzma2.dict_reset_if(U32.is_eq(mode, 3), regs))
-      +nd = XzLzma2.want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), u)
+      +nd = L.XzLzma.dict_want(XzL2Ctl.depth(ctl), XzL2Ctl.maxdepth(ctl), L.XzLzRegs.pos(regs2), u)
       +ctl2 = XzL2Ctl.chunk(ctl, False{}, Nat.add(hl, p), u, nd)
-      XzLzma2.lz.done(L.XzLzma.chunk(U32.to_nat(u), XzLzma2.probs_if(sreset, probs), XzLzma2.grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc, B.take.fast(p, data)), ctl2, B.drop(p, data))
+      XzLzma2.lz.done(L.XzLzma.chunk(U32.to_nat(u), XzLzma2.probs_if(sreset, probs), L.XzLzma.dict_grow(dict, XzL2Ctl.depth(ctl), nd), regs2, acc, B.take.fast(p, data)), ctl2, B.drop(p, data))
 
 def XzLzma2.lz.room(over: Bool, +mode: U32, +u: U32, +p: Nat, +hl: Nat, +data: List<&2, U32>, +buf: List<&2, U32>, probs: Array<U32>, dict: Array<U32>, regs: L.XzLzRegs, +ctl: XzL2Ctl, acc: List<&2, U32>) -> XzL2Step:
   match over:

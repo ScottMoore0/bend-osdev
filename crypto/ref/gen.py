@@ -2,8 +2,10 @@
 """Differential test cases for bend-osdev-crypto: every instance through its
 interface, against implementations outside this package.
 
-Writes ref/cases.bend (a Bend program printing each case through the
-interfaces) and ref/expected.txt (the same values from Python):
+Writes ref/cases00.bend, cases01.bend, ... (Bend programs printing the
+cases through the interfaces, CHUNK cases each, so that each one builds or
+runs within a check process's memory) and ref/expected.txt (the same values
+from Python, in the same order):
   * block ciphers, one block both ways: AES, DES, 3DES, SM4, Camellia through
     Python's cryptography (OpenSSL; DES as TripleDES with three equal keys);
     Serpent and Twofish through legacy-ciphers' ref/model.py (written from
@@ -55,6 +57,17 @@ interfaces) and ref/expected.txt (the same values from Python):
     interface, against this file's XCBC (checked on RFC 3566's vectors) and
     VMAC (checked on draft-krovetz-vmac-01's) over the cipher's block
     function, with verify accepting the tag and refusing it changed.
+  * the hashes package's hashes through the hash interface, one-shot and in
+    pieces, and HMAC over them: MD5, SHA-1, RIPEMD-160 and SM3 against
+    hashlib and hmac; MD4 and Streebog against hashes/ref/model.py (Python
+    lacks them here; that model shares an author with the package and is
+    checked against the specifications' vectors first) under Python's hmac;
+  * Michael through the MAC interface (the tag, verify of it and of it
+    changed) against hashes/ref/model.py;
+  * PBKDF2 over HMAC over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3 against
+    hashlib.pbkdf2_hmac, and over SHA-1 and SHA-256 against cryptography's
+    PBKDF2HMAC too, with iteration counts of 1 to 40 and outputs of 1 to
+    three blocks and more.
 This file's PCBC, LRW, CS3, XCBC and VMAC were written from the
 specifications by the author of this package's: where they are the only
 reference (no outside implementation has the mode or the cipher), they
@@ -66,12 +79,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(HERE, "..", "..", "legacy-ciphers", "ref"))
 import model as lcm  # noqa: E402
+import importlib.util  # noqa: E402
+_spec = importlib.util.spec_from_file_location("hsmodel", os.path.join(HERE, "..", "..", "hashes", "ref", "model.py"))
+hsm = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hsm)
 
 warnings.simplefilter("ignore")
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # noqa: E402
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM  # noqa: E402
 from cryptography.hazmat.primitives import cmac as ccmac, hashes  # noqa: E402
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF  # noqa: E402
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
 
 h = bytes.fromhex
 
@@ -441,6 +459,48 @@ HASHES = {
 SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512}
 
 
+def whole(fn, dsize, name):
+    """a hash of hashes/ref/model.py as a Python hash object (for hmac)"""
+    class Whole:
+        digest_size, block_size = dsize, 64
+
+        def __init__(self, data=b""):
+            self.m = bytes(data)
+
+        def update(self, d):
+            self.m += d
+
+        def digest(self):
+            return fn(self.m)
+
+        def copy(self):
+            return Whole(self.m)
+    Whole.name = name
+    return Whole
+
+
+def lib(name):
+    return lambda data=b"": hashlib.new(name, data)
+
+
+# the hashes package's hashes: (Python hash object, its source, Bend template
+# arguments)
+HS = {
+    "md4": (whole(hsm.md4, 16, "md4"), "hsmodel", "~Hs.HsMdState<Hs.HsW4>, ~64n, ~16n, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, ~HM4.HsMd4.digest"),
+    "md5": (hashlib.md5, "python", "~Hs.HsMdState<Hs.HsW4>, ~64n, ~16n, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, ~HM5.HsMd5.final, ~HM5.HsMd5.digest"),
+    "sha1": (hashlib.sha1, "python", "~Hs.HsMdState<Hs.HsW5>, ~64n, ~20n, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, ~HS1.HsSha1.final, ~HS1.HsSha1.digest"),
+    "ripemd160": (lib("ripemd160"), "python", "~Hs.HsMdState<Hs.HsW5>, ~64n, ~20n, ~HRM.HsRipemd160.init(), ~HRM.HsRipemd160.update, ~HRM.HsRipemd160.final, ~HRM.HsRipemd160.digest"),
+    "sm3": (lib("sm3"), "python", "~Hs.HsMdState<Hs.HsW8>, ~64n, ~32n, ~HSM.HsSm3.init(), ~HSM.HsSm3.update, ~HSM.HsSm3.final, ~HSM.HsSm3.digest"),
+    "streebog256": (whole(hsm.streebog256, 32, "streebog256"), "hsmodel",
+                    "~Hs.HsMdState<HST.HsStbCv>, ~64n, ~32n, ~HST.HsStreebog.init256(), ~HST.HsStreebog.update, ~HST.HsStreebog.final256, ~HST.HsStreebog.digest256"),
+    "streebog512": (whole(hsm.streebog512, 64, "streebog512"), "hsmodel",
+                    "~Hs.HsMdState<HST.HsStbCv>, ~64n, ~64n, ~HST.HsStreebog.init512(), ~HST.HsStreebog.update, ~HST.HsStreebog.final512, ~HST.HsStreebog.digest512"),
+}
+for _n in ["ripemd160", "sm3"]:
+    if _n not in hashlib.algorithms_available:
+        HS[_n] = (whole(getattr(hsm, _n), {"ripemd160": 20, "sm3": 32}[_n], _n), "hsmodel", HS[_n][2])
+
+
 def hkdf(H, ikm, salt, info, n):
     prk = hmac.new(salt or bytes(H.digest_size), ikm, H).digest()
     t, out, i = b"", b"", 1
@@ -453,6 +513,7 @@ def hkdf(H, ikm, salt, info, n):
 def self_checks(rng, rb):
     """this file's references against outside implementations and published
     values, before they judge the package"""
+    hsm.check_vectors()
     assert Crc32(b"123456789").digest().hex() == "cbf43926"
     assert Crc32c(b"123456789").digest().hex() == "e3069283"
     assert Crc64xz(b"123456789").digest().hex() == "995dc9bbdf1939fa"
@@ -517,6 +578,11 @@ def self_checks(rng, rb):
 
 KERNEL = set()  # the modes the kernel had (filled by self_checks)
 
+# cases per program: one program of every case outgrows a check process's
+# memory (its native build is killed, and the JavaScript lane then runs out
+# near 3 GB)
+CHUNK = 80
+
 HEADER = '''# Generated by ref/gen.py; do not edit. Every instance through its interface.
 import Base
 import ../../bytes/bytes.bend as B
@@ -561,6 +627,16 @@ import ../../legacy-ciphers/cast5.bend as C5
 import ../../legacy-ciphers/tea.bend as Te
 import ../../legacy-ciphers/xtea.bend as Xt
 import ../../legacy-ciphers/fcrypt.bend as Fc
+import ../inst_michael.bend as MIC
+import ../pbkdf2.bend as Pb
+import ../../hashes/hashes.bend as Hs
+import ../../hashes/md4.bend as HM4
+import ../../hashes/md5.bend as HM5
+import ../../hashes/sha1.bend as HS1
+import ../../hashes/ripemd160.bend as HRM
+import ../../hashes/sm3.bend as HSM
+import ../../hashes/streebog.bend as HST
+import ../../hashes/michael.bend as HMI
 
 def res(r: Result<&2, &2, Cr.CrError, B.Octets>) -> String:
   match r:
@@ -647,6 +723,10 @@ def hmac(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets ->
 
 def hkdf(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +ikm: B.Octets, +salt: B.Octets, +info: B.Octets, n: Nat) -> String:
   res(Hk.CrHkdf.derive(~bsize, ~dsize, ~digest, ikm, salt, info, n))
+
+# PBKDF2 over HMAC over a hash
+def pbkdf2(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +p: B.Octets, +salt: B.Octets, c: U32, n: Nat) -> String:
+  res(Pb.CrPbkdf2.pbkdf2(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~bsize, ~digest), ~Hm.CrHmac.mac(~digest), ~dsize, p, salt, c, n))
 '''
 
 
@@ -654,7 +734,7 @@ def main():
     rng = random.Random(int(sys.argv[1]) if len(sys.argv) > 1 else 2026)
     rb = lambda n: bytes(rng.randrange(256) for _ in range(n))
     self_checks(rng, rb)
-    lines, expect, counts = [], [], {"cryptography": 0, "model": 0, "python": 0, "openssl": 0, "kernel": 0}
+    lines, expect, counts = [], [], {"cryptography": 0, "model": 0, "python": 0, "openssl": 0, "kernel": 0, "hsmodel": 0}
 
     def case(name, k, call, want, src):
         lines.append('    IO.print("%s %d " ++ %s)' % (name, k, call))
@@ -806,12 +886,45 @@ def main():
                 want, src = hkdf(Hc, ikm, salt, info, n), "python"
             case("%s_hkdf" % name, i, "hkdf(%s, %s, %s, %s, %dn)" % (ht, o(ikm), o(salt), o(info), n), want.hex(), src)
 
-    with open(os.path.join(HERE, "cases.bend"), "w", newline="\n") as f:
-        f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines) + "\n")
+    for name, (Hc, src, ht) in HS.items():  # the hashes package's hashes, and HMAC over them
+        for i in range(4):
+            a, b = rb(rng.randrange(0, 90)), rb(rng.randrange(0, 90))
+            d = Hc(a + b).digest().hex()
+            case("%s_hash" % name, i, "hash(%s, %s, %s)" % (ht, o(a), o(b)), "%s %s" % (d, d), src)
+        for i in range(4):
+            key = rb([0, 20, 64, 100][i])
+            a, b = rb(rng.randrange(0, 70)), rb(rng.randrange(0, 70))
+            t = hmac.new(key, a + b, Hc).digest().hex()
+            case("%s_hmac" % name, i, "hmac(%s, %s, %s, %s)" % (ht, o(key), o(a), o(b)), "%s %s yes" % (t, t), src)
+    mt = "~Hs.HsW2, ~MIC.CrMichael.key, ~HMI.HsMichael.mic, ~MIC.CrMichael.verify"
+    for i in range(6):  # Michael
+        key, m = rb(8), rb([0, 1, 3, 4, 31, rng.randrange(5, 100)][i])
+        t = hsm.michael(key, m)
+        bad = bytes([t[0] ^ 1]) + t[1:]
+        case("michael_mac", i, "mac(%s, %s, %s, %s)" % (mt, o(key), o(m), o(bad)), "%s yes no" % t.hex(), "hsmodel")
+    for name in ["sha1", "sha256", "md5", "ripemd160", "sm3"]:  # PBKDF2
+        ht = HASHES["sha256"][1] if name == "sha256" else HS[name][2]
+        dsize = hashlib.new(name).digest_size
+        for i in range(3):
+            pw, salt = rb(rng.randrange(0, 80)), rb(rng.randrange(0, 20))
+            c, n = [1, 2, rng.randrange(3, 40)][i], [1, dsize + 1, rng.randrange(2 * dsize, 3 * dsize + 5)][i]
+            want = hashlib.pbkdf2_hmac(name, pw, salt, c, n)
+            src = "python"
+            if name in ("sha1", "sha256"):
+                assert PBKDF2HMAC({"sha1": hashes.SHA1, "sha256": hashes.SHA256}[name](), n, salt, c).derive(pw) == want
+                src = "cryptography"
+            case("%s_pbkdf2" % name, i, "pbkdf2(%s, %s, %s, %d, %dn)" % (ht, o(pw), o(salt), c, n), want.hex(), src)
+
+    for old in os.listdir(HERE):
+        if old.startswith("cases") and old.endswith(".bend"):
+            os.remove(os.path.join(HERE, old))
+    for j in range(0, len(lines), CHUNK):
+        with open(os.path.join(HERE, "cases%02d.bend" % (j // CHUNK)), "w", newline="\n") as f:
+            f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines[j:j + CHUNK]) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs)"
-          % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"]))
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
+          % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"], counts["hsmodel"]))
 
 
 if __name__ == "__main__":

@@ -56,6 +56,17 @@ import ./inst_ccm.bend as CC
 import ./inst_cmac.bend as CMI
 import ./inst_crc.bend as CR
 import ./inst_sha2.bend as SH
+import ../hashes/hashes.bend as Hs
+import ../hashes/md4.bend as HM4
+import ../hashes/md5.bend as HM5
+import ../hashes/sha1.bend as HS1
+import ../hashes/ripemd160.bend as HRM
+import ../hashes/sm3.bend as HSM
+import ../hashes/streebog.bend as HST
+import ../hashes/michael.bend as HMI
+import ./inst_michael.bend as MIC
+import ./pbkdf2.bend as Pb
+import ./inst_pbkdf2.bend as PbI
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha.bend as F256
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha512.bend as F512
 
@@ -428,6 +439,76 @@ law sha256_abc:
 # RFC 4231 test case 2: HMAC-SHA-256 with the key "Jefe"
 law hmac_sha256_rfc4231_2:
   {Hm.CrHmac.mac(~SH.CrSha2.sha256, Hm.CrHmac.key(~64n, ~SH.CrSha2.sha256, B.Octets.of_string("Jefe")), B.Octets.of_string("what do ya want for nothing?")) == B.Octets.of_list([91, 220, 193, 70, 191, 96, 117, 78, 106, 4, 36, 38, 8, 149, 117, 199, 90, 0, 63, 8, 157, 39, 57, 131, 157, 236, 88, 185, 100, 236, 56, 67]) : B.Octets}
+
+# Michael as a MAC (inst_michael.bend): it accepts what it computes, for
+# every key and message (it uses the named default verify); a key of
+# another length than 8 bytes is refused; the sixth test vector recalled as
+# IEEE 802.11i's, through the MAC interface (not checked against a published
+# copy: hashes/README.md)
+law michael_accepts:
+  for +k: Hs.HsW2
+  for +m: B.Octets
+  {MIC.CrMichael.verify(k, m, HMI.HsMichael.mic(k, m)) == True{} : Bool}
+
+law michael_key_length:
+  {Result.map(&2, &2, Cr.CrError, Hs.HsW2, Unit, k => Unit{}, MIC.CrMichael.key(B.Octets.zeros(16n))) == Fail{Cr.CrBadKeyLength{16n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+law michael_mac_vector:
+  {Mc.CrMac.compute_with(~Hs.HsW2, ~MIC.CrMichael.key, ~HMI.HsMichael.mic, B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134]), B.Octets.of_string("Michael")) == Done{B.Octets.of_list([10, 148, 43, 18, 78, 202, 165, 70])} : Result<&2, &2, Cr.CrError, B.Octets>}
+
+# PBKDF2 over any MAC (pbkdf2.bend), for every MAC, password, salt,
+# iteration count and length: a derivation that succeeds gives exactly the
+# length asked for (the KDF interface's length law); the unchecked stream
+# has that length, and a shorter stream is a prefix of a longer (the KDF
+# interface's prefix law)
+law pbkdf2_length:
+  for ~K: Data
+  for ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~hlen: Nat
+  for +p: B.Octets
+  for +salt: B.Octets
+  for +c: U32
+  for +n: Nat
+  {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Pb.CrPbkdf2.pbkdf2(~K, ~key, ~compute, ~hlen, p, salt, c, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Pb.CrPbkdf2.pbkdf2(~K, ~key, ~compute, ~hlen, p, salt, c, n)) : Result<&2, &2, Cr.CrError, Nat>}
+
+law pbkdf2_stream_length:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for +k: K
+  for +salt: B.Octets
+  for +c: U32
+  for +n: Nat
+  {B.Octets.len(Pb.CrPbkdf2.stream(~K, ~compute, k, salt, c, n)) == n : Nat}
+
+law pbkdf2_stream_prefix:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for +k: K
+  for +salt: B.Octets
+  for +c: U32
+  for +n: Nat
+  for +j: Nat
+  {B.Octets.take(n, Pb.CrPbkdf2.stream(~K, ~compute, k, salt, c, Nat.add(n, j))) == Pb.CrPbkdf2.stream(~K, ~compute, k, salt, c, n) : B.Octets}
+
+# PBKDF2 refuses an iteration count of 0 (over HMAC-SHA-1)
+law pbkdf2_zero_iterations:
+  {Result.map(&2, &2, Cr.CrError, B.Octets, Unit, o => Unit{}, PbI.CrPbkdf2.hmac_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 0, 20n)) == Fail{Cr.CrTooShort{0n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# RFC 6070 test cases 1 and 2: PBKDF2-HMAC-SHA1, P = "password",
+# S = "salt", c = 1 and 2, dkLen = 20
+law pbkdf2_hmac_sha1_rfc6070_1:
+  {PbI.CrPbkdf2.hmac_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 1, 20n) == Done{B.Octets.of_list([12, 96, 200, 15, 150, 31, 14, 113, 243, 169, 181, 36, 175, 96, 18, 6, 47, 224, 55, 166])} : Result<&2, &2, Cr.CrError, B.Octets>}
+
+law pbkdf2_hmac_sha1_rfc6070_2:
+  {PbI.CrPbkdf2.hmac_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 2, 20n) == Done{B.Octets.of_list([234, 108, 1, 77, 199, 45, 111, 140, 205, 30, 217, 42, 206, 29, 65, 240, 216, 222, 137, 87])} : Result<&2, &2, Cr.CrError, B.Octets>}
+
+# RFC 7914, section 11: PBKDF2-HMAC-SHA256, P = "passwd", S = "salt",
+# c = 1: the first 32 of its 64 bytes (a shorter output is a prefix of a
+# longer, pbkdf2_stream_prefix; all 64 bytes, two blocks, run past
+# --verdict's kernel fuel, and check.bend computes them)
+law pbkdf2_hmac_sha256_rfc7914_1:
+  {PbI.CrPbkdf2.hmac_sha256(B.Octets.of_string("passwd"), B.Octets.of_string("salt"), 1, 32n) == Done{B.Octets.of_list([85, 172, 4, 110, 86, 227, 8, 159, 236, 22, 145, 194, 37, 68, 182, 5, 249, 65, 133, 33, 109, 222, 4, 101, 230, 139, 157, 87, 194, 13, 172, 188])} : Result<&2, &2, Cr.CrError, B.Octets>}
 
 # Per-instance laws, from the law schemas (gen/instances.py)
 
@@ -1021,4 +1102,277 @@ law hmac_sha512_split:
   for +a: B.Octets
   for +b: B.Octets
   {Hm.CrHmac.finish(~SH.CrSha2State, ~SH.CrSha2.init512(), ~SH.CrSha2.update, ~SH.CrSha2.final, Hm.CrHmac.update(~SH.CrSha2State, ~SH.CrSha2.update, Hm.CrHmac.update(~SH.CrSha2State, ~SH.CrSha2.update, Hm.CrHmac.start(~SH.CrSha2State, ~SH.CrSha2.init512(), ~SH.CrSha2.update, kk), a), b)) == Hm.CrHmac.mac(~SH.CrSha2.sha512, kk, B.Octets.append(a, b)) : B.Octets}
+
+# MD4 (hashes): update over a ++ b is update over a, then b, for every state
+law md4_hash_streaming:
+  for s: Hs.HsMdState<Hs.HsW4>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HM4.HsMd4.update(s, B.Octets.append(a, b)) == HM4.HsMd4.update(HM4.HsMd4.update(s, a), b) : Hs.HsMdState<Hs.HsW4>}
+
+# MD4 (hashes): streaming equals one-shot, for every split
+law md4_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HM4.HsMd4.final(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.init(), a), b)) == HM4.HsMd4.digest(B.Octets.append(a, b)) : B.Octets}
+
+# MD4 (hashes): and for every split into three
+law md4_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HM4.HsMd4.final(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.init(), a), b), c)) == HM4.HsMd4.digest(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# MD4 (hashes): final(s) has 16 bytes, for every state
+law md4_hash_length:
+  for +s: Hs.HsMdState<Hs.HsW4>
+  {B.Octets.len(HM4.HsMd4.final(s)) == 16n : Nat}
+
+# HMAC over MD4 (hashes): the state after a ++ b is the state after a, then b
+law hmac_md4_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>}
+
+# HMAC over MD4 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_md4_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.update, Hm.CrHmac.start(~Hs.HsMdState<Hs.HsW4>, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, kk), a), b)) == Hm.CrHmac.mac(~HM4.HsMd4.digest, kk, B.Octets.append(a, b)) : B.Octets}
+
+# MD5 (hashes): update over a ++ b is update over a, then b, for every state
+law md5_hash_streaming:
+  for s: Hs.HsMdState<Hs.HsW4>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HM5.HsMd5.update(s, B.Octets.append(a, b)) == HM5.HsMd5.update(HM5.HsMd5.update(s, a), b) : Hs.HsMdState<Hs.HsW4>}
+
+# MD5 (hashes): streaming equals one-shot, for every split
+law md5_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HM5.HsMd5.final(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.init(), a), b)) == HM5.HsMd5.digest(B.Octets.append(a, b)) : B.Octets}
+
+# MD5 (hashes): and for every split into three
+law md5_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HM5.HsMd5.final(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.init(), a), b), c)) == HM5.HsMd5.digest(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# MD5 (hashes): final(s) has 16 bytes, for every state
+law md5_hash_length:
+  for +s: Hs.HsMdState<Hs.HsW4>
+  {B.Octets.len(HM5.HsMd5.final(s)) == 16n : Nat}
+
+# HMAC over MD5 (hashes): the state after a ++ b is the state after a, then b
+law hmac_md5_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>}
+
+# HMAC over MD5 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_md5_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, ~HM5.HsMd5.final, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.update, Hm.CrHmac.start(~Hs.HsMdState<Hs.HsW4>, ~HM5.HsMd5.init(), ~HM5.HsMd5.update, kk), a), b)) == Hm.CrHmac.mac(~HM5.HsMd5.digest, kk, B.Octets.append(a, b)) : B.Octets}
+
+# SHA-1 (hashes): update over a ++ b is update over a, then b, for every state
+law sha1_hash_streaming:
+  for s: Hs.HsMdState<Hs.HsW5>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HS1.HsSha1.update(s, B.Octets.append(a, b)) == HS1.HsSha1.update(HS1.HsSha1.update(s, a), b) : Hs.HsMdState<Hs.HsW5>}
+
+# SHA-1 (hashes): streaming equals one-shot, for every split
+law sha1_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HS1.HsSha1.final(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.init(), a), b)) == HS1.HsSha1.digest(B.Octets.append(a, b)) : B.Octets}
+
+# SHA-1 (hashes): and for every split into three
+law sha1_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HS1.HsSha1.final(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.init(), a), b), c)) == HS1.HsSha1.digest(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# SHA-1 (hashes): final(s) has 20 bytes, for every state
+law sha1_hash_length:
+  for +s: Hs.HsMdState<Hs.HsW5>
+  {B.Octets.len(HS1.HsSha1.final(s)) == 20n : Nat}
+
+# HMAC over SHA-1 (hashes): the state after a ++ b is the state after a, then b
+law hmac_sha1_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>}
+
+# HMAC over SHA-1 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_sha1_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, ~HS1.HsSha1.final, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.update, Hm.CrHmac.start(~Hs.HsMdState<Hs.HsW5>, ~HS1.HsSha1.init(), ~HS1.HsSha1.update, kk), a), b)) == Hm.CrHmac.mac(~HS1.HsSha1.digest, kk, B.Octets.append(a, b)) : B.Octets}
+
+# RIPEMD-160 (hashes): update over a ++ b is update over a, then b, for every state
+law ripemd160_hash_streaming:
+  for s: Hs.HsMdState<Hs.HsW5>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HRM.HsRipemd160.update(s, B.Octets.append(a, b)) == HRM.HsRipemd160.update(HRM.HsRipemd160.update(s, a), b) : Hs.HsMdState<Hs.HsW5>}
+
+# RIPEMD-160 (hashes): streaming equals one-shot, for every split
+law ripemd160_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HRM.HsRipemd160.final(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.init(), a), b)) == HRM.HsRipemd160.digest(B.Octets.append(a, b)) : B.Octets}
+
+# RIPEMD-160 (hashes): and for every split into three
+law ripemd160_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HRM.HsRipemd160.final(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.init(), a), b), c)) == HRM.HsRipemd160.digest(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# RIPEMD-160 (hashes): final(s) has 20 bytes, for every state
+law ripemd160_hash_length:
+  for +s: Hs.HsMdState<Hs.HsW5>
+  {B.Octets.len(HRM.HsRipemd160.final(s)) == 20n : Nat}
+
+# HMAC over RIPEMD-160 (hashes): the state after a ++ b is the state after a, then b
+law hmac_ripemd160_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>}
+
+# HMAC over RIPEMD-160 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_ripemd160_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.init(), ~HRM.HsRipemd160.update, ~HRM.HsRipemd160.final, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.update, Hm.CrHmac.start(~Hs.HsMdState<Hs.HsW5>, ~HRM.HsRipemd160.init(), ~HRM.HsRipemd160.update, kk), a), b)) == Hm.CrHmac.mac(~HRM.HsRipemd160.digest, kk, B.Octets.append(a, b)) : B.Octets}
+
+# SM3 (hashes): update over a ++ b is update over a, then b, for every state
+law sm3_hash_streaming:
+  for s: Hs.HsMdState<Hs.HsW8>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HSM.HsSm3.update(s, B.Octets.append(a, b)) == HSM.HsSm3.update(HSM.HsSm3.update(s, a), b) : Hs.HsMdState<Hs.HsW8>}
+
+# SM3 (hashes): streaming equals one-shot, for every split
+law sm3_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HSM.HsSm3.final(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.init(), a), b)) == HSM.HsSm3.digest(B.Octets.append(a, b)) : B.Octets}
+
+# SM3 (hashes): and for every split into three
+law sm3_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HSM.HsSm3.final(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.init(), a), b), c)) == HSM.HsSm3.digest(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# SM3 (hashes): final(s) has 32 bytes, for every state
+law sm3_hash_length:
+  for +s: Hs.HsMdState<Hs.HsW8>
+  {B.Octets.len(HSM.HsSm3.final(s)) == 32n : Nat}
+
+# HMAC over SM3 (hashes): the state after a ++ b is the state after a, then b
+law hmac_sm3_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<Hs.HsW8>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<Hs.HsW8>>}
+
+# HMAC over SM3 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_sm3_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.init(), ~HSM.HsSm3.update, ~HSM.HsSm3.final, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.update, Hm.CrHmac.update(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.update, Hm.CrHmac.start(~Hs.HsMdState<Hs.HsW8>, ~HSM.HsSm3.init(), ~HSM.HsSm3.update, kk), a), b)) == Hm.CrHmac.mac(~HSM.HsSm3.digest, kk, B.Octets.append(a, b)) : B.Octets}
+
+# Streebog-256 (hashes): update over a ++ b is update over a, then b, for every state
+law streebog256_hash_streaming:
+  for s: Hs.HsMdState<HST.HsStbCv>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HST.HsStreebog.update(s, B.Octets.append(a, b)) == HST.HsStreebog.update(HST.HsStreebog.update(s, a), b) : Hs.HsMdState<HST.HsStbCv>}
+
+# Streebog-256 (hashes): streaming equals one-shot, for every split
+law streebog256_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HST.HsStreebog.final256(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init256(), a), b)) == HST.HsStreebog.digest256(B.Octets.append(a, b)) : B.Octets}
+
+# Streebog-256 (hashes): and for every split into three
+law streebog256_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HST.HsStreebog.final256(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init256(), a), b), c)) == HST.HsStreebog.digest256(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# Streebog-256 (hashes): final(s) has 32 bytes, for every state
+law streebog256_hash_length:
+  for +s: Hs.HsMdState<HST.HsStbCv>
+  {B.Octets.len(HST.HsStreebog.final256(s)) == 32n : Nat}
+
+# HMAC over Streebog-256 (hashes): the state after a ++ b is the state after a, then b
+law hmac_streebog256_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>}
+
+# HMAC over Streebog-256 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_streebog256_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init256(), ~HST.HsStreebog.update, ~HST.HsStreebog.final256, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.start(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init256(), ~HST.HsStreebog.update, kk), a), b)) == Hm.CrHmac.mac(~HST.HsStreebog.digest256, kk, B.Octets.append(a, b)) : B.Octets}
+
+# Streebog-512 (hashes): update over a ++ b is update over a, then b, for every state
+law streebog512_hash_streaming:
+  for s: Hs.HsMdState<HST.HsStbCv>
+  for +a: B.Octets
+  for +b: B.Octets
+  {HST.HsStreebog.update(s, B.Octets.append(a, b)) == HST.HsStreebog.update(HST.HsStreebog.update(s, a), b) : Hs.HsMdState<HST.HsStbCv>}
+
+# Streebog-512 (hashes): streaming equals one-shot, for every split
+law streebog512_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {HST.HsStreebog.final512(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init512(), a), b)) == HST.HsStreebog.digest512(B.Octets.append(a, b)) : B.Octets}
+
+# Streebog-512 (hashes): and for every split into three
+law streebog512_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {HST.HsStreebog.final512(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init512(), a), b), c)) == HST.HsStreebog.digest512(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+# Streebog-512 (hashes): final(s) has 64 bytes, for every state
+law streebog512_hash_length:
+  for +s: Hs.HsMdState<HST.HsStbCv>
+  {B.Octets.len(HST.HsStreebog.final512(s)) == 64n : Nat}
+
+# HMAC over Streebog-512 (hashes): the state after a ++ b is the state after a, then b
+law hmac_streebog512_streaming:
+  for s: Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, s, B.Octets.append(a, b)) == Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, s, a), b) : Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>}
+
+# HMAC over Streebog-512 (hashes): the tag in pieces is the tag in one call, for every split
+law hmac_streebog512_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init512(), ~HST.HsStreebog.update, ~HST.HsStreebog.final512, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.update(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.update, Hm.CrHmac.start(~Hs.HsMdState<HST.HsStbCv>, ~HST.HsStreebog.init512(), ~HST.HsStreebog.update, kk), a), b)) == Hm.CrHmac.mac(~HST.HsStreebog.digest512, kk, B.Octets.append(a, b)) : B.Octets}
 # END GENERATED: laws

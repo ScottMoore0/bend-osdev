@@ -10,6 +10,7 @@
 # byte is not 0, or the code reaches the range. The caller checks ok (and that
 # the code is 0) when the data is meant to end: XzRd.finish.
 import Base
+import ../bytes/bytes.bend as B
 
 type XzRd is Type:
   XzRd{probs: Array<U32>, range: U32, code: U32, input: List<&2, U32>, ok: Bool}
@@ -155,3 +156,26 @@ def XzRd.finish.go(input: List<&2, U32>, probs: Array<U32>, +code: U32, ok: Bool
 def XzRd.finish(d: XzRd) -> Array<U32> & Bool:
   XzRd{probs, range, +code, input, ok} = d
   XzRd.finish.go(input, probs, code, ok)
+
+# The decoder's state, for a decoder that does not know where its data ends
+# (the .lzma format): whether it has seen no corruption yet, and how many
+# input bytes it has not read
+
+type XzRdOk is Type:
+  XzRdOk{rd: XzRd, ok: Bool}
+
+type XzRdLeft is Type:
+  XzRdLeft{rd: XzRd, left: Nat}
+
+def XzRd.ok(d: XzRd) -> XzRdOk:
+  XzRd{probs, range, code, input, +ok} = d
+  XzRdOk{XzRd{probs, range, code, input, ok}, ok}
+
+def XzRd.left(d: XzRd) -> XzRdLeft:
+  XzRd{probs, range, code, +input, ok} = d
+  XzRdLeft{XzRd{probs, range, code, input, ok}, B.len.fast(input)}
+
+# more input, after what is still unread
+def XzRd.feed(d: XzRd, xs: List<&2, U32>) -> XzRd:
+  XzRd{probs, range, code, input, ok} = d
+  XzRd{probs, range, code, B.append.fast(input, xs), ok}

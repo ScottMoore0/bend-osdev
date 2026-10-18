@@ -30,6 +30,7 @@ GPL source was read.
 |---|---|
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
+| [packing](packing/) | Bit fields at any bit position of a byte buffer, packed and unpacked, with lib/packing's quirks as parameters |
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
 | [blockdev](blockdev/) | The block-device interfaces (pure, and owned with writes), a balanced in-memory device, and a proved `Array<U32>` image device |
@@ -45,6 +46,7 @@ GPL source was read.
 | [partition](partition/) | MBR and GPT partition tables, with GPT's CRCs |
 | [uuid](uuid/) | UUIDs (RFC 9562), text and both byte orders |
 | [netheaders](netheaders/) | Ethernet, ARP, IPv4, IPv6, ICMP, UDP and TCP headers, and the Internet checksum |
+| [nlattr](nlattr/) | Netlink attributes (RFC 3549): building, parsing and nested attributes with both flags, and validation against policies, strict or liberal; checked against the running kernel |
 | [tcpip](tcpip/) | A TCP/IP stack as a pure state machine: ARP, IPv4 with reassembly, ICMP echo, UDP, TCP (RFC 9293, 6298, 5681), tested against Linux |
 | [caps](caps/) | Linux capability sets and how execve, capset and prctl change them |
 | [perms](perms/) | Unix permission checks, umask, POSIX ACLs, sticky directories |
@@ -57,9 +59,17 @@ GPL source was read.
 | [bzip2](bzip2/) | bzip2 compression and decompression, each stage (RLE, MTF, BWT, Huffman) usable alone |
 | [zstd](zstd/) | Zstandard (RFC 8878) decompression with dictionaries and streaming, and a compressor; FSE, Huffman and XXH64 usable alone |
 | [lzo](lzo/) | LZO1X compression and decompression, and the lzop container (clean-room, from documentation only) |
+| [c842](c842/) | IBM's 842 compression, as Linux and POWER's NX accelerator read and write it, with its CRC trailer (clean-room, from IBM's paper and patent and black-box tests of Linux) |
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
+| [errseq](errseq/) | Error sequence counters (`errseq_t`): a writer records errors, each observer learns of one it has not seen exactly once |
+| [ratelimit](ratelimit/) | Rate limiting as a pure state machine: at most `burst` events per `interval` (sliding or fixed window), with the suppressed count |
+| [timerqueue](timerqueue/) | Timers keyed by expiry as a pure state machine: add, delete, next expiry, expire all due; any priority queue or ordered map as the store |
+| [dim](dim/) | Dynamic interrupt moderation (net_dim) as a pure state machine: profile steps from interval samples, converging on identical samples |
+| [genalloc](genalloc/) | A general-purpose pool allocator in the style of genalloc, the fit algorithm a template (first, best, aligned, order-aligned, fixed offset) |
 | [algo](algo/) | Bit search, bitmaps, binary search |
+| [ksort](ksort/) | Sorting: a stable merge sort on lists and an in-place heapsort on an `Array`, the comparison a template |
+| [textsearch](textsearch/) | Searching a byte stream that arrives in chunks, matches spanning chunk boundaries: KMP, Boyer-Moore (Horspool or good suffix) and a token automaton behind one interface |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
 | [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
@@ -71,7 +81,8 @@ GPL source was read.
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
-| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, and SHA-256 and SHA-512 (from bend-collections), as instances |
+| [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF and PBKDF2, ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256 and SHA-512 (from bend-collections), as instances |
 | [aead](aead/) | AEGIS-128, encrypt-then-MAC over any cipher and MAC (the kernel's authenc), and the IV generators ESSIV, seqiv and echainiv over any AEAD, as instances of crypto's AEAD interface |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |

@@ -51,6 +51,19 @@ import ./inst_ccm.bend as CC
 import ./inst_cmac.bend as CMI
 import ./inst_crc.bend as CR
 import ./inst_sha2.bend as SH
+import ../hashes/hashes.bend as Hs
+import ../hashes/md4.bend as HM4
+import ../hashes/md5.bend as HM5
+import ../hashes/sha1.bend as HS1
+import ../hashes/ripemd160.bend as HRM
+import ../hashes/sm3.bend as HSM
+import ../hashes/streebog.bend as HST
+import ../hashes/michael.bend as HMI
+import ./inst_michael.bend as MIC
+import ./pbkdf2.bend as Pb
+import ./inst_pbkdf2.bend as PbI
+import ../hashes/LAWS.bend as HSL
+import ../hashes/PROOF.bend as HSP
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha.bend as F256
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha512.bend as F512
 import bend-collections-laws-crypto@1.0.0.0/src/crypto/hash.bend as Hc
@@ -517,6 +530,88 @@ def Laws.sha256_abc():
   {==}
 
 def Laws.hmac_sha256_rfc4231_2():
+  {==}
+
+# Michael as a MAC
+
+def Laws.michael_accepts(k, m):
+  Laws.mac_verify_tag_accepts(~Hs.HsW2, ~HMI.HsMichael.mic, k, m)
+
+def Laws.michael_key_length():
+  {==}
+
+def Laws.michael_mac_vector():
+  {==}
+
+# PBKDF2: the output generator gives n bytes, whatever the MAC (induction
+# on n), and its first n bytes are the same whatever comes after
+def pbkdf2_out_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, cur: List<&2, U32>, +k: K, +salt: B.Octets, +c: Nat, +i: U32) -> {B.len(Pb.cr.pbkdf2.out(~K, ~compute, n, cur, k, salt, c, i)) == n : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %pbkdf2_out_len(~K, ~compute, p, t, k, salt, c, i) : {B.len(Pb.cr.pbkdf2.out(~K, ~compute, 1n+p, Con{h, t}, k, salt, c, i)) == 1n+_ : Nat}
+          {==}
+        case Nil{}:
+          %pbkdf2_out_len(~K, ~compute, p, Pb.cr.pbkdf2.tail(Pb.cr.pbkdf2.block(~K, ~compute, k, salt, c, U32.add(i, 1))), k, salt, c, U32.add(i, 1)) : {B.len(Pb.cr.pbkdf2.out(~K, ~compute, 1n+p, Nil{}, k, salt, c, i)) == 1n+_ : Nat}
+          {==}
+
+def pbkdf2_out_prefix(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, +j: Nat, cur: List<&2, U32>, +k: K, +salt: B.Octets, +c: Nat, +i: U32) -> {B.take(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), cur, k, salt, c, i)) == Pb.cr.pbkdf2.out(~K, ~compute, n, cur, k, salt, c, i) : List<&2, U32>}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %pbkdf2_out_prefix(~K, ~compute, p, j, t, k, salt, c, i) : {Con{h, B.take(p, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(p, j), t, k, salt, c, i))} == Con{h, _} : List<&2, U32>}
+          {==}
+        case Nil{}:
+          %pbkdf2_out_prefix(~K, ~compute, p, j, Pb.cr.pbkdf2.tail(Pb.cr.pbkdf2.block(~K, ~compute, k, salt, c, U32.add(i, 1))), k, salt, c, U32.add(i, 1)) : {Con{Pb.cr.pbkdf2.head(Pb.cr.pbkdf2.block(~K, ~compute, k, salt, c, U32.add(i, 1))), B.take(p, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(p, j), Pb.cr.pbkdf2.tail(Pb.cr.pbkdf2.block(~K, ~compute, k, salt, c, U32.add(i, 1))), k, salt, c, U32.add(i, 1)))} == Con{Pb.cr.pbkdf2.head(Pb.cr.pbkdf2.block(~K, ~compute, k, salt, c, U32.add(i, 1))), _} : List<&2, U32>}
+          {==}
+
+def Laws.pbkdf2_stream_length(K, compute, k, salt, c, n):
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))), B.len(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), octets_len_of(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))) : {_ == n : Nat}
+  pbkdf2_out_len(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)
+
+def pbkdf2_checked_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, zero: Bool, fits: Bool, kr: Result<&2, &2, Cr.CrError, K>, +salt: B.Octets, +c: U32, +n: Nat) -> {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Pb.cr.pbkdf2.checked(~K, ~compute, zero, fits, kr, salt, c, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Pb.cr.pbkdf2.checked(~K, ~compute, zero, fits, kr, salt, c, n)) : Result<&2, &2, Cr.CrError, Nat>}:
+  match zero:
+    case True{}:
+      {==}
+    case False{}:
+      match fits:
+        case False{}:
+          {==}
+        case True{}:
+          match kr:
+            case Fail{e}:
+              {==}
+            case Done{+k}:
+              %Laws.pbkdf2_stream_length(~K, ~compute, k, salt, c, n) : {Done{B.Octets.len(Pb.CrPbkdf2.stream(~K, ~compute, k, salt, c, n))} == Done{_} : Result<&2, &2, Cr.CrError, Nat>}
+              {==}
+
+def Laws.pbkdf2_length(K, key, compute, hlen, p, salt, c, n):
+  pbkdf2_checked_len(~K, ~compute, U32.is_eq(c, 0), Pb.cr.pbkdf2.fits(Nat.is_lt(0n, hlen), n, hlen), key(p), salt, c, n)
+
+def Laws.pbkdf2_stream_prefix(K, compute, k, salt, c, n, j):
+  %BL.take_drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : {B.Octets.take(n, B.Octets.of_list(_)) == B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.take(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0), pbkdf2_out_prefix(~K, ~compute, n, j, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : {B.Octets.take(n, B.Octets.of_list(B.append(_, B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))))) == B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.of_list(B.append(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0), B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)))), B.Octets.append(B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), B.Octets.of_list(B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)))), octets_of_append(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0), B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)))) : {B.Octets.take(n, _) == B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : B.Octets}
+  %pbkdf2_out_len(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), B.Octets.of_list(B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))))) == B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : B.Octets}
+  %octets_len_of(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), B.Octets.of_list(B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))))) == B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)) : B.Octets}
+  BL.octets_take_append(B.Octets.of_list(Pb.cr.pbkdf2.out(~K, ~compute, n, Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0)), B.Octets.of_list(B.drop(n, Pb.cr.pbkdf2.out(~K, ~compute, Nat.add(n, j), Nil{}, k, salt, Nat.sub(U32.to_nat(c), 1n), 0))))
+
+def Laws.pbkdf2_zero_iterations():
+  {==}
+
+def Laws.pbkdf2_hmac_sha1_rfc6070_1():
+  {==}
+
+def Laws.pbkdf2_hmac_sha1_rfc6070_2():
+  {==}
+
+def Laws.pbkdf2_hmac_sha256_rfc7914_1():
   {==}
 
 # Per-instance proofs (gen/instances.py)
@@ -1402,5 +1497,180 @@ def Laws.hmac_sha512_split(kk, a, b):
     case Hm.CrHmacKey{+i, +o}:
       %Equal.sym(B.Octets, SH.CrSha2.final(SH.CrSha2.update(SH.CrSha2.update(SH.CrSha2.update(SH.CrSha2.init512(), i), a), b)), SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))), Laws.sha512_hash_split3(i, a, b)) : {SH.CrSha2.final(SH.CrSha2.update(SH.CrSha2.update(SH.CrSha2.init512(), o), _)) == SH.CrSha2.sha512(B.Octets.append(o, SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
       %Equal.sym(B.Octets, SH.CrSha2.final(SH.CrSha2.update(SH.CrSha2.update(SH.CrSha2.init512(), o), SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))))), SH.CrSha2.sha512(B.Octets.append(o, SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))))), Laws.sha512_hash_split(o, SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == SH.CrSha2.sha512(B.Octets.append(o, SH.CrSha2.sha512(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.md4_hash_streaming(s, a, b):
+  HSL.md4_streaming(s, a, b)
+
+def Laws.md4_hash_split(a, b):
+  HSL.md4_split(a, b)
+
+def Laws.md4_hash_split3(a, b, c):
+  HSL.md4_split3(a, b, c)
+
+def Laws.md4_hash_length(s):
+  HSL.md4_length(s)
+
+def Laws.hmac_md4_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.md4_hash_streaming(h, a, b) : {Hm.CrHmacState{HM4.HsMd4.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>}
+      {==}
+
+def Laws.hmac_md4_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HM4.HsMd4.final(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.init(), i), a), b)), HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))), Laws.md4_hash_split3(i, a, b)) : {HM4.HsMd4.final(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.init(), o), _)) == HM4.HsMd4.digest(B.Octets.append(o, HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HM4.HsMd4.final(HM4.HsMd4.update(HM4.HsMd4.update(HM4.HsMd4.init(), o), HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))))), HM4.HsMd4.digest(B.Octets.append(o, HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))))), Laws.md4_hash_split(o, HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HM4.HsMd4.digest(B.Octets.append(o, HM4.HsMd4.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.md5_hash_streaming(s, a, b):
+  HSL.md5_streaming(s, a, b)
+
+def Laws.md5_hash_split(a, b):
+  HSL.md5_split(a, b)
+
+def Laws.md5_hash_split3(a, b, c):
+  HSL.md5_split3(a, b, c)
+
+def Laws.md5_hash_length(s):
+  HSL.md5_length(s)
+
+def Laws.hmac_md5_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.md5_hash_streaming(h, a, b) : {Hm.CrHmacState{HM5.HsMd5.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<Hs.HsW4>>}
+      {==}
+
+def Laws.hmac_md5_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HM5.HsMd5.final(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.init(), i), a), b)), HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))), Laws.md5_hash_split3(i, a, b)) : {HM5.HsMd5.final(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.init(), o), _)) == HM5.HsMd5.digest(B.Octets.append(o, HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HM5.HsMd5.final(HM5.HsMd5.update(HM5.HsMd5.update(HM5.HsMd5.init(), o), HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))))), HM5.HsMd5.digest(B.Octets.append(o, HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))))), Laws.md5_hash_split(o, HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HM5.HsMd5.digest(B.Octets.append(o, HM5.HsMd5.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.sha1_hash_streaming(s, a, b):
+  HSL.sha1_streaming(s, a, b)
+
+def Laws.sha1_hash_split(a, b):
+  HSL.sha1_split(a, b)
+
+def Laws.sha1_hash_split3(a, b, c):
+  HSL.sha1_split3(a, b, c)
+
+def Laws.sha1_hash_length(s):
+  HSL.sha1_length(s)
+
+def Laws.hmac_sha1_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.sha1_hash_streaming(h, a, b) : {Hm.CrHmacState{HS1.HsSha1.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>}
+      {==}
+
+def Laws.hmac_sha1_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HS1.HsSha1.final(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.init(), i), a), b)), HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))), Laws.sha1_hash_split3(i, a, b)) : {HS1.HsSha1.final(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.init(), o), _)) == HS1.HsSha1.digest(B.Octets.append(o, HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HS1.HsSha1.final(HS1.HsSha1.update(HS1.HsSha1.update(HS1.HsSha1.init(), o), HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))))), HS1.HsSha1.digest(B.Octets.append(o, HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))))), Laws.sha1_hash_split(o, HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HS1.HsSha1.digest(B.Octets.append(o, HS1.HsSha1.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.ripemd160_hash_streaming(s, a, b):
+  HSL.ripemd160_streaming(s, a, b)
+
+def Laws.ripemd160_hash_split(a, b):
+  HSL.ripemd160_split(a, b)
+
+def Laws.ripemd160_hash_split3(a, b, c):
+  HSL.ripemd160_split3(a, b, c)
+
+def Laws.ripemd160_hash_length(s):
+  HSL.ripemd160_length(s)
+
+def Laws.hmac_ripemd160_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.ripemd160_hash_streaming(h, a, b) : {Hm.CrHmacState{HRM.HsRipemd160.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<Hs.HsW5>>}
+      {==}
+
+def Laws.hmac_ripemd160_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HRM.HsRipemd160.final(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.init(), i), a), b)), HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))), Laws.ripemd160_hash_split3(i, a, b)) : {HRM.HsRipemd160.final(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.init(), o), _)) == HRM.HsRipemd160.digest(B.Octets.append(o, HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HRM.HsRipemd160.final(HRM.HsRipemd160.update(HRM.HsRipemd160.update(HRM.HsRipemd160.init(), o), HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))))), HRM.HsRipemd160.digest(B.Octets.append(o, HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))))), Laws.ripemd160_hash_split(o, HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HRM.HsRipemd160.digest(B.Octets.append(o, HRM.HsRipemd160.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.sm3_hash_streaming(s, a, b):
+  HSL.sm3_streaming(s, a, b)
+
+def Laws.sm3_hash_split(a, b):
+  HSL.sm3_split(a, b)
+
+def Laws.sm3_hash_split3(a, b, c):
+  HSL.sm3_split3(a, b, c)
+
+def Laws.sm3_hash_length(s):
+  HSL.sm3_length(s)
+
+def Laws.hmac_sm3_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.sm3_hash_streaming(h, a, b) : {Hm.CrHmacState{HSM.HsSm3.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<Hs.HsW8>>}
+      {==}
+
+def Laws.hmac_sm3_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HSM.HsSm3.final(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.init(), i), a), b)), HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))), Laws.sm3_hash_split3(i, a, b)) : {HSM.HsSm3.final(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.init(), o), _)) == HSM.HsSm3.digest(B.Octets.append(o, HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HSM.HsSm3.final(HSM.HsSm3.update(HSM.HsSm3.update(HSM.HsSm3.init(), o), HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))))), HSM.HsSm3.digest(B.Octets.append(o, HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))))), Laws.sm3_hash_split(o, HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HSM.HsSm3.digest(B.Octets.append(o, HSM.HsSm3.digest(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.streebog256_hash_streaming(s, a, b):
+  HSL.streebog256_streaming(s, a, b)
+
+def Laws.streebog256_hash_split(a, b):
+  HSL.streebog256_split(a, b)
+
+def Laws.streebog256_hash_split3(a, b, c):
+  HSL.streebog256_split3(a, b, c)
+
+def Laws.streebog256_hash_length(s):
+  HSL.streebog256_length(s)
+
+def Laws.hmac_streebog256_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.streebog256_hash_streaming(h, a, b) : {Hm.CrHmacState{HST.HsStreebog.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>}
+      {==}
+
+def Laws.hmac_streebog256_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HST.HsStreebog.final256(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init256(), i), a), b)), HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))), Laws.streebog256_hash_split3(i, a, b)) : {HST.HsStreebog.final256(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init256(), o), _)) == HST.HsStreebog.digest256(B.Octets.append(o, HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HST.HsStreebog.final256(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init256(), o), HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))))), HST.HsStreebog.digest256(B.Octets.append(o, HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))))), Laws.streebog256_hash_split(o, HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HST.HsStreebog.digest256(B.Octets.append(o, HST.HsStreebog.digest256(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      {==}
+
+def Laws.streebog512_hash_streaming(s, a, b):
+  HSL.streebog512_streaming(s, a, b)
+
+def Laws.streebog512_hash_split(a, b):
+  HSL.streebog512_split(a, b)
+
+def Laws.streebog512_hash_split3(a, b, c):
+  HSL.streebog512_split3(a, b, c)
+
+def Laws.streebog512_hash_length(s):
+  HSL.streebog512_length(s)
+
+def Laws.hmac_streebog512_streaming(s, a, b):
+  match s:
+    case Hm.CrHmacState{h, o}:
+      %Laws.streebog512_hash_streaming(h, a, b) : {Hm.CrHmacState{HST.HsStreebog.update(h, B.Octets.append(a, b)), o} == Hm.CrHmacState{_, o} : Hm.CrHmacState<Hs.HsMdState<HST.HsStbCv>>}
+      {==}
+
+def Laws.hmac_streebog512_split(kk, a, b):
+  match kk:
+    case Hm.CrHmacKey{+i, +o}:
+      %Equal.sym(B.Octets, HST.HsStreebog.final512(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init512(), i), a), b)), HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))), Laws.streebog512_hash_split3(i, a, b)) : {HST.HsStreebog.final512(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init512(), o), _)) == HST.HsStreebog.digest512(B.Octets.append(o, HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
+      %Equal.sym(B.Octets, HST.HsStreebog.final512(HST.HsStreebog.update(HST.HsStreebog.update(HST.HsStreebog.init512(), o), HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))))), HST.HsStreebog.digest512(B.Octets.append(o, HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))))), Laws.streebog512_hash_split(o, HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))))) : {_ == HST.HsStreebog.digest512(B.Octets.append(o, HST.HsStreebog.digest512(B.Octets.append(i, B.Octets.append(a, b))))) : B.Octets}
       {==}
 # END GENERATED: proofs

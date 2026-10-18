@@ -18,6 +18,9 @@ fi
 for f in ccases[0-9][0-9].bend; do "${bend[@]}" "$f" >> ccases.out 2>&1; done
 m=$(python3 gen.py verify ccases.out) || { printf '%s\n' "$m" | tail -20; tail -3 ccases.out | cut -c1-200; exit 1; }
 rm -f ccases.out
+# the LZ4HC ratios first, then the summary line
+printf '%s\n' "$m" | sed '$d'
+m=$(printf '%s\n' "$m" | tail -1)
 if ! command -v lz4 > /dev/null; then
   echo "$n match; $m; lz4 tool missing, its checks skipped"
   exit 77

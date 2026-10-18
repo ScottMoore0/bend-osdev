@@ -17,8 +17,10 @@
 #
 # A hash whose one-shot form is not separate code takes CrHash.digest_of (the
 # streaming form in one call) as its ~digest. The instances: inst_crc.bend
-# (CRC-32 and CRC-64 of any parameter set, non-cryptographic). Generic
-# algorithms over any hash: hmac.bend, hkdf.bend.
+# (CRC-32 and CRC-64 of any parameter set, non-cryptographic), inst_sha2.bend
+# (SHA-256, SHA-512), and the hashes package's MD4, MD5, SHA-1, RIPEMD-160,
+# SM3 and Streebog (their defs directly; each file's header gives its tuple).
+# Generic algorithms over any hash: hmac.bend, hkdf.bend.
 import Base
 import ../bytes/bytes.bend as B
 
