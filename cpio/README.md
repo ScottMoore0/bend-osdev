@@ -131,6 +131,31 @@ misreading. It is weaker than a third-party tool (GNU cpio, bsdcpio, the
 kernel's `gen_init_cpio`) would be. The one-file archive vector was also
 checked by hand against cpio(5).
 
+## Sizes
+
+Every loop over an archive's bytes or entries is a tail call (Bend 2.0.37's
+runtime overflows its stack at some tens of thousands of nested calls), so
+neither a file's length nor the number of entries has a limit beyond
+memory. The structural forms the proofs reason about stay beside the loops
+in `cpio.bend` (`split.ref`, `nat.half.ref`, `parse.go.ref`,
+`Cpio.build.ref`), and `PROOF.bend` proves each equal to its loop for every
+input (`split_eq`, `half_eq`, `parse_eq`, `build_eq`).
+
+Measured on Bend 2.0.37 (native build, WSL2), building an archive in the crc
+format and parsing it back (the archive's length, byte sum and entries
+checked against a Python encoder):
+
+| Archive | Time | Peak RAM |
+|---|---|---|
+| 1 MB: one 512 KB file and 2,790 files of 64 bytes | 6.9 s | 2.6 GB |
+| 1 MB: 8,000 empty files | 15.7 s | 1.3 GB |
+
+Most of the memory is `Octets` (about 940 bytes per byte today) and the list
+forms the parser reads. Before this, a 64 KB file overflowed the stack (the
+data was split and measured by structural recursion), and so did parsing
+3,000 entries. `check.bend` builds and parses a 96 KB archive (a 48 KB file
+and 250 small ones) as a regression test.
+
 ## Limitations
 
 * The proof of `parse_build` reaches the entries' bytes only through bytes'
@@ -140,7 +165,7 @@ checked by hand against cpio(5).
   proofs would need revisiting if `Octets` changed representation again; the
   laws themselves would not change.
 * Sizes are computed on `Nat`, and lengths are counted by walking the lists:
-  fine for an initramfs's files, slow for very large ones.
+  linear in the archive's size (see Sizes).
 * `Cpio.build` does not refuse an entry whose data is 2^32 bytes or longer, or
   whose name is `TRAILER!!!`; such an archive does not parse back.
 

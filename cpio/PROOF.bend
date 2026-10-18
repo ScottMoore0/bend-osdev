@@ -139,7 +139,7 @@ def rc_succ(+b: Bool, +h: Nat) -> {1n+1n+rec(b, h) == rec(b, 1n+h) : Nat}:
     case True{}:
       {==}
 
-def decomp(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half(n)) : Nat}:
+def decomp.ref(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half.ref(n)) : Nat}:
   match n:
     case 0n:
       {==}
@@ -148,9 +148,43 @@ def decomp(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half(n)) : Nat}:
         case 0n:
           {==}
         case 1n+q:
-          %rc_succ(C.nat.odd(q), C.nat.half(q)) : {1n+1n+q == _ : Nat}
-          %decomp(q) : {1n+1n+q == 1n+1n+_ : Nat}
+          %rc_succ(C.nat.odd(q), C.nat.half.ref(q)) : {1n+1n+q == _ : Nat}
+          %decomp.ref(q) : {1n+1n+q == 1n+1n+_ : Nat}
           {==}
+
+# The tail-recursive half is the structural one: halving onto acc adds acc.
+
+def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+n), 1n+Nat.add(p, n), add_succ(p, n))
+
+def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
+
+def half_go(+n: Nat, +acc: Nat) -> {C.nat.half.go(n, acc) == Nat.add(C.nat.half.ref(n), acc) : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match p:
+        case 0n:
+          {==}
+        case 1n+q:
+          Equal.trans(Nat, C.nat.half.go(q, 1n+acc), Nat.add(C.nat.half.ref(q), 1n+acc), 1n+Nat.add(C.nat.half.ref(q), acc), half_go(q, 1n+acc), add_succ(C.nat.half.ref(q), acc))
+
+def half_eq(+n: Nat) -> {C.nat.half.ref(n) == C.nat.half(n) : Nat}:
+  Equal.sym(Nat, C.nat.half(n), C.nat.half.ref(n), Equal.trans(Nat, C.nat.half.go(n, 0n), Nat.add(C.nat.half.ref(n), 0n), C.nat.half.ref(n), half_go(n, 0n), add_zero(C.nat.half.ref(n))))
+
+def decomp(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half(n)) : Nat}:
+  %half_eq(n) : {n == rec(C.nat.odd(n), _) : Nat}
+  decomp.ref(n)
 
 def bits_rt(+k: Nat, +n: Nat, e: {C.nat.high(k, n) == 0n : Nat}) -> {n == Word.to_nat(k, C.nat.bits(k, n)) : Nat}:
   match k:
@@ -166,13 +200,57 @@ def size_rt(+n: Nat, e: {C.size.over(n) == 0n : Nat}) -> {n == U32.to_nat(C.size
 
 # Byte lists
 
-def split_rt(+a: List<&2, U32>, +b: List<&2, U32>) -> {Some{C.CpioCut{a, b}} == C.split(B.len(a), B.append(a, b)) : Maybe<&2, C.CpioCut>}:
+def split_rt.ref(+a: List<&2, U32>, +b: List<&2, U32>) -> {Some{C.CpioCut{a, b}} == C.split.ref(B.len(a), B.append(a, b)) : Maybe<&2, C.CpioCut>}:
   match a:
     case Nil{}:
       {==}
     case Con{h, t}:
-      %split_rt(t, b) : {Some{C.CpioCut{Con{h, t}, b}} == C.split.cons(h, _) : Maybe<&2, C.CpioCut>}
+      %split_rt.ref(t, b) : {Some{C.CpioCut{Con{h, t}, b}} == C.split.cons(h, _) : Maybe<&2, C.CpioCut>}
       {==}
+
+# The tail-recursive split is the structural one: the bytes taken so far,
+# reversed in acc, go back in front of the structural split's head.
+
+def split_fin(acc: List<&2, U32>, m: Maybe<&2, C.CpioCut>) -> Maybe<&2, C.CpioCut>:
+  match m:
+    case None{}:
+      None{}
+    case Some{C.CpioCut{a, b}}:
+      Some{C.CpioCut{B.rev_onto(acc, a), b}}
+
+def split_fin_cons(+h: U32, +acc: List<&2, U32>, +m: Maybe<&2, C.CpioCut>) -> {split_fin(Con{h, acc}, m) == split_fin(acc, C.split.cons(h, m)) : Maybe<&2, C.CpioCut>}:
+  match m:
+    case None{}:
+      {==}
+    case Some{c}:
+      match c:
+        case C.CpioCut{a, b}:
+          {==}
+
+def split_fin_nil(+m: Maybe<&2, C.CpioCut>) -> {split_fin(Nil{}, m) == m : Maybe<&2, C.CpioCut>}:
+  match m:
+    case None{}:
+      {==}
+    case Some{c}:
+      match c:
+        case C.CpioCut{a, b}:
+          {==}
+
+def split_go(+n: Nat, +xs: List<&2, U32>, +acc: List<&2, U32>) -> {C.split.go(n, xs, acc) == split_fin(acc, C.split.ref(n, xs)) : Maybe<&2, C.CpioCut>}:
+  match n xs:
+    case 0n _:
+      {==}
+    case 1n+p Nil{}:
+      {==}
+    case 1n+p Con{h, t}:
+      Equal.trans(Maybe<&2, C.CpioCut>, C.split.go(p, t, Con{h, acc}), split_fin(Con{h, acc}, C.split.ref(p, t)), split_fin(acc, C.split.cons(h, C.split.ref(p, t))), split_go(p, t, Con{h, acc}), split_fin_cons(h, acc, C.split.ref(p, t)))
+
+def split_eq(+n: Nat, +xs: List<&2, U32>) -> {C.split.ref(n, xs) == C.split(n, xs) : Maybe<&2, C.CpioCut>}:
+  Equal.sym(Maybe<&2, C.CpioCut>, C.split(n, xs), C.split.ref(n, xs), Equal.trans(Maybe<&2, C.CpioCut>, C.split.go(n, xs, Nil{}), split_fin(Nil{}, C.split.ref(n, xs)), C.split.ref(n, xs), split_go(n, xs, Nil{}), split_fin_nil(C.split.ref(n, xs))))
+
+def split_rt(+a: List<&2, U32>, +b: List<&2, U32>) -> {Some{C.CpioCut{a, b}} == C.split(B.len(a), B.append(a, b)) : Maybe<&2, C.CpioCut>}:
+  %split_eq(B.len(a), B.append(a, b)) : {Some{C.CpioCut{a, b}} == _ : Maybe<&2, C.CpioCut>}
+  split_rt.ref(a, b)
 
 def skip_rt(+n: Nat, +b: List<&2, U32>) -> {Some{b} == C.skip(n, B.append(B.zeros(n), b)) : Maybe<&2, List<&2, U32>>}:
   match n:
@@ -248,7 +326,7 @@ def lvstep(+fmt: C.CpioFormat, e: C.CpioEntry, +r: List<&2, U32>) -> List<&2, U3
 def lv(+fmt: C.CpioFormat, es: List<&2, C.CpioEntry>) -> List<&2, U32>:
   match es:
     case Nil{}:
-      B.Octets.to_list(C.Cpio.build(fmt, Nil{}))
+      B.Octets.to_list(C.Cpio.build.ref(fmt, Nil{}))
     case Con{e, t}:
       lvstep(fmt, e, lv(fmt, t))
 
@@ -256,6 +334,8 @@ def lv(+fmt: C.CpioFormat, es: List<&2, C.CpioEntry>) -> List<&2, U32>:
 def vstep(+fmt: C.CpioFormat, +e: C.CpioEntry, +rb: B.Octets) -> {lvstep(fmt, e, B.Octets.to_list(rb)) == B.Octets.to_list(C.entry.onto(fmt, e, rb)) : List<&2, U32>}:
   match e:
     case C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, +name, +data}:
+      %Equal.sym(Nat, B.Octets.len(data), B.len(B.Octets.to_list(data)), BL.octets_len_list(data)) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == B.Octets.to_list(B.Octets.append(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(_), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.Octets.len(name)), C.entry.check(fmt, data)}), B.Octets.append(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(C.pad4(Nat.add(111n, B.Octets.len(name))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(C.pad4(_)), rb)))))) : List<&2, U32>}
+      %Equal.sym(Nat, B.Octets.len(name), B.len(B.Octets.to_list(name)), BL.octets_len_list(name)) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == B.Octets.to_list(B.Octets.append(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+_), C.entry.check(fmt, data)}), B.Octets.append(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(C.pad4(Nat.add(111n, _)))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(C.pad4(B.len(B.Octets.to_list(data)))), rb)))))) : List<&2, U32>}
       %al(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(fmt, data)}), B.Octets.append(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(C.pad4(B.len(B.Octets.to_list(data)))), rb))))) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == _ : List<&2, U32>}
       %al(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(C.pad4(B.len(B.Octets.to_list(data)))), rb)))) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == B.append(B.Octets.to_list(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(fmt, data)})), _) : List<&2, U32>}
       %al(B.Octets.cons(0, B.Octets.zeros(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(C.pad4(B.len(B.Octets.to_list(data)))), rb))) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == B.append(B.Octets.to_list(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(fmt, data)})), B.append(B.Octets.to_list(name), _)) : List<&2, U32>}
@@ -266,12 +346,12 @@ def vstep(+fmt: C.CpioFormat, +e: C.CpioEntry, +rb: B.Octets) -> {lvstep(fmt, e,
       %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.zeros(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))), B.zeros(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name))))), BL.octets_zeros_list(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))) : {lvstep(fmt, C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, data}, B.Octets.to_list(rb)) == B.append(B.Octets.to_list(C.CpioHeader.encode(C.CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(fmt, data)})), B.append(B.Octets.to_list(name), B.append(Con{0, _}, B.append(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), B.Octets.to_list(rb)))))) : List<&2, U32>}
       {==}
 
-def vlist(+fmt: C.CpioFormat, +es: List<&2, C.CpioEntry>) -> {lv(fmt, es) == B.Octets.to_list(C.Cpio.build(fmt, es)) : List<&2, U32>}:
+def vlist(+fmt: C.CpioFormat, +es: List<&2, C.CpioEntry>) -> {lv(fmt, es) == B.Octets.to_list(C.Cpio.build.ref(fmt, es)) : List<&2, U32>}:
   match es:
     case Nil{}:
       {==}
     case Con{e, t}:
-      %vstep(fmt, e, C.Cpio.build(fmt, t)) : {lvstep(fmt, e, lv(fmt, t)) == _ : List<&2, U32>}
+      %vstep(fmt, e, C.Cpio.build.ref(fmt, t)) : {lvstep(fmt, e, lv(fmt, t)) == _ : List<&2, U32>}
       %vlist(fmt, t) : {lvstep(fmt, e, lv(fmt, t)) == lvstep(fmt, e, _) : List<&2, U32>}
       {==}
 
@@ -300,6 +380,7 @@ def entry_rt(+fmt: C.CpioFormat, +e: C.CpioEntry, +r: List<&2, U32>, ok: C.CpioE
       %skip_rt(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))), B.append(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r))) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r7(_, B.Octets.to_list(name), C.CpioHeader{C.CpioNewc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioNewc{}, data)}) : C.CpioStep}
       %size_rt(B.len(B.Octets.to_list(data)), okd) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r8(C.split(_, B.append(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r))), B.Octets.to_list(name), C.CpioHeader{C.CpioNewc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioNewc{}, data)}) : C.CpioStep}
       %split_rt(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r)) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r8(_, B.Octets.to_list(name), C.CpioHeader{C.CpioNewc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioNewc{}, data)}) : C.CpioStep}
+      %BL.len_fast(B.Octets.to_list(data)) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r9(C.skip(C.pad4(_), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r)), B.Octets.to_list(name), B.Octets.to_list(data), C.CpioHeader{C.CpioNewc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioNewc{}, data)}) : C.CpioStep}
       %skip_rt(C.pad4(B.len(B.Octets.to_list(data))), r) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r9(_, B.Octets.to_list(name), B.Octets.to_list(data), C.CpioHeader{C.CpioNewc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioNewc{}, data)}) : C.CpioStep}
       {==}
     case C.CpioCrc{} C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, +name, +data}:
@@ -315,6 +396,7 @@ def entry_rt(+fmt: C.CpioFormat, +e: C.CpioEntry, +r: List<&2, U32>, ok: C.CpioE
       %skip_rt(C.pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))), B.append(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r))) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r7(_, B.Octets.to_list(name), C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}) : C.CpioStep}
       %size_rt(B.len(B.Octets.to_list(data)), okd) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r8(C.split(_, B.append(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r))), B.Octets.to_list(name), C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}) : C.CpioStep}
       %split_rt(B.Octets.to_list(data), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r)) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r8(_, B.Octets.to_list(name), C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}) : C.CpioStep}
+      %BL.len_fast(B.Octets.to_list(data)) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r9(C.skip(C.pad4(_), B.append(B.zeros(C.pad4(B.len(B.Octets.to_list(data)))), r)), B.Octets.to_list(name), B.Octets.to_list(data), C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}) : C.CpioStep}
       %skip_rt(C.pad4(B.len(B.Octets.to_list(data))), r) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r9(_, B.Octets.to_list(name), B.Octets.to_list(data), C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}) : C.CpioStep}
       %eq_self(C.checksum(B.Octets.to_list(data))) : {C.CpioStepEntry{C.CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(data))}, r} == C.entry.r10(_, C.entry.of(C.CpioHeader{C.CpioCrc{}, ino, mode, uid, gid, nlink, mtime, C.size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, C.size32(1n+B.len(B.Octets.to_list(name))), C.entry.check(C.CpioCrc{}, data)}, B.Octets.to_list(name), B.Octets.to_list(data)), r) : C.CpioStep}
       {==}
@@ -335,7 +417,7 @@ def len_bound(+es: List<&2, C.CpioEntry>, +fmt: C.CpioFormat) -> {Nat.sub(List.l
       len_step(fmt, e, List.length(&2, C.CpioEntry, t), lv(fmt, t), len_bound(t, fmt))
 
 # With fuel for every entry, the archive's entries read back, one at a time.
-def parse_rt(+es: List<&2, C.CpioEntry>, +n: Nat, +fmt: C.CpioFormat, ok: C.CpioEntry.valid_all(es), h: {Nat.sub(List.length(&2, C.CpioEntry, es), n) == 0n : Nat}) -> {Done{es} == C.parse.go(n, C.entry.read(lv(fmt, es))) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
+def parse_rt(+es: List<&2, C.CpioEntry>, +n: Nat, +fmt: C.CpioFormat, ok: C.CpioEntry.valid_all(es), h: {Nat.sub(List.length(&2, C.CpioEntry, es), n) == 0n : Nat}) -> {Done{es} == C.parse.go.ref(n, C.entry.read(lv(fmt, es))) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
   match es:
     case Nil{}:
       match n:
@@ -354,16 +436,79 @@ def parse_rt(+es: List<&2, C.CpioEntry>, +n: Nat, +fmt: C.CpioFormat, ok: C.Cpio
     case Con{e, t}:
       match n:
         case 0n:
-          Empty.absurd({Done{Con{e, t}} == C.parse.go(0n, C.entry.read(lv(fmt, Con{e, t}))) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}, disc_lemma(List.length(&2, C.CpioEntry, t), h))
+          Empty.absurd({Done{Con{e, t}} == C.parse.go.ref(0n, C.entry.read(lv(fmt, Con{e, t}))) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}, disc_lemma(List.length(&2, C.CpioEntry, t), h))
         case 1n+m:
           (oke, okt) = ok
-          %entry_rt(fmt, e, lv(fmt, t), oke) : {Done{Con{e, t}} == C.parse.go(1n+m, _) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+          %entry_rt(fmt, e, lv(fmt, t), oke) : {Done{Con{e, t}} == C.parse.go.ref(1n+m, _) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
           %parse_rt(t, m, fmt, okt, h) : {Done{Con{e, t}} == C.parse.cons(e, _) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
           {==}
 
+# The tail-recursive parser is the structural one: the entries read so far,
+# reversed in acc, go back in front of the structural parser's answer.
+
+def parse_fin(acc: List<&2, C.CpioEntry>, m: Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>) -> Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>:
+  match m:
+    case Fail{x}:
+      Fail{x}
+    case Done{l}:
+      Done{C.entries.rev_onto(acc, l)}
+
+def parse_fin_cons(+e: C.CpioEntry, +acc: List<&2, C.CpioEntry>, +m: Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>) -> {parse_fin(Con{e, acc}, m) == parse_fin(acc, C.parse.cons(e, m)) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
+  match m:
+    case Fail{x}:
+      {==}
+    case Done{l}:
+      {==}
+
+def parse_fin_nil(+m: Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>) -> {parse_fin(Nil{}, m) == m : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
+  match m:
+    case Fail{x}:
+      {==}
+    case Done{l}:
+      {==}
+
+def parse_acc(+fuel: Nat, +s: C.CpioStep, +acc: List<&2, C.CpioEntry>) -> {C.parse.acc(fuel, s, acc) == parse_fin(acc, C.parse.go.ref(fuel, s)) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
+  match fuel:
+    case 0n:
+      match s:
+        case C.CpioStepEnd{}:
+          {==}
+        case C.CpioStepBad{x}:
+          {==}
+        case C.CpioStepEntry{e, r}:
+          {==}
+    case 1n+f:
+      match s:
+        case C.CpioStepEnd{}:
+          {==}
+        case C.CpioStepBad{x}:
+          {==}
+        case C.CpioStepEntry{+e, +r}:
+          Equal.trans(Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>, C.parse.acc(f, C.entry.read(r), Con{e, acc}), parse_fin(Con{e, acc}, C.parse.go.ref(f, C.entry.read(r))), parse_fin(acc, C.parse.cons(e, C.parse.go.ref(f, C.entry.read(r)))), parse_acc(f, C.entry.read(r), Con{e, acc}), parse_fin_cons(e, acc, C.parse.go.ref(f, C.entry.read(r))))
+
+def parse_eq(+fuel: Nat, +s: C.CpioStep) -> {C.parse.go.ref(fuel, s) == C.parse.go(fuel, s) : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}:
+  Equal.sym(Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>, C.parse.go(fuel, s), C.parse.go.ref(fuel, s), Equal.trans(Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>, C.parse.acc(fuel, s, Nil{}), parse_fin(Nil{}, C.parse.go.ref(fuel, s)), C.parse.go.ref(fuel, s), parse_acc(fuel, s, Nil{}), parse_fin_nil(C.parse.go.ref(fuel, s))))
+
+# The tail-recursive build is the structural one: building the reversed
+# entries rs onto the trailer, after xs reversed onto them, is building rs
+# onto the structural archive of xs.
+
+def build_go(+fmt: C.CpioFormat, +xs: List<&2, C.CpioEntry>, +rs: List<&2, C.CpioEntry>) -> {C.build.go(fmt, C.entries.rev_onto(xs, rs), C.entry.onto(fmt, C.trailer.entry(), B.Octets.empty())) == C.build.go(fmt, rs, C.Cpio.build.ref(fmt, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      build_go(fmt, t, Con{x, rs})
+
+def build_eq(+fmt: C.CpioFormat, +es: List<&2, C.CpioEntry>) -> {C.Cpio.build.ref(fmt, es) == C.Cpio.build(fmt, es) : B.Octets}:
+  Equal.sym(B.Octets, C.Cpio.build(fmt, es), C.Cpio.build.ref(fmt, es), build_go(fmt, es, Nil{}))
+
 def Laws.parse_build(fmt, es, ok):
-  %vlist(fmt, es) : {C.parse.go(B.len(_), C.entry.read(B.Octets.to_list(C.Cpio.build(fmt, es)))) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
-  %vlist(fmt, es) : {C.parse.go(B.len(lv(fmt, es)), C.entry.read(_)) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+  %build_eq(fmt, es) : {C.Cpio.parse(_) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+  %Equal.sym(Nat, B.Octets.len(C.Cpio.build.ref(fmt, es)), B.len(B.Octets.to_list(C.Cpio.build.ref(fmt, es))), BL.octets_len_list(C.Cpio.build.ref(fmt, es))) : {C.parse.go(_, C.entry.read(B.Octets.to_list(C.Cpio.build.ref(fmt, es)))) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+  %parse_eq(B.len(B.Octets.to_list(C.Cpio.build.ref(fmt, es))), C.entry.read(B.Octets.to_list(C.Cpio.build.ref(fmt, es)))) : {_ == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+  %vlist(fmt, es) : {C.parse.go.ref(B.len(_), C.entry.read(B.Octets.to_list(C.Cpio.build.ref(fmt, es)))) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+  %vlist(fmt, es) : {C.parse.go.ref(B.len(lv(fmt, es)), C.entry.read(_)) == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
   %parse_rt(es, B.len(lv(fmt, es)), fmt, ok, len_bound(es, fmt)) : {_ == Done{es} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
   {==}
 

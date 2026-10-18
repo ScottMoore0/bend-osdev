@@ -173,7 +173,8 @@ def hdr.decode(xs: List<&2, U32>) -> Result<&2, &2, CpioError, CpioHdrRest>:
 
 # Sizes: a length as a 32-bit field
 
-def nat.half(n: Nat) -> Nat:
+# n / 2, structural: the reference the proofs reason about
+def nat.half.ref(n: Nat) -> Nat:
   match n:
     case 0n:
       0n
@@ -182,7 +183,24 @@ def nat.half(n: Nat) -> Nat:
         case 0n:
           0n
         case 1n+q:
-          1n+nat.half(q)
+          1n+nat.half.ref(q)
+
+def nat.half.go(n: Nat, acc: Nat) -> Nat:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      match p:
+        case 0n:
+          acc
+        case 1n+q:
+          nat.half.go(q, 1n+acc)
+
+# n / 2, tail-recursive, so a length of any size can be halved (Bend 2.0.37's
+# runtime overflows its stack at some tens of thousands of nested calls);
+# PROOF.bend: half_eq ties it to nat.half.ref
+def nat.half(n: Nat) -> Nat:
+  nat.half.go(n, 0n)
 
 def nat.odd(n: Nat) -> Bool:
   match n:
@@ -228,8 +246,9 @@ def split.cons(h: U32, m: Maybe<&2, CpioCut>) -> Maybe<&2, CpioCut>:
     case Some{CpioCut{a, b}}:
       Some{CpioCut{Con{h, a}, b}}
 
-# the first n bytes and the rest; None if there are fewer than n
-def split(n: Nat, xs: List<&2, U32>) -> Maybe<&2, CpioCut>:
+# the first n bytes and the rest; None if there are fewer than n (structural:
+# the reference the proofs reason about)
+def split.ref(n: Nat, xs: List<&2, U32>) -> Maybe<&2, CpioCut>:
   match n:
     case 0n:
       Some{CpioCut{Nil{}, xs}}
@@ -238,7 +257,24 @@ def split(n: Nat, xs: List<&2, U32>) -> Maybe<&2, CpioCut>:
         case Nil{}:
           None{}
         case Con{h, t}:
-          split.cons(h, split(p, t))
+          split.cons(h, split.ref(p, t))
+
+# the bytes taken so far are kept reversed in acc
+def split.go(n: Nat, xs: List<&2, U32>, acc: List<&2, U32>) -> Maybe<&2, CpioCut>:
+  match n:
+    case 0n:
+      Some{CpioCut{B.rev(acc), xs}}
+    case 1n+p:
+      match xs:
+        case Nil{}:
+          None{}
+        case Con{h, t}:
+          split.go(p, t, Con{h, acc})
+
+# split.ref, tail-recursive (PROOF.bend: split_eq), so a file's data can be
+# of any length
+def split(n: Nat, xs: List<&2, U32>) -> Maybe<&2, CpioCut>:
+  split.go(n, xs, Nil{})
 
 # all but the first n bytes; None if there are fewer than n
 def skip(n: Nat, xs: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
@@ -352,7 +388,7 @@ def entry.r8(m: Maybe<&2, CpioCut>, name: List<&2, U32>, h: CpioHeader) -> CpioS
     case None{}:
       CpioStepBad{CpioTruncated{}}
     case Some{CpioCut{+data, r}}:
-      entry.r9(skip(pad4(B.len(data)), r), name, data, h)
+      entry.r9(skip(pad4(B.len.fast(data)), r), name, data, h)
 
 # after the name's padding
 def entry.r7(m: Maybe<&2, List<&2, U32>>, name: List<&2, U32>, +h: CpioHeader) -> CpioStep:
@@ -422,8 +458,9 @@ def parse.cons(e: CpioEntry, m: Result<&2, &2, CpioError, List<&2, CpioEntry>>) 
     case Done{l}:
       Done{Con{e, l}}
 
-# fuel bounds the number of entries
-def parse.go(fuel: Nat, s: CpioStep) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
+# fuel bounds the number of entries (structural: the reference the proofs
+# reason about)
+def parse.go.ref(fuel: Nat, s: CpioStep) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
   match fuel s:
     case _ CpioStepEnd{}:
       Done{Nil{}}
@@ -432,7 +469,32 @@ def parse.go(fuel: Nat, s: CpioStep) -> Result<&2, &2, CpioError, List<&2, CpioE
     case 0n CpioStepEntry{e, r}:
       Fail{CpioTruncated{}}
     case 1n+f CpioStepEntry{e, r}:
-      parse.cons(e, parse.go(f, entry.read(r)))
+      parse.cons(e, parse.go.ref(f, entry.read(r)))
+
+# the entries of xs in reverse order, in front of acc
+def entries.rev_onto(xs: List<&2, CpioEntry>, acc: List<&2, CpioEntry>) -> List<&2, CpioEntry>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      entries.rev_onto(t, Con{h, acc})
+
+# the entries read so far are kept reversed in acc
+def parse.acc(fuel: Nat, s: CpioStep, acc: List<&2, CpioEntry>) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
+  match fuel s:
+    case _ CpioStepEnd{}:
+      Done{entries.rev_onto(acc, Nil{})}
+    case _ CpioStepBad{x}:
+      Fail{x}
+    case 0n CpioStepEntry{e, r}:
+      Fail{CpioTruncated{}}
+    case 1n+f CpioStepEntry{e, r}:
+      parse.acc(f, entry.read(r), Con{e, acc})
+
+# parse.go.ref, tail-recursive (PROOF.bend: parse_eq), so an archive can hold
+# any number of entries
+def parse.go(fuel: Nat, s: CpioStep) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
+  parse.acc(fuel, s, Nil{})
 
 # Public interface
 
@@ -484,26 +546,40 @@ def entry.check(fmt: CpioFormat, data: B.Octets) -> U32:
 def CpioEntry.header(+fmt: CpioFormat, e: CpioEntry) -> CpioHeader:
   match e:
     case CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, name, +data}:
-      CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, size32(1n+B.len(B.Octets.to_list(name))), entry.check(fmt, data)}
+      CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, size32(B.Octets.len(data)), devmajor, devminor, rdevmajor, rdevminor, size32(1n+B.Octets.len(name)), entry.check(fmt, data)}
 
 # one entry's bytes (header, name, NUL, padding, data, padding), then rest
 def entry.onto(+fmt: CpioFormat, e: CpioEntry, rest: B.Octets) -> B.Octets:
   match e:
     case CpioEntry{ino, mode, uid, gid, nlink, mtime, devmajor, devminor, rdevmajor, rdevminor, +name, +data}:
-      B.Octets.append(CpioHeader.encode(CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, size32(B.len(B.Octets.to_list(data))), devmajor, devminor, rdevmajor, rdevminor, size32(1n+B.len(B.Octets.to_list(name))), entry.check(fmt, data)}), B.Octets.append(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(pad4(Nat.add(111n, B.len(B.Octets.to_list(name)))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(pad4(B.len(B.Octets.to_list(data)))), rest)))))
+      B.Octets.append(CpioHeader.encode(CpioHeader{fmt, ino, mode, uid, gid, nlink, mtime, size32(B.Octets.len(data)), devmajor, devminor, rdevmajor, rdevminor, size32(1n+B.Octets.len(name)), entry.check(fmt, data)}), B.Octets.append(name, B.Octets.append(B.Octets.cons(0, B.Octets.zeros(pad4(Nat.add(111n, B.Octets.len(name))))), B.Octets.append(data, B.Octets.append(B.Octets.zeros(pad4(B.Octets.len(data))), rest)))))
 
-# an archive in format fmt: the entries, then the trailer
-def Cpio.build(+fmt: CpioFormat, es: List<&2, CpioEntry>) -> B.Octets:
+# an archive in format fmt: the entries, then the trailer (structural: the
+# reference the proofs reason about)
+def Cpio.build.ref(+fmt: CpioFormat, es: List<&2, CpioEntry>) -> B.Octets:
   match es:
     case Nil{}:
       entry.onto(fmt, trailer.entry(), B.Octets.empty())
     case Con{e, t}:
-      entry.onto(fmt, e, Cpio.build(fmt, t))
+      entry.onto(fmt, e, Cpio.build.ref(fmt, t))
+
+# the entries rs (the archive's entries, last first) in front of acc
+def build.go(+fmt: CpioFormat, rs: List<&2, CpioEntry>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{e, t}:
+      build.go(fmt, t, entry.onto(fmt, e, acc))
+
+# an archive in format fmt: the entries, then the trailer; built from the last
+# entry back, tail-recursively (PROOF.bend: build_eq ties it to Cpio.build.ref)
+def Cpio.build(+fmt: CpioFormat, es: List<&2, CpioEntry>) -> B.Octets:
+  build.go(fmt, entries.rev_onto(es, Nil{}), entry.onto(fmt, trailer.entry(), B.Octets.empty()))
 
 # the entries of an archive in either format, up to its trailer; bytes after
 # the trailer's name are ignored (an initramfs may pad the archive)
 def Cpio.parse(+o: B.Octets) -> Result<&2, &2, CpioError, List<&2, CpioEntry>>:
-  parse.go(B.len(B.Octets.to_list(o)), entry.read(B.Octets.to_list(o)))
+  parse.go(B.Octets.len(o), entry.read(B.Octets.to_list(o)))
 
 # The entries Cpio.build can hold, so that Cpio.parse gives them back: the
 # data, and the name with its NUL, fit in a 32-bit size field; the name is
