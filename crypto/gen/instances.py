@@ -97,7 +97,7 @@ HASH = [
          digest="CR.CrCrc64.digest(~spec)",
          streaming="Laws.crc64_hash_streaming(~spec, %s, %s, %s)", split="Laws.crc64_hash_split(~spec, %s, %s)",
          split3="Laws.crc64_hash_split3(~spec, %s, %s, %s)"),
-    # bend-collections proves SHA-2's pieces only from the start state, so
+    # bend-collections proves SHA-2's and SHA-3's pieces only from the start state, so
     # these rows have no streaming law (and no HMAC streaming law)
     dict(name="sha256", title="SHA-256 (bend-collections)", tparams=[], H="SH.CrSha2State",
          init="SH.CrSha2.init256()", update="SH.CrSha2.update", final="SH.CrSha2.final", digest="SH.CrSha2.sha256",
@@ -105,6 +105,9 @@ HASH = [
     dict(name="sha512", title="SHA-512 (bend-collections)", tparams=[], H="SH.CrSha2State",
          init="SH.CrSha2.init512()", update="SH.CrSha2.update", final="SH.CrSha2.final", digest="SH.CrSha2.sha512",
          streaming=None, split="Laws.sha512_hash_split(%s, %s)", split3="Laws.sha512_hash_split3(%s, %s, %s)"),
+    dict(name="sha3_256", title="SHA3-256 (bend-collections)", tparams=[], H="S3.CrSha3State",
+         init="S3.CrSha3.init()", update="S3.CrSha3.update", final="S3.CrSha3.final", digest="S3.CrSha3.sha3_256",
+         streaming=None, split="Laws.sha3_256_hash_split(%s, %s)", split3="Laws.sha3_256_hash_split3(%s, %s, %s)"),
 ]
 
 # ---------------------------------------------------------------- schemas
