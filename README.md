@@ -57,6 +57,7 @@ GPL source was read.
 | [bzip2](bzip2/) | bzip2 compression and decompression, each stage (RLE, MTF, BWT, Huffman) usable alone |
 | [zstd](zstd/) | Zstandard (RFC 8878) decompression with dictionaries and streaming, and a compressor; FSE, Huffman and XXH64 usable alone |
 | [lzo](lzo/) | LZO1X compression and decompression, and the lzop container (clean-room, from documentation only) |
+| [c842](c842/) | IBM's 842 compression, as Linux and POWER's NX accelerator read and write it, with its CRC trailer (clean-room, from IBM's paper and patent and black-box tests of Linux) |
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
 | [errseq](errseq/) | Error sequence counters (`errseq_t`): a writer records errors, each observer learns of one it has not seen exactly once |
