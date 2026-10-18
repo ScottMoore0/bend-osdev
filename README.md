@@ -41,6 +41,7 @@ GPL source was read.
 | [perms](perms/) | Unix permission checks, umask, POSIX ACLs, sticky directories |
 | [lz4](lz4/) | LZ4 block and frame compression and decompression |
 | [xz](xz/) | `.xz` decompression: LZMA2, delta, every check type, streaming |
+| [bzip2](bzip2/) | bzip2 compression and decompression, each stage (RLE, MTF, BWT, Huffman) usable alone |
 | [lzo](lzo/) | LZO1X compression and decompression, and the lzop container (clean-room, from documentation only) |
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
