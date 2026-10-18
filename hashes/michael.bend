@@ -2,8 +2,9 @@
 # algorithm as A. Wool, IEEE Trans. Wireless Commun. 3(5), 2004, Fig. 1,
 # and Huang, Seberry, Susilo and Bunder, LNCS 3823, 2005, Algorithms 2.1
 # and 2.2, describe it; README.md): a 64-bit tag under a 64-bit key, over
-# 32-bit words, little-endian (the byte order those sources do not state,
-# so it is unverified, as are the test vectors: README.md). With the key (K0, K1) as two
+# 32-bit words, little-endian (the byte order those sources do not state;
+# IEEE 802.11-2012 M.6.3's TKIP vector confirms it, while the six recalled
+# test vectors are unverified: README.md). With the key (K0, K1) as two
 # little-endian words, (L, R) = (K0, K1); the message is padded with the
 # byte 0x5a and four to seven zero bytes to a multiple of four bytes; each
 # word M_i is taken in by L = L xor M_i, (L, R) = b(L, R), where b is

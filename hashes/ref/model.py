@@ -236,6 +236,23 @@ STB_EX1 = ["b383fc2eced4a574" * 8,
 # could be read; README.md, Specifications), and michael() above was
 # written from the same memory, so their agreement is no independent
 # evidence
+# IEEE Std 802.11-2012, M.6.3 (the TKIP test vector), as hostap's
+# BSD-licensed wlantest/test_vectors.c (test_vector_tkip) reproduces its
+# data: TK = 12 34 56 78 90 repeated (32 bytes), a FromDS data frame with
+# A1 = DA = 02:03:04:05:06:08 and A2 = A3 = SA = 02:03:04:05:06:07, no QoS
+# (priority 0), a 92-byte MSDU, and the 8 bytes that follow it in the
+# plaintext MPDU (commented out there): its MIC. Michael's input is DA, SA,
+# the priority and three zero bytes, then the MSDU; the key is TK bytes 16
+# to 23. Read as test data only.
+TKIP_M63_KEY = bytes([0x12, 0x34, 0x56, 0x78, 0x90] * 7)[16:24]
+TKIP_M63_DA = bytes.fromhex("020304050608")
+TKIP_M63_SA = bytes.fromhex("020304050607")
+TKIP_M63_MSDU = bytes.fromhex(
+    "aaaa030000000800" "4500005400004000" "4001a555c0a80a02" "c0a80a0108003ab0" "00000000cd4c0500" "0000000008090a0b"
+    "0c0d0e0f10111213" "1415161718191a1b" "1c1d1e1f20212223" "2425262728292a2b" "2c2d2e2f30313233" "34353637")
+TKIP_M63_MIC = "6881a3f3d648d03c"
+TKIP_M63_INPUT = TKIP_M63_DA + TKIP_M63_SA + bytes(4) + TKIP_M63_MSDU
+assert len(TKIP_M63_MSDU) == 92
 MICHAEL_V = [("0000000000000000", b"", "82925c1ca1d130b8"), ("82925c1ca1d130b8", b"M", "434721ca40639b3f"),
              ("434721ca40639b3f", b"Mi", "e8f9becae97e5d29"), ("e8f9becae97e5d29", b"Mic", "90038fc6cf13c1db"),
              ("90038fc6cf13c1db", b"Mich", "d55e100510128986"), ("d55e100510128986", b"Michael", "0a942b124ecaa546")]
@@ -258,6 +275,7 @@ def check_vectors():
     h = stb_g(0, 0, int.from_bytes(STB_M1 + bytes([1]), "little"))
     assert "%0128x" % stb_lps(0) == STB_EX1[0] and "%0128x" % h == STB_EX1[1]
     assert "%0128x" % stb_g(0, h, 504) == STB_EX1[2]
+    assert michael(TKIP_M63_KEY, TKIP_M63_INPUT).hex() == TKIP_M63_MIC
     for k, m, v in MICHAEL_V:
         assert michael(bytes.fromhex(k), m).hex() == v, ("michael", m)
     # the models Python can check: against hashlib, on a few lengths around

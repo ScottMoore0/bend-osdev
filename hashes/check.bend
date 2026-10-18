@@ -5,7 +5,8 @@
 # (init, three updates, final). Then Streebog's transformations on RFC
 # 6986's example 1, a million bytes "a" through SHA-1 and RIPEMD-160, and
 # Michael on the six vectors recalled as the standard's (each key the
-# previous tag; unverified, README.md) with a
+# previous tag; unverified, README.md), on IEEE 802.11-2012 M.6.3's TKIP
+# frame (as hostap's wlantest/test_vectors.c gives it), with a
 # short key refused. The values are the specifications' (the #| lines).
 import Base
 import ../bytes/bytes.bend as B
@@ -98,6 +99,7 @@ def main() -> IO(Unit):
     IO.print("michael e8f9becae97e5d29 " ++ mic(B.Octets.of_list([232, 249, 190, 202, 233, 126, 93, 41]), B.Octets.of_string("Mic")))
     IO.print("michael 90038fc6cf13c1db " ++ mic(B.Octets.of_list([144, 3, 143, 198, 207, 19, 193, 219]), B.Octets.of_string("Mich")))
     IO.print("michael d55e100510128986 " ++ mic(B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134]), B.Octets.of_string("Michael")))
+    IO.print("michael tkip m.6.3 " ++ mic(B.Octets.of_list([52, 86, 120, 144, 18, 52, 86, 120]), B.Octets.of_list([2, 3, 4, 5, 6, 8, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 170, 170, 3, 0, 0, 0, 8, 0, 69, 0, 0, 84, 0, 0, 64, 0, 64, 1, 165, 85, 192, 168, 10, 2, 192, 168, 10, 1, 8, 0, 58, 176, 0, 0, 0, 0, 205, 76, 5, 0, 0, 0, 0, 0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55])))
     IO.print("michael short key: " ++ mic(B.Octets.zeros(7n), B.Octets.empty()))
 
 #|md4 0 31d6cfe0d16ae931b73c59d7e0c089c0 31d6cfe0d16ae931b73c59d7e0c089c0
@@ -141,4 +143,5 @@ def main() -> IO(Unit):
 #|michael e8f9becae97e5d29 90038fc6cf13c1db 90038fc6cf13c1db
 #|michael 90038fc6cf13c1db d55e100510128986 d55e100510128986
 #|michael d55e100510128986 0a942b124ecaa546 0a942b124ecaa546
+#|michael tkip m.6.3 6881a3f3d648d03c 6881a3f3d648d03c
 #|michael short key: bad key length 7

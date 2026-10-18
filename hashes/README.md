@@ -55,9 +55,21 @@ Written from the public specifications only; no GPL source was read.
   with 0x5a and four to seven zero bytes to a multiple of four; per word
   l ^= M_i, then b(l, r); b as R ^= L <<< 17, L += R, R ^= XSWAP(L),
   L += R, R ^= L <<< 3, L += R, R ^= L >>> 2, L += R, with XSWAP(ABCD) =
-  BADC; the tag (l, r). **Neither states the byte order** (key bytes into
-  K0 and K1, message bytes into words, the tag's bytes): the little-endian
-  order used here is not checked against a published source.
+  BADC; the tag (l, r). Neither states the byte order (key bytes into K0
+  and K1, message bytes into words, the tag's bytes). **The algorithm and
+  its byte order are verified end to end** by IEEE Std 802.11-2012's M.6.3
+  TKIP test vector, as the test data of hostap's `wlantest/test_vectors.c`
+  (`test_vector_tkip`; BSD-licensed, Jouni Malinen, 2012;
+  https://fuchsia.googlesource.com/third_party/hostap/+/fuchsia/wlantest/test_vectors.c) reproduces it,
+  read as data only: TK = 12 34 56 78 90 repeated (32 bytes); a FromDS
+  data frame with DA = 02:03:04:05:06:08 and SA = 02:03:04:05:06:07, no
+  QoS (priority 0); a 92-byte MSDU; and the 8 bytes that follow the MSDU in
+  the plaintext MPDU (commented out in that file, unlabelled), 68 81 a3 f3
+  d6 48 d0 3c. Michael over DA, SA, the priority and three zero bytes, then
+  the MSDU (TKIP's input, as both papers describe it), under TK bytes 16 to
+  23, gives exactly those 8 bytes (TK bytes 24 to 31 do not); the 108-byte
+  input also exercises the longest padding, 0x5a and seven zeros. It is a
+  law (`michael_tkip_m63`) and in `check.bend`.
   **The six test vectors are unverified.** No published copy of them could
   be read; they were written from memory (as the standard's chained
   vectors: key 0, message ""; then each key the previous tag, messages "M",
@@ -160,7 +172,7 @@ Everything else (`hs.*`, `HsW16`, `HsStbTab`, `HsStbTabs`) is internal.
 
 ## Laws
 
-`LAWS.bend` (written by `gen/laws.py`) has 76 laws.
+`LAWS.bend` (written by `gen/laws.py`) has 77 laws.
 
 **For every input**, with no hypothesis:
 
@@ -183,7 +195,9 @@ two SHA-1 examples; the eight values of the RIPEMD-160 page (all but the
 million "a"); SM3's two examples; Streebog's LPS(0), and the first two
 compressions of RFC 6986's example 1 (g_N(h, m) and g_0(h, N), as the RFC
 prints them); Michael's six vectors (unverified against a published
-copy: Specifications above) and the refusal of a 7-byte key.
+copy: Specifications above), its MIC on IEEE 802.11-2012 M.6.3's TKIP
+frame (`michael_tkip_m63`, verified: above) and the refusal of a 7-byte
+key.
 
 **Not laws, and why.** Streebog's whole digests: one compression runs within
 `--verdict`'s kernel fuel and two do not, and a digest is at least three;
@@ -201,7 +215,8 @@ does).
   pieces through init/update/final, including Streebog's four RFC 6986
   digests and the intermediate values, a million bytes "a" through SHA-1
   and RIPEMD-160, Michael's six vectors (whole and in pieces; unverified,
-  above) and its short key refused. The expected lines are the specifications' values.
+  above), the M.6.3 TKIP MIC (whole and in pieces) and its short key
+  refused. The expected lines are the specifications' values.
 * `ref/run.sh` (216 cases with the default seed): each hash on 27 message
   lengths (around every block boundary up to three blocks, and 1000 and
   4103 bytes), whole and cut into three pieces at random points, and

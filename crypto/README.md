@@ -46,9 +46,12 @@ Written from the public specifications only:
   hashes/README.md cites (RFC 1320, RFC 1321, FIPS 180-4, the RIPEMD-160
   paper, GB/T 32905, RFC 6986, IEEE 802.11i). Michael's algorithm is
   checked against Wool (IEEE Trans. Wireless Commun. 3(5), 2004, Fig. 1)
-  and Huang, Seberry, Susilo and Bunder (LNCS 3823, 2005, section 2); its
-  byte order and its six test vectors are not checked against a published
-  copy of the standard, which could not be read (hashes/README.md).
+  and Huang, Seberry, Susilo and Bunder (LNCS 3823, 2005, section 2), and
+  with its byte order end to end against IEEE 802.11-2012 M.6.3's TKIP
+  test vector (as hostap's BSD-licensed `wlantest/test_vectors.c` gives
+  its data); its six chained test vectors are not checked against a
+  published copy of the standard, which could not be read
+  (hashes/README.md).
 * **AEAD:** the shape of RFC 5116, *An Interface and Algorithms for
   Authenticated Encryption* (2008).
 * The instances follow their own packages' specifications (FIPS 197, FIPS

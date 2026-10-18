@@ -293,6 +293,10 @@ def michael_laws():
             "{Result.map(&2, &2, Hs.HsError, %s, B.Octets, k => %s, MI.HsMichael.key(%s)) == Done{%s} : %s}"
             % (K, D(octets(m)), digest_lit(k), digest_lit(v), res))
         PROOFS.append("def Laws.michael_vector_%d():\n  {==}\n" % i)
+    law("michael_tkip_m63", "%s: IEEE Std 802.11-2012, M.6.3 (the TKIP test vector, as hostap's BSD-licensed wlantest/test_vectors.c reproduces it): the MIC of its MSDU (DA, SA, priority 0 and three zero bytes, then the data) under TK bytes 16 to 23" % t, [],
+        "{Result.map(&2, &2, Hs.HsError, %s, B.Octets, k => %s, MI.HsMichael.key(%s)) == Done{%s} : Result<&2, &2, Hs.HsError, B.Octets>}"
+        % (K, D(octets(model.TKIP_M63_INPUT)), digest_lit(model.TKIP_M63_KEY.hex()), digest_lit(model.TKIP_M63_MIC)))
+    PROOFS.append("def Laws.michael_tkip_m63():\n  {==}\n")
 
 
 for h in HASHES:

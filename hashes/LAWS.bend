@@ -424,3 +424,7 @@ law michael_vector_5:
 # Michael (IEEE 802.11i): test vector 6 as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)
 law michael_vector_6:
   {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_string("Michael")), MI.HsMichael.key(B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134]))) == Done{B.Octets.of_list([10, 148, 43, 18, 78, 202, 165, 70])} : Result<&2, &2, Hs.HsError, B.Octets>}
+
+# Michael (IEEE 802.11i): IEEE Std 802.11-2012, M.6.3 (the TKIP test vector, as hostap's BSD-licensed wlantest/test_vectors.c reproduces it): the MIC of its MSDU (DA, SA, priority 0 and three zero bytes, then the data) under TK bytes 16 to 23
+law michael_tkip_m63:
+  {Result.map(&2, &2, Hs.HsError, Hs.HsW2, B.Octets, k => MI.HsMichael.mic(k, B.Octets.of_list([2, 3, 4, 5, 6, 8, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 170, 170, 3, 0, 0, 0, 8, 0, 69, 0, 0, 84, 0, 0, 64, 0, 64, 1, 165, 85, 192, 168, 10, 2, 192, 168, 10, 1, 8, 0, 58, 176, 0, 0, 0, 0, 205, 76, 5, 0, 0, 0, 0, 0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55])), MI.HsMichael.key(B.Octets.of_list([52, 86, 120, 144, 18, 52, 86, 120]))) == Done{B.Octets.of_list([104, 129, 163, 243, 214, 72, 208, 60])} : Result<&2, &2, Hs.HsError, B.Octets>}
