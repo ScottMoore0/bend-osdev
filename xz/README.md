@@ -20,15 +20,53 @@ Inputs and outputs are `Octets` (bend-osdev-bytes).
   public domain): the range decoder, literals with lc/lp/pb, matches and rep0
   to rep3, the state machine, length and distance coding. LZMA2's chunk
   format follows the description of the LZMA2 filter in the .xz format.
-* The `.lzma` ("LZMA alone") header, from the descriptions of the format in
-  the LZMA SDK (the LZMA specification's file format section, and lzma.txt)
-  and in XZ Utils' documentation (lzma-file-format.txt), all public domain:
-  the properties byte `(pb * 5 + lp) * 9 + lc`, the 32-bit dictionary size,
-  the 64-bit uncompressed size (all ones: unknown), then the LZMA stream,
-  ending with the end marker when the size is unknown. The limit
-  `lc + lp <= 4` is xz(1)'s (`--lzma1` options: "the sum of lc and lp must
-  not exceed 4"); a dictionary size below 4096 counts as 4096, as the LZMA
-  specification's decoder does.
+* The `.lzma` ("LZMA alone") format, checked against these documents (all
+  public domain):
+  * XZ Utils' `doc/lzma-file-format.txt` ("The .lzma File Format", Lasse
+    Collin, last modified 2024-04-08), read in an installed XZ Utils
+    documentation directory,
+    <https://dawn2.umd.edu/PBC/conda/share/doc/xz/lzma-file-format.txt>:
+    * 1: a 13-byte header, then the LZMA data; data after the first stream
+      is corruption to XZ Utils (other implementations ignore it). This
+      package follows XZ Utils: `XzTrailingData`.
+    * 1.1.1 Properties: one byte, `(pb * 5 + lp) * 9 + lc`, with lc 0 to 8,
+      lp 0 to 4, pb 0 to 4, larger values invalid; XZ Utils additionally
+      requires `lc + lp <= 4`, which this package requires too (its
+      probability array, `rangecoder.bend`, holds the literal coder only up
+      to that).
+    * 1.1.2 Dictionary Size: 32 bits, little-endian; any value is allowed
+      (2^n and 2^n + 2^(n-1) are recommended for portability). This package
+      accepts any value.
+    * 1.1.3 Uncompressed Size: 64 bits, little-endian; all ones means
+      unknown, and then the stream must end with the end of payload marker;
+      a known size may also be followed by the marker (allowed since the
+      2022 revision; XZ Utils 5.2.5 and older refuse it). XZ Utils refuses
+      known sizes of 256 GiB or more (to avoid false positives when
+      detecting the format); this package refuses any known size above its
+      `max_out` (a `U32`) with `XzOutputTooLarge`.
+    * 1.2: the LZMA data's own format is left to the LZMA SDK.
+  * xz(1), <https://tukaani.org/xz/man/xz.1.html>: OPTIONS, "Custom
+    compressor filter chains" (`--lzma1`): lc and lp may not sum to more
+    than 4; LZMA UTILS COMPATIBILITY, "Unsupported .lzma files": xz refuses
+    `lc + lp > 4`, and dictionary sizes other than 2^n and 2^n + 2^(n-1);
+    it decodes files with or without the end of payload marker, and calls
+    a file with data after its stream corrupt.
+  * liblzma's API documentation, `lzma_options_lzma`,
+    <https://www.tukaani.org/xz/liblzma-api/structlzma__options__lzma.html>
+    (`dict_size`: the minimum dictionary size is 4096 bytes; `lc`: `lc + lp
+    <= 4`), and `lzma12.h`,
+    <https://www.tukaani.org/xz/liblzma-api/lzma12_8h.html>
+    (`LZMA_DICT_SIZE_MIN` 4096, `LZMA_LCLP_MAX` 4, `LZMA_PB_MAX` 4).
+
+  This package treats a dictionary size below 4096 as 4096 when it checks
+  match distances. That is liblzma's documented minimum, and the LZMA SDK's
+  decoder is reported to do the same (`LZMA_DIC_MIN`), but the SDK's own
+  specification is distributed only as an archive
+  (`lzma-specification.7z`, <https://www.7-zip.org/sdk.html>), which was
+  not downloaded, so that part of the SDK was not read. Observed of the
+  `xz` tool 5.4.5 as a black box (not documentation): it decodes a file
+  whose header names a dictionary of 3 bytes (3 = 2 + 1), refuses one of
+  2^31 - 1 bytes as "File format not recognized", and accepts all ones.
 
 The code was written from these specifications; no source of xz-utils,
 liblzma, the LZMA SDK or any GPL implementation was read.

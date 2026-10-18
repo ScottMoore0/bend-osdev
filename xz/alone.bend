@@ -1,10 +1,10 @@
 # bend-osdev-xz: the legacy .lzma format ("LZMA alone"): its 13-byte header,
 # both ways, and decoding, one-shot and streaming.
 #
-# Written from the description of the .lzma format in the LZMA SDK
-# ("lzma-specification" and lzma.txt, Igor Pavlov) and in XZ Utils'
-# documentation (lzma-file-format.txt; xz(1) for the limits on lc and lp),
-# all public domain. A .lzma file is
+# Written from XZ Utils' description of the .lzma format
+# (doc/lzma-file-format.txt, sections 1 to 1.2), xz(1) (the limit on lc +
+# lp) and liblzma's API documentation (the 4096-byte minimum dictionary), all
+# public domain; README.md cites them. A .lzma file is
 #
 #   1 byte    the properties, (pb * 5 + lp) * 9 + lc
 #   4 bytes   the dictionary size, little-endian
@@ -12,10 +12,12 @@
 #   then one LZMA stream, ending with the end marker if the size is unknown,
 #   and with or without it if the size is known
 #
-# lc + lp must not exceed 4 and pb must not exceed 4 (xz(1) documents these
-# limits; the literal probabilities fit the decoder's array only within
-# them). A dictionary size below 4096 is taken as 4096, as the LZMA SDK
-# specifies. Nothing may follow the stream.
+# lc + lp must not exceed 4 and pb must not exceed 4 (the format allows lc
+# up to 8; XZ Utils, and this package, require lc + lp <= 4, within which
+# the literal probabilities fit the decoder's array). A dictionary size
+# below 4096 is taken as 4096 (liblzma's documented minimum) when distances
+# are checked. Nothing may follow the stream (XZ Utils calls that
+# corruption).
 #
 # The LZMA decoding itself is lzma.bend's, through its interface: a step
 # decodes one byte (or the end marker), and this file checks after each step
