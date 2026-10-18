@@ -18,8 +18,11 @@ GPL source was read.
   kernel) accepts them all except four laws in cipher-modes that its kernel
   cannot yet model (see that README).
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
-- **Not yet published** on the Bend hub; every package is at version
-  0.1.0.0.
+- **Publishing on BendHub**, every package at version 0.1.0.0, as
+  `bend-osdev-<package>`: so far word64, bytes, acpi, caps and apparmor
+  (`import bend-osdev-bytes@0.1.0.0/bytes.bend as B`). The hub registers
+  about five new package names a day, so the others follow over the coming
+  days.
 
 ## Packages
 
