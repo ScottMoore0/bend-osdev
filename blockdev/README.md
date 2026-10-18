@@ -125,11 +125,12 @@ perfect array of depth below 32 with room for every block.
   counts reads: provide the operations of either interface for its type and
   pass them as template arguments. A pure device can always be used where
   the owned interface is expected, through the adapters.
-* **Single-owner devices:** an `Array` (`ImgDev`) today; a file-backed device
-  needs its operations in `IO`, which a template over a pure function type
-  cannot express yet. Its shape is the owned interface's (an `IO` handle is
-  handed back the same way), so an `IO` twin of `ODev.read_bytes` is a
-  mechanical next step, in its own package.
+* **Single-owner devices:** an `Array` (`ImgDev`) here; a device whose
+  operations are in `IO` (a file read on demand) is in bend-osdev-iodev: its
+  interface is the owned interface with each answer in `IO` (a template's
+  type may be an `IO` function type), with IO twins of the owned helpers,
+  adapters that run every pure and owned device through it (laws tie them
+  to the pure helpers), `FileDev` and a write overlay.
 * **Writing filesystems:** `write_block` is part of the owned interface;
   `ODev` helpers for writing ranges can be added beside the reading ones.
 * **Partitions:** a device wrapping another with an offset and a length is a
