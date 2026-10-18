@@ -75,19 +75,12 @@ path, on random inputs (277 cases) with:
 
 ## Speed
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 The reference engines in `crc.bend` run bit by bit. The fast path in
 `table.bend` looks up one 256-entry table per byte instead of eight bit
 steps: on a native build, CRC32C over 400 KB took 3 ms bit by bit and 1 ms
-table-driven (Bend 2.0.37, WSL2). The 64-bit CRCs use `W64`, which is slow
-until Base has a native `U64`; the table matters most there.
+table-driven (Bend 2.0.37, WSL2). The 64-bit CRCs use `W64`; natively they
+run about as fast as the 32-bit ones (see the table below), so the table
+gains less than it did on the JavaScript lane.
 
 The fast path builds its table once per call (an `Array`, threaded through
 the loop), so it pays off on inputs longer than a few hundred bytes.
@@ -96,24 +89,26 @@ the loop), so it pays off on inputs longer than a few hundred bytes.
 
 Every engine, bitwise and table-driven, is a tail-recursive loop over the
 bytes, so there is no length limit beyond memory. Measured on Bend 2.0.37
-(native build, WSL2) over 1 MB of pseudo-random bytes, each run including
-building the input (all seven results checked against `ref/gen.py`'s model,
-zlib and xz):
+(native build, `bend file.bend -o prog`, WSL2) over pseudo-random bytes,
+each run including building the input (results checked against an
+independent Python CRC):
 
-| Run, 1 MB | Time | Peak RAM |
-|---|---|---|
-| `crc32c`, bitwise | 3.0 s | 1.30 GB |
-| `crc32c`, table-driven | 3.7 s | 1.30 GB |
-| `crc64_ecma`, bitwise | 17.7 s | 1.36 GB |
-| `crc64_ecma`, table-driven | 10.0 s | 1.36 GB |
-| all seven named CRCs, bitwise | 60 s | 1.74 GB |
-| all seven named CRCs, table-driven | 35 s | 1.79 GB |
+| Run | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|
+| building the 1 MB input alone | 0.07 s | 84 MB | |
+| `crc32c`, bitwise, 1 MB | 0.13 s | 84 MB | 3.0 s, 1.30 GB |
+| `crc32c`, table-driven, 1 MB | 0.12 s | 84 MB | 3.7 s, 1.30 GB |
+| `crc64_ecma`, bitwise, 1 MB | 0.12 s | 84 MB | 17.7 s, 1.36 GB |
+| `crc64_ecma`, table-driven, 1 MB | 0.13 s | 84 MB | 10.0 s, 1.36 GB |
+| all seven named CRCs, bitwise, 1 MB | 1.1 s | 125 MB | 60 s, 1.74 GB |
+| all seven named CRCs, table-driven, 1 MB | 0.55 s | 100 MB | 35 s, 1.79 GB |
+| building the 16 MB input alone | 1.2 s | 1.31 GB | |
+| `crc32c`, bitwise / table-driven, 16 MB | 2.3 s / 2.2 s | 1.31 GB | |
+| `crc64_ecma`, bitwise / table-driven, 16 MB | 2.0 s / 2.0 s | 1.31 GB | |
 
-Most of the memory is the 1 MB `Octets` (about 940 bytes per byte
-when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured)
-and its list form. `check.bend` runs CRC32C both ways and CRC-64/XZ
+Most of the memory is the input `Octets` (about 80 bytes per byte held,
+natively) and its list form, so the CRC itself adds little.
+`check.bend` runs CRC32C both ways and CRC-64/XZ
 table-driven over 100 KB as a regression test.
 
 ## Status

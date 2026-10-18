@@ -288,45 +288,41 @@ halves are compared.
 
 ## Speed and size limits
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
+Measured on native builds (Bend 2.0.37, `bend file.bend -o prog`, WSL2;
+times are whole runs, including loading the test device). Byte strings are
+`Octets` (bytes' `OctByte` storage, about 80 bytes of memory per byte held
+natively). The differential test (34 images of up to 480 KB, 48 cases,
+every file streamed and CRC'd) runs in 2.0 s and 50 MB once built (the
+build takes 21 s and 500 MB; about 12 s on the JavaScript lane, `bend
+file.bend`); `check.bend` in 0.9 s (about 2.6 s on the JavaScript lane); the
+proofs check in about 1.5 s, with `--verdict` in about 4.3 s.
 
-Measured with Bend 2.0.37 under bun in WSL2 (not a native build; times are
-whole runs, including loading the test device). Byte strings are `Octets`,
-which cost about 940 bytes of memory per byte
-(when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured). The differential test
-(34 images of up to 480 KB, 48 cases, every file streamed and CRC'd) runs in
-about 12 s; `check.bend` in about 2.6 s; the proofs check in about 1.5 s,
-with `--verdict` in about 4.3 s.
+Large images, read a 2048-byte block at a time from a sparse device (a
+`MemDev` holding the image's metadata blocks, every file's data zero, so the
+streamed and read bytes' CRC-32s are checked against Python's `zlib`; the
+counts against `ref/gen.py`'s reader). The JavaScript-lane figures are the
+earlier ones, on images built the same way:
 
-Large images, read a 2048-byte block at a time from a sparse device (its
-non-zero metadata blocks, and file data computed from the block number):
-
-| Image | Operation | Time, peak memory |
-|---|---|---|
-| plain, `ref/gen.py`'s builder, a directory of 30,000 entries (940 KB) | `Iso.list` | 4.1 s, 874 MB (before: stack overflow) |
-| | `Iso.walk` (30,002 items); `Iso.find` of the last | 7.8 s, 896 MB; 7.1 s |
-| plain, a 40 MB file of 20,481 extents of 2 KB | `Iso.find` | 3.1 s, 548 MB (before: over 3 GB, killed) |
-| | stream it (20,481 pieces) | 91 s, 683 MB |
-| | read 1 MB across 512 extents; 100 KB; its last 5,000 bytes | 6.3 s, 1.9 GB; 3.0 s, 605 MB; 3.1 s |
-| Rock Ridge and Joliet, the builder, a 12 MB file of 3,073 extents | `Iso.find` | 2.8 s, 690 MB (before: 7.0 s, 1.1 GB) |
-| | stream it; read 1 MB across 256 extents | 14 s, 690 MB (before: 34 s, 1.2 GB); 7.1 s, 1.9 GB |
-| `genisoimage -R -J`, 22 MB, a directory of 4,000 Rock Ridge names | `Iso.list` of it; `Iso.walk` | 11 s, 1.2 GB; 8.8 s, 1.2 GB |
-| | stream a 20 MB file (10,241 pieces) | 24 s, 704 MB |
-| | `Iso.read_path` of 1 MB; of 100 KB | 11.7 s, 1.5 GB; 1.0 s, 480 MB |
+| Image | Operation | Time, peak memory, native | JavaScript lane, before |
+|---|---|---|---|
+| plain, `ref/gen.py`'s builder, a directory of 30,000 entries (1.28 MB) | open only | 0.25 s, 127 MB | |
+| | `Iso.list` | 1.1 s, 178 MB | 4.1 s, 874 MB (940 KB directory) |
+| | `Iso.walk` (30,000 items); `Iso.find` of the last | 1.2 s, 179 MB; 1.2 s, 178 MB | 7.8 s, 896 MB; 7.1 s |
+| plain, a 40 MB file of 20,481 extents of 2 KB | `Iso.find` | 0.77 s, 110 MB | 3.1 s, 548 MB |
+| | stream it (20,481 pieces) | 10.4 s, 110 MB | 91 s, 683 MB |
+| | read 1 MB across 512 extents; 100 KB; its last 5,000 bytes | 1.1 s, 193 MB; 0.79 s, 110 MB; 1.5 s, 110 MB | 6.3 s, 1.9 GB; 3.0 s, 605 MB; 3.1 s |
+| Rock Ridge and Joliet, the builder, a 12 MB file of 3,073 extents | `Iso.find` | 0.32 s, 87 MB | 2.8 s, 690 MB |
+| | stream it; read 1 MB across 256 extents | 3.2 s, 87 MB; 0.65 s, 166 MB | 14 s, 690 MB; 7.1 s, 1.9 GB |
+| `genisoimage -R -J`, 22 MB, a directory of 4,000 Rock Ridge names | open only | 0.30 s, 134 MB | |
+| | `Iso.list` of it; `Iso.walk` | 0.96 s, 204 MB; 0.98 s, 205 MB | 11 s, 1.2 GB; 8.8 s, 1.2 GB |
+| | stream a 20 MB file (10,241 pieces) | 4.5 s, 135 MB | 24 s, 704 MB |
+| | `Iso.read_path` of 1 MB; of 100 KB | 0.60 s, 233 MB; 0.32 s, 144 MB | 11.7 s, 1.5 GB; 1.0 s, 480 MB |
 
 Before this round a directory listing, a walk, a lookup and a file's extents
 recursed once per record (or per extent, with a quadratic list of pending
-extents), and a directory walk once per sector: a 30,000-entry directory
-overflowed the stack and a 20,481-extent file ran out of memory, while 12,000
-entries and 3,073 extents still worked. They are loops now (the walk of
+extents), and a directory walk once per sector: on the JavaScript lane a
+30,000-entry directory overflowed the stack and a 20,481-extent file ran out
+of memory, while 12,000 entries and 3,073 extents still worked. They are loops now (the walk of
 sectors keeps its structural form as the reference the proofs use), and a
 byte range is read from the device in pieces of at most 64 blocks, so no
 single read is long. Nothing recurses over a file's size, a directory's
@@ -334,13 +330,16 @@ records or a file's extents; walking a tree recurses once per directory level
 (at most `max_depth`). What is left:
 
 * a range read answers one `Octets`, so its length is bounded by memory:
-  1 MB takes 1.5 to 2 GB. Stream large files (`Iso.file_start` /
+  1 MB adds about 80 to 100 MB natively (1.5 to 2 GB on the JavaScript
+  lane). Stream large files (`Iso.file_start` /
   `Iso.file_next`), which hold one block at a time;
 * a directory is read whole: every record is held, its identifier and
-  system use area as `Octets` (about 30 KB a record with plain names, up to
-  about 250 KB with genisoimage's Rock Ridge entries), so a directory of
-  30,000 plain entries takes about 900 MB and one of 4,000 Rock Ridge
-  entries about 1.2 GB;
+  system use area as `Octets` (natively about 1.7 KB a record with plain
+  names and about 17 KB with genisoimage's Rock Ridge entries, beyond the
+  device; about 30 KB and 250 KB on the JavaScript lane), so listing a
+  directory of 30,000 plain entries takes about 180 MB in all and one of
+  4,000 Rock Ridge entries about 200 MB (about 900 MB and 1.2 GB on the
+  JavaScript lane);
 * offsets and lengths are `Nat`s.
 
 ## Status

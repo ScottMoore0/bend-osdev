@@ -83,33 +83,31 @@ The same operations on `List<&2, U32>` directly. Packages written before
 
 ## Speed
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 The field readers and writers are built from bit slicing, not shifts and
 masks, so their round trips can be proved for every value. That costs speed:
 use them for header fields, not bulk data.
 
-Bend 2.0.37's JavaScript lane overflows its stack (a native build has a
-2 GB stack and does not) somewhere between 10,000 and 40,000 nested non-tail calls.
-So `Octets` runs tail-recursive forms (`w8s.*.fast`, `w8s.len.go`, `w8s.eq`,
+Bend 2.0.37's JavaScript lane (`bend file.bend`) overflows its stack
+somewhere between 10,000 and 40,000 nested non-tail calls; a native build
+(`bend file.bend -o prog`) has a 2 GB stack and does not (the structural
+`len`, `take` and `append` of the list layer run over 10,000,000 elements
+natively in 0.26 s and 310 MB).
+So that it runs on both lanes, `Octets` uses tail-recursive forms (`w8s.*.fast`, `w8s.len.go`, `w8s.eq`,
 and the text and hex builders), and each is proved equal to its structural
 form for every input in `PROOF.bend`, which is what the laws reason about.
 `Octets.of_list`, `to_list`, `append`, `take`, `drop`, `len`, `zeros`,
 `split_at`, `is_eq`, `hex` and `to_string` have no length limit.
 `Octets.concat` is tail-recursive too, in the number of pieces and their size.
 
-Measured on the reference machine: a 2,000,000-byte `Octets` built,
-appended, cut and printed in about 3 s. Storage: each byte is one `OctByte`
-record (eight `Bool` fields), about 150 bytes of memory per byte held (an
-8-bit `Word`, used before, cost about 450; a `List<&2, U32>` element costs
-about 60). A pipeline that builds, copies and reads 1 MB peaks at about
-1 GB. Hold images of more than a few MB a block at a time (blockdev's
+Measured on a native build (Bend 2.0.37, WSL2): a 2,000,000-byte `Octets`
+built, appended to itself, cut and printed as hex in 0.66 s, peaking at
+380 MB (about 3 s on the JavaScript lane). Storage: each byte is one
+`OctByte` record (eight `Bool` fields); natively a 16 MB `Octets` built from
+a list peaks at 1.31 GB, about 80 bytes of memory per byte held (on the
+JavaScript lane about 150; an 8-bit `Word`, used before, cost about 450 there,
+and a `List<&2, U32>` element about 60). A pipeline that builds, copies and
+reads 1 MB peaks at 166 MB natively (about 1 GB on the JavaScript lane).
+Hold images of more than a few tens of MB a block at a time (blockdev's
 `MemDev`).
 
 The list layer's structural forms (`take`, `append`, `len`, `mask`, `hex`, ...

@@ -226,14 +226,6 @@ and limits were run by hand against the lz4 tool, not in CI.
 
 ## Speed and limits
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 * Nothing recurses over the data's length except as a tail call: the
   decoder, the matcher, the frame reader and writer, the stream reader and
   the length bytes of a literal run (`lit.ext`, tail-recursive, proved equal
@@ -241,35 +233,43 @@ will be re-measured natively once W64-heavy code builds natively
   stack, and use bytes' tail-recursive list forms (`len.fast`,
   `append.fast`, `take.fast`, `to_string.fast`, `rev_onto`). What still
   recurses is bounded: the window trie (depth 16), a frame header's fields.
-* Measured with Bend 2.0.37 (one process each, checked against `lz4` 1.9.4):
+* Measured on native builds (Bend 2.0.37, `bend file.bend -o prog`, WSL2;
+  one process each, checked against `lz4` 1.9.4):
 
-  | 1 MB (1,048,576 bytes) | time | peak memory |
-  |---|---|---|
-  | `compress`, text (lz4 -d gives it back) | 11 s | 2.2 GB |
-  | `decompress` of `lz4 -1`'s frame, text | 14 s | 2.3 GB |
-  | `decompress` of `lz4 -9 -BD -BX -B7 --content-size`'s frame (linked 4 MB blocks, block checksums) | 17 s | 2.5 GB |
-  | `frame_compress`, linked 4 MB blocks, every checksum and the size | 12 s | 2.2 GB |
-  | `frame_stream`, 256 KB blocks of 100,000 bytes, fed in two pieces | 15 s | 2.8 GB |
-  | `block_compress`, one 1 MB block (lz4 -d gives it back) | 17 s | 2.0 GB |
-  | `block_decompress` of `lz4 -1 -B7`'s 1 MB block | 11 s | 1.8 GB |
-  | random bytes (stored blocks): `compress`, `decompress`, `block_compress` | 11, 13, 20 s | 2.8, 2.6, 2.9 GB |
+  | 1 MB (1,048,576 bytes) | time, native | peak memory, native | JavaScript lane, before |
+  |---|---|---|---|
+  | `compress`, text (lz4 -d gives it back) | 2.4 s | 127 MB | 11 s, 2.2 GB |
+  | `decompress` of `lz4 -1`'s frame, text | 1.8 s | 128 MB | 14 s, 2.3 GB |
+  | `decompress` of `lz4 -9 -BD -BX -B7 --content-size`'s frame (linked 4 MB blocks, block checksums) | 1.9 s | 128 MB | 17 s, 2.5 GB |
+  | `frame_compress`, linked 4 MB blocks, every checksum and the size | 2.1 s | 152 MB | 12 s, 2.2 GB |
+  | `frame_stream`, 256 KB blocks of 100,000 bytes, fed in two pieces | 2.4 s | 155 MB | 15 s, 2.8 GB |
+  | `block_compress`, one 1 MB block (`block_decompress` gives it back) | 2.0 s | 179 MB | 17 s, 2.0 GB |
+  | `block_decompress` of `lz4 -1 -B7`'s 1 MB block | 1.5 s | 126 MB | 11 s, 1.8 GB |
+  | random bytes (stored blocks): `compress`, `decompress`, `block_compress` | 2.5, 0.76, 1.9 s | 132, 128, 250 MB | 11, 13, 20 s; 2.8, 2.6, 2.9 GB |
 
   These include reading the input from a file and writing the output (the
-  text is this repository's sources). At 256 KB, `compress` takes 3.9 s and
-  660 MB, `decompress` 3.4 s and 720 MB; at 100 KB, 1.5 s and 400 MB, and
-  1.7 s and 380 MB. Before this release, 100 KB overflowed the stack.
-* The limit now is memory, not the stack: an `Octets` cost about 940 bytes
-  of memory per byte when measured (bytes' compact `OctByte` storage, merged
-  since, holds one in about a third of that; not re-measured here), and a 1 MB input and its 1 MB output
-  are almost 2 GB between them, so keep a single call to a few MB, or work a
-  block at a time (`block_decompress_dict`, the streaming writer), until
-  bytes' storage is compact. Time is mostly that too: converting 1 MB to and
-  from `Octets` takes about 4 s.
+  text is this repository's sources). At 256 KB, `compress` takes 0.58 s
+  and 35 MB, `decompress` 0.47 s and 34 MB; at 100 KB, 0.19 s and 17 MB, and
+  0.15 s and 15 MB (on the JavaScript lane: 3.9 s and 660 MB, 3.4 s and
+  720 MB; 1.5 s and 400 MB, 1.7 s and 380 MB). At 16 MB (base64 text, which
+  lz4 stores rather than compresses), `compress` takes 43 s and
+  `decompress` 12 s, each peaking at 2.0 GB. Before this release, 100 KB
+  overflowed the JavaScript lane's stack.
+* The limit now is memory, not the stack (a native build has a 2 GB stack):
+  natively a call costs about 60 MB per MB of input and output together
+  (1 MB in and 1 MB out peak at about 130 MB, 16 MB and 16 MB at 2.0 GB; an
+  `Octets` holds about 80 bytes per byte; it was about 940 on the
+  JavaScript lane when first measured, where 1 MB in and out took almost
+  2 GB), so keep a single call to a few MB, or work a block at a time
+  (`block_decompress_dict`, the streaming writer). Converting 1 MB to and
+  from `Octets` takes well under a second natively (about 4 s on the
+  JavaScript lane).
 * List literals of a few thousand elements overflow the stack, which is why
   `ref/gen.py` joins long inputs from pieces, and its cases stay under 12 KB.
   `check.bend` holds one large case, a 70 KB block (past the decoder's 64 KB
   window, with matches reaching back up to 64 KB) compressed and decompressed
-  (about 2 s and 400 MB with the rest of the file).
+  (0.33 s and 19 MB natively with the rest of the file; about 2 s and
+  400 MB on the JavaScript lane).
 * Block and frame sizes in the writer are `U32` counts, not `Nat`: the Lean
   kernel (`--verdict`) fails on Nat computations tens of thousands of
   successors long.

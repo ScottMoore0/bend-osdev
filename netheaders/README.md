@@ -150,14 +150,6 @@ to verify; and the checksum in pieces agrees with the whole.
 
 ## Speed
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 Fields are read and written by bit slicing, so that the round trips can be
 proved; that is fine for headers. The checksum assembles each 16-bit word by
 bit slicing too, so it is slower than native arithmetic on large payloads.
@@ -165,14 +157,16 @@ bit slicing too, so it is slower than native arithmetic on large payloads.
 ## Sizes
 
 The checksum and every reader walk their bytes with tail calls, so packet
-size has no limit beyond memory (no conversion was needed for Bend 2.0.37's
-stack limit). Measured on Bend 2.0.37's JavaScript lane (WSL2), in one run:
+size has no limit beyond memory on either of Bend 2.0.37's lanes (no
+conversion was needed for the JavaScript lane's stack limit). Measured on a
+native build (Bend 2.0.37, `bend file.bend -o prog`, WSL2), in one run:
 building and verifying a 65,515-byte UDP datagram over IPv4 inside a
 65,535-byte IPv4 packet (header checksum, parse, payload, UDP checksum), a
 65,515-byte TCP segment, a 65,515-byte ICMP message and a 65,535-byte UDP
-datagram over IPv6, with every checksum checked against Python: 2.4 s,
-550 MB peak. `check.bend` builds and verifies the 64 KB UDP datagram as a
-regression test (0.7 s, 280 MB).
+datagram over IPv6, with every checksum checked against Python: 0.48 s,
+33 MB peak (2.4 s and 550 MB on the JavaScript lane). `check.bend` builds
+and verifies the 64 KB UDP datagram as a regression test (0.12 s and 10 MB
+natively; 0.7 s and 280 MB on the JavaScript lane).
 
 ## Status
 

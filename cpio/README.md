@@ -133,38 +133,31 @@ checked by hand against cpio(5).
 
 ## Sizes
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 Every loop over an archive's bytes or entries is a tail call (Bend 2.0.37's
-runtime overflows its stack at some tens of thousands of nested calls), so
-neither a file's length nor the number of entries has a limit beyond
-memory. The structural forms the proofs reason about stay beside the loops
+JavaScript lane overflows its stack at some tens of thousands of nested
+calls; a native build has a 2 GB stack), so on either lane neither a
+file's length nor the number of entries has a limit beyond memory. The structural forms the proofs reason about stay beside the loops
 in `cpio.bend` (`split.ref`, `nat.half.ref`, `parse.go.ref`,
 `Cpio.build.ref`), and `PROOF.bend` proves each equal to its loop for every
 input (`split_eq`, `half_eq`, `parse_eq`, `build_eq`).
 
-Measured on Bend 2.0.37's JavaScript lane (WSL2), building an archive in the crc
-format and parsing it back (the archive's length, byte sum and entries
-checked against a Python encoder):
+Measured on a native build (Bend 2.0.37, `bend file.bend -o prog`, WSL2),
+building an archive in the crc format and parsing it back (the archive's
+length, byte sum and entries checked; for the 1 MB rows, the length and
+byte sum against a Python encoder):
 
-| Archive | Time | Peak RAM |
-|---|---|---|
-| 1 MB: one 512 KB file and 2,790 files of 64 bytes | 6.9 s | 2.6 GB |
-| 1 MB: 8,000 empty files | 15.7 s | 1.3 GB |
+| Archive | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|
+| 1 MB: one 512 KB file and 2,790 files of 64 bytes | 1.0 s | 162 MB | 6.9 s, 2.6 GB |
+| 1 MB: 8,000 empty files | 1.3 s | 119 MB | 15.7 s, 1.3 GB |
+| 8 MB: one 4 MB file and 22,320 files of 64 bytes | 8.7 s | 1.28 GB | |
+| 7.9 MB: 64,000 empty files | 10.3 s | 940 MB | |
 
-Most of the memory is `Octets` (about 940 bytes per byte
-when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured) and the list
-forms the parser reads. Before this, a 64 KB file overflowed the stack (the
-data was split and measured by structural recursion), and so did parsing
-3,000 entries. `check.bend` builds and parses a 96 KB archive (a 48 KB file
+Time and memory grow linearly with the archive. Most of the memory is
+`Octets` (about 80 bytes per byte natively) and the list
+forms the parser reads. Before this, a 64 KB file overflowed the JavaScript
+lane's stack (the data was split and measured by structural recursion), and
+so did parsing 3,000 entries. `check.bend` builds and parses a 96 KB archive (a 48 KB file
 and 250 small ones) as a regression test.
 
 ## Limitations

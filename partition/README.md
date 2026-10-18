@@ -151,33 +151,25 @@ so surrogate pairs are covered by the vectors only.
 
 ## Speed
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 Byte strings are lists and the fields are read by bit slicing, so a table is
 read one sector at a time: read the blocks you need (`File.read_at`), not
 the disk.
 
 ## Sizes
 
-Measured on Bend 2.0.37's JavaScript lane (WSL2):
+Measured on native builds (Bend 2.0.37, `bend file.bend -o prog`, WSL2):
 
-| Run | Time | Peak RAM |
-|---|---|---|
-| an 8 MiB image sgdisk wrote with 128 partitions: the protective MBR parsed, the header validated, the 16 KB entry array's CRC checked, every entry read (all agree with sgdisk) | 0.65 s | 190 MB |
-| a 1,024-entry table built (`Gpt.entries_encode`, `Gpt.build`), validated and read back | 2.2 s | 670 MB |
-| the same with 4,096 entries (a 512 KB array) | 6.9 s | 2.2 GB |
+| Run | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|
+| an 8 MiB image sgdisk wrote with 128 partitions: the protective MBR parsed, the header validated, the 16 KB entry array's CRC checked, every entry read (128 used, the names sgdisk wrote) | 0.02 s | 6 MB | 0.65 s, 190 MB |
+| a 1,024-entry table built (`Gpt.entries_encode`, `Gpt.build`), validated and read back | 0.31 s | 30 MB | 2.2 s, 670 MB |
+| the same with 4,096 entries (a 512 KB array) | 1.3 s | 114 MB | 6.9 s, 2.2 GB |
 
 `Gpt.entries` reads the array with a tail call, and decodes each entry from
 its first 128 bytes. Before this it converted the whole rest of the array to
-a list for every entry: 128 entries took 1.4 s, 1,024 took 69 s, and 4,096
-ran out of memory. Building an array (`Gpt.entries_encode`) recurses once
-per entry, which is fine for the thousands of entries a table can have; the
+a list for every entry: on the JavaScript lane 128 entries took 1.4 s, 1,024
+took 69 s, and 4,096 ran out of memory. Building an array
+(`Gpt.entries_encode`) recurses once per entry, which is fine for the thousands of entries a table can have; the
 MBR and the header are fixed-size. `check.bend` builds, validates and reads
 a 384-entry table (a 48 KB array) as a regression test.
 

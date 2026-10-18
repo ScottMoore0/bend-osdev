@@ -366,8 +366,10 @@ its fast list forms, and this package's `.fast` and `.go` defs). What still
 recurses is bounded by the tree: the writers and the checks recurse into a
 node's children (the tree's depth), and the lookups (`FdtNode.find`,
 `find_phandle`, `child`, `prop`) and `FdtNode.dump` recurse once per
-sibling or property: the lookups pass with 10,000 siblings under one node,
-and `dump` with 5,000. The reservation block's writer and
+sibling or property. On the JavaScript lane (`bend file.bend`, whose stack
+is small) the lookups passed with 10,000 siblings under one node, and `dump`
+with 5,000; a native build has a 2 GB stack, and both pass with 100,000
+siblings (below). The reservation block's writer and
 `FdtRsv.valid_all` recurse once per reservation (there are a handful). The
 reader keeps an explicit stack, so a deep tree does not deepen its
 recursion. The name index recurses once per byte of a name.
@@ -418,17 +420,20 @@ were not slowed by the old searches; the index costs them nothing
 measurable. The benchmark programs are not part of the package (they read
 blobs written by `ref/gen.py`'s writer and by dtc).
 
-Earlier figures on the JavaScript lane (`bend file.bend`, before the
-indexes; that lane has a small stack and uses several times the memory of
-a native build, see AGENTS.md, "Runtime and checker limits"):
+Other operations, measured natively the same way (each run builds its
+input; the JavaScript-lane figures are earlier ones, from before the
+indexes, on a lane with a small stack and several times the memory of a
+native build, see AGENTS.md, "Runtime and checker limits"):
 
-| Input | Operation | Time | Peak RAM |
-|---|---|---|---|
-| 1,000 nodes, 130 KB | `Fdt.build`; `Fdt.parse` and build again | 1.1 s; 2.8 s | 300 MB; 500 MB |
-| 5,000 nodes | `FdtToken.decode_all` (the lexer), 30,408 tokens | 5.9 s | 1.2 GB |
-| 10,000 siblings | `FdtNode.find`, `find_phandle` | 5.7 s | 1.6 GB |
-| a 500 KB property value | `Fdt.build`, then `Fdt.parse` | 2.9 s | 1.4 GB |
-| 100,000 cells; 50,000 strings | `FdtProp.of_cells`; `of_strings` then `strings` | 1.8 s | 440 MB; 480 MB |
+| Input | Operation | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|---|
+| 1,010 nodes, 134 KB | `Fdt.build`; `Fdt.parse` and build again | 0.13 s; 0.36 s | 17 MB; 29 MB | 1.1 s; 2.8 s, 300 MB; 500 MB (1,000 nodes, 130 KB) |
+| 5,051 nodes | `FdtToken.decode_all` (the lexer), 30,153 tokens | 1.1 s | 64 MB | 5.9 s, 1.2 GB (30,408 tokens) |
+| 10,000 siblings | `FdtNode.find`, `find_phandle` | 0.60 s | 83 MB | 5.7 s, 1.6 GB |
+| 100,000 siblings | `FdtNode.find`, `find_phandle` | 6.8 s | 810 MB | |
+| 100,000 siblings | `FdtNode.dump` (13.9 million characters) | 2.9 s | 950 MB | |
+| a 500 KB property value | `Fdt.build`, then `Fdt.parse` | 0.36 s | 78 MB | 2.9 s, 1.4 GB |
+| 100,000 cells; 50,000 strings | `FdtProp.of_cells`; `of_strings` then `strings` | 0.23 s; 0.24 s | 33 MB; 42 MB | 1.8 s, 440 MB; 480 MB |
 
 Sizes and offsets are `Nat`.
 

@@ -140,11 +140,13 @@ SP 800-38A F.2.2 and F.2.6, IEEE 1619's vectors and Python's `cryptography`
 on symbolic bits, which is out of reach). The mode laws take the inversion as
 a hypothesis instead.
 
-Speed, through `bend file.bend` on this machine: a 4 KiB CBC or XTS unit
-encrypts or decrypts in about 0.15 s beyond start-up, decryption no slower
-than encryption. In the proof checker AES is costly (about 0.4 GB and a
-second per block for encryption, several GB for one block of decryption),
-which limits the vectors `LAWS.bend` can hold (below).
+Speed, on a native build on this machine: a 4 KiB CBC or XTS unit
+encrypts in about 0.01 s, and encrypts and decrypts back in about 0.02 s,
+start-up included (about 0.15 s each way through `bend file.bend`, the
+JavaScript lane); decryption is no slower than encryption. In the proof
+checker AES is costly (about 0.4 GB and a second per block for encryption,
+several GB for one block of decryption), which limits the vectors
+`LAWS.bend` can hold (below).
 
 ## Errors
 
@@ -244,37 +246,32 @@ and in two pieces. `check.bend` runs the specification vectors above.
 
 ## Sizes
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
+Every loop over a message's bytes or blocks is a tail call, so a message has
+no length limit beyond memory, on both of Bend 2.0.37's lanes (the
+JavaScript lane overflows its stack at some tens of thousands of nested
+calls; a native build has a 2 GB stack). Measured on Bend 2.0.37 (native
+build, `bend file.bend -o prog`, WSL2) with AES-128 (for XTS, a 256-bit key:
+two AES-128 keys), over pseudo-random messages, each run including building
+the message, every ciphertext checked against Python's `cryptography`:
 
-Every loop over a message's bytes or blocks is a tail call (Bend 2.0.37's
-runtime overflows its stack at some tens of thousands of nested calls), so a
-message has no length limit beyond memory. Measured on Bend 2.0.37 (native
-build, WSL2) with AES-128 (AES-256 for XTS's two keys), over pseudo-random
-messages, every ciphertext checked against Python's `cryptography`:
+| Run | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|
+| CBC encryption, 1 MB | 3.5 s | 104 MB | 12.8 s, 2.5 GB |
+| CBC encryption and decryption back, 512 KB | 3.5 s | 102 MB | 18.2 s, 2.1 GB |
+| XTS encryption, 1 MB | 3.6 s | 106 MB | 13.1 s, 2.5 GB |
+| XTS encryption and decryption back, 512 KB | 3.4 s | 103 MB | 15.2 s, 2.1 GB |
+| CMAC, 1 MB | 2.6 s | 101 MB | 8.7 s, 1.7 GB |
+| CCM encryption, 1 MB (12-byte nonce) | 6.0 s | 121 MB | 17.3 s, 2.6 GB |
+| CCM encryption and decryption back, 512 KB | 6.1 s | 111 MB | 11.4 s, 1.9 GB |
 
-| Run | Time | Peak RAM |
-|---|---|---|
-| CBC encryption, 1 MB | 12.8 s | 2.5 GB |
-| CBC encryption and decryption back, 512 KB | 18.2 s | 2.1 GB |
-| XTS encryption, 1 MB | 13.1 s | 2.5 GB |
-| XTS encryption and decryption back, 512 KB | 15.2 s | 2.1 GB |
-| CMAC, 1 MB | 8.7 s | 1.7 GB |
-| CCM encryption, 1 MB (12-byte nonce) | 17.3 s | 2.6 GB |
-| CCM encryption and decryption back, 512 KB | 11.4 s | 1.9 GB |
-
-Most of the memory is the message as `Octets` (about 940 bytes per byte
-when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured) and as the lists and blocks the modes work on; a round trip of 1 MB
-needed more than 3 GB before `Octets` became compact. Before this, CBC, XTS and
-CCM overflowed the stack at 32 KB (CMAC was already a loop), and PKCS #7
-padding walked the message as a list (it now works on `Octets`).
+AES dominates the time (natively about 300 KB/s per pass of AES), so the
+native build gains less here than in the packages that only move bytes.
+Most of the memory is the message as `Octets` (about 80 bytes per byte
+natively) and the lists and blocks the modes work on; on the JavaScript
+lane a round trip of 1 MB needed more than 3 GB before `Octets` became
+compact. Before this, CBC, XTS and CCM overflowed the JavaScript lane's
+stack at 32 KB (CMAC was already a loop), and PKCS #7 padding walked the
+message as a list (it now works on `Octets`).
 `check.bend` runs CBC and CCM over 32 KB and XTS over 32 KB and 5 bytes,
 both ways, as a regression test.
 

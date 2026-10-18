@@ -31,27 +31,19 @@ array internals, which bend-osdev does not do.
 
 ## Sizes
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 Every conversion is a tail-recursive loop, so there is no length limit
-beyond memory. Measured on Bend 2.0.37's JavaScript lane (WSL2), with 1 MB of
-pseudo-random bytes:
+beyond memory. Measured on a native build (`bend file.bend -o prog`,
+Bend 2.0.37, WSL2), with 1 MB of pseudo-random bytes, each run including
+building the input:
 
-| Run | Time | Peak RAM |
-|---|---|---|
-| `of_octets`, 1 MB | 6.9 s | 1.35 GB |
-| `round_trip` (both ways), 1 MB | 9.6 s | 1.86 GB |
+| Run | Time, native | Peak RAM, native | JavaScript lane, before |
+|---|---|---|---|
+| building the 1 MB input alone | 0.05 s | 84 MB | |
+| `of_octets`, 1 MB | 0.12 s | 85 MB | 6.9 s, 1.35 GB |
+| `round_trip` (both ways), 1 MB | 0.14 s | 85 MB | 9.6 s, 1.86 GB |
 
-Most of the memory is the `Octets` itself (about 940 bytes per byte
-when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured)
+Most of the memory is the `Octets` itself (about 80 bytes per byte held,
+natively)
 and its list form. `check.bend` round-trips 100 KB as a regression test.
 Before this, `of_octets` overflowed the JavaScript lane's stack at 64 KB (it took
 the length through bytes' structural `B.len`; it now uses `B.len.fast`).

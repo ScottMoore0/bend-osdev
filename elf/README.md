@@ -321,9 +321,9 @@ through an index of `.shstrtab` built for the call.
 
 Every loop over a file's bytes or a table's entries is a tail call (Bend
 2.0.37's JavaScript lane overflows its stack at some tens of thousands of
-nested calls), so neither a section's size nor the number of sections,
-symbols, relocations, dynamic entries or notes has a limit beyond memory.
-The tables' structural forms stay beside the loops as the reference the
+nested calls; a native build has a 2 GB stack), so on either lane neither
+a section's size nor the number of sections, symbols, relocations, dynamic
+entries or notes has a limit beyond memory. The tables' structural forms stay beside the loops as the reference the
 proofs reason about (`table.list.ref`, `write_table.ref`, `normal_table.ref`
 for each entry type, `ElfNote.write_all.ref`, `elf_suffixes` and `elf_alt`
 in `strtab.bend`), and `PROOF.bend` proves each equal to its loop for every
@@ -334,7 +334,8 @@ converts all of its input: give it a file's first 64 bytes, as
 `ElfFile.read` does.
 
 Most of the memory is the file's `Octets` (bytes' `OctByte` storage, about
-150 bytes per byte held) and the list `File.read_bytes` gives.
+80 bytes per byte held natively; about 150 on the JavaScript lane) and the
+list `File.read_bytes` gives.
 
 ## Dependencies
 

@@ -159,7 +159,9 @@ byte at a time, raw LZMA2, the delta filter, the tables, and two large
 inputs, beyond what a decoder recursing once per byte could reach: an
 820-byte `.xz` file decoding to 100 KiB, and a 100 KiB raw LZMA2 stream of
 two uncompressed chunks (64 KiB and 36 KiB), each checked by its length and
-CRC32 (about 0.7 s and 0.2 GB more than the rest of the file).
+CRC32 (natively the whole of `check.bend` runs in 0.08 s and 16 MB; on
+the JavaScript lane the two took about 0.7 s and 0.2 GB more than the rest
+of the file).
 
 `ref/run.sh` (needs `python3` with `lzma`, and `xz`) generates 229 cases
 (`ref/gen.py`) and compares the decoder's output (length and SHA-256) with
@@ -186,53 +188,46 @@ the expected one:
 
 ## Speed and limits
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 Every loop over the input or the output is a tail call: the buffered input
 (appended and counted with bytes' `B.append.fast` and `B.len.fast`), the
 LZMA2 chunks (taken with `B.take.fast`), the range decoder, the dictionary,
 the output (gathered in a list, then made `Octets` once per feed; a single
 piece is not copied again), the delta filter, the checks and the index (its
 records compared by a tail call). So there is no length limit from the
-JavaScript lane's stack. Before this, a 38 KB `.xz` file (100 KB of output) and a
-raw LZMA2 stream of 100 KB overflowed it; a small file with a large output
-(100 KB from 820 bytes) did not.
+JavaScript lane's stack (a native build has a 2 GB stack). Before this, a
+38 KB `.xz` file (100 KB of output) and a raw LZMA2 stream of 100 KB
+overflowed it; a small file with a large output (100 KB from 820 bytes) did
+not.
 
-Measured with `bend` (Bend 2.0.37, JavaScript backend), one run at a time,
-on files made by Python's `lzma` (random-word text, which compresses about
-3:1) and the `xz` tool; every output matched the original's length and
-CRC32 exactly:
+Measured on native builds (Bend 2.0.37, `bend file.bend -o prog`, WSL2),
+one run at a time, on files made by Python's `lzma` (random-word text,
+which compresses about 3:1) and the `xz` tool; every output matched the
+original byte for byte:
 
-| Input | Output | Time | Peak memory |
-|---|---|---|---|
-| `xz_decode`, CRC64 | 100 KB | 3.3 s | 0.47 GB |
-| `xz_decode`, random data (uncompressed chunks), CRC32 | 100 KB | 2.3 s | 0.58 GB |
-| `xz_decode`, CRC32 | 1 MB | 5.9 s | 1.9 GB |
-| `xz_decode`, CRC64 | 1 MB | 27 s | 2.0 GB |
-| `xz_decode`, SHA-256 | 1 MB | 7.0 s | 2.6 GB |
-| `xz_decode`, 256 blocks of 4 KiB (`xz --block-size=4096`) | 1 MB | 6.7 s | 2.1 GB |
-| `xz_decode`, two streams with padding | 1 MB | 6.5 s | 2.6 GB |
-| `xz_decode`, delta (distance 4) then LZMA2 | 512 KB | 6.9 s | 2.1 GB |
-| `XzDecoder.feed` in 64 KiB pieces, CRC64 | 1 MB | 23 s | 1.9 GB |
-| `XzDecoder.feed` in 4 KiB pieces, CRC32 | 1 MB | 12 s | 1.8 GB |
+| Input | Output | Time, native | Peak memory, native | JavaScript lane, before |
+|---|---|---|---|---|
+| `xz_decode`, CRC64 | 100 KB | 0.05 s | 15 MB | 3.3 s, 0.47 GB |
+| `xz_decode`, random data (uncompressed chunks), CRC32 | 100 KB | 0.06 s | 15 MB | 2.3 s, 0.58 GB |
+| `xz_decode`, CRC32 | 1 MB | 0.55 s | 134 MB | 5.9 s, 1.9 GB |
+| `xz_decode`, CRC64 | 1 MB | 0.55 s | 134 MB | 27 s, 2.0 GB |
+| `xz_decode`, SHA-256 | 1 MB | 0.61 s | 208 MB | 7.0 s, 2.6 GB |
+| `xz_decode`, 256 blocks of 4 KiB (`xz --block-size=4096`) | 1 MB | 0.83 s | 127 MB | 6.7 s, 2.1 GB |
+| `xz_decode`, two streams with padding | 1 MB | 0.57 s | 130 MB | 6.5 s, 2.6 GB |
+| `xz_decode`, delta (distance 4) then LZMA2 | 512 KB | 0.40 s | 68 MB | 6.9 s, 2.1 GB |
+| `xz_decode`, delta (distance 4) then LZMA2 (630 KB compressed) | 1 MB | 0.77 s | 134 MB | more than 3 GB |
+| `xz_decode`, delta (distance 4) then LZMA2 | 4 MB | 3.0 s | 531 MB | not tried |
+| `xz_decode`, CRC64 | 8 MB | 4.3 s | 1.06 GB | |
+| `XzDecoder.feed` in 64 KiB pieces, CRC64 | 1 MB | 0.59 s | 134 MB | 23 s, 1.9 GB |
+| `XzDecoder.feed` in 4 KiB pieces, CRC32 | 1 MB | 0.61 s | 134 MB | 12 s, 1.8 GB |
 
-(The times include reading the file, and the test's own CRC32 of the
-output.) What limits size now is memory, not the stack: an `Octets` cost
-about 1 KB of memory per byte when measured (bytes' compact `OctByte`
-storage, merged since, holds one in about a third of that; not re-measured
-here), and the decoder holds its input and
-its output, so a 1 MB output needs about 2 GB. A 1 MB file with a delta
-filter (660 KB compressed) used more than 3 GB, and 4 MB was not tried for
-that reason (it would need about 8 GB). That limit goes when `Octets`
-storage becomes compact; nothing in this package depends on how `Octets`
-stores its bytes. CRC64 is the slow check: the CRC-64 of 1 MB takes about
-19 s in `crc` on its own.
+(The times include reading the file and writing the output.) What limits
+size now is memory, not the stack: an `Octets` holds about 80 bytes of
+memory per byte natively (it was about 1 KB on the JavaScript lane when
+first measured), and the decoder holds its input and its output, so
+natively a 1 MB output needs about 130 MB and 8 MB about 1 GB. Nothing in
+this package depends on how `Octets` stores its bytes. CRC64 is no longer
+the slow check natively (on the JavaScript lane the CRC-64 of 1 MB took
+about 19 s in `crc` on its own; natively it takes about 0.05 s).
 
 The streaming decoder buffers at most one LZMA2 chunk (64 KiB compressed)
 and re-checks whether it is complete on each `feed`, so tiny pieces cost
@@ -243,5 +238,5 @@ is complete.
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (with its 100 KiB cases), `ref/run.sh` 229 cases match;
-1 MB outputs decode exactly, within about 2 GB of memory (see Speed and
-limits).
+1 MB outputs decode exactly, natively within about 130 MB of memory (see
+Speed and limits).
