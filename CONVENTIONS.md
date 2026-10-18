@@ -22,8 +22,11 @@ A change to one of these rules is a change to every package.
   - `LICENSE`: the MIT licence, beside the entry file, so `--publish` takes it;
   - optionally `ref/`: a differential test against an independent
     implementation (see Testing).
-- A package imports its siblings by relative path (`../bytes/bytes.bend`)
-  until they are published; at publishing time those become hub imports.
+- A package imports its siblings by relative path (`../bytes/bytes.bend`);
+  `scripts/publish.py` publishes a copy in which those become hub imports
+  (`bend-osdev-bytes@0.1.0.0/bytes.bend`), dependencies first, and
+  `scripts/publish.py --check` checks that copy against a local stand-in for
+  the hub before anything is published.
 
 ## One file per concern
 

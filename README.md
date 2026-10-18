@@ -103,6 +103,13 @@ reference tests need python3 and the tools listed in
 `.github/workflows/check.yml` (each skips, with exit 77, when its tool is
 missing).
 
+## Publishing
+
+`scripts/publish.py --check [package...]` stages each package as it would be
+published (its sibling imports rewritten as hub imports) and checks it;
+`scripts/publish.py [package...]` publishes it on BendHub as
+`bend-osdev-<package>@<VERSION>`, dependencies first, after `bend login`.
+
 ## Licence
 
 MIT; see [LICENSE](LICENSE).
