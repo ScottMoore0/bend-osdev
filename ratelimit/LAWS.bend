@@ -152,3 +152,8 @@ law ratelimit_vec_policies:
 # the suppressed count after the sliding run above, and after a report
 law ratelimit_vec_report:
   {(R.RateLimit.suppressed(R.RateLimitRun.state(R.RateLimit.run(R.RateLimit.new(W.W64.from_u32(10), 3), [W.W64.from_u32(0), W.W64.from_u32(1), W.W64.from_u32(2), W.W64.from_u32(3), W.W64.from_u32(9)]))), R.RateLimit.suppressed(R.RateLimitReport.state(R.RateLimit.report(R.RateLimitRun.state(R.RateLimit.run(R.RateLimit.new(W.W64.from_u32(10), 3), [W.W64.from_u32(0), W.W64.from_u32(1), W.W64.from_u32(2), W.W64.from_u32(3), W.W64.from_u32(9)])))))) == (2n, 0n) : Nat & Nat}
+
+# the documented printk defaults, in seconds: ten messages at time 0 pass,
+# the eleventh and one at 4 are suppressed, and at 5 a new burst begins
+law ratelimit_vec_printk:
+  {R.RateLimitRun.allowed(R.RateLimit.run(R.RateLimit.printk(W.W64.one()), [W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(4), W.W64.from_u32(5)])) == [True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, False{}, False{}, True{}] : List<&2, Bool>}

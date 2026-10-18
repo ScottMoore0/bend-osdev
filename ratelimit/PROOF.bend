@@ -441,3 +441,6 @@ def Laws.ratelimit_vec_policies():
 
 def Laws.ratelimit_vec_report():
   {==}
+
+def Laws.ratelimit_vec_printk():
+  {==}

@@ -15,7 +15,9 @@
 #   window of length interval ever holds more than burst allowed events;
 # * fixed: a window opens at the first event after the previous one closed
 #   and lasts interval; at most burst events are allowed in it. This is the
-#   shape of the kernel's ratelimit: cheaper (no list), but a stretch of
+#   behaviour the kernel documents for printk_ratelimit_burst (after the
+#   interval has elapsed, another burst may be sent), and RateLimit.printk
+#   uses it: cheaper (no list), but a stretch of
 #   length interval that straddles two fixed windows can hold up to
 #   2 * burst allowed events.
 #
@@ -60,6 +62,21 @@ def RateLimit.new_with(p: RateLimitPolicy, interval: W.W64, burst: U32) -> RateL
 
 def RateLimit.new(interval: W.W64, burst: U32) -> RateLimit:
   RateLimit.new_with(RateLimitPolicy.default(), interval, burst)
+
+# The printk defaults the kernel documents for its printk_ratelimit and
+# printk_ratelimit_burst sysctls: an interval of 5 seconds and a burst of
+# 10, with the window the sysctl text describes (after the interval has
+# elapsed, another burst may be sent): the fixed policy. per_second is the
+# caller's time units in a second.
+
+def RateLimit.printk_interval_seconds() -> U32:
+  5
+
+def RateLimit.printk_burst() -> U32:
+  10
+
+def RateLimit.printk(per_second: W.W64) -> RateLimit:
+  RateLimit.new_with(RateLimitFixed{}, W.W64.mul(W.W64.from_u32(RateLimit.printk_interval_seconds()), per_second), RateLimit.printk_burst())
 
 # Observers
 

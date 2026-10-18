@@ -11,37 +11,64 @@ interval. tcpip handles its timers the same way.
 
 ## Specification
 
-The kernel's documented behaviour: the `printk_ratelimit` and
-`printk_ratelimit_burst` sysctls in `Documentation/admin-guide/sysctl/kernel.rst`
-(a burst of messages is let through, and then at most that many per
-interval; an interval of 0 disables rate limiting), and the "N callbacks
-suppressed" report of the refused calls. This package was written from that
-documented behaviour, as an abstract data type; **no kernel source was
-read**, and the documents were not re-read in this session (it had no
-network access): the behaviour below is what this package commits to, and
-its laws and tests hold it to that.
+The kernel documents rate limiting in one place that was found:
+**"Documentation for /proc/sys/kernel/"**,
+<https://docs.kernel.org/admin-guide/sysctl/kernel.html>
+(`Documentation/admin-guide/sysctl/kernel.rst`), in the entries
+**`printk_ratelimit`** and **`printk_ratelimit_burst`**. It was read on
+2026-10-18. From those entries:
 
-* An event at time `t` is **within the window** at time `now` when
-  `now - t < interval`, the subtraction modulo 2^64 (so a time ahead of
-  `now`, from a clock that went back, is outside it).
-* **The sliding policy** (the default): an event is allowed when fewer than
-  `burst` allowed events lie within the window ending at it. The state keeps
-  the times of those events, newest first, and never more than `burst` of
-  them. For nondecreasing times this is the strict reading of "at most
-  `burst` per `interval`": no stretch of time of length `interval` ever
-  holds more than `burst` allowed events.
-* **The fixed policy** (`RateLimitFixed`): a window opens at the first event
-  after the previous window closed and lasts `interval`; at most `burst`
-  events are allowed in it. This is the shape of the kernel's own counter,
-  cheaper (a start time and a count), but a stretch of length `interval`
-  that straddles two windows can hold up to `2 * burst` allowed events (the
-  vector `ratelimit_vec_policies` shows five where `burst` is 3).
-* **An interval of 0 turns rate limiting off**: every event is allowed, and
-  nothing is counted. A `burst` of 0 (with a nonzero interval) refuses every
-  event.
+* `printk_ratelimit` is the minimum length of time between rate-limited
+  messages, in seconds, default **5**, and **a value of 0 disables rate
+  limiting**;
+* `printk_ratelimit_burst` is the number of messages let through before
+  rate limiting starts, default **10**, and after `printk_ratelimit` seconds
+  have elapsed another burst may be sent.
+
+There is no rendered kernel-doc for `___ratelimit` or `struct
+ratelimit_state` on docs.kernel.org. "The Linux Kernel API"
+(<https://docs.kernel.org/core-api/kernel-api.html>, read in full) has none,
+and "Message logging with printk"
+(<https://docs.kernel.org/core-api/printk-basics.html>) only recommends the
+`pr_*_ratelimited()` macros. So the interval/burst/suppressed-count
+interface and the "N callbacks suppressed" report come from the brief for
+this package, not from a document. **No kernel source was read**: search
+results pointing at `lib/ratelimit.c` mirrors or mailing-list patches were
+skipped.
+
+How this package relates to the documented behaviour:
+
+* **An interval of 0 turns rate limiting off**, as `printk_ratelimit`
+  documents: every event is allowed, and nothing is counted. A `burst` of 0
+  (with a nonzero interval) refuses every event; the page does not say what
+  a burst of 0 means.
+* **The documented defaults are a named constructor**:
+  `RateLimit.printk(per_second)` is an interval of 5 seconds
+  (`RateLimit.printk_interval_seconds()`) in the caller's units, a burst of
+  10 (`RateLimit.printk_burst()`), and the fixed window below, which is the
+  behaviour the sysctl text describes ("after printk_ratelimit seconds have
+  elapsed, another burst of messages may be sent"). The vector
+  `ratelimit_vec_printk` holds it to that.
+* **The fixed policy** (`RateLimitFixed`, the documented behaviour): a
+  window opens at the first event after the previous window closed and
+  lasts `interval`; at most `burst` events are allowed in it. A stretch of
+  length `interval` that straddles two windows can hold up to `2 * burst`
+  allowed events (the vector `ratelimit_vec_policies` shows five where
+  `burst` is 3).
+* **The sliding policy** (the default, a deliberate choice): an event is
+  allowed when fewer than `burst` allowed events lie within the window
+  ending at it. The state keeps the times of those events, newest first,
+  and never more than `burst` of them. For nondecreasing times this is the
+  strict reading of "at most `burst` per `interval`" that the brief asks
+  for: no stretch of time of length `interval` holds more than `burst`
+  allowed events.
+* **Within the window**: an event at time `t` is within the window at time
+  `now` when `now - t < interval`, the subtraction modulo 2^64 (so a time
+  ahead of `now`, from a clock that went back, is outside it). This
+  package's choice; time is the caller's, in any unit.
 * **Suppressed counts**: each refused event adds one; `RateLimit.report`
-  answers the count and clears it. The kernel prints its report when a new
-  window opens; here the caller decides when to report.
+  answers the count and clears it, and the caller decides when to report
+  (the brief's "N callbacks suppressed").
 
 ## Files
 
@@ -60,6 +87,7 @@ its laws and tests hold it to that.
 | `RateLimit` | the state (opaque: use the defs below) |
 | `RateLimitPolicy`: `RateLimitSliding{}`, `RateLimitFixed{}`; `RateLimitPolicy.default()` | the window policy; sliding by default |
 | `RateLimit.new(interval, burst)`, `RateLimit.new_with(policy, interval, burst)` | a new state: `interval` a `W64`, `burst` a `U32` |
+| `RateLimit.printk(per_second)`, `RateLimit.printk_interval_seconds()`, `RateLimit.printk_burst()` | the documented printk defaults: 5 seconds, a burst of 10, the fixed window |
 | `RateLimit.check(s, now)` | `RateLimitStep{state, allowed}`: whether an event at `now` is allowed, and the new state (the kernel's `__ratelimit`) |
 | `RateLimitStep.state`, `RateLimitStep.allowed` | its fields |
 | `RateLimit.suppressed(s)` | the refused calls since the last report |
@@ -117,7 +145,8 @@ every time and every list of times:
 * Witnesses that the hypotheses can hold (`ratelimit_wit`), and vectors: a
   sliding run (`ratelimit_vec_sliding`), the two policies told apart
   (`ratelimit_vec_policies`), a count and its report
-  (`ratelimit_vec_report`).
+  (`ratelimit_vec_report`), and the documented printk defaults
+  (`ratelimit_vec_printk`).
 
 **Not proved: the window law over a whole run** ("in any stretch of length
 `interval`, at most `burst` events are allowed", for nondecreasing times).
@@ -133,7 +162,8 @@ laws. The differential test checks the run form on every random sequence.
 ## Tests
 
 * `check.bend`: the same times under both policies; the edge where they
-  differ; rate limiting off; a burst of 0; times wrapping past 2^64.
+  differ; rate limiting off; a burst of 0; the printk defaults in
+  milliseconds; times wrapping past 2^64.
 * `ref/run.sh`: 40 random sequences (3566 events with the default seed) of
   checks and reports, half under each policy, with intervals of 0 to 99 and
   bursts of 0 to 7, times starting anywhere (some just below 2^64, so they
@@ -149,6 +179,6 @@ laws. The differential test checks the run form on every random sequence.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (20 laws), `--verdict` ALL
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (21 laws), `--verdict` ALL
 PROOFS CHECK, `check.bend` passes, `ref/run.sh` 3566 events in 40 sequences
 match, `scripts/deps.sh ratelimit` ok.
