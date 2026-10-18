@@ -2,8 +2,10 @@
 # The size measurement (not run by check.sh): a 64 MB image file written
 # by Python, then every block read through a FileDev (measure.bend, built
 # natively), timed with peak RAM, and the byte sum and hash compared with
-# Python's. Usage: measure.sh [dir] [MB] [block size]; the image goes in
-# dir (default $TMPDIR or /tmp; keep it off slow mounts).
+# Python's; then every block rewritten in place through a FileRW
+# (measure_rw.bend), timed, and the file checked by Python. Usage:
+# measure.sh [dir] [MB] [block size]; the image goes in dir (default
+# $TMPDIR or /tmp; keep it off slow mounts).
 set -uo pipefail
 cd "$(dirname "$0")"
 dir=${1:-${TMPDIR:-/tmp}}; mb=${2:-64}; bs=${3:-4096}
@@ -26,4 +28,16 @@ for mode in count sum; do
   echo "$mode: $got" | tr '\n' ' '; echo
 done
 echo "python: $want"
-rm -f "$img" "$dir/bend-osdev-iodev-measure"
+# every block rewritten in place through FileRW (measure_rw.bend), block n
+# filled with n mod 256, and the file checked by Python
+"${bend[@]}" measure_rw.bend -o "$dir/bend-osdev-iodev-measure-rw" > /dev/null || exit 1
+got=$( { /usr/bin/time -f "%es %MKB" "$dir/bend-osdev-iodev-measure-rw" "$img" "$bs"; } 2>&1 )
+echo "rewrite: $got" | tr '\n' ' '; echo
+python3 - "$img" "$bs" <<'PY'
+import sys
+path, bs = sys.argv[1], int(sys.argv[2])
+data = open(path, "rb").read()
+bad = [i for i in range(0, len(data), bs) if data[i:i + bs] != bytes([(i // bs) & 255]) * len(data[i:i + bs])]
+print("python: rewrite " + ("matches" if not bad else "differs at block %d" % (bad[0] // bs)))
+PY
+rm -f "$img" "$dir/bend-osdev-iodev-measure" "$dir/bend-osdev-iodev-measure-rw"

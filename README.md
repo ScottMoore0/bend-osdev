@@ -14,9 +14,10 @@ GPL source was read.
 ## Status
 
 - **Laws reviewed.** The maintainer has reviewed and accepted every
-  package's laws. They are proved, and `--verdict` (Bend's Lean-formalised
-  kernel) accepts them all except four laws in cipher-modes that its kernel
-  cannot yet model (see that README).
+  package's laws, except fileio's, which are new and still a draft. They
+  are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
+  all except four laws in cipher-modes that its kernel cannot yet model
+  (see that README).
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
 - **Publishing on BendHub**, every package at version 0.1.0.0, as
   `bend-osdev-<package>`: so far word64, bytes, acpi, caps and apparmor
@@ -33,7 +34,8 @@ GPL source was read.
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
 | [blockdev](blockdev/) | The block-device interfaces (pure, and owned with writes), a balanced in-memory device, and a proved `Array<U32>` image device |
-| [iodev](iodev/) | Block devices in `IO`: the interface and its helpers, adapters for blockdev's devices, a disk image file read on demand, and a write overlay |
+| [iodev](iodev/) | Block devices in `IO`: the interface and its helpers, adapters for blockdev's devices, a disk image file read on demand, a write overlay, and a disk image read and written in place, of any size, on file effects passed in |
+| [fileio](fileio/) | Library effects on Base's `File` (C and JavaScript sides): a read-write open that keeps the file, positioned writes, 64-bit reads and sizes, `fsync` |
 | [crc](crc/) | CRCs in the Rocksoft parameter model (CRC-32C, CRC-32, CRC-16, CRC-T10DIF, three CRC-64s), bitwise and table-driven |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
 | [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |

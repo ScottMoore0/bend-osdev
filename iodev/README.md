@@ -3,9 +3,12 @@
 Block devices whose operations are in `IO`: the interface, helpers that read
 and write byte ranges across blocks or stream every block of a range,
 adapters that run any of blockdev's devices (pure or owned) through it, a
-disk image file read on demand (`FileDev`), and a write overlay that makes
-any IO device writable (`IOOverlay`). A large image is never held in
-memory: a 64 MB image is read block by block in under 3 MB (below).
+disk image file read on demand (`FileDev`), a write overlay that makes
+any IO device writable (`IOOverlay`), and a disk image file read and
+written in place, of any size (`FileRW`, on file effects passed in as
+template arguments: bend-osdev-fileio's, or Base's own once it has them).
+A large image is never held in memory: a 64 MB image is read, or rewritten
+in place, block by block in under 3 MB (below).
 
 ## Base's file API (Bend 2.0.37)
 
@@ -36,23 +39,29 @@ truncating. So:
 * **sizes:** offsets and sizes are `U32`, so an image is at most 4 GiB - 1
   bytes.
 
-### What Base would need (a draft note, not posted)
+### Filling the gaps: library effects, passed in
 
-> A block device over an image file needs to rewrite blocks in place. Base
-> 2.0.37 can read at an offset (`File.read_at`) but cannot write at one:
-> `File.open` has no read-write mode that keeps the file (`"w"` truncates,
-> `"a"` only appends) and there is no `File.seek`. Two additions would
-> cover it: a mode `"r+"` (`O_RDWR`, no create, no truncate), and
-> `File.write_at(file, offset: U32, data: List<&2, U32>) -> IO(File &
-> Result<&1, &1, U32 & String, Unit>)`, a `pwrite` loop shaped like
-> `File.write_bytes`, the position unchanged as with `read_at`. A
-> `File.sync(file)` (`fsync`) would let a writer order its writes
-> (a journal before its commit block). For images past 4 GiB, `read_at` and
-> `write_at` would need a 64-bit offset (`Nat`, or two `U32`s) and
-> `File.size` a 64-bit answer.
+The Bend team keeps Base's effects to thin system-call wrappers and leaves
+the rest to libraries (bendlang/bend#1430; a library effect reuses Base's
+`File` handle, WONTFIX.txt #825, as bendlang/bend#1573 does).
+**bend-osdev-fileio** is such a library: `FileIO.open_rw` (`O_RDWR`, no
+truncation), `FileIO.write_at` (a `pwrite` loop), `FileIO.read_at` and
+`FileIO.size` with 64-bit offsets and sizes (`W64`), and `FileIO.sync`
+(`fsync`), each with a C side and a JavaScript side, on Base's `File`.
 
-With those, `FileDev.write_block` becomes one `write_at`, and the overlay is
-needed only for writes that must not reach the file.
+iodev does not import it. `FileRW` (filerw.bend) takes its five file
+operations as template arguments, of exactly fileio's types, so this
+package holds no foreign code and its proofs never meet an effect (a file
+that imports a foreign def gets "relies on foreign code" from
+`--check-only`). With fileio's effects passed in, `FileRW.write_block` is
+one `pwrite` of the block, in place, and images past 4 GiB work; with the
+Base-only defaults (`FileRW.base_*`), `FileRW` behaves as `FileDev`. If Base
+gains the same effects (a draft proposal: `"r+"`, `File.write_at`, 64-bit
+offsets and sizes), they are passed in place of fileio's and nothing here
+changes.
+
+`FileDev`, `FileOv` and `IOOverlay` are unchanged: the overlay is still
+the way to write without touching the file.
 
 ## The IO interface
 
@@ -89,9 +98,10 @@ what blockdev's pure helpers answer, for every device and range.
 | `overlay.bend` | `IOOverlay`: a write overlay on any IO device |
 | `filedev.bend` | `FileDev`: an image file read on demand; `FileDev.save` |
 | `fileov.bend` | `FileOv.*`: an `IOOverlay` on a `FileDev`, its operations named |
+| `filerw.bend` | `FileRW`: an image file read and written in place, of any size, on file effects passed as template arguments; the Base-only defaults `FileRW.base_*` |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`IOP.` lemmas) |
 | `check.bend` | a runnable check of every file (it writes two files in `/tmp`) |
-| `ref/` | the differential test (`gen.py`, `run.sh`, `cases.bend`) and the size measurement (`measure.sh`, `measure.bend`) |
+| `ref/` | the differential tests (`gen.py`, `run.sh`, `cases.bend`, and `big.bend` over 4 GiB) and the size measurement (`measure.sh`, `measure.bend`, `measure_rw.bend`); they import bend-osdev-fileio for `FileRW`'s effects |
 
 ### span.bend
 
@@ -157,6 +167,52 @@ blocks 2^32 apart share an entry (no `FileDev` is that large).
 The size is read when the file is opened; a file that grows or shrinks
 while open is not noticed (a read past its new end reads zeros).
 
+### filerw.bend
+
+`FileRW` is an open image file (internal fields: the handle, block size,
+count). Its file operations are template arguments, each of the type of
+fileio's def named beside it (`W64` is bend-osdev-word64's):
+
+| Template | Type | fileio | Base-only default |
+|---|---|---|---|
+| `~open` | `String -> IO(Result<&1, &1, U32 & String, File>)` | `FileIO.open_rw` | `FileRW.base_open`: `File.open(path, "r")` |
+| `~size` | `File -> IO(File & Result<&1, &1, U32 & String, W64>)` | `FileIO.size` | `FileRW.base_size`: `File.size` (fails past 4 GiB) |
+| `~read_at` | `File -> W64 -> U32 -> IO(File & Result<&1, &1, U32 & String, List<&2, U32>>)` | `FileIO.read_at` | `FileRW.base_read_at`: `File.read_at` below 4 GiB, else `EOVERFLOW` |
+| `~write_at` | `File -> W64 -> List<&2, U32> -> IO(File & Result<&1, &1, U32 & String, Unit>)` | `FileIO.write_at` | `FileRW.base_write_at`: always `EROFS` (30) |
+| `~sync` | `File -> IO(File & Result<&1, &1, U32 & String, Unit>)` | `FileIO.sync` | `FileRW.base_sync`: nothing to do |
+
+| Def | Meaning |
+|---|---|
+| `FileRW.open(~open, ~size, path, bs)` | the file at `path`, opened with `~open`, as a device of `bs`-byte blocks (1 to `FileDev.max_block()`); `IO(Result<&1, &1, FileDevError, FileRW>)`; a bad block size fails before the file is opened |
+| `FileRW.of(~size, f, bs)` | a file already open (any way) as such a device; on a failure the file is closed |
+| `FileRW.close(d)` | |
+| `FileRW.block_size`, `FileRW.block_count` | the IO interface |
+| `FileRW.read_block(~read_at, d, n)` | block `n`, read from the file now; a final partial block reads padded with zeros; a failed system read is `DevFailed{errno}` |
+| `FileRW.write_block(~write_at, d, n, data)` | block `n` written to the file now, in place: exactly one block and `n` below the count (else `DevBadLength`, `DevOutOfRange`, nothing written, as `IOOverlay.put`); the whole block is written, so a final partial block grows the file to a whole number of blocks; a failed system write is `DevFailed{errno}` |
+| `FileRW.sync(~sync, d)` | the blocks written so far reach the device |
+
+`FileRW.read_block` and `write_block`, applied to their effect, are the
+template arguments the IO helpers take. On fileio:
+
+```python
+import bend-osdev-blockdev@0.1.0.0/blockdev.bend as D
+import bend-osdev-fileio@0.1.0.0/fileio.bend as FIO
+import bend-osdev-iodev@0.1.0.0/iodev.bend as V
+import bend-osdev-iodev@0.1.0.0/filedev.bend as F
+import bend-osdev-iodev@0.1.0.0/filerw.bend as R
+...
+  d : Result<&1, &1, F.FileDevError, R.FileRW> <- R.FileRW.open(~FIO.FileIO.open_rw, ~FIO.FileIO.size, "disk.img", 4096n)
+  ...
+  w : R.FileRW & Result<&2, &2, D.DevError, Unit> <- V.IODev.write_bytes(~R.FileRW, ~R.FileRW.block_size, ~R.FileRW.read_block(~FIO.FileIO.read_at), ~R.FileRW.write_block(~FIO.FileIO.write_at), d, off, data)
+```
+
+`FileDev.save` and every IO helper work on a `FileRW` as on any device.
+Block offsets are computed as a `Nat` (`IOSpan.offset`) and passed as a
+`W64`, so the image may be as large as the file system allows, up to
+2^48 − 1 bytes natively (the largest `Nat` a native build holds) and
+2^63 − 1 bytes on the JavaScript lane (`off_t`). The size is read when
+the device is made.
+
 ### fileov.bend
 
 | Def | Meaning |
@@ -172,9 +228,14 @@ while open is not noticed (a read past its new end reads zeros).
   counts reads, a network block device: provide the operations for its type
   and pass them as template arguments. Every pure or owned device already is
   one, through `IODev.of_pure_*` / `of_own_*`.
-* **Writing a file in place:** when Base gains a positioned write, only
-  `FileDev.write_block` changes (and `FileDev.open` opens read-write); the
-  interface, helpers and laws stay.
+* **The file effects under `FileRW`** are template arguments: fileio's
+  (in place, any size), the Base-only defaults (`FileRW.base_*`), Base's own
+  once it has a positioned write and 64-bit offsets, or any def of the same
+  type (one that counts or fails writes, for a test; one over a network
+  block device). `FileRW.of` takes a file opened any way.
+* **Writing a file in place:** `FileRW` with fileio's effects. `FileDev`
+  stays read-only, for callers that must not change the file, and the
+  overlay over it keeps writes in memory until `FileDev.save`.
 * **The overlay** works on any IO device; its store (an `XArray`) is
   internal and can change behind the same laws. A flush that writes the
   overlay's blocks to a device that can be written is a short addition.
@@ -188,8 +249,8 @@ while open is not noticed (a read past its new end reads zeros).
 
 `LAWS.bend` (draft, not yet reviewed by the maintainer). A law about an IO
 action states what the action gives a continuation `k`, for every `R` and
-`k`: the action run as `m(R, k)`. Effects themselves (`FileDev`) are
-tested, not proved.
+`k`: the action run as `m(R, k)`. Effects themselves (`FileDev`, and
+`FileRW` on any effects) are tested, not proved.
 
 **Block arithmetic, for every block size `1 + bp`, offset and length:**
 `span_start` (`first * bs + skip == off`), `span_skip` (`skip < bs`),
@@ -236,16 +297,35 @@ lemma's statement that mentions a lambda returning IO is given as a def
 ## Tests
 
 * `check.bend`: every device and helper, including a `FileDev` on a file it
-  writes, the overlay, `FileDev.save`, and the open errors.
+  writes, the overlay, `FileDev.save`, the open errors, and a `FileRW` on
+  the Base-only defaults (reads, refused writes, bad lengths and blocks,
+  the open errors).
 * `ref/run.sh`: 40 random image files (sizes 0 to 6000 bytes, block sizes
   1 to 4096), each opened three ways, a `FileDev` under an overlay (read
   from the file on demand), a `MemDev` and, for block sizes that are
   multiples of 4, an `ImgDev`; then a random sequence of reads, writes
   across blocks (in range and past the end) and saves is run on each through
-  the same IO helpers (518 operations at the default seed). Every answer is
+  the same IO helpers (518 operations at the default seed). A copy of each
+  file is opened as a fourth device, a `FileRW` on bend-osdev-fileio's
+  effects, and the same operations write it in place. Every answer is
   compared with a model in Python that reads the generated file back itself
   (`seek`, `read`), and every saved file with the model's image byte for
-  byte. Seeds 1 to 5 pass too.
+  byte; each copy written in place is compared byte for byte with Python's
+  own copy, to which Python does every write that succeeds itself (`seek`,
+  `write`; a write that reaches a final partial block pads it to a whole
+  block, as `FileRW` writes whole blocks).
+* `ref/run.sh`, over 4 GiB (`big.bend`): a sparse image of 5 GiB + 1234
+  bytes (Python's `truncate`, in a fresh directory under `$TMPDIR`, default
+  `/tmp`, removed afterwards), in 1000-byte blocks so that one block holds
+  the 4 GiB mark, opened as a `FileRW` on fileio; its block count, then 29
+  reads and writes before, across and past the mark and into the final
+  partial block (which grows the file), against the same model on
+  Python's own sparse copy, and the two files compared byte for byte over
+  their data extents. Left out where the file system keeps no sparse
+  files.
+* Both parts pass natively and on the JavaScript lane (`BEND_LANE=js`), so
+  fileio's C and JavaScript sides are both exercised; seeds 1 to 5 pass
+  too.
 
 ## Sizes and speed
 
@@ -260,22 +340,36 @@ read through `FileDev` with `IODev.fold_blocks`, timed with
 | 16384 blocks of 4 KB, every byte summed and hashed (matches Python) | 6.05 s | 2.8 MB |
 | 131072 blocks of 512 bytes, counted | 6.85 s | 3.3 MB |
 | 131072 blocks of 512 bytes, summed and hashed | 12.7 s | 3.3 MB |
+| 16384 blocks of 4 KB rewritten in place through `FileRW` on fileio (checked by Python) | 5.62 s | 2.7 MB |
+| 131072 blocks of 512 bytes rewritten in place | 13.9 s | 2.4 MB |
 
 Memory is one block and the runtime's 2 to 3 MB, whatever the image's size
 (blockdev's `ImgDev` holds a 64 MB image in about 67 MB). A block read costs
 one `pread` (on a helper thread) and the conversion of its bytes to
-`Octets`, about 50 µs; small blocks are dominated by that.
+`Octets`, about 50 µs, and a block write one `pwrite` and the conversion
+back (the rewrite also builds each block's bytes); small blocks are
+dominated by that.
+
+Image sizes: `FileDev` and `FileOv` are capped by Base at 4 GiB - 1 bytes;
+`FileRW` on fileio has no cap of its own (tested at 5 to 8 GiB, above), up
+to 2^48 - 1 bytes natively (the largest `Nat` a native build holds) and
+2^63 - 1 on the JavaScript lane.
 
 ## Dependencies
 
 `bytes` (Octets); `blockdev` (`DevError`, the pure and owned interfaces and
 their helpers, `MemDev`, `ImgDev`, and its laws in the proofs); `xarray`
-(the overlay's store, and its laws in the proofs). No other.
+(the overlay's store, and its laws in the proofs); `word64` (`W64`, the
+64-bit offsets and sizes in `FileRW`'s template types, so that fileio's
+effects fit them). No other: fileio is imported only by the tests in
+`ref/`, not by the package.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 518 operations on 40 image files (43
-saves) match, `scripts/deps.sh iodev` ok. Laws: a draft, not yet reviewed
-by the maintainer. The 64 MB measurement above was run separately,
-natively.
+saves, 40 files written in place) match and 29 operations on a 5 GiB
+sparse image match, natively and on the JavaScript lane;
+`scripts/deps.sh iodev` ok. Laws: a draft, not yet reviewed by the
+maintainer; `FileRW` adds none. The 64 MB measurements above were run
+separately, natively.
