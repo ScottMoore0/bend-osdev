@@ -41,8 +41,9 @@ proofs. At run time Base's `Array.to_list(~T, a)` lists the same slots.
 
 ## Laws
 
-`LAWS.bend`, 34 laws: 25 for
-every input, 4 witnesses, 5 vectors. `T` is any `Data` element type.
+`LAWS.bend`, 38 laws: 27 for every input, 5 witnesses, 6 vectors
+(`index_wrap`, `index_of_u32`, their witness and a vector are drafts, not yet
+reviewed by the maintainer). `T` is any `Data` element type.
 
 **For every array, of any shape** (no hypothesis):
 
@@ -71,7 +72,12 @@ every input, 4 witnesses, 5 vectors. `T` is any `Data` element type.
   at `i` leaves the read at `j` unchanged.
 
 **Indices:** `index_below`: `index(d, i) < 2^d` (any depth); `index_of_nat`:
-`index(d, U32.from_nat(k)) == k` for `k < 2^d`, `d < 32`.
+`index(d, U32.from_nat(k)) == k` for `k < 2^d`, `d < 32`; `index_wrap`
+(draft): `index(d, U32.from_nat(2^d + k)) == k` for `k < 2^d`, `d < 32`, so a
+counter between `2^d` and `2^(d+1)` wraps to its distance from `2^d`;
+`index_of_u32` (draft): `index(d, i) == U32.to_nat(i)` for a `U32` `i` below
+`2^d` (any depth), so an index computed by `U32` arithmetic reads the slot of
+its value.
 
 **Arrays built from a Data list** (the composable form):
 
@@ -88,9 +94,10 @@ every input, 4 witnesses, 5 vectors. `T` is any `Data` element type.
 
 **Witnesses:** depth 2 with `Array.new` (perfect, below 32); the indices 1 and
 2 (masks differ); slot 3 below `2^2`; a four-element list (the length
-hypothesis). **Vectors:** a wrapped write and read, the leaves of a written
-array, `index(3, 13) == 5`, a read of a written `of_list` array, and a tree
-that is not perfect.
+hypothesis); the `U32` 5 below `2^3` and slot 3 below `2^2` (the hypotheses
+of `index_of_u32` and `index_wrap`). **Vectors:** a wrapped write and read,
+the leaves of a written array, `index(3, 13) == 5`, `index(2, 4 + 3) == 3`, a
+read of a written `of_list` array, and a tree that is not perfect.
 
 ### Ownership, pairs and what exactly is proved
 
@@ -131,35 +138,28 @@ induction over Base's `Word(n)`: `U32.cmp` is the order of the values;
 `Word.sub` (an add-with-carry of the complement) subtracts; halving
 `shln(1, d + 1)` gives `shln(1, d)` below 2^32; `shln(1, d) - 1` is the mask of
 the low `d` bits, and a word masked by it is below `2^d` (and unchanged when
-it already is); `U32.from_nat` and `U32.to_nat` are inverse below `2^32`. The
+it already is, and wraps a word of value `2^d + k` to `k`); `U32.from_nat`
+and `U32.to_nat` are inverse below `2^32`. The
 walk down a perfect tree then picks the left half exactly when the index is
 below `2^(d-1)`, and subtracts `2^(d-1)` on the right, which is where the
 model's element sits in `leaves(xs) ++ leaves(ys)`.
 
 ## What this allows elsewhere
 
-**ringbuf** (`ringbuf/README.md`, "What is proved where") names exactly these
-lemmas as the missing piece for proving that the Array ring holds the
-model's elements: get after set at the same index (`get_set_same`), at a
-different masked index (`get_set_other`), set keeps the size
-(`set_keeps_size`), get hands back the array (`get_same_array`), and
-`Array.new` / `Array.set` give perfect trees (`new_perfect`, `set_perfect`).
-Its three walls are also addressed: the index arithmetic (`model_get`,
-`model_set`, `index_below`), the pair eta (`of_list_get` answers a literal
-pair), and linearity (`reflect` and the `of_list` laws). With them ringbuf
-can state `items(model) == contents(ring)` with the ring's slots as
-`of_list(k, L, 0)` and prove it after every push and pop, for every ring,
-instead of on fixed shapes. Its slot index (`in mod 2^k`, computed by the
-array's own wrap) is exactly `Arrays.index(k, in)`.
+**ringbuf** proves with these laws that the Array ring holds the model's
+elements after every operation, for every sound ring (`ringbuf/README.md`,
+the element laws): the ring's slots are reflected once into
+`of_list(k, L, 0)`, every push is `of_list_set` and every read
+`of_list_get`, and a counter's slot is `Arrays.index(k, counter)`, which
+`index_of_nat` and `index_wrap` make the counter modulo `2^k` for the
+counters of a valid ring.
 
-**algo** (`algo/README.md`, "Not proved") could now prove that the
-`Array<U32>` binary search agrees with the list reference for every sorted
-array: each `Array.get` of the search is, by `of_list_get`, a literal pair
-of the same array and `nth(L, index(d, i))`, and `index_of_nat` makes that
-`nth(L, i)` for the in-range indices the search uses, so the search on the
-array is the search on the list `L`.
-
-Neither package is changed here.
+**algo** proves with them that the `Array<U32>` binary search agrees with the
+list reference for every perfect array whose searched prefix is sorted
+(`algo/README.md`): each `Array.get` of the search is, by `of_list_get`, a
+literal pair of the same array and `nth(L, index(d, mid))`, and
+`index_of_u32` makes that `nth(L, mid)` for the in-range indices the search
+computes by `U32` arithmetic.
 
 ## Extension points
 
@@ -193,4 +193,6 @@ None: Base only (`DEPS` is empty).
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 2905 operations in 40 sequences match,
-`scripts/deps.sh array` ok. Not yet offered upstream.
+`scripts/deps.sh array` ok. Not yet offered upstream. `index_wrap`,
+`index_of_u32`, `witness_index_wrap` and `vector_index_wrap` are drafts, not
+yet reviewed by the maintainer.
