@@ -30,6 +30,7 @@ GPL source was read.
 |---|---|
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
+| [packing](packing/) | Bit fields at any bit position of a byte buffer, packed and unpacked, with lib/packing's quirks as parameters |
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
 | [blockdev](blockdev/) | The block-device interfaces (pure, and owned with writes), a balanced in-memory device, and a proved `Array<U32>` image device |
@@ -45,6 +46,7 @@ GPL source was read.
 | [partition](partition/) | MBR and GPT partition tables, with GPT's CRCs |
 | [uuid](uuid/) | UUIDs (RFC 9562), text and both byte orders |
 | [netheaders](netheaders/) | Ethernet, ARP, IPv4, IPv6, ICMP, UDP and TCP headers, and the Internet checksum |
+| [nlattr](nlattr/) | Netlink attributes (RFC 3549): building, parsing and nested attributes with both flags, and validation against policies, strict or liberal; checked against the running kernel |
 | [tcpip](tcpip/) | A TCP/IP stack as a pure state machine: ARP, IPv4 with reassembly, ICMP echo, UDP, TCP (RFC 9293, 6298, 5681), tested against Linux |
 | [caps](caps/) | Linux capability sets and how execve, capset and prctl change them |
 | [perms](perms/) | Unix permission checks, umask, POSIX ACLs, sticky directories |
@@ -64,7 +66,10 @@ GPL source was read.
 | [ratelimit](ratelimit/) | Rate limiting as a pure state machine: at most `burst` events per `interval` (sliding or fixed window), with the suppressed count |
 | [timerqueue](timerqueue/) | Timers keyed by expiry as a pure state machine: add, delete, next expiry, expire all due; any priority queue or ordered map as the store |
 | [dim](dim/) | Dynamic interrupt moderation (net_dim) as a pure state machine: profile steps from interval samples, converging on identical samples |
+| [genalloc](genalloc/) | A general-purpose pool allocator in the style of genalloc, the fit algorithm a template (first, best, aligned, order-aligned, fixed offset) |
 | [algo](algo/) | Bit search, bitmaps, binary search |
+| [ksort](ksort/) | Sorting: a stable merge sort on lists and an in-place heapsort on an `Array`, the comparison a template |
+| [textsearch](textsearch/) | Searching a byte stream that arrives in chunks, matches spanning chunk boundaries: KMP, Boyer-Moore (Horspool or good suffix) and a token automaton behind one interface |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
 | [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
