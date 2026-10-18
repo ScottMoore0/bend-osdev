@@ -34,7 +34,7 @@ def model(order, ops):
         elif kind == "pop_list":
             n = min(op[1], len(q))
             out.append("out " + ",".join(str(q.popleft()) for _ in range(n)))
-        out.append("len %d avail %d" % (len(q), cap - len(q)))
+        out.append("len %d avail %d items %s" % (len(q), cap - len(q), ",".join(str(x) for x in q)))
     return out
 
 def bend_op(op):
@@ -135,9 +135,13 @@ def step(op: Op, r: R.RingBuf) -> R.RingBuf & String:
     case OPopList{n}:
       out_line(R.ring.pop_list(r, n))
 
+def counts.items(out: String, p: R.RingBuf & List<&2, U32>) -> R.RingBuf & String:
+  (r, xs) = p
+  (r, out ++ " items " ++ show_list(xs))
+
 def counts.avail(out: String, p: R.RingBuf & Nat) -> R.RingBuf & String:
   (r, n) = p
-  (r, out ++ " avail " ++ Nat.show(n))
+  counts.items(out ++ " avail " ++ Nat.show(n), R.ring.items(r))
 
 def counts(out: String, p: R.RingBuf & Nat) -> R.RingBuf & String:
   (r, n) = p
@@ -203,7 +207,7 @@ def m.add(out: String, q: M.RingModel & String) -> M.RingModel & String:
   (+r, line) = q
   (r, out ++ "
 " ++ line ++ "
-len " ++ Nat.show(M.model.len(r)) ++ " avail " ++ Nat.show(M.model.avail(r)))
+len " ++ Nat.show(M.model.len(r)) ++ " avail " ++ Nat.show(M.model.avail(r)) ++ " items " ++ show_list(M.model.items(r)))
 
 def m.run.step(op: Op, p: M.RingModel & String) -> M.RingModel & String:
   (r, out) = p

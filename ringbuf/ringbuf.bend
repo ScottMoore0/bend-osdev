@@ -16,6 +16,7 @@
 # model.bend is the reference implementation of the same interface, on the
 # list of the elements.
 import Base
+import ../array/array.bend as A
 
 type RingError is Data:
   RingFull{}
@@ -92,6 +93,27 @@ def ring.valid(r: RingBuf) -> RingBuf & Bool:
   match r:
     case RingBuf{+o, +i, +u, a}:
       (RingBuf{o, i, u, a}, ring.inv(o, i, u))
+
+# Listing the elements
+
+def ring.items.word(r: Array<U32> & U32, k: Array<U32> -> U32 -> RingBuf & List<&2, U32>) -> RingBuf & List<&2, U32>:
+  (a, x) = r
+  k(a, x)
+
+# the elements pushed when in was u to u + n - 1, newest first, in front of
+# acc (a tail call per element, so it runs on long rings)
+def ring.items.go(n: Nat, +o: Nat, +i: Nat, +u: Nat, a: Array<U32>, acc: List<&2, U32>) -> RingBuf & List<&2, U32>:
+  match n:
+    case 0n:
+      (RingBuf{o, i, u, a}, acc)
+    case 1n+ +p:
+      ring.items.word(Array.get(U32, a, U32.from_nat(Nat.add(u, p))), a2 => x => ring.items.go(p, o, i, u, a2, Con{x, acc}))
+
+# the elements, oldest first, left in place (kfifo_out_peek of all of them)
+def ring.items(r: RingBuf) -> RingBuf & List<&2, U32>:
+  match r:
+    case RingBuf{+o, +i, +u, a}:
+      ring.items.go(Nat.sub(i, u), o, i, u, a, Nil{})
 
 # Push and pop
 
@@ -199,3 +221,14 @@ def ring.pop_list.go(n: Nat, st: RingBuf & List<&2, U32>) -> RingBuf & List<&2, 
 # up to n elements popped, oldest first; fewer if the ring empties (kfifo_out)
 def ring.pop_list(r: RingBuf, n: Nat) -> RingBuf & List<&2, U32>:
   ring.pop_list.go(n, (r, Nil{}))
+
+# Specifications (for the laws; they look inside the array, so they do not
+# run compiled)
+
+# a ring as the defs above build it: valid counters, an order below 32 (so
+# that every slot index fits a U32), and its slots a perfect array of 2^order
+# (bend-osdev-array's Arrays.is_perfect)
+def ring.sound(r: RingBuf) -> Bool:
+  match r:
+    case RingBuf{+o, +i, +u, a}:
+      Bool.and(ring.inv(o, i, u), Bool.and(Nat.is_lt(o, 32n), A.Arrays.is_perfect(U32, o, a)))

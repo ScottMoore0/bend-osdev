@@ -71,6 +71,9 @@ def main() -> IO(Unit):
     IO.print(popped(R.ring.pop(R.ring.new(3n))))
     IO.print(got(R.ring.pop_list(ring_of(R.ring.push_list(ring_out(R.ring.pop_list(four(), 3n)), [7, 8, 9])), 9n)))
     IO.print(len(R.ring.avail(ring_out(R.ring.pop_list(four(), 1n)))))
+    IO.print(got(R.ring.items(four())))
+    IO.print(got(R.ring.items(ring_out(R.ring.pop_list(four(), 3n)))))
+    IO.print(got(R.ring.items(R.ring.new(3n))))
 
 #|256
 #|4
@@ -80,3 +83,6 @@ def main() -> IO(Unit):
 #|RingEmpty
 #|6,7,8,9
 #|1
+#|3,4,5,6
+#|6
+#|-
