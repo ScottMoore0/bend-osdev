@@ -40,10 +40,12 @@ interface keeps its code and laws.
 Errors are `DevError`: `DevOutOfRange{block}`, `DevBadLength{expected, got}`,
 `DevFailed{code}`.
 
-### The filesystems stay on the pure interface
+### The filesystems' readers stay on the pure interface
 
-fat, iso9660 and ext2 are read-only and take the pure interface. They are
-left on it, unchanged, for these reasons:
+The readers of fat, iso9660 and ext2 take the pure interface. fat's writer
+(`fat/write.bend`) uses the owned interface, with `~write_block`, and reads
+back through the same owned device. The readers are left on the pure
+interface, unchanged, for these reasons:
 
 * every one of their laws that mentions a device (fat's `chain_bound`,
   iso9660's `dir_records_fenced` and `stream_*` laws, ext2's `map_*`,

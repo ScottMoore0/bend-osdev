@@ -1,6 +1,6 @@
-# bend-osdev-fat, error.bend: why a FAT volume, record, chain, directory or
-# path was refused. One constructor per failure, so a caller can tell them
-# apart; FatDev wraps the device's own error.
+# bend-osdev-fat, error.bend: why a FAT volume, record, chain, directory,
+# path or write was refused. One constructor per failure, so a caller can
+# tell them apart; FatDev wraps the device's own error.
 #
 # The public interface is listed in README.md; everything else is internal.
 import Base
@@ -42,6 +42,21 @@ type FatError is Data:
   FatNotFound{}
   FatNotADirectory{}
   FatIsADirectory{}
+  # writing
+  FatDiskFull{}
+  FatExists{}
+  FatNotEmpty{}
+  FatBadName{}
+  FatRootFull{}
+  FatDirFull{}
+  FatNoAlias{}
+  FatIsRoot{}
+  FatMoveIntoSelf{}
+  FatFileTooLarge{}
+  FatReadOnly{}
+  # formatting
+  FatFormatBadType{clusters: Nat}
+  FatFormatBadParam{}
 
 # a short name for each failure (what check.bend and the reference test print)
 def FatError.show(e: FatError) -> String:
@@ -108,3 +123,29 @@ def FatError.show(e: FatError) -> String:
       "not a directory"
     case FatIsADirectory{}:
       "is a directory"
+    case FatDiskFull{}:
+      "disk full"
+    case FatExists{}:
+      "name exists"
+    case FatNotEmpty{}:
+      "directory not empty"
+    case FatBadName{}:
+      "bad name"
+    case FatRootFull{}:
+      "root directory full"
+    case FatDirFull{}:
+      "directory full"
+    case FatNoAlias{}:
+      "no short name free"
+    case FatIsRoot{}:
+      "is the root directory"
+    case FatMoveIntoSelf{}:
+      "move into itself"
+    case FatFileTooLarge{}:
+      "file too large"
+    case FatReadOnly{}:
+      "read-only file"
+    case FatFormatBadType{n}:
+      "cluster count " ++ Nat.show(n) ++ " outside the FAT type"
+    case FatFormatBadParam{}:
+      "bad format parameter"

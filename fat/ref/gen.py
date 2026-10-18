@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Differential test cases for bend-osdev-fat.
 
-Writes ref/cases.bend (a Bend program that mounts each image through the
-package and prints one line per operation, through ref/harness.bend) and
-ref/expected.txt (the same lines from an independent reader written here).
+Writes the images into a work directory (the second argument), ref/cases-NN.bend
+(Bend programs that load an image from its file, mount it through the
+package and print one line per operation, through ref/harness.bend; at most
+120 operations a file, in helper defs of at most 40, so each builds
+natively) and ref/expected.txt (the same lines from an independent reader
+written here).
 
 Two sources of images:
   * an image builder written here from Microsoft's "FAT: General Overview of
@@ -21,9 +24,10 @@ The reader below (Reader) is written from the same specification by the
 package's author; it is checked against the builder's own record of each
 tree, and on the mtools images against the source trees and mdir.
 
-FAT32 needs at least 65525 clusters, so FAT32 images are about 34 MB; the
-images are passed to Bend as sparse devices (only the 512-byte blocks that
-are not all zero) and read a block at a time.
+FAT32 needs at least 65525 clusters, so FAT32 images are about 34 MB; Bend
+reads only the 512-byte blocks that are not all zero from each image file
+(their numbers are listed in the case file) into a sparse device, and the
+package reads it a block at a time.
 """
 import os, random, shutil, struct, subprocess, sys, tempfile
 
@@ -643,48 +647,80 @@ def bend_str(s):
     return "str_of([%s])" % ", ".join(str(ord(c)) for c in s)
 
 class Cases:
-    def __init__(self):
-        self.images, self.lines, self.expect = [], [], []
+    PER_FILE = 120  # operations a case file (each file builds natively)
+    PER_DEF = 40    # operations a helper def (bendlang/bend#1069)
+
+    def __init__(self, work):
+        self.work = work
+        self.images, self.expect = [], []
 
     def image(self, tag, img):
-        blocks = []
-        for i in range(0, len(img), BLOCK):
-            blk = bytes(img[i:i + BLOCK])
-            if any(blk):
-                blocks.append("R.H.block(%dn, 512n, \"%s\")" % (i // BLOCK, blk.rstrip(b"\0").hex()))
+        path = os.path.join(self.work, tag + ".img")
+        with open(path, "wb") as f:
+            f.write(bytes(img))
+        nz = [i // BLOCK for i in range(0, len(img), BLOCK) if any(img[i:i + BLOCK])]
         count = -(-len(img) // BLOCK)
-        self.images.append((tag, count, blocks))
+        self.images.append([tag, path, count, nz, []])
         self.cur = tag
-        self.calls = []
 
-    def op(self, label, call, result):
-        tag = self.cur
-        lit = label.replace("\\", "\\\\").replace('"', '\\"')
-        self.lines.append((tag, '    IO.print("%s %s " ++ %s)' % (tag, lit, call)))
-        self.expect.append("%s %s %s" % (tag, label, result))
+    def op(self, label, query, result):
+        """query: a Bend RQuery constructor, "{L}" standing for the label."""
+        self.images[-1][4].append(query.replace("{L}", bend_str(label)))
+        self.expect.append("%s %s %s" % (self.cur, label, result))
+
+    @staticmethod
+    def nat_list(xs):
+        # long lists are built from pieces (a literal over a few thousand
+        # elements overflows the checker)
+        pieces = ["[%s]" % ", ".join("%dn" % k for k in xs[i:i + 500]) for i in range(0, len(xs), 500)] or ["[]"]
+        lst = pieces[-1]
+        for p in reversed(pieces[:-1]):
+            lst = "List.append(&2, Nat, %s, %s)" % (p, lst)
+        return lst
 
     def write(self, here):
-        with open(os.path.join(here, "cases.bend"), "w") as f:
-            f.write("import Base\nimport ../bpb.bend as P\nimport ./harness.bend as R\n\n")
-            f.write("def str_of(xs: List<&2, U32>) -> String:\n  match xs:\n    case Nil{}:\n      \"\"\n    case Con{h, t}:\n      SCon{Char.from_u32(h), str_of(t)}\n\n")
-            f.write("def strict() -> P.FatOptions:\n  P.FatOptions.default()\n\n")
-            f.write("def lenient() -> P.FatOptions:\n  P.FatOptions.lenient()\n\n")
-            for tag, count, blocks in self.images:
-                # the block list in pieces, so no list literal is long (the
-                # last piece first: a def may call only defs above it)
-                for k in reversed(range(0, max(1, len(blocks)), 40)):
-                    part = blocks[k:k + 40]
-                    nxt = "blocks_%s_%d()" % (tag, k + 40) if k + 40 < len(blocks) else "[]"
-                    f.write("def blocks_%s_%d() -> List<&2, R.SparseBlock>:\n  List.append(&2, R.SparseBlock, [%s], %s)\n\n" % (tag, k, ", ".join(part), nxt))
-                f.write("def dev_%s() -> R.SparseDev:\n  R.SparseDev{512n, %dn, blocks_%s_0()}\n\n" % (tag, count, tag))
-                f.write("def run_%s(+d: R.SparseDev) -> IO(Unit):\n  do IO<Unit>:\n" % tag)
-                body = [l for t, l in self.lines if t == tag]
-                f.write("\n".join(body) + "\n\n")
-            f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n")
-            for tag, count, blocks in self.images:
-                f.write("    run_%s(dev_%s())\n" % (tag, tag))
-        with open(os.path.join(here, "expected.txt"), "w") as f:
+        for old in os.listdir(here):
+            if old.startswith("cases") and old.endswith(".bend"):
+                os.unlink(os.path.join(here, old))
+        # the images' queries packed into files of PER_FILE queries (the
+        # last fewer), an image's queries split across files where they do
+        # not fit (each file loads its images again; each build costs
+        # seconds)
+        files, cur, size = [], [], 0
+        for tag, path, count, nz, qs in self.images:
+            qs = list(qs)
+            while True:
+                room = self.PER_FILE - size
+                part, qs = qs[:room], qs[room:]
+                cur.append((tag, path, count, nz, part))
+                size += len(part)
+                if size == self.PER_FILE:
+                    files.append(cur)
+                    cur, size = [], 0
+                if not qs:
+                    break
+        if cur:
+            files.append(cur)
+        for k, group in enumerate(files):
+            with open(os.path.join(here, "cases-%02d.bend" % k), "w", encoding="utf-8") as f:
+                f.write("import Base\nimport ./harness.bend as R\n\n")
+                f.write("def str_of(xs: List<&2, U32>) -> String:\n  match xs:\n    case Nil{}:\n      \"\"\n    case Con{h, t}:\n      SCon{Char.from_u32(h), str_of(t)}\n\n")
+                runs = []
+                for g, (tag, path, count, nz, part) in enumerate(group):
+                    n = 0
+                    for b in range(0, len(part), self.PER_DEF):
+                        f.write("def qs%d_%d() -> List<&2, R.RQuery>:\n  [%s]\n\n" % (g, n, ", ".join(part[b:b + self.PER_DEF])))
+                        n += 1
+                    lst = "qs%d_%d()" % (g, n - 1) if n else "[]"
+                    for m in reversed(range(n - 1)):
+                        lst = "List.append(&2, R.RQuery, qs%d_%d(), %s)" % (g, m, lst)
+                    f.write("def blocks%d() -> List<&2, Nat>:\n  %s\n\n" % (g, self.nat_list(nz)))
+                    runs.append("    R.RImg.run(\"%s\", \"%s\", blocks%d(), %dn, %s)" % (tag, path, g, count, lst))
+                f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(runs) + "\n")
+        with open(os.path.join(here, "expected.txt"), "w", encoding="utf-8") as f:
             f.write("\n".join(self.expect) + "\n")
+        k = len(files)
+        return k
 
 def result(fn):
     try:
@@ -693,11 +729,11 @@ def result(fn):
         return "error " + str(e)
 
 def opts(strict):
-    return "strict()" if strict else "lenient()"
+    return "True{}" if strict else "False{}"
 
 def ops_mount(cs, img, strict=True):
     r = Reader(img, strict, 32768 if strict else 65536)
-    cs.op("mount", "R.H.mount(d, %s)" % opts(strict), result(r.mount))
+    cs.op("mount", "R.RQMount{{L}, %s}" % opts(strict), result(r.mount))
     return r
 
 def ops_ls(cs, r, path, strict=True):
@@ -705,26 +741,26 @@ def ops_ls(cs, r, path, strict=True):
         r.strict = strict
         ns = r.listdir(path)
         return "%d%s" % (len(ns), "".join(" " + n.show() + ";" for n in ns))
-    cs.op("ls " + esc(path), "R.H.ls(d, %s, %s)" % (opts(strict), bend_str(path)), result(go))
+    cs.op("ls " + esc(path), "R.RQLs{{L}, %s, %s}" % (opts(strict), bend_str(path)), result(go))
 
 def ops_stat(cs, r, path):
     def go():
         n = r.resolve(path)
         return "root" if n is None else n.show()
-    cs.op("stat " + esc(path), "R.H.stat(d, strict(), %s)" % bend_str(path), result(go))
+    cs.op("stat " + esc(path), "R.RQStat{{L}, %s}" % bend_str(path), result(go))
 
 def ops_read(cs, r, path, off, ln):
     def go():
         n = r.resolve(path)
         return show_bytes(r.read(n, off, ln))
-    cs.op("read %s %d %d" % (esc(path), off, ln), "R.H.read(d, strict(), %s, %d, %d)" % (bend_str(path), off, ln), result(go))
+    cs.op("read %s %d %d" % (esc(path), off, ln), "R.RQRead{{L}, %s, %d, %d}" % (bend_str(path), off, ln), result(go))
 
 def ops_stream(cs, r, path):
     def go():
         pieces = r.stream(r.resolve(path))
         data = b"".join(pieces)
         return "%d %08x %s" % (len(data), h32(data), "True" if all(len(p) <= r.bps for p in pieces) else "False")
-    cs.op("stream " + esc(path), "R.H.stream(d, strict(), %s)" % bend_str(path), result(go))
+    cs.op("stream " + esc(path), "R.RQStream{{L}, %s}" % bend_str(path), result(go))
 
 def ops_walk(cs, r, path):
     def go():
@@ -732,7 +768,7 @@ def ops_walk(cs, r, path):
         if n is None:
             raise FatErr("is a directory")
         return str(len(r.walk(n.cluster)))
-    cs.op("walk " + esc(path), "R.H.walk(d, strict(), %s)" % bend_str(path), result(go))
+    cs.op("walk " + esc(path), "R.RQWalk{{L}, %s}" % bend_str(path), result(go))
 
 def ops_fsinfo(cs, r):
     def go():
@@ -745,10 +781,10 @@ def ops_fsinfo(cs, r):
         if (lead, st, trail) != (0x41615252, 0x61417272, 0xAA550000):
             raise FatErr("bad FSInfo")
         return "%d %d" % (free, nxt)
-    cs.op("fsinfo", "R.H.fsinfo(d, strict())", result(go))
+    cs.op("fsinfo", "R.RQFsinfo{{L}}", result(go))
 
 def ops_label(cs, r):
-    cs.op("label", "R.H.label(d, strict())", result(lambda: "%08x %s" % (r.volid, esc("".join(chr(c) for c in r.label)))))
+    cs.op("label", "R.RQLabel{{L}}", result(lambda: "%08x %s" % (r.volid, esc("".join(chr(c) for c in r.label)))))
 
 def flip_case(rng, s):
     return "".join(c.swapcase() if c.isascii() and rng.random() < 0.5 else c for c in s)
@@ -904,7 +940,7 @@ def corrupt(img, off, val, width=1):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     rng = random.Random(int(sys.argv[1]) if len(sys.argv) > 1 else 2026)
-    cs = Cases()
+    cs = Cases(sys.argv[2] if len(sys.argv) > 2 else tempfile.mkdtemp())
     tmp = tempfile.mkdtemp()
     try:
         # (kind, bytes per sector, sectors per cluster, clusters, root entries)
@@ -1038,7 +1074,8 @@ def main():
             all_ops(cs, data, record, rng, fsinfo=(kind == 32))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    cs.write(here)
-    print(len(cs.expect), "cases,", len(cs.images), "images")
+    files = cs.write(here)
+    print(len(cs.expect), "cases,", len(cs.images), "images,", files, "files")
 
-main()
+if __name__ == "__main__":
+    main()

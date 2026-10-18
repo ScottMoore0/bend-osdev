@@ -285,3 +285,110 @@ def H.label(+d: SparseDev, +opts: P.FatOptions) -> String:
   H.label.show(do Result<&2, &2, E.FatError, P.FatBootExt>:
     fs : M.FatFs <- M.Fat.mount(~SparseDev, ~SparseDev.block_size, ~SparseDev.read_block, d, opts)
     M.Fat.boot_ext(~SparseDev, ~SparseDev.block_size, ~SparseDev.read_block, d, fs))
+
+# Loading an image's device from a file: the listed blocks (those that are
+# not all zero), each read on its own
+
+def L.got(res: Result<&1, &1, U32 & String, List<&2, U32>>, +n: Nat, acc: List<&2, SparseBlock>) -> List<&2, SparseBlock>:
+  match res:
+    case Done{xs}:
+      Con{SparseBlock{n, B.Octets.of_list(xs)}, acc}
+    case Fail{e}:
+      acc
+
+def L.step(p: File & Result<&1, &1, U32 & String, List<&2, U32>>, +n: Nat, acc: List<&2, SparseBlock>) -> IO(File & List<&2, SparseBlock>):
+  (f, res) = p
+  IO.pure(File & List<&2, SparseBlock>, (f, L.got(res, n, acc)))
+
+def L.go(ns: List<&2, Nat>, st: File & List<&2, SparseBlock>) -> IO(File & List<&2, SparseBlock>):
+  match ns:
+    case Nil{}:
+      IO.pure(File & List<&2, SparseBlock>, st)
+    case Con{+n, t}:
+      (f, acc) = st
+      do IO<File & List<&2, SparseBlock>>:
+        r : File & Result<&1, &1, U32 & String, List<&2, U32>> <- File.read_at(f, U32.from_nat(Nat.mul(n, 512n)), 512)
+        q : File & List<&2, SparseBlock> <- L.step(r, n, acc)
+        L.go(t, q)
+
+def L.rev(xs: List<&2, SparseBlock>, acc: List<&2, SparseBlock>) -> List<&2, SparseBlock>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      L.rev(t, Con{h, acc})
+
+def L.fin(+count: Nat, r: File & List<&2, SparseBlock>) -> IO(SparseDev):
+  (f, bs) = r
+  do IO<SparseDev>:
+    File.close(f)
+    return SparseDev{512n, count, L.rev(bs, Nil{})}
+
+def L.opened(r: Result<&1, &1, U32 & String, File>, ns: List<&2, Nat>, +count: Nat) -> IO(SparseDev):
+  match r:
+    case Done{f}:
+      do IO<SparseDev>:
+        q : File & List<&2, SparseBlock> <- L.go(ns, (f, Nil{}))
+        L.fin(count, q)
+    case Fail{e}:
+      IO.pure(SparseDev, SparseDev{512n, count, Nil{}})
+
+def L.file(path: String, ns: List<&2, Nat>, +count: Nat) -> IO(SparseDev):
+  do IO<SparseDev>:
+    r : Result<&1, &1, U32 & String, File> <- File.open(path, "r")
+    L.opened(r, ns, count)
+
+# The queries a case file asks of an image, each with the label its line
+# carries
+
+type RQuery is Data:
+  RQMount{label: String, strict: Bool}
+  RQLabel{label: String}
+  RQFsinfo{label: String}
+  RQLs{label: String, strict: Bool, path: String}
+  RQStat{label: String, path: String}
+  RQRead{label: String, path: String, off: U32, len: U32}
+  RQStream{label: String, path: String}
+  RQWalk{label: String, path: String}
+
+def RQ.opts(strict: Bool) -> P.FatOptions:
+  match strict:
+    case True{}:
+      P.FatOptions.default()
+    case False{}:
+      P.FatOptions.lenient()
+
+def RQ.run(q: RQuery, +d: SparseDev) -> String:
+  match q:
+    case RQMount{l, s}:
+      l ++ " " ++ H.mount(d, RQ.opts(s))
+    case RQLabel{l}:
+      l ++ " " ++ H.label(d, P.FatOptions.default())
+    case RQFsinfo{l}:
+      l ++ " " ++ H.fsinfo(d, P.FatOptions.default())
+    case RQLs{l, s, p}:
+      l ++ " " ++ H.ls(d, RQ.opts(s), p)
+    case RQStat{l, p}:
+      l ++ " " ++ H.stat(d, P.FatOptions.default(), p)
+    case RQRead{l, p, off, len}:
+      l ++ " " ++ H.read(d, P.FatOptions.default(), p, off, len)
+    case RQStream{l, p}:
+      l ++ " " ++ H.stream(d, P.FatOptions.default(), p)
+    case RQWalk{l, p}:
+      l ++ " " ++ H.walk(d, P.FatOptions.default(), p)
+
+def RQ.all(qs: List<&2, RQuery>, +tag: String, +d: SparseDev) -> IO(Unit):
+  match qs:
+    case Nil{}:
+      IO.pure(Unit, Unit{})
+    case Con{q, t}:
+      do IO<Unit>:
+        IO.print(tag ++ " " ++ RQ.run(q, d))
+        RQ.all(t, tag, d)
+
+# one image (count 512-byte blocks, the blocks ns read from the file path)
+# and its queries
+def RImg.run(+tag: String, path: String, ns: List<&2, Nat>, +count: Nat, qs: List<&2, RQuery>) -> IO(Unit):
+  do IO<Unit>:
+    d : SparseDev <- L.file(path, ns, count)
+    RQ.all(qs, tag, d)

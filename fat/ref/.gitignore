@@ -1,2 +1,4 @@
-cases.bend
+cases-*.bend
 expected.txt
+wcases.bend
+wexpected.txt

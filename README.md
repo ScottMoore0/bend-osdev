@@ -57,7 +57,7 @@ GPL source was read.
 | [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
 | [fdt](fdt/) | Devicetree Blobs, read and written (output byte-identical to dtc's) |
 | [acpi](acpi/) | ACPI tables read and written (RSDP, RSDT/XSDT, MADT, FADT, HPET, MCFG, SRAT, SLIT, BGRT), and an AML interpreter with a step bound |
-| [fat](fat/) | FAT12/16/32, read-only |
+| [fat](fat/) | FAT12/16/32, read and write: format, create, write, truncate, delete, rename |
 | [iso9660](iso9660/) | ISO 9660 with Rock Ridge, Joliet and El Torito, read-only |
 | [ext2](ext2/) | ext2, ext3 and ext4 (extents, checksums), read-only |
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |

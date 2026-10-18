@@ -103,23 +103,62 @@ def FatWant.name(+s: String) -> FatWant:
 # checksum, and its units so far
 type FatRun is Data:
   FatRunNone{}
-  FatRunSome{next: U32, chk: U32, units: List<&2, U32>}
+  FatRunSome{next: U32, chk: U32, units: List<&2, U32>, start: Nat}
+
+# Where a node's entries are in its directory: the index of its first entry
+# (its first long-name entry, or its short entry) and of its short entry,
+# counting the directory's 32-byte entries from 0
+type FatSpan is Data:
+  FatSpan{first: Nat, last: Nat}
+
+def FatSpan.first(s: FatSpan) -> Nat:
+  match s:
+    case FatSpan{a, b}:
+      a
+
+def FatSpan.last(s: FatSpan) -> Nat:
+  match s:
+    case FatSpan{a, b}:
+      b
 
 # The state of a scan: whether to refuse bad long names, what it looks for,
 # the long name being read, the nodes found (latest first), whether the
-# directory (or the search) has ended, and the entries seen
+# directory (or the search) has ended, the entries seen, and the spans of the
+# nodes found (latest first)
 type FatScan is Data:
-  FatScan{strict: Bool, want: FatWant, run: FatRun, found: List<&2, FatNode>, ended: Bool, seen: Nat}
+  FatScan{strict: Bool, want: FatWant, run: FatRun, found: List<&2, FatNode>, ended: Bool, seen: Nat, spans: List<&2, FatSpan>}
 
 def FatScan.start(opts: P.FatOptions, want: FatWant) -> FatScan:
   match opts:
     case P.FatOptions{m, strict}:
-      FatScan{strict, want, FatRunNone{}, Nil{}, False{}, 0n}
+      FatScan{strict, want, FatRunNone{}, Nil{}, False{}, 0n, Nil{}}
 
 def FatScan.ended(s: FatScan) -> Bool:
   match s:
-    case FatScan{st, w, r, f, e, n}:
+    case FatScan{st, w, r, f, e, n, sp}:
       e
+
+def FatScan.seen(s: FatScan) -> Nat:
+  match s:
+    case FatScan{st, w, r, f, e, n, sp}:
+      n
+
+def FatScan.spans.reverse(xs: List<&2, FatSpan>, acc: List<&2, FatSpan>) -> List<&2, FatSpan>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      FatScan.spans.reverse(t, Con{h, acc})
+
+# where the nodes found are, in directory order (one span a node)
+def FatScan.spans(s: FatScan) -> List<&2, FatSpan>:
+  match s:
+    case FatScan{st, w, r, f, e, n, sp}:
+      FatScan.spans.reverse(sp, Nil{})
+
+# the index of the entry being read (the last one counted)
+def FatScan.at(s: FatScan) -> Nat:
+  Nat.sub(FatScan.seen(s), 1n)
 
 def FatScan.reverse(xs: List<&2, FatNode>, acc: List<&2, FatNode>) -> List<&2, FatNode>:
   match xs:
@@ -131,7 +170,7 @@ def FatScan.reverse(xs: List<&2, FatNode>, acc: List<&2, FatNode>) -> List<&2, F
 # the nodes found, in directory order
 def FatScan.found(s: FatScan) -> List<&2, FatNode>:
   match s:
-    case FatScan{st, w, r, f, e, n}:
+    case FatScan{st, w, r, f, e, n, sp}:
       FatScan.reverse(f, Nil{})
 
 def FatScan.stopped(r: Result<&2, &2, E.FatError, FatScan>) -> Bool:
@@ -151,17 +190,17 @@ def FatScan.bad(strict: Bool, e: E.FatError, s: FatScan) -> Result<&2, &2, E.Fat
 
 def FatScan.with_run(s: FatScan, run: FatRun) -> FatScan:
   match s:
-    case FatScan{st, w, r, f, e, n}:
-      FatScan{st, w, run, f, e, n}
+    case FatScan{st, w, r, f, e, n, sp}:
+      FatScan{st, w, run, f, e, n, sp}
 
 def FatScan.strict(s: FatScan) -> Bool:
   match s:
-    case FatScan{st, w, r, f, e, n}:
+    case FatScan{st, w, r, f, e, n, sp}:
       st
 
 def FatScan.run(s: FatScan) -> FatRun:
   match s:
-    case FatScan{st, w, r, f, e, n}:
+    case FatScan{st, w, r, f, e, n, sp}:
       r
 
 # Long-name entries
@@ -169,14 +208,14 @@ def FatScan.run(s: FatScan) -> FatRun:
 def FatScan.lfn.first(ok: Bool, +s: FatScan, +n: U32, +chk: U32, units: List<&2, U32>) -> Result<&2, &2, E.FatError, FatScan>:
   match ok:
     case True{}:
-      Done{FatScan.with_run(s, FatRunSome{U32.sub(n, 1), chk, units})}
+      Done{FatScan.with_run(s, FatRunSome{U32.sub(n, 1), chk, units, FatScan.at(s)})}
     case False{}:
       FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, FatScan.with_run(s, FatRunNone{}))
 
-def FatScan.lfn.more(inseq: Bool, same: Bool, +s: FatScan, +next: U32, +chk: U32, units: List<&2, U32>, have: List<&2, U32>) -> Result<&2, &2, E.FatError, FatScan>:
+def FatScan.lfn.more(inseq: Bool, same: Bool, +s: FatScan, +next: U32, +chk: U32, units: List<&2, U32>, have: List<&2, U32>, start: Nat) -> Result<&2, &2, E.FatError, FatScan>:
   match inseq same:
     case True{} True{}:
-      Done{FatScan.with_run(s, FatRunSome{U32.sub(next, 1), chk, B.append(units, have)})}
+      Done{FatScan.with_run(s, FatRunSome{U32.sub(next, 1), chk, B.append(units, have), start})}
     case True{} False{}:
       FatScan.bad(FatScan.strict(s), E.FatLfnBadChecksum{}, FatScan.with_run(s, FatRunNone{}))
     case False{} _:
@@ -189,12 +228,12 @@ def FatScan.lfn.go(last: Bool, run: FatRun, +s: FatScan, +ord: U32, +chk: U32, u
     case True{} FatRunNone{}:
       +n = U32.and(63, ord)
       FatScan.lfn.first(Bool.and(U32.is_ge(n, 1), U32.is_le(n, 20)), s, n, chk, units)
-    case True{} FatRunSome{x, c, us}:
+    case True{} FatRunSome{x, c, us, st0}:
       FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, FatScan.with_run(s, FatRunNone{}))
     case False{} FatRunNone{}:
       FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, s)
-    case False{} FatRunSome{+next, +c, us}:
-      FatScan.lfn.more(Bool.and(U32.is_eq(ord, next), Bool.not(U32.is_eq(next, 0))), U32.is_eq(chk, c), s, next, c, units, us)
+    case False{} FatRunSome{+next, +c, us, st0}:
+      FatScan.lfn.more(Bool.and(U32.is_eq(ord, next), Bool.not(U32.is_eq(next, 0))), U32.is_eq(chk, c), s, next, c, units, us, st0)
 
 def FatScan.lfn(+s: FatScan, e: R.FatLfn) -> Result<&2, &2, E.FatError, FatScan>:
   match e:
@@ -238,39 +277,47 @@ def FatScan.keep.add(hit: Bool, +all: Bool, n: FatNode, found: List<&2, FatNode>
     case False{}:
       found
 
-# a node joins the found list if it is wanted; a search ends at its first hit
-def FatScan.keep(listed: Bool, +s: FatScan, +n: FatNode) -> FatScan:
+def FatScan.keep.span(hit: Bool, sp: FatSpan, spans: List<&2, FatSpan>) -> List<&2, FatSpan>:
+  match hit:
+    case True{}:
+      Con{sp, spans}
+    case False{}:
+      spans
+
+# a node joins the found list if it is wanted (with its span, from entry
+# first to the one being read); a search ends at its first hit
+def FatScan.keep(listed: Bool, +s: FatScan, +n: FatNode, first: Nat) -> FatScan:
   match listed s:
     case False{} _:
       FatScan.with_run(s, FatRunNone{})
-    case True{} FatScan{st, +w, r, f, e, c}:
+    case True{} FatScan{st, +w, r, f, e, +c, sp}:
       +hit = FatWant.matches(w, n)
-      FatScan{st, w, FatRunNone{}, FatScan.keep.add(hit, FatWant.is_all(w), n, f), Bool.and(hit, Bool.not(FatWant.is_all(w))), c}
+      FatScan{st, w, FatRunNone{}, FatScan.keep.add(hit, FatWant.is_all(w), n, f), Bool.and(hit, Bool.not(FatWant.is_all(w))), c, FatScan.keep.span(hit, FatSpan{first, Nat.sub(c, 1n)}, sp)}
 
 # whether a short entry is listed: not the volume label, not "." or ".."
 def FatScan.listed(+d: R.FatDirent) -> Bool:
   Bool.and(Bool.not(Bool.and(R.FatDirent.is_volume_label(d), Bool.not(R.FatDirent.is_dir(d)))), Bool.not(P.Fat.byte_is(B.Octets.at(R.FatDirent.name(d), 0n), 46)))
 
-def FatScan.short.named(ok: Bool, +s: FatScan, +units: List<&2, U32>, +d: R.FatDirent) -> Result<&2, &2, E.FatError, FatScan>:
+def FatScan.short.named(ok: Bool, +s: FatScan, +units: List<&2, U32>, +d: R.FatDirent, +start: Nat) -> Result<&2, &2, E.FatError, FatScan>:
   match ok:
     case True{}:
-      Done{FatScan.keep(FatScan.listed(d), s, FatNode{R.FatLfn.cut(units), d})}
+      Done{FatScan.keep(FatScan.listed(d), s, FatNode{R.FatLfn.cut(units), d}, start)}
     case False{}:
-      FatScan.bad(FatScan.strict(s), E.FatLfnBadChecksum{}, FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d}))
+      FatScan.bad(FatScan.strict(s), E.FatLfnBadChecksum{}, FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d}, FatScan.at(s)))
 
-def FatScan.short.complete(done: Bool, +s: FatScan, +c: U32, +us: List<&2, U32>, +d: R.FatDirent) -> Result<&2, &2, E.FatError, FatScan>:
+def FatScan.short.complete(done: Bool, +s: FatScan, +c: U32, +us: List<&2, U32>, +d: R.FatDirent, +start: Nat) -> Result<&2, &2, E.FatError, FatScan>:
   match done:
     case True{}:
-      FatScan.short.named(U32.is_eq(R.FatLfn.checksum(R.FatDirent.name(d)), c), s, us, d)
+      FatScan.short.named(U32.is_eq(R.FatLfn.checksum(R.FatDirent.name(d)), c), s, us, d, start)
     case False{}:
-      FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d}))
+      FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d}, FatScan.at(s)))
 
 def FatScan.short.go(run: FatRun, +s: FatScan, +d: R.FatDirent) -> Result<&2, &2, E.FatError, FatScan>:
   match run:
     case FatRunNone{}:
-      Done{FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d})}
-    case FatRunSome{+next, +c, us}:
-      FatScan.short.complete(U32.is_eq(next, 0), s, c, us, d)
+      Done{FatScan.keep(FatScan.listed(d), s, FatNode{Nil{}, d}, FatScan.at(s))}
+    case FatRunSome{+next, +c, us, start}:
+      FatScan.short.complete(U32.is_eq(next, 0), s, c, us, d, start)
 
 # One 32-byte entry
 
@@ -296,16 +343,16 @@ def FatKind.of(+xs: List<&2, U32>) -> FatKind:
 
 def FatScan.end(+s: FatScan) -> Result<&2, &2, E.FatError, FatScan>:
   match s:
-    case FatScan{st, w, FatRunNone{}, f, e, n}:
-      Done{FatScan{st, w, FatRunNone{}, f, True{}, n}}
-    case FatScan{st, w, FatRunSome{x, c, us}, f, e, n}:
-      FatScan.bad(st, E.FatLfnBadSequence{}, FatScan{st, w, FatRunNone{}, f, True{}, n})
+    case FatScan{st, w, FatRunNone{}, f, e, n, sp}:
+      Done{FatScan{st, w, FatRunNone{}, f, True{}, n, sp}}
+    case FatScan{st, w, FatRunSome{x, c, us, a}, f, e, n, sp}:
+      FatScan.bad(st, E.FatLfnBadSequence{}, FatScan{st, w, FatRunNone{}, f, True{}, n, sp})
 
 def FatScan.free.go(run: FatRun, +s: FatScan) -> Result<&2, &2, E.FatError, FatScan>:
   match run:
     case FatRunNone{}:
       Done{s}
-    case FatRunSome{x, c, us}:
+    case FatRunSome{x, c, us, a}:
       FatScan.bad(FatScan.strict(s), E.FatLfnBadSequence{}, FatScan.with_run(s, FatRunNone{}))
 
 # a free entry: a long name before it is an orphan
@@ -314,15 +361,10 @@ def FatScan.free(+s: FatScan) -> Result<&2, &2, E.FatError, FatScan>:
 
 def FatScan.counted(ok: Bool, +s: FatScan) -> Result<&2, &2, E.FatError, FatScan>:
   match ok s:
-    case True{} FatScan{st, w, r, f, e, +n}:
-      Done{FatScan{st, w, r, f, e, Nat.add(n, 1n)}}
+    case True{} FatScan{st, w, r, f, e, +n, sp}:
+      Done{FatScan{st, w, r, f, e, Nat.add(n, 1n), sp}}
     case False{} _:
       Fail{E.FatDirTooLong{}}
-
-def FatScan.seen(s: FatScan) -> Nat:
-  match s:
-    case FatScan{st, w, r, f, e, n}:
-      n
 
 def FatScan.step.go(k: FatKind, +s: FatScan, +o: B.Octets) -> Result<&2, &2, E.FatError, FatScan>:
   match k:
