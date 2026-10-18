@@ -14,11 +14,16 @@
 #   the key, and every element from it on is not; find answers an index that
 #   holds the key, and None only when no element is the key.
 #
+# * binary search on an Array<U32> (through bend-osdev-array's laws): for
+#   every perfect array whose first n slots are sorted, array_lower_bound
+#   and array_find answer what lower_bound and find answer on the list of
+#   those slots, and hand the array back.
+#
 # Vectors: the values of each function on edge cases, and binary search on a
-# sorted Array<U32> (whose index arithmetic over Base's Array is not yet
-# within reach of a proof; see the README).
+# sorted Array<U32>.
 import Base
 import ../word64/word64.bend as W
+import ../array/array.bend as AR
 import ./algo.bend as A
 import ./bitmap.bend as M
 import ./bsearch.bend as S
@@ -257,6 +262,64 @@ law find_none:
   for g: {List.get(&2, U32, xs, i) == Some{x} : Maybe<&2, U32>}
   {U32.is_eq(x, key) == False{} : Bool}
 
+# Binary search on an Array<U32> (the fast implementation), against the
+# reference: for an array a that is a perfect tree of depth d < 32 (as
+# Array.new and Array.set build), searched in its first n slots (n <= 2^d)
+# whose elements, in index order (array's Arrays.leaves), are sorted. The
+# array search answers a U32 and Maybe<&2, U32>; algo_index_nat reads the
+# latter as the list search's Maybe<&2, Nat>.
+
+def algo_index_nat(m: Maybe<&2, U32>) -> Maybe<&2, Nat>:
+  match m:
+    case None{}:
+      None{}
+    case Some{i}:
+      Some{U32.to_nat(i)}
+
+# DRAFT: not yet reviewed by the maintainer
+law array_lower_bound_list:
+  for +d: Nat
+  for a: Array<U32>
+  for hp: {AR.Arrays.is_perfect(U32, d, a) == True{} : Bool}
+  for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
+  for n: U32
+  for hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}
+  for key: U32
+  for hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}
+  {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Nat}
+
+# DRAFT: not yet reviewed by the maintainer
+law array_lower_bound_same:
+  for +d: Nat
+  for a: Array<U32>
+  for hp: {AR.Arrays.is_perfect(U32, d, a) == True{} : Bool}
+  for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
+  for n: U32
+  for key: U32
+  {Pair.fst(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key)) == a : Array<U32>}
+
+# DRAFT: not yet reviewed by the maintainer
+law array_find_list:
+  for +d: Nat
+  for a: Array<U32>
+  for hp: {AR.Arrays.is_perfect(U32, d, a) == True{} : Bool}
+  for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
+  for n: U32
+  for hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}
+  for key: U32
+  for hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}
+  {algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key))) == S.bsearch.find(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Maybe<&2, Nat>}
+
+# DRAFT: not yet reviewed by the maintainer
+law array_find_same:
+  for +d: Nat
+  for a: Array<U32>
+  for hp: {AR.Arrays.is_perfect(U32, d, a) == True{} : Bool}
+  for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
+  for n: U32
+  for key: U32
+  {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key)) == a : Array<U32>}
+
 # Vectors (0x80000000 = 2147483648, 0xFFFFFFFF = 4294967295, 40 = 0b101000)
 
 law vec_popcount:
@@ -323,3 +386,9 @@ law wit_next:
 # from it on (index 4); find answering Some and None
 law wit_bsearch:
   {(S.bsearch.sorted([1, 3, 3, 7, 9]), S.bsearch.lower_bound([1, 3, 3, 7, 9], 7), List.get(&2, U32, [1, 3, 3, 7, 9], 1n), List.get(&2, U32, [1, 3, 3, 7, 9], 4n), S.bsearch.find([1, 3, 3, 7, 9], 7), S.bsearch.find([1, 3, 3, 7, 9], 8)) == (True{}, 3n, Some{3}, Some{9}, Some{3n}, None{}) : Bool & Nat & Maybe<&2, U32> & Maybe<&2, U32> & Maybe<&2, Nat> & Maybe<&2, Nat>}
+
+# the array [1, 3, 3, 7, 9, 0, 0, 0] (depth 3), searched in its first 5
+# slots: perfect, of depth below 32, 5 <= 2^3, and those slots sorted
+# DRAFT: not yet reviewed by the maintainer
+law wit_array_bsearch:
+  {(AR.Arrays.is_perfect(U32, 3n, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, [0 : U32*8n], 0, 1), 1, 3), 2, 3), 3, 7), 4, 9)), Nat.is_lt(3n, 32n), Nat.is_le(U32.to_nat(5), AR.Arrays.slots(3n)), S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, [0 : U32*8n], 0, 1), 1, 3), 2, 3), 3, 7), 4, 9)), U32.to_nat(5)))) == (True{}, True{}, True{}, True{}) : Bool & Bool & Bool & Bool}

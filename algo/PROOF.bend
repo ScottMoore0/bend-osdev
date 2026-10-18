@@ -5,6 +5,11 @@ import ../word64/PROOF.bend as WP
 import ./algo.bend as A
 import ./bitmap.bend as M
 import ./bsearch.bend as S
+import ../array/array.bend as AR
+import ../array/LAWS.bend as AL
+import ../array/PROOF.bend as APF
+import ./proof_u32.bend as U
+import ./proof_bsearch.bend as Q
 import ./LAWS.bend as Laws
 
 # Contradictions
@@ -1249,4 +1254,240 @@ def Laws.wit_next():
   {==}
 
 def Laws.wit_bsearch():
+  {==}
+
+# Binary search on an Array<U32>
+# ===============================
+#
+# The array is reflected once into Arrays.of_list(d, l, 0) (array's
+# `reflect`); proof_bsearch.bend shows that the search on it is Q.bq.run on
+# Data and hands the array back (Q.bq.go). Below, Q.bq.run is followed on
+# the values of lo and hi: lo <= lower_bound <= hi <= n throughout, and
+# hi - lo < 2^f with f halvings left, so after the 33 halvings lo is the
+# lower bound. LB below is Q.bq.lb(l, n, key), the lower bound of the
+# searched prefix Q.bq.pre(l, n) of l.
+
+# the element read at m is below the key exactly when m is below LB
+def ba.kc(b: Bool, +l: List<&2, U32>, +key: U32, +n: U32, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}, +m: Nat, +eg: {List.get(&2, U32, Q.bq.pre(l, n), m) == Some{AR.Arrays.nth(U32, l, m, 0)} : Maybe<&2, U32>}, +eb: {Nat.is_lt(m, Q.bq.lb(l, n, key)) == b : Bool}) -> {U32.is_lt(AR.Arrays.nth(U32, l, m, 0), key) == b : Bool}:
+  match b:
+    case True{}:
+      bs.below(Q.bq.pre(l, n), key, m, AR.Arrays.nth(U32, l, m, 0), eg, eb)
+    case False{}:
+      bs.above(Q.bq.pre(l, n), key, m, AR.Arrays.nth(U32, l, m, 0), hs, eg, Q.bq.not_lt(m, Q.bq.lb(l, n, key), eb))
+
+def ba.key_cmp(+d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hN: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}, +mid: U32, +m: Nat, +eM: {U32.to_nat(mid) == m : Nat}, +hmN: {Nat.is_lt(m, U32.to_nat(n)) == True{} : Bool}) -> {U32.is_lt(AR.Arrays.nth(U32, l, AR.Arrays.index(d, mid), 0), key) == Nat.is_lt(m, Q.bq.lb(l, n, key)) : Bool}:
+  +hmS = Q.bq.lt_le_trans(m, U32.to_nat(n), AR.Arrays.slots(d), hmN, hN)
+  +eI = Equal.trans(Nat, AR.Arrays.index(d, mid), U32.to_nat(mid), m, AL.index_of_u32(d, mid, Q.bq.lt_rw(m, AR.Arrays.slots(d), U32.to_nat(mid), AR.Arrays.slots(d), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, hmS)), eM)
+  +hml = Q.bq.lt_rw(m, AR.Arrays.slots(d), m, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hmS)
+  +eg = Equal.trans(Maybe<&2, U32>, List.get(&2, U32, Q.bq.pre(l, n), m), List.get(&2, U32, l, m), Some{AR.Arrays.nth(U32, l, m, 0)}, Q.bq.get_take(l, U32.to_nat(n), m, hmN), Q.bq.get_nth(l, m, hml))
+  %Equal.sym(Nat, AR.Arrays.index(d, mid), m, eI) : {U32.is_lt(AR.Arrays.nth(U32, l, _, 0), key) == Nat.is_lt(m, Q.bq.lb(l, n, key)) : Bool}
+  ba.kc(Nat.is_lt(m, Q.bq.lb(l, n, key)), l, key, n, hs, m, eg, {==})
+
+# after a halving that keeps the upper half: hi - (mid + 1) is
+# (hi - lo) - (1 + (hi - lo) / 2)
+def ba.jz_eq(+lo: U32, +hi: U32, eI: {U32.to_nat(U32.inc(Q.bq.mid(lo, hi))) == 1n+Q.bq.m(lo, hi) : Nat}, ehs: {Nat.add(U32.to_nat(lo), Q.bq.s(lo, hi)) == U32.to_nat(hi) : Nat}) -> {Nat.sub(Q.bq.s(lo, hi), 1n+U.uq.half(Q.bq.s(lo, hi))) == Q.bq.s(U32.inc(Q.bq.mid(lo, hi)), hi) : Nat}:
+  +l0 = U32.to_nat(lo)
+  +s = Q.bq.s(lo, hi)
+  +hs = U.uq.half(s)
+  +m = Q.bq.m(lo, hi)
+  %Equal.sym(Nat, U32.to_nat(U32.inc(Q.bq.mid(lo, hi))), 1n+m, eI) : {Nat.sub(s, 1n+hs) == Nat.sub(U32.to_nat(hi), _) : Nat}
+  %ehs : {Nat.sub(s, 1n+hs) == Nat.sub(_, 1n+m) : Nat}
+  %U.uq.add_succ(l0, hs) : {Nat.sub(s, 1n+hs) == Nat.sub(Nat.add(l0, s), _) : Nat}
+  Equal.sym(Nat, Nat.sub(Nat.add(l0, s), Nat.add(l0, 1n+hs)), Nat.sub(s, 1n+hs), Q.bq.sub_cancel(l0, s, 1n+hs))
+
+# one halving, with the element at mid below the key (b) or not
+def ba.adv2(b: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +key: U32, +n: U32, +lo: U32, +hi: U32, +eb: {Nat.is_lt(Q.bq.m(lo, hi), Q.bq.lb(l, n, key)) == b : Bool}, +i1: {Nat.is_le(U32.to_nat(lo), Q.bq.lb(l, n, key)) == True{} : Bool}, +i2: {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(hi)) == True{} : Bool}, +i3: {Nat.is_le(U32.to_nat(hi), U32.to_nat(n)) == True{} : Bool}, +hz: {Nat.is_lt(Q.bq.s(lo, hi), U.uq.pw(1n+g)) == True{} : Bool}, +eM: {U32.to_nat(Q.bq.mid(lo, hi)) == Q.bq.m(lo, hi) : Nat}, +ehs: {Nat.add(U32.to_nat(lo), Q.bq.s(lo, hi)) == U32.to_nat(hi) : Nat}, +hmh: {Nat.is_lt(Q.bq.m(lo, hi), U32.to_nat(hi)) == True{} : Bool}, ih: @lo2: U32 -> @hi2: U32 -> @j1: {Nat.is_le(U32.to_nat(lo2), Q.bq.lb(l, n, key)) == True{} : Bool} -> @j2: {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(hi2)) == True{} : Bool} -> @j3: {Nat.is_le(U32.to_nat(hi2), U32.to_nat(n)) == True{} : Bool} -> @jz: {Nat.is_lt(Q.bq.s(lo2, hi2), U.uq.pw(g)) == True{} : Bool} -> {U32.to_nat(Q.bq.run(g, d, l, lo2, hi2, key)) == Q.bq.lb(l, n, key) : Nat}) -> {U32.to_nat(Q.bq.run(g, d, l, Q.bq.lo_b(b, lo, Q.bq.mid(lo, hi)), Q.bq.hi_b(b, hi, Q.bq.mid(lo, hi)), key)) == Q.bq.lb(l, n, key) : Nat}:
+  match b:
+    case True{}:
+      +h0 = U32.to_nat(hi)
+      +l0 = U32.to_nat(lo)
+      +s = Q.bq.s(lo, hi)
+      +m = Q.bq.m(lo, hi)
+      +mid = Q.bq.mid(lo, hi)
+      +lb = Q.bq.lb(l, n, key)
+      +hinc = Q.bq.le_rw(1n+m, h0, 1n+U32.to_nat(mid), h0, U.uq.succ_cong(m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)), {==}, Equal.trans(Bool, Nat.is_le(1n+m, h0), Nat.is_lt(m, h0), True{}, U.uq.le_succ(m, h0), hmh))
+      +eI = Equal.trans(Nat, U32.to_nat(U32.inc(mid)), 1n+U32.to_nat(mid), 1n+m, U.uq.u32_inc(mid, hi, hinc), U.uq.succ_cong(U32.to_nat(mid), m, eM))
+      +j1 = Q.bq.le_rw(1n+m, lb, U32.to_nat(U32.inc(mid)), lb, Equal.sym(Nat, U32.to_nat(U32.inc(mid)), 1n+m, eI), {==}, Equal.trans(Bool, Nat.is_le(1n+m, lb), Nat.is_lt(m, lb), True{}, U.uq.le_succ(m, lb), eb))
+      +jz = Q.bq.lt_rw(Nat.sub(s, 1n+U.uq.half(s)), U.uq.pw(g), Q.bq.s(U32.inc(mid), hi), U.uq.pw(g), ba.jz_eq(lo, hi, eI, ehs), {==}, Q.bq.hr_lt_pw(s, U.uq.pw(g), hz))
+      ih(U32.inc(mid), hi, j1, i2, i3, jz)
+    case False{}:
+      +h0 = U32.to_nat(hi)
+      +l0 = U32.to_nat(lo)
+      +s = Q.bq.s(lo, hi)
+      +m = Q.bq.m(lo, hi)
+      +mid = Q.bq.mid(lo, hi)
+      +lb = Q.bq.lb(l, n, key)
+      +j2 = Q.bq.le_rw(lb, m, lb, U32.to_nat(mid), {==}, Equal.sym(Nat, U32.to_nat(mid), m, eM), Q.bq.not_lt(m, lb, eb))
+      +j3 = Q.bq.le_rw(m, U32.to_nat(n), U32.to_nat(mid), U32.to_nat(n), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, Q.bq.le_trans(m, h0, U32.to_nat(n), Q.bq.lt_le(m, h0, hmh), i3))
+      +e2 = Equal.trans(Nat, U.uq.half(s), Nat.sub(Nat.add(l0, U.uq.half(s)), l0), Nat.sub(U32.to_nat(mid), l0), Equal.sym(Nat, Nat.sub(Nat.add(l0, U.uq.half(s)), l0), U.uq.half(s), U.uq.sub_add_l(l0, U.uq.half(s))), Equal.cong(Nat, Nat, z => Nat.sub(z, l0), m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)))
+      +jz = Q.bq.lt_rw(U.uq.half(s), U.uq.pw(g), Q.bq.s(lo, mid), U.uq.pw(g), e2, {==}, Q.bq.half_lt_pw(s, U.uq.pw(g), hz))
+      ih(lo, mid, i1, j2, j3, jz)
+
+# one halving of [lo, hi): active when lo < hi (c)
+def ba.adv(c: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hN: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}, +lo: U32, +hi: U32, +ec: {U32.is_lt(lo, hi) == c : Bool}, +i1: {Nat.is_le(U32.to_nat(lo), Q.bq.lb(l, n, key)) == True{} : Bool}, +i2: {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(hi)) == True{} : Bool}, +i3: {Nat.is_le(U32.to_nat(hi), U32.to_nat(n)) == True{} : Bool}, +hz: {Nat.is_lt(Q.bq.s(lo, hi), U.uq.pw(1n+g)) == True{} : Bool}, ih: @lo2: U32 -> @hi2: U32 -> @j1: {Nat.is_le(U32.to_nat(lo2), Q.bq.lb(l, n, key)) == True{} : Bool} -> @j2: {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(hi2)) == True{} : Bool} -> @j3: {Nat.is_le(U32.to_nat(hi2), U32.to_nat(n)) == True{} : Bool} -> @jz: {Nat.is_lt(Q.bq.s(lo2, hi2), U.uq.pw(g)) == True{} : Bool} -> {U32.to_nat(Q.bq.run(g, d, l, lo2, hi2, key)) == Q.bq.lb(l, n, key) : Nat}) -> {U32.to_nat(Q.bq.run(g, d, l, Q.bq.nlo.a(c, U32.is_lt(Q.bq.x(d, l, lo, hi), key), lo, Q.bq.mid(lo, hi)), Q.bq.nhi.a(c, U32.is_lt(Q.bq.x(d, l, lo, hi), key), hi, Q.bq.mid(lo, hi)), key)) == Q.bq.lb(l, n, key) : Nat}:
+  match c:
+    case False{}:
+      +h0 = U32.to_nat(hi)
+      +l0 = U32.to_nat(lo)
+      +e0 = Q.bq.sub_le0(h0, l0, Q.bq.not_lt(l0, h0, u32.mv_lt(lo, hi, False{}, ec)))
+      ih(lo, hi, i1, i2, i3, Q.bq.lt_rw(0n, U.uq.pw(g), Q.bq.s(lo, hi), U.uq.pw(g), Equal.sym(Nat, Q.bq.s(lo, hi), 0n, e0), {==}, Q.bq.pw_pos(g)))
+    case True{}:
+      +h0 = U32.to_nat(hi)
+      +l0 = U32.to_nat(lo)
+      +s = Q.bq.s(lo, hi)
+      +m = Q.bq.m(lo, hi)
+      +mid = Q.bq.mid(lo, hi)
+      +lb = Q.bq.lb(l, n, key)
+      +sh = U32.to_nat(U32.shr(U32.sub(hi, lo)))
+      +hlt = u32.mv_lt(lo, hi, True{}, ec)
+      +hle = Q.bq.lt_le(l0, h0, hlt)
+      +eD = U.uq.u32_sub(hi, lo, hle)
+      +eE = Equal.trans(Nat, sh, U.uq.half(U32.to_nat(U32.sub(hi, lo))), U.uq.half(s), U.uq.u32_shr(U32.sub(hi, lo)), Equal.cong(Nat, Nat, z => U.uq.half(z), U32.to_nat(U32.sub(hi, lo)), s, eD))
+      +ehs = Q.bq.add_sub(l0, h0, hle)
+      +hmh = Q.bq.lt_rw(Nat.add(l0, U.uq.half(s)), Nat.add(l0, s), m, h0, {==}, ehs, Equal.trans(Bool, Nat.is_lt(Nat.add(l0, U.uq.half(s)), Nat.add(l0, s)), Nat.is_lt(U.uq.half(s), s), True{}, Q.bq.lt_cancel(l0, U.uq.half(s), s), Q.bq.half_lt(s, Q.bq.sub_pos(l0, h0, hlt))))
+      +hadd = Q.bq.le_rw(m, h0, Nat.add(l0, sh), h0, Equal.cong(Nat, Nat, z => Nat.add(l0, z), U.uq.half(s), sh, Equal.sym(Nat, sh, U.uq.half(s), eE)), {==}, Q.bq.lt_le(m, h0, hmh))
+      +eM = Equal.trans(Nat, U32.to_nat(mid), Nat.add(l0, sh), m, U.uq.u32_add(lo, U32.shr(U32.sub(hi, lo)), hi, hadd), Equal.cong(Nat, Nat, z => Nat.add(l0, z), sh, U.uq.half(s), eE))
+      +hmN = Q.bq.lt_le_trans(m, h0, U32.to_nat(n), hmh, i3)
+      %Equal.sym(Bool, U32.is_lt(Q.bq.x(d, l, lo, hi), key), Nat.is_lt(m, lb), ba.key_cmp(d, l, hl, key, n, hN, hs, mid, m, eM, hmN)) : {U32.to_nat(Q.bq.run(g, d, l, Q.bq.lo_b(_, lo, mid), Q.bq.hi_b(_, hi, mid), key)) == lb : Nat}
+      ba.adv2(Nat.is_lt(m, lb), g, d, l, key, n, lo, hi, {==}, i1, i2, i3, hz, eM, ehs, hmh, ih)
+
+# f halvings from lo <= LB <= hi <= n with hi - lo < 2^f end at LB
+def ba.run(f: Nat, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hN: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}, +lo: U32, +hi: U32, +i1: {Nat.is_le(U32.to_nat(lo), Q.bq.lb(l, n, key)) == True{} : Bool}, +i2: {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(hi)) == True{} : Bool}, +i3: {Nat.is_le(U32.to_nat(hi), U32.to_nat(n)) == True{} : Bool}, +hz: {Nat.is_lt(Q.bq.s(lo, hi), U.uq.pw(f)) == True{} : Bool}) -> {U32.to_nat(Q.bq.run(f, d, l, lo, hi, key)) == Q.bq.lb(l, n, key) : Nat}:
+  match f:
+    case 0n:
+      +l0 = U32.to_nat(lo)
+      +h0 = U32.to_nat(hi)
+      +lb = Q.bq.lb(l, n, key)
+      Q.bq.le_antisym(l0, lb, i1, Q.bq.le_trans(lb, h0, l0, i2, Q.bq.sub0_le(h0, l0, Q.bq.lt_one(Q.bq.s(lo, hi), hz))))
+    case 1n+ +g:
+      ba.adv(U32.is_lt(lo, hi), g, d, l, hl, key, n, hN, hs, lo, hi, {==}, i1, i2, i3, hz, lo2 => hi2 => j1 => j2 => j3 => jz => ba.run(g, d, l, hl, key, n, hN, hs, lo2, hi2, j1, j2, j3, jz))
+
+# n < 2^32 < 2^33: the 33 halvings suffice (stated so that 2^33 is never
+# expanded)
+def ba.hz33(n: U32) -> {Nat.is_lt(Q.bq.s(0, n), U.uq.pw(33n)) == True{} : Bool}:
+  match n:
+    case U32{+w}:
+      U.uq.lt_succ_pw(32n, 33n, {==}, Word.to_nat(32n, w), Q.bq.s(0, U32{w}), Equal.sym(Nat, Nat.sub(Word.to_nat(32n, w), 0n), Word.to_nat(32n, w), Q.bq.sub_zero(Word.to_nat(32n, w))), U.uq.val_lt(32n, w))
+
+# the lower bound is at most n
+def ba.lb_le(-d: Nat, +l: List<&2, U32>, +n: U32, +key: U32, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}) -> {Nat.is_le(Q.bq.lb(l, n, key), U32.to_nat(n)) == True{} : Bool}:
+  Q.bq.le_rw(Q.bq.lb(l, n, key), List.length(&2, U32, Q.bq.pre(l, n)), Q.bq.lb(l, n, key), U32.to_nat(n), {==}, Q.bq.len_take(l, U32.to_nat(n), Q.bq.le_rw(U32.to_nat(n), AR.Arrays.slots(d), U32.to_nat(n), List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hn)), Laws.lower_bound_le_length(Q.bq.pre(l, n), key))
+
+# the search's answer is the lower bound
+def ba.answer(+d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}) -> {U32.to_nat(Q.bq.run(33n, d, l, 0, n, key)) == Q.bq.lb(l, n, key) : Nat}:
+  ba.run(33n, d, l, hl, key, n, hn, hs, 0, n, Q.bq.le_zero(Q.bq.lb(l, n, key)), ba.lb_le(d, l, n, key, hl, hn), Q.bq.le_refl(U32.to_nat(n)), ba.hz33(n))
+
+# a sorted prefix of the reflected array is a sorted prefix of l
+def ba.hs(+d: Nat, -a: Array<U32>, +l: List<&2, U32>, +n: U32, e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}) -> {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}:
+  %AL.of_list_leaves(U32, d, l, 0, hl) : {S.bsearch.sorted(List.take(&2, U32, _, U32.to_nat(n))) == True{} : Bool}
+  %Equal.sym(Array<U32>, AR.Arrays.of_list(U32, d, l, 0), a, e1) : {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, _), U32.to_nat(n))) == True{} : Bool}
+  hs
+
+# The find: the element at the lower bound, if it is inside the first n
+
+def ba.hit(b: Bool, +r: U32, +lb: Nat, +er: {U32.to_nat(r) == lb : Nat}) -> {Laws.algo_index_nat(Bool.pick(Maybe<&2, U32>, b, Some{r}, None{})) == S.bsearch.find.hit(b, lb) : Maybe<&2, Nat>}:
+  match b:
+    case True{}:
+      Equal.cong(Nat, Maybe<&2, Nat>, z => Some{z}, U32.to_nat(r), lb, er)
+    case False{}:
+      {==}
+
+def ba.fd(c: Bool, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +r: U32, +ec: {U32.is_lt(r, n) == c : Bool}, +er: {U32.to_nat(r) == Q.bq.lb(l, n, key) : Nat}) -> {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(c, (AR.Arrays.of_list(U32, d, l, 0), AR.Arrays.nth(U32, l, AR.Arrays.index(d, r), 0)), r, key))) == S.bsearch.find(Q.bq.pre(l, n), key) : Maybe<&2, Nat>}:
+  match c:
+    case True{}:
+      +lb = Q.bq.lb(l, n, key)
+      +nn = U32.to_nat(n)
+      +pre = Q.bq.pre(l, n)
+      +hnl = Q.bq.le_rw(nn, AR.Arrays.slots(d), nn, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hn)
+      +hc = Equal.trans(Bool, Nat.is_lt(lb, nn), Nat.is_lt(U32.to_nat(r), nn), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(z, nn), lb, U32.to_nat(r), Equal.sym(Nat, U32.to_nat(r), lb, er)), u32.mv_lt(r, n, True{}, ec))
+      +hls = Q.bq.lt_le_trans(lb, nn, AR.Arrays.slots(d), hc, hn)
+      +ei = Equal.trans(Nat, AR.Arrays.index(d, r), U32.to_nat(r), lb, AL.index_of_u32(d, r, Q.bq.lt_rw(lb, AR.Arrays.slots(d), U32.to_nat(r), AR.Arrays.slots(d), Equal.sym(Nat, U32.to_nat(r), lb, er), {==}, hls)), er)
+      +hll = Q.bq.lt_rw(lb, AR.Arrays.slots(d), lb, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hls)
+      +eg = Equal.trans(Maybe<&2, U32>, List.get(&2, U32, pre, lb), List.get(&2, U32, l, lb), Some{AR.Arrays.nth(U32, l, lb, 0)}, Q.bq.get_take(l, nn, lb, hc), Q.bq.get_nth(l, lb, hll))
+      %Equal.sym(Nat, AR.Arrays.index(d, r), lb, ei) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(True{}, (AR.Arrays.of_list(U32, d, l, 0), AR.Arrays.nth(U32, l, _, 0)), r, key))) == S.bsearch.find(pre, key) : Maybe<&2, Nat>}
+      %Equal.sym(Maybe<&2, U32>, List.get(&2, U32, pre, lb), Some{AR.Arrays.nth(U32, l, lb, 0)}, eg) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(True{}, (AR.Arrays.of_list(U32, d, l, 0), AR.Arrays.nth(U32, l, lb, 0)), r, key))) == S.bsearch.find.check(lb, _, key) : Maybe<&2, Nat>}
+      ba.hit(U32.is_eq(AR.Arrays.nth(U32, l, lb, 0), key), r, lb, er)
+    case False{}:
+      +lb = Q.bq.lb(l, n, key)
+      +nn = U32.to_nat(n)
+      +pre = Q.bq.pre(l, n)
+      +hnl = Q.bq.le_rw(nn, AR.Arrays.slots(d), nn, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hn)
+      +hc = Equal.trans(Bool, Nat.is_lt(lb, nn), Nat.is_lt(U32.to_nat(r), nn), False{}, Equal.cong(Nat, Bool, z => Nat.is_lt(z, nn), lb, U32.to_nat(r), Equal.sym(Nat, U32.to_nat(r), lb, er)), u32.mv_lt(r, n, False{}, ec))
+      +eln = Q.bq.le_antisym(lb, nn, ba.lb_le(d, l, n, key, hl, hn), Q.bq.not_lt(lb, nn, hc))
+      +eg = Equal.trans(Maybe<&2, U32>, List.get(&2, U32, pre, lb), List.get(&2, U32, pre, List.length(&2, U32, pre)), None{}, Equal.cong(Nat, Maybe<&2, U32>, z => List.get(&2, U32, pre, z), lb, List.length(&2, U32, pre), Equal.trans(Nat, lb, nn, List.length(&2, U32, pre), eln, Equal.sym(Nat, List.length(&2, U32, pre), nn, Q.bq.len_take(l, nn, hnl)))), Q.bq.get_len(pre))
+      %Equal.sym(Maybe<&2, U32>, List.get(&2, U32, pre, lb), None{}, eg) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(False{}, (AR.Arrays.of_list(U32, d, l, 0), AR.Arrays.nth(U32, l, AR.Arrays.index(d, r), 0)), r, key))) == S.bsearch.find.check(lb, _, key) : Maybe<&2, Nat>}
+      {==}
+
+def ba.fs(c: Bool, -a0: Array<U32>, -x: U32, +r: U32, +key: U32) -> {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(c, (a0, x), r, key)) == a0 : Array<U32>}:
+  match c:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+# The laws, each on its array reflected
+
+def ba.lb.body(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +key: U32, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}, +l: List<&2, U32>, +e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Nat}:
+  -ol = AR.Arrays.of_list(U32, d, l, 0)
+  %e1 : {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(_, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, AR.Arrays.leaves(U32, _), U32.to_nat(n)), key) : Nat}
+  %Equal.sym(List<&2, U32>, AR.Arrays.leaves(U32, ol), l, AL.of_list_leaves(U32, d, l, 0, hl)) : {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(ol, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, _, U32.to_nat(n)), key) : Nat}
+  %Equal.sym(Array<U32> & U32, S.bsearch.array.go(33n, S.BsearchState{ol, 0, n}, key), (ol, Q.bq.run(33n, d, l, 0, n, key)), Q.bq.go(33n, d, l, hl, hd, 0, n, key)) : {U32.to_nat(Pair.snd(Array<U32>, U32, _)) == Q.bq.lb(l, n, key) : Nat}
+  ba.answer(d, l, hl, key, n, hn, ba.hs(d, a, l, n, e1, hl, hs))
+
+def ba.lb.ref(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +key: U32, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}, r: &l: List<&2, U32> -> {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>} & {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Nat}:
+  (l, e) = r
+  (e1, hl) = e
+  ba.lb.body(d, a, hd, n, hn, key, hs, l, e1, hl)
+
+def ba.lbs.body(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +key: U32, +l: List<&2, U32>, +e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Pair.fst(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key)) == a : Array<U32>}:
+  -ol = AR.Arrays.of_list(U32, d, l, 0)
+  %e1 : {Pair.fst(Array<U32>, U32, S.bsearch.array_lower_bound(_, n, key)) == _ : Array<U32>}
+  %Equal.sym(Array<U32> & U32, S.bsearch.array.go(33n, S.BsearchState{ol, 0, n}, key), (ol, Q.bq.run(33n, d, l, 0, n, key)), Q.bq.go(33n, d, l, hl, hd, 0, n, key)) : {Pair.fst(Array<U32>, U32, _) == ol : Array<U32>}
+  {==}
+
+def ba.lbs.ref(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +key: U32, r: &l: List<&2, U32> -> {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>} & {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Pair.fst(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key)) == a : Array<U32>}:
+  (l, e) = r
+  (e1, hl) = e
+  ba.lbs.body(d, a, hd, n, key, l, e1, hl)
+
+def ba.fl.body(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +key: U32, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}, +l: List<&2, U32>, +e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key))) == S.bsearch.find(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Maybe<&2, Nat>}:
+  -ol = AR.Arrays.of_list(U32, d, l, 0)
+  +r = Q.bq.run(33n, d, l, 0, n, key)
+  %e1 : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(_, n, key))) == S.bsearch.find(List.take(&2, U32, AR.Arrays.leaves(U32, _), U32.to_nat(n)), key) : Maybe<&2, Nat>}
+  %Equal.sym(List<&2, U32>, AR.Arrays.leaves(U32, ol), l, AL.of_list_leaves(U32, d, l, 0, hl)) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(ol, n, key))) == S.bsearch.find(List.take(&2, U32, _, U32.to_nat(n)), key) : Maybe<&2, Nat>}
+  %Equal.sym(Array<U32> & U32, S.bsearch.array.go(33n, S.BsearchState{ol, 0, n}, key), (ol, r), Q.bq.go(33n, d, l, hl, hd, 0, n, key)) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.find(_, n, key))) == S.bsearch.find(Q.bq.pre(l, n), key) : Maybe<&2, Nat>}
+  %Equal.sym(Array<U32> & U32, Array.get(U32, ol, r), (ol, AR.Arrays.nth(U32, l, AR.Arrays.index(d, r), 0)), AL.of_list_get(U32, d, l, 0, hl, hd, r)) : {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(U32.is_lt(r, n), _, r, key))) == S.bsearch.find(Q.bq.pre(l, n), key) : Maybe<&2, Nat>}
+  ba.fd(U32.is_lt(r, n), d, l, hl, key, n, hn, r, {==}, ba.answer(d, l, hl, key, n, hn, ba.hs(d, a, l, n, e1, hl, hs)))
+
+def ba.fl.ref(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +key: U32, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}, r: &l: List<&2, U32> -> {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>} & {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Laws.algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key))) == S.bsearch.find(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Maybe<&2, Nat>}:
+  (l, e) = r
+  (e1, hl) = e
+  ba.fl.body(d, a, hd, n, hn, key, hs, l, e1, hl)
+
+def ba.fls.body(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +key: U32, +l: List<&2, U32>, +e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key)) == a : Array<U32>}:
+  -ol = AR.Arrays.of_list(U32, d, l, 0)
+  +r = Q.bq.run(33n, d, l, 0, n, key)
+  %e1 : {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(_, n, key)) == _ : Array<U32>}
+  %Equal.sym(Array<U32> & U32, S.bsearch.array.go(33n, S.BsearchState{ol, 0, n}, key), (ol, r), Q.bq.go(33n, d, l, hl, hd, 0, n, key)) : {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array.find(_, n, key)) == ol : Array<U32>}
+  %Equal.sym(Array<U32> & U32, Array.get(U32, ol, r), (ol, AR.Arrays.nth(U32, l, AR.Arrays.index(d, r), 0)), AL.of_list_get(U32, d, l, 0, hl, hd, r)) : {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array.found(U32.is_lt(r, n), _, r, key)) == ol : Array<U32>}
+  ba.fs(U32.is_lt(r, n), ol, AR.Arrays.nth(U32, l, AR.Arrays.index(d, r), 0), r, key)
+
+def ba.fls.ref(+d: Nat, -a: Array<U32>, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +n: U32, +key: U32, r: &l: List<&2, U32> -> {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>} & {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}) -> {Pair.fst(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key)) == a : Array<U32>}:
+  (l, e) = r
+  (e1, hl) = e
+  ba.fls.body(d, a, hd, n, key, l, e1, hl)
+
+def Laws.array_lower_bound_list(d, a, hp, hd, n, hn, key, hs):
+  ba.lb.ref(d, a, hd, n, hn, key, hs, AL.reflect(U32, d, a, hp, 0))
+
+def Laws.array_lower_bound_same(d, a, hp, hd, n, key):
+  ba.lbs.ref(d, a, hd, n, key, AL.reflect(U32, d, a, hp, 0))
+
+def Laws.array_find_list(d, a, hp, hd, n, hn, key, hs):
+  ba.fl.ref(d, a, hd, n, hn, key, hs, AL.reflect(U32, d, a, hp, 0))
+
+def Laws.array_find_same(d, a, hp, hd, n, key):
+  ba.fls.ref(d, a, hd, n, key, AL.reflect(U32, d, a, hp, 0))
+
+def Laws.wit_array_bsearch():
   {==}

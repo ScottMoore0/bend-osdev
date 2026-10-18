@@ -23,8 +23,9 @@ package's own words; no kernel source was read.
   the free space), as `kfifo_in` does. `ring.pop_list(r, n)` pops up to `n`
   elements, oldest first, as `kfifo_out` does.
 * `ring.len`, `ring.avail`, `ring.capacity`, `ring.is_empty`, `ring.is_full`
-  observe a ring. Every observer hands the ring back beside its answer,
-  because the ring holds an `Array` and is linear.
+  observe a ring, and `ring.items` lists its elements, oldest first. Every
+  observer hands the ring back beside its answer, because the ring holds an
+  `Array` and is linear.
 
 The counters are `Nat`, not machine words that wrap: once `out` reaches the
 capacity, both counters drop by the capacity. That keeps `out` below the
@@ -39,9 +40,11 @@ masking) is unchanged.
 | `ringbuf.bend` | the ring buffer: the fast implementation, on an `Array<U32>` |
 | `model.bend` | the reference: the same interface on the list of the elements |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `proof_items.bend` | the lemmas `PROOF.bend` uses for the ring's elements: the list view of a ring's slots, the slot arithmetic, and the ring's reads and writes on a reflected array (prefixed `ri.`) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
-| `gen/proof_model.py` | generates the part of `PROOF.bend` from "# Lists and Nat, for the model" on (the model and relation proofs); `--check` tells whether the file is up to date |
+| `gen/proof_model.py` | generates the part of `PROOF.bend` from "# Lists and Nat, for the model" up to "# The Array ring's elements, through bend-osdev-array" (the model and relation proofs); `--check` tells whether the file is up to date |
+| `gen/proof_elems.py` | generates the part of `PROOF.bend` from "# The Array ring's elements, through bend-osdev-array" on (the element laws, prefixed `el.`); `--check` as above |
 
 ## API
 
@@ -58,6 +61,8 @@ masking) is unchanged.
 | `ring.len(r)`, `ring.avail(r)`, `ring.capacity(r)` | `RingBuf & Nat` |
 | `ring.is_empty(r)`, `ring.is_full(r)` | `RingBuf & Bool` |
 | `ring.valid(r)` | `RingBuf & Bool`: the counters keep the invariant (always `True` for a ring built by these defs) |
+| `ring.items(r)` | `RingBuf & List<&2, U32>`: the elements, oldest first, left in place (`kfifo_out_peek` of all of them) |
+| `ring.sound(r)` | a specification for the laws (it looks inside the array, so it does not run compiled): the counters are valid, the order is below 32, and the slots are a perfect array of `2^order` (bend-osdev-array's `Arrays.is_perfect`); every ring these defs build is sound |
 | `RingModel{cap, items}`, `model.new(order)` | the reference model: the capacity and the elements, oldest first |
 | `model.push`, `model.pop`, `model.peek`, `model.push_list`, `model.pop_list` | as for the ring, with the same errors |
 | `model.len`, `model.avail`, `model.capacity`, `model.is_empty`, `model.is_full`, `model.valid`, `model.items` | observers (the model is `Data`, so they answer the value alone) |
@@ -73,10 +78,11 @@ masking) is unchanged.
   carry over unchanged because they do not depend on the elements.
 * **Reference and fast implementations:** `model.bend` is the reference,
   written to be obviously correct; `ringbuf.bend` is the fast one. Another
-  implementation can be held to the model the same way: the relation laws
-  and the differential test.
+  implementation can be held to the model the same way: the relation laws,
+  the element laws and the differential test.
 * **The invariant is checkable:** `ring.valid` lets a caller (or a law about
-  code built on this package) state that a ring came from these defs.
+  code built on this package) state that a ring came from these defs;
+  `ring.sound` states it for the laws, slots included.
 
 ## Laws
 
@@ -118,55 +124,79 @@ exactly when it succeeds on the other, and leaves the same length and
 capacity; `push_list` answers the same count, and `pop_list` the same number
 of elements.
 
+**The Array ring against the model, element by element, for every sound
+ring** (draft laws, not yet reviewed by the maintainer; proved through
+bend-osdev-array's laws). `ring.sound(r)` says that the counters are valid,
+the order is below 32 and the slots are a perfect array, which is what
+`new` builds (`new_sound`, for an order below 32) and what `push`, `pop`,
+`peek`, `push_list` and `pop_list` keep (`push_sound` and the like); a sound
+ring is valid (`sound_valid`). `ring.items` lists the elements: as many as
+the length (`items_len`), none for a new ring (`new_items`), and it hands the
+ring back (`items_same`). Then, for a sound ring `r` and a model `m` with the
+same capacity and the same elements (`items(r) == model.items(m)`), every
+operation answers what the model answers, and leaves the two with the same
+capacity and the same elements:
+
+* `elems_push`, `elems_push_items`, `elems_push_capacity`;
+* `elems_pop` (the element popped, or `RingEmpty`), `elems_pop_items`,
+  `elems_pop_capacity`;
+* `elems_peek`, `elems_peek_items`, `elems_peek_capacity`;
+* `elems_push_list` (the count), `elems_push_list_items`,
+  `elems_push_list_capacity`;
+* `elems_pop_list` (the elements popped, oldest first),
+  `elems_pop_list_items`, `elems_pop_list_capacity`.
+
+Since soundness is kept too, a sequence of operations can be followed on the
+model, and the model's laws (FIFO among them) hold of the Array ring for
+every ring, element and list. **Witness:** a ring of order 2 with one element
+pushed is sound and holds what the model holds (`wit_elems`). **Vector:**
+`vec_items`, the elements of a ring whose counters have passed the end of
+the slots.
+
+**How the element laws are proved.** A sound ring's array is reflected once
+into `Arrays.of_list(order, l, 0)` for a Data list `l` (array's `reflect`),
+and every read and write is followed on `l` (`of_list_get`, `of_list_set`).
+The elements are then the view of the slots of the counters `out` to
+`in - 1` (`ri.view` in `proof_items.bend`). A counter between `2^order` and
+`2^(order + 1)` reaches the slot of its distance from `2^order` (array's
+`index_wrap`), so the counters of a valid ring reach distinct slots: a push
+at `in` leaves the view before it unchanged, and a pop that drops both
+counters by `2^order` reads on from the same slots.
+
 **For every value of the elements, on fixed shapes of the Array ring**
-(vectors with variables, proved by computation): pushing four arbitrary
-elements into an empty four-slot ring and popping four gives them back in
-order; the same with the counters at 3, so the elements wrap past the last
-slot; three elements across the end of an eight-slot ring; five pushed into
-four slots, where the fifth is refused; pushes and pops interleaved.
+(vectors with variables, proved by computation, kept beside the laws for
+every ring above): pushing four arbitrary elements into an empty four-slot
+ring and popping four gives them back in order; the same with the counters
+at 3, so the elements wrap past the last slot; three elements across the end
+of an eight-slot ring; five pushed into four slots, where the fifth is
+refused; pushes and pops interleaved.
 
 **Witnesses:** a valid ring that is full; one that is not full and is empty;
 one that is not empty; a ring and a model in the relation; and models that
 are full, not full, empty, with a first element, and with room for a list.
 
-**What is proved where.** Element order (FIFO) is proved for the model, for
-every model and list. For the Array ring it is proved on the fixed shapes
-above, and checked by the differential test against both the model and
-`collections.deque`. The laws tie the two on everything that depends only on
-the counters. To prove that the Array ring holds the model's elements
-(`items(model) == contents(ring)` after every operation), Base needs two
-lemmas about its `Array`:
-
-* `Array.get` after `Array.set` at the **same** index answers the value set:
-  for every array `a` of `2^k` slots and `U32` `i`, `v`,
-  `Pair.snd(Array.get(U32, Array.set(U32, a, i, v), i)) == v`;
-* `Array.get` after `Array.set` at a **different** index answers what was
-  there: for `i` and `j` whose indices differ modulo the size,
-  `Pair.snd(Array.get(U32, Array.set(U32, a, i, v), j)) == Pair.snd(Array.get(U32, a, j))`;
-
-together with the facts they rest on: `Array.set` keeps the size,
-`Array.get` hands back the same array, and arrays built by `Array.new` and
-`Array.set` are perfect trees. Proving these here ran into three walls:
-
-* the index arithmetic (a mask, and comparisons against the size, on a
-  symbolic `U32`) needs a theory of `U32` masking, halving and subtraction;
-* the checker has no eta rule for pairs, and `Array.set` destructures the
-  pairs that `Array.size` and `Array.swap` answer;
-* an `Array` is linear while proofs are live code, so two lemmas cannot both
-  be applied to one array.
-
 ## Tests
 
-`ref/run.sh` runs 24 random sequences (1491 operations: pushes, pops, peeks,
-batch pushes and pops) on rings of 1 to 16 slots. Each sequence runs on both
-the Array ring and the model, and every result, and the length and free space
-after each operation, is compared with Python's `collections.deque` under the
-same capacity. The sequences pass the end of the slots many times, so the
-index wrap and the counter drop are exercised throughout.
+`check.bend` runs examples, `ring.items` among them. `ref/run.sh` runs 24
+random sequences (1491 operations: pushes, pops, peeks, batch pushes and
+pops) on rings of 1 to 16 slots. Each sequence runs on both the Array ring
+and the model, and every result, and the length, free space and elements
+after each operation, is compared with Python's `collections.deque` under
+the same capacity. The sequences pass the end of the slots many times, so
+the index wrap and the counter drop are exercised throughout.
+
+## Dependencies
+
+`bend-osdev-array` (`DEPS`): `ring.sound` states that the slots are a
+perfect array with array's `Arrays.is_perfect`, and the element laws are
+proved through array's laws (`PROOF.bend` and `proof_items.bend` import its
+`LAWS.bend` and `PROOF.bend`).
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 1491 operations in 24 sequences, on the
 Array ring and on the model, match,
-`scripts/deps.sh ringbuf` ok.
+`scripts/deps.sh ringbuf` ok. The element laws (`ring.items`, `ring.sound`
+and the laws above that mention them) are drafts, not yet reviewed by the
+maintainer.

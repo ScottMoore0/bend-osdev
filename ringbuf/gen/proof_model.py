@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Generates the part of ringbuf/PROOF.bend that proves the model laws and
 the relation between the Array ring and the model: everything from the line
-"# Lists and Nat, for the model" to the end, whose lemma signatures repeat
-long hypotheses. The part of PROOF.bend above that line is written by hand
-and kept as it is.
+"# Lists and Nat, for the model" up to the line "# The Array ring's
+elements, through bend-osdev-array" (or the end), whose lemma signatures
+repeat long hypotheses. The part of PROOF.bend above the first line is
+written by hand, and the part from the second on is gen/proof_elems.py's;
+both are kept as they are.
 
 Run from anywhere: python3 gen/proof_model.py rewrites ../PROOF.bend; with
 --check it only reports whether the file is up to date (exit 1 if not).
@@ -479,9 +481,12 @@ def Laws.wit_model():
 """ % (ISF, ISF, ISF, ISF, L, R32, R32, L, R32, L, R32))
 
 MARK = "# Lists and Nat, for the model\n"
+# the part from this line on is gen/proof_elems.py's, and is kept as it is
+MARK2 = "# The Array ring's elements, through bend-osdev-array\n"
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "PROOF.bend")
 old = open(path, newline="").read()
-new = old[:old.index(MARK)] + "\n".join(P)
+tail = "\n" + old[old.index(MARK2):] if MARK2 in old else ""
+new = old[:old.index(MARK)] + "\n".join(P) + tail
 if "--check" in sys.argv[1:]:
     print("up to date" if new == old else "differs")
     sys.exit(0 if new == old else 1)

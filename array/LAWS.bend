@@ -11,7 +11,8 @@
 #   element at the masked index (`Arrays.index`), a write sets it, the model
 #   has 2^d elements, and a write leaves every read at a different masked
 #   index unchanged;
-# * the masked index is below 2^d, and is k itself for a k below 2^d;
+# * the masked index is below 2^d, and is k itself for a k below 2^d (for
+#   2^d + k as well, which wraps to k; and for a U32 below 2^d, its value);
 # * arrays built from a Data list (`Arrays.of_list`): every perfect array is
 #   one (`reflect`), and get, set and new answer one, so that a proof can
 #   follow a sequence of reads and writes on Data alone.
@@ -135,6 +136,21 @@ law index_of_nat:
   for hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}
   {A.Arrays.index(d, U32.from_nat(k)) == k : Nat}
 
+# DRAFT: not yet reviewed by the maintainer
+law index_wrap:
+  for d: Nat
+  for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
+  for k: Nat
+  for hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}
+  {A.Arrays.index(d, U32.from_nat(Nat.add(A.Arrays.slots(d), k))) == k : Nat}
+
+# DRAFT: not yet reviewed by the maintainer
+law index_of_u32:
+  for d: Nat
+  for i: U32
+  for hi: {Nat.is_lt(U32.to_nat(i), A.Arrays.slots(d)) == True{} : Bool}
+  {A.Arrays.index(d, i) == U32.to_nat(i) : Nat}
+
 # Arrays built from a Data list: a proof may name such an array as often as
 # it needs, since it is rebuilt from Data each time. `reflect` turns a
 # perfect array into one (using the array once), and get, set and new keep
@@ -248,6 +264,10 @@ law witness_other:
 law witness_index:
   {Nat.is_lt(3n, A.Arrays.slots(2n)) == True{} : Bool}
 
+# DRAFT: not yet reviewed by the maintainer
+law witness_index_wrap:
+  {Bool.and(Nat.is_lt(U32.to_nat(5), A.Arrays.slots(3n)), Nat.is_lt(3n, A.Arrays.slots(2n))) == True{} : Bool}
+
 law witness_list:
   {Bool.and(Nat.is_eq(List.length(&2, U32, [5, 6, 7, 8]), A.Arrays.slots(2n)), Bool.and(Nat.is_lt(1n, 4n), Nat.is_ne(1n, 2n))) == True{} : Bool}
 
@@ -264,6 +284,10 @@ law vector_index:
 
 law vector_of_list:
   {Pair.snd(Array<U32>, U32, Array.get(U32, Array.set(U32, A.Arrays.of_list(U32, 2n, [5, 6, 7, 8], 0), 1, 9), 5)) == 9 : U32}
+
+# DRAFT: not yet reviewed by the maintainer
+law vector_index_wrap:
+  {A.Arrays.index(2n, U32.from_nat(Nat.add(A.Arrays.slots(2n), 3n))) == 3n : Nat}
 
 law vector_not_perfect:
   {A.Arrays.is_perfect(U32, 2n, ANode{ALeaf{1}, ANode{ALeaf{2}, ALeaf{3}}}) == False{} : Bool}

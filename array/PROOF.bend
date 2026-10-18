@@ -1760,3 +1760,113 @@ def Laws.witness_list():
 
 def Laws.vector_of_list():
   {==}
+
+# An index between 2^d and 2^(d+1) wraps to its distance from 2^d
+# (index_wrap)
+
+def AP.wh0(b: Bool, -s: Nat, -k: Nat, e: {AP.bv(b, 0n) == Nat.add(Nat.double(1n+s), k) : Nat}) -> Empty:
+  match b:
+    case False{}:
+      AP.sz(1n+Nat.add(Nat.double(s), k), Equal.sym(Nat, 0n, 2n+Nat.add(Nat.double(s), k), e))
+    case True{}:
+      AP.sz(Nat.add(Nat.double(s), k), Equal.sym(Nat, 0n, 1n+Nat.add(Nat.double(s), k), AP.pred_cong(0n, 1n+Nat.add(Nat.double(s), k), e)))
+
+# bv(b, x) = 2s + k: k is bv(b, x - s)
+def AP.wh(x: Nat, s: Nat, b: Bool, -k: Nat, e: {AP.bv(b, x) == Nat.add(Nat.double(s), k) : Nat}) -> {k == AP.bv(b, Nat.sub(x, s)) : Nat}:
+  match x s:
+    case 0n 0n:
+      Equal.sym(Nat, AP.bv(b, 0n), k, e)
+    case 0n 1n+q:
+      Empty.absurd({k == AP.bv(b, Nat.sub(0n, 1n+q)) : Nat}, AP.wh0(b, q, k, e))
+    case 1n+p 0n:
+      Equal.sym(Nat, AP.bv(b, 1n+p), k, e)
+    case 1n+p 1n+q:
+      match b:
+        case False{}:
+          AP.wh(p, q, False{}, k, AP.pred_cong(Nat.double(p), Nat.add(Nat.double(q), k), AP.pred_cong(1n+Nat.double(p), 1n+Nat.add(Nat.double(q), k), e)))
+        case True{}:
+          AP.wh(p, q, True{}, k, AP.pred_cong(1n+Nat.double(p), Nat.add(Nat.double(q), k), AP.pred_cong(2n+Nat.double(p), 1n+Nat.add(Nat.double(q), k), e)))
+
+# bv(b, x) = 2s + k: x is s + (x - s)
+def AP.wh2(x: Nat, s: Nat, b: Bool, -k: Nat, e: {AP.bv(b, x) == Nat.add(Nat.double(s), k) : Nat}) -> {x == Nat.add(s, Nat.sub(x, s)) : Nat}:
+  match x s:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({0n == Nat.add(1n+q, Nat.sub(0n, 1n+q)) : Nat}, AP.wh0(b, q, k, e))
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      match b:
+        case False{}:
+          AP.succ_cong(p, Nat.add(q, Nat.sub(p, q)), AP.wh2(p, q, False{}, k, AP.pred_cong(Nat.double(p), Nat.add(Nat.double(q), k), AP.pred_cong(1n+Nat.double(p), 1n+Nat.add(Nat.double(q), k), e))))
+        case True{}:
+          AP.succ_cong(p, Nat.add(q, Nat.sub(p, q)), AP.wh2(p, q, True{}, k, AP.pred_cong(1n+Nat.double(p), Nat.add(Nat.double(q), k), AP.pred_cong(2n+Nat.double(p), 1n+Nat.add(Nat.double(q), k), e))))
+
+def AP.lt_rw_k(-k: Nat, -x: Nat, -s: Nat, e: {k == x : Nat}, h: {Nat.is_lt(k, s) == True{} : Bool}) -> {Nat.is_lt(x, s) == True{} : Bool}:
+  %e : {Nat.is_lt(_, s) == True{} : Bool}
+  h
+
+# a word of value 2^d + k, k < 2^d, masked to its low d bits, is k
+def AP.wrap(n: Nat, w: Word(n), +d: Nat, +k: Nat, +e: {Word.to_nat(n, w) == Nat.add(A.Arrays.slots(d), k) : Nat}, hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}, hd: {Nat.is_lt(d, n) == True{} : Bool}) -> {Word.to_nat(n, Word.and(n, w, AP.lm(n, d))) == k : Nat}:
+  match n:
+    case 0n:
+      Empty.absurd({Word.to_nat(0n, Word.and(0n, w, AP.lm(0n, d))) == k : Nat}, AP.tf(Equal.trans(Bool, True{}, Nat.is_lt(d, 0n), False{}, Equal.sym(Bool, Nat.is_lt(d, 0n), True{}, hd), AP.lt_zero(d))))
+    case 1n+ +q:
+      match w d:
+        case WCon{+b0, +t0} 0n:
+          +x = Word.to_nat(1n+q, Word.and(1n+q, WCon{b0, t0}, AP.lm(1n+q, 0n)))
+          Equal.trans(Nat, x, 0n, k, AP.lt_one(x, AP.mask_lt(1n+q, WCon{b0, t0}, 0n)), Equal.sym(Nat, k, 0n, AP.lt_one(k, hk)))
+        case WCon{False{}, +t} 1n+ +dd:
+          +s = A.Arrays.slots(dd)
+          +v = Nat.sub(Word.to_nat(q, t), s)
+          +ek = AP.wh(Word.to_nat(q, t), s, False{}, k, e)
+          +ev = AP.wh2(Word.to_nat(q, t), s, False{}, k, e)
+          +hv = AP.lt_bv_inv(False{}, v, s, AP.lt_rw_k(k, Nat.double(v), Nat.double(s), ek, hk))
+          +x = Word.to_nat(q, Word.and(q, t, AP.lm(q, dd)))
+          Equal.trans(Nat, Nat.double(x), Nat.double(v), k, AP.double_cong(x, v, AP.wrap(q, t, dd, v, ev, hv, hd)), Equal.sym(Nat, k, Nat.double(v), ek))
+        case WCon{True{}, +t} 1n+ +dd:
+          +s = A.Arrays.slots(dd)
+          +v = Nat.sub(Word.to_nat(q, t), s)
+          +ek = AP.wh(Word.to_nat(q, t), s, True{}, k, e)
+          +ev = AP.wh2(Word.to_nat(q, t), s, True{}, k, e)
+          +hv = AP.lt_bv_inv(True{}, v, s, AP.lt_rw_k(k, 1n+Nat.double(v), Nat.double(s), ek, hk))
+          +x = Word.to_nat(q, Word.and(q, t, AP.lm(q, dd)))
+          Equal.trans(Nat, 1n+Nat.double(x), 1n+Nat.double(v), k, AP.succ_cong(Nat.double(x), Nat.double(v), AP.double_cong(x, v, AP.wrap(q, t, dd, v, ev, hv, hd))), Equal.sym(Nat, k, 1n+Nat.double(v), ek))
+
+def AP.u32_wrap(a: U32, +d: Nat, +k: Nat, e: {U32.to_nat(a) == Nat.add(A.Arrays.slots(d), k) : Nat}, hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}, hd: {Nat.is_lt(d, 32n) == True{} : Bool}) -> {U32.to_nat(U32.and(a, U32{AP.lm(32n, d)})) == k : Nat}:
+  match a:
+    case U32{w}:
+      AP.wrap(32n, w, d, k, e, hk, hd)
+
+# s + k < 2s, for k < s
+def AP.wrap_lt(+s: Nat, +k: Nat, hk: {Nat.is_lt(k, s) == True{} : Bool}) -> {Nat.is_lt(Nat.add(s, k), Nat.double(s)) == True{} : Bool}:
+  %Equal.sym(Nat, Nat.double(s), Nat.add(s, s), AP.double_self(s)) : {Nat.is_lt(Nat.add(s, k), _) == True{} : Bool}
+  Equal.trans(Bool, Nat.is_lt(Nat.add(s, k), Nat.add(s, s)), Nat.is_lt(k, s), True{}, AP.lt_cancel(s, k, s), hk)
+
+def AP.index_wrap.go(+d: Nat, +hd: {Nat.is_lt(d, 32n) == True{} : Bool}, +k: Nat, +hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}) -> {A.Arrays.index(d, U32.from_nat(Nat.add(A.Arrays.slots(d), k))) == k : Nat}:
+  +s = A.Arrays.slots(d)
+  +a = U32.from_nat(Nat.add(s, k))
+  +hd1 = Equal.trans(Bool, Nat.is_le(1n+d, 32n), Nat.is_lt(d, 32n), True{}, AP.le_succ(d, 32n), hd)
+  +fk = AP.from_nat(Nat.add(s, k), 1n+d, AP.wrap_lt(s, k, hk), hd1)
+  %Equal.sym(U32, U32.sub(U32.shln(1, d), 1), U32{AP.lm(32n, d)}, AP.mask_lm(d)) : {U32.to_nat(U32.and(a, _)) == k : Nat}
+  AP.u32_wrap(a, d, k, fk, hk, hd)
+
+def Laws.index_wrap(d, hd, k, hk):
+  AP.index_wrap.go(d, hd, k, hk)
+
+def Laws.vector_index_wrap():
+  {==}
+
+# A U32 below 2^d is its own slot (index_of_u32)
+
+def AP.index_of_u32.go(+d: Nat, +i: U32, hi: {Nat.is_lt(U32.to_nat(i), A.Arrays.slots(d)) == True{} : Bool}) -> {A.Arrays.index(d, i) == U32.to_nat(i) : Nat}:
+  %Equal.sym(U32, U32.sub(U32.shln(1, d), 1), U32{AP.lm(32n, d)}, AP.mask_lm(d)) : {U32.to_nat(U32.and(i, _)) == U32.to_nat(i) : Nat}
+  %Equal.sym(U32, U32.and(i, U32{AP.lm(32n, d)}), i, AP.u32_and_id(i, d, hi)) : {U32.to_nat(_) == U32.to_nat(i) : Nat}
+  {==}
+
+def Laws.index_of_u32(d, i, hi):
+  AP.index_of_u32.go(d, i, hi)
+
+def Laws.witness_index_wrap():
+  {==}
