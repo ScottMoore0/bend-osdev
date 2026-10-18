@@ -23,9 +23,33 @@ def bits8(b: U32) -> Word(8n):
 def of_bits8(s: Word(8n)) -> U32:
   U32{W.W64.bits.cat(8n, 24n, s, Word.zero(24n))}
 
-# the byte of a word: its low 8 bits
+# One byte of an Octets: eight bits as one record, the low bit first. Every
+# value of the type is a byte (there is nothing to mask), and it is built
+# from a word's bits and back without branching, so proofs about symbolic
+# bytes compute through it. One record per byte costs about a quarter of the
+# memory of an 8-bit Word, which is a chain of eight cells.
+type OctByte is Data:
+  OctByte{b0: Bool, b1: Bool, b2: Bool, b3: Bool, b4: Bool, b5: Bool, b6: Bool, b7: Bool}
+
+# the low 8 bits of a word (the high 24 are never looked at)
+def oct.of(x: U32) -> OctByte:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, hi}}}}}}}}}:
+      OctByte{c0, c1, c2, c3, c4, c5, c6, c7}
+
+# the byte as a word (0 to 255)
+def oct.to(b: OctByte) -> U32:
+  match b:
+    case OctByte{b0, b1, b2, b3, b4, b5, b6, b7}:
+      U32{WCon{b0, WCon{b1, WCon{b2, WCon{b3, WCon{b4, WCon{b5, WCon{b6, WCon{b7, Word.zero(24n)}}}}}}}}}
+
+def oct.zero() -> OctByte:
+  OctByte{False{}, False{}, False{}, False{}, False{}, False{}, False{}, False{}}
+
+# the byte of a word: its low 8 bits (through OctByte, so that a byte read
+# back from an Octets and byte(b) are the same term even for an unknown b)
 def byte(b: U32) -> U32:
-  of_bits8(bits8(b))
+  oct.to(oct.of(b))
 
 # List operations
 
@@ -319,13 +343,13 @@ def hex.fast(xs: List<&2, U32>) -> String:
 #
 # Public interfaces take and answer Octets. Its representation is internal:
 # other packages use only the Octets.* defs below and, in proofs, this
-# package's laws, never the constructor. Today an Octets is a list of 8-bit
-# words, so every value of the type is a valid byte string (no element can
-# be 256 or more), which is what makes laws like of_list(to_list(o)) == o
-# hold for every o.
+# package's laws, never the constructor. Today an Octets is a list of
+# OctByte records, so every value of the type is a valid byte string (no
+# element can be 256 or more), which is what makes laws like
+# of_list(to_list(o)) == o hold for every o.
 
 type Octets is Data:
-  Octets{words: List<&2, Word(8n)>}
+  Octets{words: List<&2, OctByte>}
 
 # masking every element of a list to 8 bits (the list layer's view)
 def mask(xs: List<&2, U32>) -> List<&2, U32>:
@@ -370,21 +394,21 @@ def list_eq.fast(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
 
 # Word lists: the operations Octets is built from
 
-def w8s.of_list(xs: List<&2, U32>) -> List<&2, Word(8n)>:
+def w8s.of_list(xs: List<&2, U32>) -> List<&2, OctByte>:
   match xs:
     case Nil{}:
       Nil{}
     case Con{h, t}:
-      Con{bits8(h), w8s.of_list(t)}
+      Con{oct.of(h), w8s.of_list(t)}
 
-def w8s.to_list(ws: List<&2, Word(8n)>) -> List<&2, U32>:
+def w8s.to_list(ws: List<&2, OctByte>) -> List<&2, U32>:
   match ws:
     case Nil{}:
       Nil{}
     case Con{h, t}:
-      Con{of_bits8(h), w8s.to_list(t)}
+      Con{oct.to(h), w8s.to_list(t)}
 
-def w8s.take(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.take(n: Nat, ws: List<&2, OctByte>) -> List<&2, OctByte>:
   match n:
     case 0n:
       Nil{}
@@ -395,7 +419,7 @@ def w8s.take(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
         case Con{h, t}:
           Con{h, w8s.take(p, t)}
 
-def w8s.drop(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.drop(n: Nat, ws: List<&2, OctByte>) -> List<&2, OctByte>:
   match n:
     case 0n:
       ws
@@ -406,17 +430,17 @@ def w8s.drop(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
         case Con{h, t}:
           w8s.drop(p, t)
 
-def w8s.zeros(n: Nat) -> List<&2, Word(8n)>:
+def w8s.zeros(n: Nat) -> List<&2, OctByte>:
   match n:
     case 0n:
       Nil{}
     case 1n+p:
-      Con{Word.zero(8n), w8s.zeros(p)}
+      Con{oct.zero(), w8s.zeros(p)}
 
-def w8s.at(ws: List<&2, Word(8n)>) -> Maybe<&2, U32>:
+def w8s.at(ws: List<&2, OctByte>) -> Maybe<&2, U32>:
   match ws:
     case Con{h, t}:
-      Some{of_bits8(h)}
+      Some{oct.to(h)}
     case Nil{}:
       None{}
 
@@ -427,34 +451,34 @@ def w8s.at(ws: List<&2, Word(8n)>) -> Maybe<&2, U32>:
 # accumulator (reversed where order matters) and is proved equal to its
 # structural form for every input (PROOF.bend: *_fast).
 
-def w8s.rev_onto(ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.rev_onto(ws: List<&2, OctByte>, acc: List<&2, OctByte>) -> List<&2, OctByte>:
   match ws:
     case Nil{}:
       acc
     case Con{h, t}:
       w8s.rev_onto(t, Con{h, acc})
 
-def w8s.of_list.go(xs: List<&2, U32>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.of_list.go(xs: List<&2, U32>, acc: List<&2, OctByte>) -> List<&2, OctByte>:
   match xs:
     case Nil{}:
       acc
     case Con{h, t}:
-      w8s.of_list.go(t, Con{bits8(h), acc})
+      w8s.of_list.go(t, Con{oct.of(h), acc})
 
-def w8s.of_list.fast(xs: List<&2, U32>) -> List<&2, Word(8n)>:
+def w8s.of_list.fast(xs: List<&2, U32>) -> List<&2, OctByte>:
   w8s.rev_onto(w8s.of_list.go(xs, Nil{}), Nil{})
 
-def w8s.to_list.go(ws: List<&2, Word(8n)>, acc: List<&2, U32>) -> List<&2, U32>:
+def w8s.to_list.go(ws: List<&2, OctByte>, acc: List<&2, U32>) -> List<&2, U32>:
   match ws:
     case Nil{}:
       acc
     case Con{h, t}:
-      w8s.to_list.go(t, Con{of_bits8(h), acc})
+      w8s.to_list.go(t, Con{oct.to(h), acc})
 
-def w8s.to_list.fast(ws: List<&2, Word(8n)>) -> List<&2, U32>:
+def w8s.to_list.fast(ws: List<&2, OctByte>) -> List<&2, U32>:
   rev_onto(w8s.to_list.go(ws, Nil{}), Nil{})
 
-def w8s.take.go(n: Nat, ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.take.go(n: Nat, ws: List<&2, OctByte>, acc: List<&2, OctByte>) -> List<&2, OctByte>:
   match n:
     case 0n:
       acc
@@ -465,56 +489,56 @@ def w8s.take.go(n: Nat, ws: List<&2, Word(8n)>, acc: List<&2, Word(8n)>) -> List
         case Con{h, t}:
           w8s.take.go(p, t, Con{h, acc})
 
-def w8s.take.fast(n: Nat, ws: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.take.fast(n: Nat, ws: List<&2, OctByte>) -> List<&2, OctByte>:
   w8s.rev_onto(w8s.take.go(n, ws, Nil{}), Nil{})
 
-def w8s.append.fast(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.append.fast(xs: List<&2, OctByte>, ys: List<&2, OctByte>) -> List<&2, OctByte>:
   w8s.rev_onto(w8s.rev_onto(xs, Nil{}), ys)
 
-def w8s.len.go(ws: List<&2, Word(8n)>, n: Nat) -> Nat:
+def w8s.len.go(ws: List<&2, OctByte>, n: Nat) -> Nat:
   match ws:
     case Nil{}:
       n
     case Con{h, t}:
       w8s.len.go(t, 1n+n)
 
-def w8s.len.fast(ws: List<&2, Word(8n)>) -> Nat:
+def w8s.len.fast(ws: List<&2, OctByte>) -> Nat:
   w8s.len.go(ws, 0n)
 
-def w8s.zeros.go(n: Nat, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.zeros.go(n: Nat, acc: List<&2, OctByte>) -> List<&2, OctByte>:
   match n:
     case 0n:
       acc
     case 1n+p:
-      w8s.zeros.go(p, Con{Word.zero(8n), acc})
+      w8s.zeros.go(p, Con{oct.zero(), acc})
 
-def w8s.zeros.fast(n: Nat) -> List<&2, Word(8n)>:
+def w8s.zeros.fast(n: Nat) -> List<&2, OctByte>:
   w8s.zeros.go(n, Nil{})
 
 # whether two word lists are equal; every word is compared (no early exit)
-def w8s.eq(xs: List<&2, Word(8n)>, ys: List<&2, Word(8n)>, ok: Bool) -> Bool:
+def w8s.eq(xs: List<&2, OctByte>, ys: List<&2, OctByte>, ok: Bool) -> Bool:
   match xs ys:
     case Nil{} Nil{}:
       ok
     case Con{a, s} Con{b, t}:
-      w8s.eq(s, t, Bool.and(ok, Cmp.is_eq(Word.cmp(8n, a, b))))
+      w8s.eq(s, t, Bool.and(ok, U32.is_eq(oct.to(a), oct.to(b))))
     case _ _:
       False{}
 
 # text and hex, built from the last byte back (rs is the string reversed)
-def w8s.text.go(rs: List<&2, Word(8n)>, acc: String) -> String:
+def w8s.text.go(rs: List<&2, OctByte>, acc: String) -> String:
   match rs:
     case Nil{}:
       acc
     case Con{h, t}:
-      w8s.text.go(t, SCon{Chr{of_bits8(h)}, acc})
+      w8s.text.go(t, SCon{Chr{oct.to(h)}, acc})
 
-def w8s.hex.go(rs: List<&2, Word(8n)>, acc: String) -> String:
+def w8s.hex.go(rs: List<&2, OctByte>, acc: String) -> String:
   match rs:
     case Nil{}:
       acc
     case Con{h, t}:
-      +b = of_bits8(h)
+      +b = oct.to(h)
       w8s.hex.go(t, SCon{hex.digit(U32.shrn(b, 4n)), SCon{hex.digit(U32.and(b, 15)), acc}})
 
 # Conversions: of_list masks every element to 8 bits
@@ -552,7 +576,7 @@ def Octets.zeros(n: Nat) -> Octets:
 def Octets.cons(b: U32, o: Octets) -> Octets:
   match o:
     case Octets{ws}:
-      Octets{Con{bits8(b), ws}}
+      Octets{Con{oct.of(b), ws}}
 
 def Octets.append(a: Octets, b: Octets) -> Octets:
   match a b:
@@ -568,7 +592,7 @@ def Octets.concat.ref(os: List<&2, Octets>) -> Octets:
       Octets.append(h, Octets.concat.ref(t))
 
 # every piece's words pushed, reversed, onto acc
-def w8s.concat.go(os: List<&2, Octets>, acc: List<&2, Word(8n)>) -> List<&2, Word(8n)>:
+def w8s.concat.go(os: List<&2, Octets>, acc: List<&2, OctByte>) -> List<&2, OctByte>:
   match os:
     case Nil{}:
       acc
@@ -580,7 +604,7 @@ def Octets.concat(os: List<&2, Octets>) -> Octets:
   Octets{w8s.rev_onto(w8s.concat.go(os, Nil{}), Nil{})}
 
 # the words of an Octets (internal; for the proofs)
-def Octets.words(o: Octets) -> List<&2, Word(8n)>:
+def Octets.words(o: Octets) -> List<&2, OctByte>:
   match o:
     case Octets{ws}:
       ws
