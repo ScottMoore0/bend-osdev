@@ -66,6 +66,19 @@ terminator; a directory's own sectors (plus, with Rock Ridge, its records'
 continuation areas and, for a relocated directory, the first sector of the
 directory its CL entry names); a file's blocks.
 
+blockdev now also has an owned interface, in which every operation hands the
+device back, so that a device may be a single-owner value (an `Array` image,
+later a file), and which has `write_block`. This package stays on the pure
+interface, unchanged: it only reads, and each of its laws that mentions a
+device is a statement about a pure read's `Result`, which on the owned
+interface would become a pair (changing the laws). The pure interface is the
+owned one's special case for `Data` devices (blockdev's adapters, with laws
+that the owned helpers on an adapted device answer what the pure ones do). A
+device on the owned interface, such as blockdev's array image `ImgDev`, is
+read here through `ImgDev.freeze` (a copy into a `MemDev`). `MemDev` now
+finds a block in O(log n) (a balanced tree of blocks) instead of walking a
+list of them.
+
 ## API
 
 Byte strings are `Octets` (bend-osdev-bytes); a file's total size is a
@@ -335,6 +348,7 @@ records or a file's extents; walking a tree recurses once per directory level
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (its last line a 7,200-entry directory and a
 2,400-extent file), `ref/run.sh` 48 cases on 34 images match (with
-genisoimage, xorriso and isoinfo), `scripts/deps.sh` passes. Large inputs:
+genisoimage, xorriso and isoinfo), `scripts/deps.sh` passes; all re-run
+unchanged on blockdev's tree-backed `MemDev`. Large inputs:
 measured to 30,000-entry directories and 40 MB files of 20,481 extents (see
 Speed and size limits).

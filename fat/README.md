@@ -49,6 +49,19 @@ device's block size need not be the volume's sector size. A device error is
 `FatDev{e}`. In the examples below `T` stands for the three template
 arguments, e.g. `~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block`.
 
+blockdev now also has an owned interface, in which every operation hands the
+device back, so that a device may be a single-owner value (an `Array` image,
+later a file), and which has `write_block`. This package stays on the pure
+interface, unchanged: it only reads, and each of its laws that mentions a
+device is a statement about a pure read's `Result`, which on the owned
+interface would become a pair (changing the laws). The pure interface is the
+owned one's special case for `Data` devices (blockdev's adapters, with laws
+that the owned helpers on an adapted device answer what the pure ones do). A
+device on the owned interface, such as blockdev's array image `ImgDev`, is
+read here through `ImgDev.freeze` (a copy into a `MemDev`). `MemDev` now
+finds a block in O(log n) (a balanced tree of blocks) instead of walking a
+list of them.
+
 ## API
 
 The records below are open (their fields are part of the interface) except
@@ -310,6 +323,9 @@ file's size, a directory's entries or a chain's length; what is left:
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (24 results, one a 50,000-cluster volume),
-`ref/run.sh` 956 cases on 39 images match, `scripts/deps.sh` passes. Large
+`ref/run.sh` 956 cases on 39 images match, `scripts/deps.sh` passes; all
+re-run unchanged on blockdev's tree-backed `MemDev` (the reference test's
+program still runs on the JavaScript lane: its native build is killed for
+memory). Large
 inputs: measured to 61,442-cluster chains, 30 MB files and 42,000-entry
 directories (see Speed and size limits).

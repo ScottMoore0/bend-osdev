@@ -181,13 +181,24 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
 * **Any device:** the reader is a set of templates over blockdev's interface;
   a file, a partition or a cached device works unchanged. Device errors come
   back as `Ext2Dev{e}`.
+  The reader takes blockdev's pure interface. blockdev now also has an owned
+  interface (every operation hands the device back, so a device may be a
+  single-owner value: an `Array` image, later a file); the reader stays on
+  the pure one, unchanged, because it only reads and each of its laws that
+  mentions a device is a statement about a pure read's `Result`, which on
+  the owned interface would become a pair. The pure interface is the owned
+  one's special case for `Data` devices (blockdev's adapters, with laws), and
+  an owned device such as blockdev's `ImgDev` is read here through
+  `ImgDev.freeze` (a copy into a `MemDev`). `MemDev` now finds a block in
+  O(log n) instead of walking a list.
 * **Which features to accept:** `Ext2Options.incompat` is the set of
   incompat bits the reader agrees to read (`ext2_incompat()` turns it into a
   plain ext2 reader that refuses extents); checksum verification, journal
   recovery, symbolic link hops and the extent depth bound are options too.
 * **Writing** is the obvious extension: the records' parsers have field
   offsets a writer would mirror (`Ext2Dirent.encode` is the first writer),
-  and blockdev would need a write operation in its interface.
+  and blockdev's owned interface has the write operation a writer would take
+  (`write_block`, as a fourth template argument).
 * **More of ext4:** inline data (`Ext2InlineData` marks where it would go),
   htree lookups by hash (linear reading is correct, only slower), extended
   attributes, bitmap checksums, casefolded names.
@@ -328,4 +339,8 @@ range and by map instead.
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 7130 lines (2949 queries, 43 images) match
-(seed 7: 7132 lines, 2945 queries), `scripts/deps.sh` passes.
+(seed 7: 7132 lines, 2945 queries), `scripts/deps.sh` passes; all re-run on
+blockdev's tree-backed `MemDev`. Every program, `check.bend` and all 43 case
+files, builds and runs natively (`ref/gen.py` builds each image's query list
+from helper defs of at most 40 queries, so no def passes the C backend's 247
+live values, bendlang/bend#1069).

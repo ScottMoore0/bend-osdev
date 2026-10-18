@@ -297,7 +297,24 @@ class Image:
         lst = pieces[-1]
         for p in reversed(pieces[:-1]):
             lst = "List.append(&2, Nat, %s, %s)" % (p, lst)
-        return 'R.Ext2Img{"%s", "%s", %dn, %dn, %s, %s, [%s]}' % (self.name, self.path, self.devbs, count, lst, self.options, ", ".join(self.queries))
+        return 'R.Ext2Img{"%s", "%s", %dn, %dn, %s, %s, %s}' % (self.name, self.path, self.devbs, count, lst, self.options, self.query_list())
+    # the queries as helper defs of at most PER_DEF each, joined in main:
+    # the C backend counts live values per def, and one literal holding
+    # every query passes its limit of 247 (bendlang/bend#1069)
+    PER_DEF = 40
+    def helpers(self):
+        out = []
+        for k in range(0, len(self.queries), self.PER_DEF):
+            out.append("def qs%d() -> List<&2, R.Ext2Query>:\n  [%s]\n\n" % (k // self.PER_DEF, ", ".join(self.queries[k:k + self.PER_DEF])))
+        return "".join(out)
+    def query_list(self):
+        n = (len(self.queries) + self.PER_DEF - 1) // self.PER_DEF
+        if n == 0:
+            return "[]"
+        lst = "qs%d()" % (n - 1)
+        for k in reversed(range(n - 1)):
+            lst = "List.append(&2, R.Ext2Query, qs%d(), %s)" % (k, lst)
+        return lst
 
 def fs_info(img):
     d = dumpe2fs(img)
@@ -528,6 +545,7 @@ def main():
     for k, im in enumerate(images):
         with open(os.path.join(HERE, "cases-%02d.bend" % k), "w") as f:
             f.write("import Base\nimport ../../bytes/bytes.bend as B\nimport ../options.bend as O\nimport ./driver.bend as R\n\n")
+            f.write(im.helpers())
             f.write("def main() -> IO(Unit):\n  R.Ext2Img.run(" + im.bend() + ")\n")
     lines = [l for im in images for l in im.expect]
     with open(os.path.join(HERE, "expected.txt"), "w") as f:
