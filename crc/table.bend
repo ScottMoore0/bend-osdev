@@ -57,16 +57,25 @@ def t32.snd(r: Array<U32> & U32) -> U32:
   (t, v) = r
   v
 
+# most significant bit first: a table for widths of 8 and up; below 8 the
+# input goes in a bit at a time, so the bitwise engine serves
+def t32.update.msb(small: Bool, +width: Nat, +poly: U32, c: U32, xs: List<&2, U32>) -> U32:
+  match small:
+    case True{}:
+      C.s32.raw(xs, poly, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), c)
+    case False{}:
+      +shift = Nat.sub(width, 8n)
+      +topbit = U32.shln(1, Nat.sub(width, 1n))
+      +mask = U32.sub(U32.shln(1, width), 1)
+      t32.snd(t32.n.raw(xs, shift, mask, (t32.fill.n(256n, [0 : U32*256n], poly, shift, topbit, mask, 0), c)))
+
 def t32.update.go(reflected: Bool, +width: Nat, +poly: U32, c: U32, xs: List<&2, U32>) -> U32:
   match reflected:
     case True{}:
       +rp = C.reflect32(poly, width)
       t32.snd(t32.r.raw(xs, (t32.fill.r(256n, [0 : U32*256n], rp, 0), c)))
     case False{}:
-      +shift = Nat.sub(width, 8n)
-      +topbit = U32.shln(1, Nat.sub(width, 1n))
-      +mask = U32.sub(U32.shln(1, width), 1)
-      t32.snd(t32.n.raw(xs, shift, mask, (t32.fill.n(256n, [0 : U32*256n], poly, shift, topbit, mask, 0), c)))
+      t32.update.msb(Nat.is_lt(width, 8n), width, poly, c, xs)
 
 # the same as Crc32Spec.update, table-driven
 def Crc32Spec.update_fast(spec: C.Crc32Spec, c: U32, o: B.Octets) -> U32:

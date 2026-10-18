@@ -4,7 +4,8 @@
 #
 # A CRC is fixed by its width, polynomial (in normal, most-significant-first
 # form), initial register value, bit order, and final XOR. Crc32Spec covers
-# widths 8 to 32 on U32; Crc64Spec covers width 64 on W64. Every CRC here
+# widths 1 to 32 on U32 (below 8, most-significant-first CRCs take their
+# input a bit at a time); Crc64Spec covers width 64 on W64. Every CRC here
 # reads its input bytes in the same order it writes its result (refin =
 # refout), as all the CRCs below do.
 #
@@ -92,6 +93,32 @@ def n32.raw(xs: List<&2, U32>, +poly: U32, +shift: Nat, +topbit: U32, +mask: U32
     case Con{h, t}:
       n32.raw(t, poly, shift, topbit, mask, n32.bits(8n, poly, topbit, mask, U32.xor(c, U32.shln(U32.and(h, 255), shift))))
 
+# The 32-bit engine for widths below 8, most significant bit first: a byte
+# does not fit at the register's top, so its bits enter one at a time (the
+# input bit is added to the bit leaving the top); topsh is width - 1
+
+def s32.pick(top: Bool, +poly: U32, +mask: U32, c: U32) -> U32:
+  match top:
+    case True{}:
+      U32.and(U32.xor(U32.shl(c), poly), mask)
+    case False{}:
+      U32.and(U32.shl(c), mask)
+
+# the bits p - 1 down to 0 of h, into register c
+def s32.bits(+n: Nat, +poly: U32, +topsh: Nat, +mask: U32, +h: U32, +c: U32) -> U32:
+  match n:
+    case 0n:
+      c
+    case 1n+p:
+      s32.bits(p, poly, topsh, mask, h, s32.pick(U32.is_eq(U32.and(U32.xor(U32.shrn(c, topsh), U32.shrn(h, p)), 1), 1), poly, mask, c))
+
+def s32.raw(xs: List<&2, U32>, +poly: U32, +topsh: Nat, +mask: U32, c: U32) -> U32:
+  match xs:
+    case Nil{}:
+      c
+    case Con{h, t}:
+      s32.raw(t, poly, topsh, mask, s32.bits(8n, poly, topsh, mask, U32.and(h, 255), c))
+
 # The 64-bit engines
 
 def r64.pick(odd: Bool, +poly: W.W64, c: W.W64) -> W.W64:
@@ -138,6 +165,16 @@ def n64.raw(xs: List<&2, U32>, +poly: W.W64, c: W.W64) -> W.W64:
 
 # The generic CRCs
 
+# most significant bit first: the byte engine for widths of 8 and up, the
+# bit engine below
+def Crc32Spec.update.msb(small: Bool, +width: Nat, poly: U32, c: U32, xs: List<&2, U32>) -> U32:
+  match small:
+    case True{}:
+      s32.raw(xs, poly, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), c)
+    case False{}:
+      +shift = Nat.sub(width, 8n)
+      n32.raw(xs, poly, shift, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)
+
 # the register after the bytes xs, from register c, without the final XOR:
 # what a caller that computes a CRC in pieces passes from one piece to the next
 def Crc32Spec.update.go(reflected: Bool, +width: Nat, poly: U32, c: U32, xs: List<&2, U32>) -> U32:
@@ -145,8 +182,7 @@ def Crc32Spec.update.go(reflected: Bool, +width: Nat, poly: U32, c: U32, xs: Lis
     case True{}:
       r32.raw(xs, reflect32(poly, width), c)
     case False{}:
-      +shift = Nat.sub(width, 8n)
-      n32.raw(xs, poly, shift, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)
+      Crc32Spec.update.msb(Nat.is_lt(width, 8n), width, poly, c, xs)
 
 def Crc32Spec.update(spec: Crc32Spec, c: U32, o: B.Octets) -> U32:
   match spec:
@@ -236,6 +272,46 @@ def crc64_xz.spec() -> Crc64Spec:
 def crc64_nvme.spec() -> Crc64Spec:
   Crc64Spec{W.W64.from_parts(2912145973, 2496214617), W.W64.max(), True{}, W.W64.max()}
 
+# CRC-4/G-704 (CRC-4/ITU): poly 0x3, reflected
+def crc4_itu.spec() -> Crc32Spec:
+  Crc32Spec{4n, 3, 0, True{}, 0}
+
+# CRC-7/MMC (SD/MMC commands): poly 0x09
+def crc7_mmc.spec() -> Crc32Spec:
+  Crc32Spec{7n, 9, 0, False{}, 0}
+
+# CRC-8/SMBUS: poly 0x07
+def crc8_smbus.spec() -> Crc32Spec:
+  Crc32Spec{8n, 7, 0, False{}, 0}
+
+# CRC-8/I-432-1 (CRC-8/ITU, ATM HEC): poly 0x07, xorout 0x55
+def crc8_itu.spec() -> Crc32Spec:
+  Crc32Spec{8n, 7, 0, False{}, 85}
+
+# CRC-8/MAXIM-DOW (Dallas/Maxim 1-Wire): poly 0x31, reflected
+def crc8_maxim.spec() -> Crc32Spec:
+  Crc32Spec{8n, 49, 0, True{}, 0}
+
+# CRC-8/DVB-S2: poly 0xD5
+def crc8_dvb_s2.spec() -> Crc32Spec:
+  Crc32Spec{8n, 213, 0, False{}, 0}
+
+# CRC-8/AUTOSAR: poly 0x2F, init 0xFF, xorout 0xFF
+def crc8_autosar.spec() -> Crc32Spec:
+  Crc32Spec{8n, 47, 255, False{}, 255}
+
+# CRC-16/KERMIT (CRC-16/CCITT, the kernel's crc_ccitt): poly 0x1021, reflected
+def crc16_kermit.spec() -> Crc32Spec:
+  Crc32Spec{16n, 4129, 0, True{}, 0}
+
+# CRC-16/IBM-3740 (CRC-16/CCITT-FALSE): poly 0x1021, init 0xFFFF
+def crc16_ccitt_false.spec() -> Crc32Spec:
+  Crc32Spec{16n, 4129, 65535, False{}, 0}
+
+# CRC-16/XMODEM (CRC-16/ITU-T, the kernel's crc_itu_t): poly 0x1021
+def crc16_xmodem.spec() -> Crc32Spec:
+  Crc32Spec{16n, 4129, 0, False{}, 0}
+
 def crc32c(xs: B.Octets) -> U32:
   Crc32Spec.compute(crc32c.spec(), xs)
 
@@ -256,3 +332,33 @@ def crc64_xz(xs: B.Octets) -> W.W64:
 
 def crc64_nvme(xs: B.Octets) -> W.W64:
   Crc64Spec.compute(crc64_nvme.spec(), xs)
+
+def crc4_itu(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc4_itu.spec(), xs)
+
+def crc7_mmc(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc7_mmc.spec(), xs)
+
+def crc8_smbus(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc8_smbus.spec(), xs)
+
+def crc8_itu(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc8_itu.spec(), xs)
+
+def crc8_maxim(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc8_maxim.spec(), xs)
+
+def crc8_dvb_s2(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc8_dvb_s2.spec(), xs)
+
+def crc8_autosar(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc8_autosar.spec(), xs)
+
+def crc16_kermit(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc16_kermit.spec(), xs)
+
+def crc16_ccitt_false(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc16_ccitt_false.spec(), xs)
+
+def crc16_xmodem(xs: B.Octets) -> U32:
+  Crc32Spec.compute(crc16_xmodem.spec(), xs)

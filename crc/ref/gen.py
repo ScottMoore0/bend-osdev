@@ -27,6 +27,13 @@ def model(data, w, poly, init, refl, xorout):
                 c = (c >> 1) ^ p if c & 1 else c >> 1
         return (c ^ xorout) & mask
     c = init
+    if w < 8:
+        # a byte does not fit at the top: its bits enter one at a time
+        for b in data:
+            for i in range(7, -1, -1):
+                top = (c >> (w - 1) & 1) ^ (b >> i & 1)
+                c = ((c << 1) ^ poly) & mask if top else (c << 1) & mask
+        return (c ^ xorout) & mask
     for b in data:
         c ^= b << (w - 8)
         for _ in range(8):
@@ -42,7 +49,22 @@ CRCS = [  # name, width, poly, init, reflected, xorout
     ("crc64_ecma", 64, 0x42F0E1EBA9EA3693, 0, False, 0),
     ("crc64_xz", 64, 0x42F0E1EBA9EA3693, ONES, True, ONES),
     ("crc64_nvme", 64, 0xAD93D23594C93659, ONES, True, ONES),
+    ("crc4_itu", 4, 0x3, 0, True, 0),
+    ("crc7_mmc", 7, 0x09, 0, False, 0),
+    ("crc8_smbus", 8, 0x07, 0, False, 0),
+    ("crc8_itu", 8, 0x07, 0, False, 0x55),
+    ("crc8_maxim", 8, 0x31, 0, True, 0),
+    ("crc8_dvb_s2", 8, 0xD5, 0, False, 0),
+    ("crc8_autosar", 8, 0x2F, 0xFF, False, 0xFF),
+    ("crc16_kermit", 16, 0x1021, 0, True, 0),
+    ("crc16_ccitt_false", 16, 0x1021, 0xFFFF, False, 0),
+    ("crc16_xmodem", 16, 0x1021, 0, False, 0),
 ]
+# the catalogue's check values of "123456789", against which the model is
+# checked before it is used
+CHECKS = {"crc32c": 0xE3069283, "crc32": 0xCBF43926, "crc16": 0xBB3D, "crc_t10dif": 0xD0DB, "crc4_itu": 0x7,
+          "crc7_mmc": 0x75, "crc8_smbus": 0xF4, "crc8_itu": 0xA1, "crc8_maxim": 0xA1, "crc8_dvb_s2": 0xBC,
+          "crc8_autosar": 0xDF, "crc16_kermit": 0x2189, "crc16_ccitt_false": 0x29B1, "crc16_xmodem": 0x31C3}
 
 def xz_crc64(data):
     # an .xz stream ends: block check (8 bytes for CRC64), index, footer (12)
@@ -77,6 +99,9 @@ def main():
     rng = random.Random(int(sys.argv[1]) if len(sys.argv) > 1 else 2026)
     short = [b"", b"a", b"123456789"] + [bytes(rng.randrange(256) for _ in range(rng.randrange(1, 64))) for _ in range(12)]
     long = [bytes(rng.randrange(256) for _ in range(rng.randrange(64, 400))) for _ in range(8)]
+    for name, w, poly, init, refl, xo in CRCS:
+        if name in CHECKS:
+            assert model(b"123456789", w, poly, init, refl, xo) == CHECKS[name], name
     lines, expect = [], []
     for k, data in enumerate(short + long):
         for name, w, poly, init, refl, xo in CRCS:

@@ -23,6 +23,13 @@ def n32_split(xs: List<&2, U32>, +poly: U32, +shift: Nat, +topbit: U32, +mask: U
     case Con{h, t}:
       n32_split(t, poly, shift, topbit, mask, C.n32.bits(8n, poly, topbit, mask, U32.xor(c, U32.shln(U32.and(h, 255), shift))), ys)
 
+def s32_split(xs: List<&2, U32>, +poly: U32, +topsh: Nat, +mask: U32, c: U32, ys: List<&2, U32>) -> {C.s32.raw(B.append(xs, ys), poly, topsh, mask, c) == C.s32.raw(ys, poly, topsh, mask, C.s32.raw(xs, poly, topsh, mask, c)) : U32}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      s32_split(t, poly, topsh, mask, C.s32.bits(8n, poly, topsh, mask, U32.and(h, 255), c), ys)
+
 def r64_split(xs: List<&2, U32>, +poly: W.W64, c: W.W64, ys: List<&2, U32>) -> {C.r64.raw(B.append(xs, ys), poly, c) == C.r64.raw(ys, poly, C.r64.raw(xs, poly, c)) : W.W64}:
   match xs:
     case Nil{}:
@@ -37,6 +44,14 @@ def n64_split(xs: List<&2, U32>, +poly: W.W64, c: W.W64, ys: List<&2, U32>) -> {
     case Con{h, t}:
       n64_split(t, poly, C.n64.bits(8n, poly, W.W64.xor(c, W.W64.from_parts(U32.shln(U32.and(h, 255), 24n), 0))), ys)
 
+# most significant bit first: either engine splits
+def msb_split(+small: Bool, +width: Nat, +poly: U32, c: U32, xs: List<&2, U32>, ys: List<&2, U32>) -> {C.Crc32Spec.update.msb(small, width, poly, c, B.append(xs, ys)) == C.Crc32Spec.update.msb(small, width, poly, C.Crc32Spec.update.msb(small, width, poly, c, xs), ys) : U32}:
+  match small:
+    case True{}:
+      s32_split(xs, poly, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), c, ys)
+    case False{}:
+      n32_split(xs, poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c, ys)
+
 # The law over Octets follows from the engines' list lemmas through bytes'
 # interface law octets_append_list, never through how Octets stores bytes.
 def Laws.streaming32(spec, c, a, b):
@@ -47,8 +62,8 @@ def Laws.streaming32(spec, c, a, b):
           %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.r32.raw(_, C.reflect32(poly, width), c) == C.r32.raw(B.Octets.to_list(b), C.reflect32(poly, width), C.r32.raw(B.Octets.to_list(a), C.reflect32(poly, width), c)) : U32}
           r32_split(B.Octets.to_list(a), C.reflect32(poly, width), c, B.Octets.to_list(b))
         case False{}:
-          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.n32.raw(_, poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c) == C.n32.raw(B.Octets.to_list(b), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), C.n32.raw(B.Octets.to_list(a), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)) : U32}
-          n32_split(B.Octets.to_list(a), poly, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c, B.Octets.to_list(b))
+          %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(a, b)), B.append(B.Octets.to_list(a), B.Octets.to_list(b)), BL.octets_append_list(a, b)) : {C.Crc32Spec.update.msb(Nat.is_lt(width, 8n), width, poly, c, _) == C.Crc32Spec.update.msb(Nat.is_lt(width, 8n), width, poly, C.Crc32Spec.update.msb(Nat.is_lt(width, 8n), width, poly, c, B.Octets.to_list(a)), B.Octets.to_list(b)) : U32}
+          msb_split(Nat.is_lt(width, 8n), width, poly, c, B.Octets.to_list(a), B.Octets.to_list(b))
 
 def Laws.streaming64(spec, c, a, b):
   match spec:
@@ -104,4 +119,43 @@ def Laws.fast_crc64_xz():
   {==}
 
 def Laws.fast_agrees_crc32c():
+  {==}
+
+def Laws.check_crc4_itu():
+  {==}
+
+def Laws.check_crc7_mmc():
+  {==}
+
+def Laws.check_crc8_smbus():
+  {==}
+
+def Laws.check_crc8_itu():
+  {==}
+
+def Laws.check_crc8_maxim():
+  {==}
+
+def Laws.check_crc8_dvb_s2():
+  {==}
+
+def Laws.check_crc8_autosar():
+  {==}
+
+def Laws.check_crc16_kermit():
+  {==}
+
+def Laws.check_crc16_ccitt_false():
+  {==}
+
+def Laws.check_crc16_xmodem():
+  {==}
+
+def Laws.fast_crc7_mmc():
+  {==}
+
+def Laws.fast_crc4_itu():
+  {==}
+
+def Laws.fast_crc16_xmodem():
   {==}
