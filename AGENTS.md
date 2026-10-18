@@ -98,18 +98,23 @@ package: copy its shape.
   equal to it, as bytes does (`PROOF.bend`, the `F_*` lemmas). `Octets`
   operations have no length limit; the `List<&2, U32>` list layer in bytes is
   structural, with `*.fast` forms beside it.
-- **Memory:** natively, an `Array<U32>` holds 4 bytes per slot, and a 1 MB
-  `Octets` pipeline (build, append, cut, print) peaks at about 280 MB (about
-  960 MB on the JavaScript lane). Hold images of more than a few MB a block
-  at a time, or in an `Array<U32>`.
+- **Memory:** natively, an `Array<U32>` holds 4 bytes per slot, an `Octets`
+  about 80 bytes per byte held, and a 1 MB `Octets` pipeline (build, append,
+  cut, print) peaks at about 166 MB (about 960 MB on the JavaScript lane).
+  Hold images of more than a few MB a block at a time, or in an `Array<U32>`
+  (blockdev's `ImgDev`: a 64 MB image in about 67 MB).
 - **List literals** of more than about 3,000 elements overflow: build long
   test inputs in pieces or with a generator function.
 - **Native builds:** code with more than 247 live one-word values in one
-  segment, which a record with four or more `W64` fields or other W64-heavy
-  code produces, fails to compile to C ("an arity over 247",
-  bendlang/bend#1069). `scripts/bend-run.sh` runs such a program on the
-  JavaScript lane and `check.sh` reports it (`js` lines). Group `W64` fields
-  into sub-records where you can.
+  segment fails to compile to C ("an arity over 247", bendlang/bend#1069).
+  A `W64` is two native `U32`s and caps' and uuid's sets and identifiers are
+  native words, so ordinary code stays well under it; what still hits it is a
+  value built from bits (a `Word(n)` of more than a few dozen bits held whole)
+  or a generated `main` with hundreds of live results: split it into helper
+  defs (ext2's and caps' ref tests do). `scripts/bend-run.sh` runs a program
+  the backend refuses on the JavaScript lane and `check.sh` reports it
+  (`js` lines); a native build killed for memory (a generated case file of
+  more than a few hundred KB) falls back the same way.
 - **`--verdict`:** it cannot model a template parameter whose type is a
   proposition (`~inv: {...}`); a large `Nat` literal (about 2^24 and up)
   bound to a reused `+` parameter trips a kernel mismatch
