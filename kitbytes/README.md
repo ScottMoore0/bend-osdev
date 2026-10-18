@@ -29,6 +29,22 @@ only**: round trips on text, on the byte values at the edges (0, 127, 128,
 `from_string`. A proof for every input would have to reason about bend-kit's
 array internals, which bend-osdev does not do.
 
+## Sizes
+
+Every conversion is a tail-recursive loop, so there is no length limit
+beyond memory. Measured on Bend 2.0.37 (native build, WSL2), with 1 MB of
+pseudo-random bytes:
+
+| Run | Time | Peak RAM |
+|---|---|---|
+| `of_octets`, 1 MB | 6.9 s | 1.35 GB |
+| `round_trip` (both ways), 1 MB | 9.6 s | 1.86 GB |
+
+Most of the memory is the `Octets` itself (about 940 bytes per byte today)
+and its list form. `check.bend` round-trips 100 KB as a regression test.
+Before this, `of_octets` overflowed the runtime's stack at 64 KB (it took
+the length through bytes' structural `B.len`; it now uses `B.len.fast`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

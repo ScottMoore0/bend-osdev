@@ -17,7 +17,7 @@ def of_octets.go(xs: List<&2, U32>, b: KB.Bytes, +i: U32) -> KB.Bytes:
 # a bend-kit buffer holding the bytes of o
 def of_octets(o: B.Octets) -> KB.Bytes:
   +xs = B.Octets.to_list(o)
-  of_octets.go(xs, KB.new(U32.from_nat(B.len(xs))), 0)
+  of_octets.go(xs, KB.new(U32.from_nat(B.len.fast(xs))), 0)
 
 def to_octets.byte(m: Maybe<&2, U32>) -> U32:
   match m:
