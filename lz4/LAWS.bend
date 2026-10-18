@@ -11,6 +11,12 @@
 # frames and streams, among them the frame the lz4 tool writes for empty
 # input, and each kind of malformed frame; compressed frames that are the
 # lz4 tool's bytes exactly, and frames that round trip.
+#
+# LZ4HC (the hash-chain matcher, chosen through Lz4Matcher): its blocks
+# decode back to their input for every parameter choice, with or without a
+# dictionary; the fast matcher chosen through the option is block_compress
+# itself; the documented levels; an HC frame round trips, and an HC block is
+# smaller than the greedy one where a longer, older match exists.
 import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
@@ -18,6 +24,7 @@ import ./block.bend as K
 import ./frame.bend as F
 import ./lz4.bend as L
 import ./compress.bend as C
+import ./hc.bend as H
 
 # Properties, for every input
 
@@ -45,6 +52,21 @@ law block_compress_dict_round_trip:
   for +dict: B.Octets
   for +o: B.Octets
   {K.block_decompress_dict(dict, C.block_compress_dict(dict, o), B.Octets.len(o)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
+
+law lz4hc_round_trip:
+  for +p: H.Lz4HcParams
+  for +o: B.Octets
+  {K.block_decompress(C.block_compress_with(C.Lz4MatchHC{p}, o), B.Octets.len(o)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
+
+law lz4hc_dict_round_trip:
+  for +p: H.Lz4HcParams
+  for +dict: B.Octets
+  for +o: B.Octets
+  {K.block_decompress_dict(dict, C.block_compress_dict_with(C.Lz4MatchHC{p}, dict, o), B.Octets.len(o)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
+
+law block_compress_with_fast:
+  for +o: B.Octets
+  {C.block_compress_with(C.Lz4MatchFast{}, o) == C.block_compress(o) : B.Octets}
 
 law offset_zero_rejected:
   for +xs: List<&2, U32>
@@ -233,10 +255,29 @@ law compress_run:
 # frames round trip: linked 16-byte blocks with every checksum and the
 # content size, and a stream fed in three pieces
 law frame_round_trip_linked:
-  {L.decompress(C.frame_compress(C.Lz4FrameOptions{C.Lz4Max64KB{}, 16, False{}, True{}, True{}, True{}}, B.Octets.of_string("abcabcabcabcabcabcabcabcabcabcabcabc-the end-abcabcabcabcabc"))) == Done{B.Octets.of_string("abcabcabcabcabcabcabcabcabcabcabcabc-the end-abcabcabcabcabc")} : Result<&2, &2, K.Lz4Error, B.Octets>}
+  {L.decompress(C.frame_compress(C.Lz4FrameOptions{C.Lz4Max64KB{}, 16, False{}, True{}, True{}, True{}, C.Lz4MatchFast{}}, B.Octets.of_string("abcabcabcabcabcabcabcabcabcabcabcabc-the end-abcabcabcabcabc"))) == Done{B.Octets.of_string("abcabcabcabcabcabcabcabcabcabcabcabc-the end-abcabcabcabcabc")} : Result<&2, &2, K.Lz4Error, B.Octets>}
 
 law frame_round_trip_stream:
-  {L.decompress(C.frame_stream(C.Lz4FrameOptions{C.Lz4Max256KB{}, 20, True{}, True{}, True{}, False{}}, [B.Octets.of_string("streamed "), B.Octets.of_string("in three pieces, "), B.Octets.of_string("in three pieces!")])) == Done{B.Octets.of_string("streamed in three pieces, in three pieces!")} : Result<&2, &2, K.Lz4Error, B.Octets>}
+  {L.decompress(C.frame_stream(C.Lz4FrameOptions{C.Lz4Max256KB{}, 20, True{}, True{}, True{}, False{}, C.Lz4MatchFast{}}, [B.Octets.of_string("streamed "), B.Octets.of_string("in three pieces, "), B.Octets.of_string("in three pieces!")])) == Done{B.Octets.of_string("streamed in three pieces, in three pieces!")} : Result<&2, &2, K.Lz4Error, B.Octets>}
 
 law frame_round_trip_text:
   {L.decompress(C.compress(B.Octets.of_string("a frame: a magic, a descriptor, blocks, a frame end"))) == Done{B.Octets.of_string("a frame: a magic, a descriptor, blocks, a frame end")} : Result<&2, &2, K.Lz4Error, B.Octets>}
+
+# Vectors: LZ4HC
+
+# the documented levels (3 to 12, 9 by default), and what each level sets:
+# out-of-range levels are clamped
+law lz4hc_levels:
+  {[H.Lz4HcParams.level(H.lz4hc_level_min()), H.Lz4HcParams.level(H.lz4hc_level_default()), H.Lz4HcParams.level(H.lz4hc_level_max()), H.Lz4HcParams.level(0), H.Lz4HcParams.level(4), H.Lz4HcParams.level(10), H.Lz4HcParams.level(11), H.Lz4HcParams.level(99)] == [H.Lz4HcParams{4, 64, False{}}, H.Lz4HcParams{256, 4096, False{}}, H.Lz4HcParams{4096, 65535, True{}}, H.Lz4HcParams{4, 64, False{}}, H.Lz4HcParams{8, 128, False{}}, H.Lz4HcParams{512, 65535, True{}}, H.Lz4HcParams{1024, 65535, True{}}, H.Lz4HcParams{4096, 65535, True{}}] : List<&2, H.Lz4HcParams>}
+
+law lz4hc_default_level:
+  {[H.lz4hc_level_min(), H.lz4hc_level_default(), H.lz4hc_level_max()] == [3, 9, 12] : List<&2, U32>}
+
+# an LZ4HC frame (level 12) decodes back
+law lz4hc_frame_round_trip:
+  {L.decompress(C.compress_hc(12, B.Octets.of_string("a frame: a magic, a descriptor, blocks, a frame end"))) == Done{B.Octets.of_string("a frame: a magic, a descriptor, blocks, a frame end")} : Result<&2, &2, K.Lz4Error, B.Octets>}
+
+# " abcd" at the third "abcdefghij" is the greedy matcher's match (5
+# bytes); LZ4HC's lazy matching (level 12) takes the 10-byte one after it
+law lz4hc_smaller:
+  {Nat.is_lt(B.Octets.len(C.block_compress_with(C.Lz4Matcher.hc(12), B.Octets.of_string("abcdefghij abcd1234 abcdefghij, the end"))), B.Octets.len(C.block_compress(B.Octets.of_string("abcdefghij abcd1234 abcdefghij, the end")))) == True{} : Bool}

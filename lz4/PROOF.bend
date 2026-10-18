@@ -5,6 +5,7 @@ import ./block.bend as K
 import ./frame.bend as F
 import ./lz4.bend as L
 import ./compress.bend as C
+import ./hc.bend as H
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./LAWS.bend as Laws
@@ -2476,6 +2477,18 @@ def Laws.block_compress_round_trip(o):
 def Laws.block_compress_dict_round_trip(dict, o):
   check_ok_dict(K.blk.run(B.Octets.to_list(B.Octets.of_list(C.cmp.block(B.Octets.to_list(dict), B.Octets.to_list(o)))), K.blk.rev(B.Octets.to_list(dict)), B.Octets.len(o)), dict, B.Octets.of_list(C.cmp.block(B.Octets.to_list(dict), B.Octets.to_list(o))), o, {==})
 
+# LZ4HC: block_compress_with checks its block exactly as block_compress
+# does, whatever the matcher wrote, so the same lemmas carry it
+
+def Laws.lz4hc_round_trip(p, o):
+  check_ok(K.blk.run(B.Octets.to_list(C.block_compress_unchecked_with(C.Lz4MatchHC{p}, o)), Nil{}, B.Octets.len(o)), C.block_compress_unchecked_with(C.Lz4MatchHC{p}, o), o, {==})
+
+def Laws.lz4hc_dict_round_trip(p, dict, o):
+  check_ok_dict(K.blk.run(B.Octets.to_list(B.Octets.of_list(C.cmp.block_with(C.Lz4MatchHC{p}, B.Octets.to_list(dict), B.Octets.to_list(o)))), K.blk.rev(B.Octets.to_list(dict)), B.Octets.len(o)), dict, B.Octets.of_list(C.cmp.block_with(C.Lz4MatchHC{p}, B.Octets.to_list(dict), B.Octets.to_list(o))), o, {==})
+
+def Laws.block_compress_with_fast(o):
+  {==}
+
 def Laws.offset_zero_rejected(xs, k, rest):
   +o = B.Octets.of_list(xs)
   +bl = K.block_literals(o)
@@ -2626,4 +2639,16 @@ def Laws.frame_round_trip_stream():
   {==}
 
 def Laws.frame_round_trip_text():
+  {==}
+
+def Laws.lz4hc_levels():
+  {==}
+
+def Laws.lz4hc_default_level():
+  {==}
+
+def Laws.lz4hc_frame_round_trip():
+  {==}
+
+def Laws.lz4hc_smaller():
   {==}

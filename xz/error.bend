@@ -42,11 +42,11 @@ type XzError is Data:
   XzUnsupportedCheck{id: U32}
   # a filter this decoder does not implement (id: the filter ID)
   XzUnsupportedFilter{id: Nat}
-  # the LZMA2 or LZMA data is corrupt
+  # the LZMA2 or LZMA data is corrupt (in a .lzma file, also: its size is not the declared size)
   XzCorruptLzma{}
   # the output would exceed the caller's maximum
   XzOutputTooLarge{}
-  # bytes follow the end of a raw LZMA2 stream
+  # bytes follow the end of a raw LZMA2 stream or of a .lzma file's stream
   XzTrailingData{}
 
 # The check IDs ("The .xz File Format", 2.1.1.2)
@@ -128,8 +128,8 @@ def XzError.show(e: XzError) -> String:
     case XzUnsupportedFilter{+id}:
       "unsupported filter " ++ Nat.show(id) ++ " (" ++ XzError.filter_name(id) ++ ")"
     case XzCorruptLzma{}:
-      "corrupt LZMA2 data"
+      "corrupt LZMA data"
     case XzOutputTooLarge{}:
       "output larger than the maximum"
     case XzTrailingData{}:
-      "data after the end of the LZMA2 stream"
+      "data after the end of the stream"

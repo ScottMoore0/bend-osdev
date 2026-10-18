@@ -92,6 +92,24 @@ def XzLzRegs.clean(r: XzLzRegs) -> Bool:
     case XzLzRegs{state, rep0, rep1, rep2, rep3, len, pos, prev, lc, lpmask, pbmask, dsize, ok}:
       Bool.and(ok, U32.is_eq(len, 0))
 
+# Whether every distance so far was possible (False after the end marker too)
+def XzLzRegs.ok(r: XzLzRegs) -> Bool:
+  match r:
+    case XzLzRegs{state, rep0, rep1, rep2, rep3, len, pos, prev, lc, lpmask, pbmask, dsize, ok}:
+      ok
+
+# Whether the last match was the end marker (rep0 holds its distance)
+def XzLzRegs.at_end(r: XzLzRegs) -> Bool:
+  match r:
+    case XzLzRegs{state, rep0, rep1, rep2, rep3, len, pos, prev, lc, lpmask, pbmask, dsize, ok}:
+      U32.is_eq(rep0, 4294967295)
+
+# The length of the match still to copy
+def XzLzRegs.pending(r: XzLzRegs) -> U32:
+  match r:
+    case XzLzRegs{state, rep0, rep1, rep2, rep3, len, pos, prev, lc, lpmask, pbmask, dsize, ok}:
+      len
+
 # Emitting a byte: into the dictionary and the output
 def XzLz.put(rd: R.XzRd, dict: Array<U32>, regs: XzLzRegs, out: List<&2, U32>, +b: U32) -> XzLzma:
   match regs:
@@ -193,6 +211,23 @@ def XzLz.dist.slot(r: R.XzSym) -> R.XzSym:
 def XzLz.distance(rd: R.XzRd, +ls: U32) -> R.XzSym:
   XzLz.dist.slot(R.XzRd.tree(rd, U32.add(432, U32.shln(ls, 6n)), 6n))
 
+# The end marker: a match whose distance is 2^32 (stored as one less,
+# 4294967295). It copies nothing: the registers keep that distance as rep0,
+# no length pending, and ok False (the distance fits nowhere), so a decoder
+# that does not expect it (LZMA2) sees corruption, and one that does (the
+# .lzma format) sees XzLzRegs.at_end
+def XzLzRegs.end_mark(r: XzLzRegs) -> XzLzRegs:
+  match r:
+    case XzLzRegs{state, rep0, rep1, rep2, rep3, len, pos, prev, lc, lpmask, pbmask, dsize, ok}:
+      XzLzRegs{state, rep0, rep1, rep2, rep3, 0, pos, prev, lc, lpmask, pbmask, dsize, False{}}
+
+def XzLz.match.go(eom: Bool, rd: R.XzRd, dict: Array<U32>, regs: XzLzRegs, out: List<&2, U32>) -> XzLzma:
+  match eom:
+    case True{}:
+      XzLzma{rd, dict, XzLzRegs.end_mark(regs), out}
+    case False{}:
+      XzLz.copy(rd, dict, regs, out)
+
 # A match: its length, then its distance, which must lie within the bytes
 # written and the dictionary
 def XzLz.match.dist(r: R.XzSym, dict: Array<U32>, regs: XzLzRegs, out: List<&2, U32>, +l: U32) -> XzLzma:
@@ -200,7 +235,7 @@ def XzLz.match.dist(r: R.XzSym, dict: Array<U32>, regs: XzLzRegs, out: List<&2, 
   match regs:
     case XzLzRegs{+state, +rep0, +rep1, +rep2, rep3, len, +pos, prev, lc, lpmask, pbmask, +dsize, ok}:
       +fits = Bool.and(U32.is_lt(d, pos), U32.is_lt(d, dsize))
-      XzLz.copy(rd, dict, XzLzRegs{XzLz.after_match(state), d, rep0, rep1, rep2, U32.add(l, 2), pos, prev, lc, lpmask, pbmask, dsize, Bool.and(ok, fits)}, out)
+      XzLz.match.go(U32.is_eq(d, 4294967295), rd, dict, XzLzRegs{XzLz.after_match(state), d, rep0, rep1, rep2, U32.add(l, 2), pos, prev, lc, lpmask, pbmask, dsize, Bool.and(ok, fits)}, out)
 
 def XzLz.match.len(r: R.XzSym, dict: Array<U32>, regs: XzLzRegs, out: List<&2, U32>) -> XzLzma:
   R.XzSym{rd, +l} = r
@@ -362,3 +397,41 @@ def XzLzma.chunk.fin(s: XzLzma) -> XzLzChunk:
 # One LZMA chunk: n bytes out from the compressed bytes input
 def XzLzma.chunk(n: Nat, probs: Array<U32>, dict: Array<U32>, regs: XzLzRegs, out: List<&2, U32>, input: List<&2, U32>) -> XzLzChunk:
   XzLzma.chunk.fin(XzLzma.run(n, XzLzma{R.XzRd.start(probs, input), dict, regs, out}))
+
+# The dictionary array: 2^k slots for the least k with 2^k at least need (k
+# at most 31). It grows (doubling at least) as the output does, up to 2^max
+# slots, and only before positions wrap, so slot i keeps position i.
+def XzLzma.dict_depth.pick(small: Bool, +need: U32) -> Nat:
+  match small:
+    case True{}:
+      0n
+    case False{}:
+      1n+U32.log2(U32.sub(need, 1))
+
+def XzLzma.dict_depth(+need: U32) -> Nat:
+  XzLzma.dict_depth.pick(U32.is_le(need, 1), need)
+
+def XzLzma.dict_grow.copy(n: Nat, r: Array<U32> & U32, new: Array<U32>, +i: U32) -> Array<U32>:
+  match n:
+    case 0n:
+      (old, +v) = r
+      Array.set(U32, new, i, v)
+    case 1n+p:
+      (old, +v) = r
+      +j = U32.add(i, 1)
+      XzLzma.dict_grow.copy(p, Array.get(U32, old, j), Array.set(U32, new, i, v), j)
+
+def XzLzma.dict_grow.pick(more: Bool, dict: Array<U32>, +cur: Nat, +want: Nat) -> Array<U32>:
+  match more:
+    case True{}:
+      XzLzma.dict_grow.copy(U32.to_nat(U32.sub(U32.shln(1, cur), 1)), Array.get(U32, dict, 0), Array.new(U32, want, 0), 0)
+    case False{}:
+      dict
+
+# the depth for writing u more bytes at position pos (cur now, max at most)
+def XzLzma.dict_want(+cur: Nat, +max: Nat, +pos: U32, +u: U32) -> Nat:
+  Nat.max(cur, Nat.min(max, XzLzma.dict_depth(U32.min(U32.add(pos, u), 2147483648))))
+
+# the array of 2^cur slots, grown to 2^want if that is more
+def XzLzma.dict_grow(dict: Array<U32>, +cur: Nat, +want: Nat) -> Array<U32>:
+  XzLzma.dict_grow.pick(Nat.is_lt(cur, want), dict, cur, want)

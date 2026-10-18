@@ -7,6 +7,9 @@
 # (a match starts 12 bytes or more before the end and ends 5 bytes or more
 # before it), and emits literals and matches as LZ4 sequences.
 #
+# The matcher is a choice (Lz4Matcher): this greedy one, or LZ4HC's
+# hash-chain search (hc.bend) at a level. Both write ordinary LZ4 blocks.
+#
 # block_compress checks its own output: it decodes it and, should that not
 # give the input back, answers the literal-only block instead. So a law can
 # say, for every input, that what it writes decodes to the input.
@@ -15,6 +18,8 @@ import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
 import ./block.bend as K
 import ./frame.bend as F
+import ./seq.bend as S
+import ./hc.bend as H
 
 # The matcher
 
@@ -37,63 +42,14 @@ def cmp.hash(xs: List<&2, U32>) -> U32:
     case _:
       0
 
-def cmp.inc_if(ok: Bool, n: Nat) -> Nat:
-  match ok:
-    case True{}:
-      1n+n
-    case False{}:
-      n
-
-# how many bytes a and b share from their starts, k at most; live: the bytes
-# so far agree
-def cmp.common(a: List<&2, U32>, live: Bool, b: List<&2, U32>, +k: U32, n: Nat) -> Nat:
-  match a live:
-    case Con{x, s} True{}:
-      match b:
-        case Nil{}:
-          n
-        case Con{y, t}:
-          +ok = Bool.and(U32.is_lt(0, k), U32.is_eq(x, y))
-          cmp.common(s, ok, t, U32.sub(k, 1), cmp.inc_if(ok, n))
-    case _ _:
-      n
-
-# the low nibble of a length: the length itself below 15, else 15
-def cmp.nib(+n: Nat) -> U32:
-  U32.from_nat(Nat.min(n, 15n))
-
-def cmp.ext.pick(more: Bool, +n: Nat) -> List<&2, U32>:
-  match more:
-    case True{}:
-      K.lit.ext(Nat.sub(n, 15n), 254n)
-    case False{}:
-      Nil{}
-
-# the length bytes after a nibble of 15
-def cmp.ext(+n: Nat) -> List<&2, U32>:
-  cmp.ext.pick(Nat.is_le(15n, n), n)
-
-# a sequence (literals, then a match at offset off of length ml), pushed onto
-# the reversed output
-def cmp.seq(+lits: List<&2, U32>, +off: U32, +ml: Nat, out: List<&2, U32>) -> List<&2, U32>:
-  +l = B.len.fast(lits)
-  +m = Nat.sub(ml, 4n)
-  +tok = U32.or(U32.shln(cmp.nib(l), 4n), cmp.nib(m))
-  K.blk.push(cmp.ext(m), Con{U32.shrn(off, 8n), Con{U32.and(off, 255), K.blk.push(lits, K.blk.push(cmp.ext(l), Con{tok, out}))}})
-
-# the last sequence: literals only
-def cmp.last(+lits: List<&2, U32>, out: List<&2, U32>) -> List<&2, U32>:
-  +l = B.len.fast(lits)
-  K.blk.push(lits, K.blk.push(cmp.ext(l), Con{U32.shln(cmp.nib(l), 4n), out}))
-
 def cmp.done(lits: List<&2, U32>, cur: List<&2, U32>, out: List<&2, U32>) -> Lz4Enc:
-  Lz4EncDone{cmp.last(B.rev_onto(lits, cur), out)}
+  Lz4EncDone{S.seq.last(B.rev_onto(lits, cur), out)}
 
 # a match of ml bytes, or (shorter than 4) one more literal
 def cmp.emit(ok: Bool, tab: Array<Lz4Cand>, +cur: List<&2, U32>, +i: U32, +ml: Nat, +off: U32, lim: U32, end: U32, +lits: List<&2, U32>, out: List<&2, U32>) -> Lz4Enc:
   match ok:
     case True{}:
-      Lz4EncGo{tab, B.drop(ml, cur), U32.add(i, U32.from_nat(ml)), lim, end, Nil{}, cmp.seq(K.blk.rev(lits), off, ml, out)}
+      Lz4EncGo{tab, B.drop(ml, cur), U32.add(i, U32.from_nat(ml)), lim, end, Nil{}, S.seq.push(K.blk.rev(lits), off, ml, out)}
     case False{}:
       match cur:
         case Nil{}:
@@ -104,7 +60,7 @@ def cmp.emit(ok: Bool, tab: Array<Lz4Cand>, +cur: List<&2, U32>, +i: U32, +ml: N
 def cmp.found(valid: Bool, +suf: List<&2, U32>, +cur: List<&2, U32>, +k: U32) -> Nat:
   match valid:
     case True{}:
-      cmp.common(suf, True{}, cur, k, 0n)
+      S.seq.common(suf, True{}, cur, k, 0n)
     case False{}:
       0n
 
@@ -137,7 +93,7 @@ def cmp.loop(fuel: Nat, st: Lz4Enc) -> List<&2, U32>:
     case 0n:
       match st:
         case Lz4EncGo{tab, cur, i, lim, end, lits, out}:
-          K.blk.rev(cmp.last(B.rev_onto(lits, cur), out))
+          K.blk.rev(S.seq.last(B.rev_onto(lits, cur), out))
         case Lz4EncDone{out}:
           K.blk.rev(out)
     case 1n+f:
@@ -167,7 +123,7 @@ def cmp.start(big: Bool, +dict: List<&2, U32>, +xs: List<&2, U32>, +total: U32) 
       tab = cmp.seed(base, Array.new(Lz4Cand, 12n, Lz4Cand{0, Nil{}}), all, 0)
       cmp.loop(Nat.add(B.len.fast(xs), 1n), Lz4EncGo{tab, B.drop(base, all), U32.from_nat(base), U32.sub(total, 12), U32.sub(total, 5), Nil{}, Nil{}})
     case False{}:
-      K.blk.rev(cmp.last(xs, Nil{}))
+      K.blk.rev(S.seq.last(xs, Nil{}))
 
 # the block for xs, after the history dict (at most its last 65535 bytes)
 def cmp.block(+dict: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
@@ -247,6 +203,44 @@ def block_compress_dict(+dict: B.Octets, +o: B.Octets) -> B.Octets:
   +c = B.Octets.of_list(cmp.block(B.Octets.to_list(dict), B.Octets.to_list(o)))
   cmp.check_dict(K.blk.run(B.Octets.to_list(c), K.blk.rev(B.Octets.to_list(dict)), B.Octets.len(o)), B.Octets.len(dict), c, o)
 
+# The matchers
+
+# which matcher writes the blocks: the greedy one above (fast), or LZ4HC's
+# hash-chain search with these parameters
+type Lz4Matcher is Data:
+  Lz4MatchFast{}
+  Lz4MatchHC{params: H.Lz4HcParams}
+
+# the greedy matcher, which block_compress uses
+def Lz4Matcher.default() -> Lz4Matcher:
+  Lz4MatchFast{}
+
+# LZ4HC at a level (3 to 12; below 3 is 3, above 12 is 12)
+def Lz4Matcher.hc(+level: U32) -> Lz4Matcher:
+  Lz4MatchHC{H.Lz4HcParams.level(level)}
+
+# the matcher's block for xs after the history dict, as a byte list
+def cmp.block_with(m: Lz4Matcher, +dict: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
+  match m:
+    case Lz4MatchFast{}:
+      cmp.block(dict, xs)
+    case Lz4MatchHC{p}:
+      H.hc.block(p, dict, xs)
+
+# this matcher's block for o, unchecked
+def block_compress_unchecked_with(m: Lz4Matcher, o: B.Octets) -> B.Octets:
+  B.Octets.of_list(cmp.block_with(m, Nil{}, B.Octets.to_list(o)))
+
+# a block for o: this matcher's, checked by decoding it
+def block_compress_with(m: Lz4Matcher, +o: B.Octets) -> B.Octets:
+  +c = block_compress_unchecked_with(m, o)
+  cmp.check(K.blk.run(B.Octets.to_list(c), Nil{}, B.Octets.len(o)), c, o)
+
+# a block for o that may refer back into dict, by this matcher, checked
+def block_compress_dict_with(m: Lz4Matcher, +dict: B.Octets, +o: B.Octets) -> B.Octets:
+  +c = B.Octets.of_list(cmp.block_with(m, B.Octets.to_list(dict), B.Octets.to_list(o)))
+  cmp.check_dict(K.blk.run(B.Octets.to_list(c), K.blk.rev(B.Octets.to_list(dict)), B.Octets.len(o)), B.Octets.len(dict), c, o)
+
 # The frame writer
 
 type Lz4BlockMax is Data:
@@ -260,14 +254,20 @@ type Lz4BlockMax is Data:
 # indep: blocks independent (or each may refer back into the ones before);
 # block_sum: a checksum after every block; content_sum: a checksum of the
 # content; content_size: the content's size in the header (one-shot writing
-# only)
+# only); matcher: what finds the matches
 type Lz4FrameOptions is Data:
-  Lz4FrameOptions{block_max: Lz4BlockMax, block_size: U32, indep: Bool, block_sum: Bool, content_sum: Bool, content_size: Bool}
+  Lz4FrameOptions{block_max: Lz4BlockMax, block_size: U32, indep: Bool, block_sum: Bool, content_sum: Bool, content_size: Bool, matcher: Lz4Matcher}
 
 # what the lz4 tool writes by default: 64 KB independent blocks and a
-# content checksum (FLG 0x64, BD 0x40)
+# content checksum (FLG 0x64, BD 0x40), the greedy matcher
 def Lz4FrameOptions.default() -> Lz4FrameOptions:
-  Lz4FrameOptions{Lz4Max64KB{}, 65536, True{}, False{}, True{}, False{}}
+  Lz4FrameOptions{Lz4Max64KB{}, 65536, True{}, False{}, True{}, False{}, Lz4MatchFast{}}
+
+# the same options with another matcher
+def Lz4FrameOptions.with_matcher(opts: Lz4FrameOptions, m: Lz4Matcher) -> Lz4FrameOptions:
+  match opts:
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, old}:
+      Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, m}
 
 def wr.code(m: Lz4BlockMax) -> U32:
   match m:
@@ -308,7 +308,7 @@ def wr.size(m: Maybe<&2, Nat>) -> List<&2, U32>:
 # the header: magic, FLG, BD, the content size if known, header checksum
 def wr.header(opts: Lz4FrameOptions, +size: Maybe<&2, Nat>) -> List<&2, U32>:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
       +flg = U32.or(64, U32.or(wr.bit(indep, 32), U32.or(wr.bit(bsum, 16), U32.or(wr.bit(csum, 4), wr.bit(Maybe.is_some(&2, Nat, size), 8)))))
       +desc = {Con{flg, Con{U32.shln(wr.code(bmax), 4n), wr.size(size)}} : List<&2, U32>}
       B.append(B.le32(407708164), B.append(desc, [U32.and(U32.shrn(F.frm.xxh32(desc), 8n), 255)]))
@@ -347,22 +347,22 @@ def wr.checked.at(r: Result<&2, &2, K.Lz4Error, K.Lz4Out>, +k: Nat, +c: List<&2,
     case Done{K.Lz4Out{acc, room}}:
       wr.pick(cmp.same(B.drop(k, K.blk.rev(acc)), xs), c, xs)
 
-def wr.checked(+hist: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
-  +c = cmp.block(hist, xs)
+def wr.checked(m: Lz4Matcher, +hist: List<&2, U32>, +xs: List<&2, U32>) -> List<&2, U32>:
+  +c = cmp.block_with(m, hist, xs)
   wr.checked.at(K.blk.run(c, K.blk.rev(hist), B.len.fast(xs)), B.len.fast(hist), c, xs)
 
-def wr.comp(indep: Bool, +hist: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
+def wr.comp(indep: Bool, m: Lz4Matcher, +hist: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
   match indep:
     case True{}:
-      wr.checked(Nil{}, raw)
+      wr.checked(m, Nil{}, raw)
     case False{}:
-      wr.checked(hist, raw)
+      wr.checked(m, hist, raw)
 
 # the bytes of one block of raw, after the history hist
 def wr.block(+opts: Lz4FrameOptions, +hist: List<&2, U32>, +raw: List<&2, U32>) -> List<&2, U32>:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
-      +comp = wr.comp(indep, hist, raw)
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
+      +comp = wr.comp(indep, matcher, hist, raw)
       wr.stored(Nat.is_lt(B.len.fast(comp), B.len.fast(raw)), bsum, comp, raw)
 
 def wr.keep(+xs: List<&2, U32>) -> List<&2, U32>:
@@ -404,7 +404,7 @@ def wr.blocks(fuel: Nat, c: Lz4Cut, +opts: Lz4FrameOptions, +bsz: U32, +hist: Li
 
 def wr.end(opts: Lz4FrameOptions, content: List<&2, U32>) -> List<&2, U32>:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
       B.append(B.le32(0), wr.sum(csum, content))
 
 def wr.size_of(on: Bool, +xs: List<&2, U32>) -> Maybe<&2, Nat>:
@@ -428,12 +428,12 @@ def wr.cut(+bmax: U32, +bsize: U32) -> U32:
 # else the block maximum size
 def wr.opts.bmax(opts: Lz4FrameOptions) -> U32:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
       wr.cut(wr.bmax(bmax), bsize)
 
 def wr.opts.csize(opts: Lz4FrameOptions) -> Bool:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
       csize
 
 # The public interface: frames
@@ -448,6 +448,10 @@ def frame_compress(+opts: Lz4FrameOptions, o: B.Octets) -> B.Octets:
 # a frame holding o, with the default options
 def compress(o: B.Octets) -> B.Octets:
   frame_compress(Lz4FrameOptions.default(), o)
+
+# a frame holding o, with the default options but LZ4HC at this level
+def compress_hc(+level: U32, o: B.Octets) -> B.Octets:
+  frame_compress(Lz4FrameOptions.with_matcher(Lz4FrameOptions.default(), Lz4Matcher.hc(level)), o)
 
 # Streaming: start, then feed the content in pieces, then finish. Each call
 # answers the frame's next bytes. A streamed frame has no content size, and
@@ -464,8 +468,8 @@ type Lz4Written is Data:
 
 def wr.no_size(opts: Lz4FrameOptions) -> Lz4FrameOptions:
   match opts:
-    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize}:
-      Lz4FrameOptions{bmax, bsize, indep, bsum, csum, False{}}
+    case Lz4FrameOptions{bmax, bsize, indep, bsum, csum, csize, matcher}:
+      Lz4FrameOptions{bmax, bsize, indep, bsum, csum, False{}, matcher}
 
 def frame_start(opts: Lz4FrameOptions) -> Lz4Written:
   +o = wr.no_size(opts)

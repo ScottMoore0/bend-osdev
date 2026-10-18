@@ -76,9 +76,13 @@ def main() -> IO(Unit):
     IO.print(B.Octets.hex(C.compress(B.Octets.of_string("hello hello hello hello hello"))))
     IO.print(B.Octets.hex(C.block_compress(B.Octets.of_string("abcabcabcabcabcabcabcabc"))))
     IO.print(show(L.decompress(C.compress(B.Octets.of_string("compressed, then decompressed")))))
-    IO.print(show(L.decompress(C.frame_stream(C.Lz4FrameOptions{C.Lz4Max64KB{}, 8, False{}, True{}, True{}, False{}}, [B.Octets.of_string("fed "), B.Octets.of_string("in pieces, fed in pieces")]))))
+    IO.print(show(L.decompress(C.frame_stream(C.Lz4FrameOptions{C.Lz4Max64KB{}, 8, False{}, True{}, True{}, False{}, C.Lz4MatchFast{}}, [B.Octets.of_string("fed "), B.Octets.of_string("in pieces, fed in pieces")]))))
     IO.print(show_len(K.block_decompress(C.block_compress(B.Octets.zeros(1000n)), 1000n)))
     IO.print(show_same(K.block_decompress(C.block_compress(o), 71680n), o))
+    IO.print(B.Octets.hex(C.block_compress_with(C.Lz4Matcher.hc(12), B.Octets.of_string("abcdefghij abcd1234 abcdefghij, the end"))))
+    IO.print(show(L.decompress(C.compress_hc(9, B.Octets.of_string("high compression, high compression, higher compression")))))
+    IO.print(show_same(K.block_decompress(C.block_compress_with(C.Lz4Matcher.hc(9), o), 71680n), o))
+    IO.print(Nat.show(B.Octets.len(C.block_compress(o))) ++ " " ++ Nat.show(B.Octets.len(C.block_compress_with(C.Lz4Matcher.hc(9), o))))
 
 #|5068656c6c6f
 #|done [hello]
@@ -102,3 +106,7 @@ def main() -> IO(Unit):
 #|done [fed in pieces, fed in pieces]
 #|done, 1000 bytes
 #|done, 71680 bytes, the input True
+#|b06162636465666768696a200b005631323334201400902c2074686520656e64
+#|done [high compression, high compression, higher compression]
+#|done, 71680 bytes, the input True
+#|54068 45780
