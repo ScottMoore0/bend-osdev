@@ -79,6 +79,7 @@ GPL source was read.
 | [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, ECB, CBC and CTR over any instance; the existing ciphers, MACs, AEADs and CRCs, and SHA-256 and SHA-512 (from bend-collections), as instances |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
+| [xorblocks](xorblocks/) | XOR of byte blocks (xor_blocks): two blocks under a length policy, many into one, laws of XOR proved |
 
 Each package's README lists its files, public interface, extension points,
 laws, tests, limits and status.
