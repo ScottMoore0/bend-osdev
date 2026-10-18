@@ -4,11 +4,12 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.dirname(HERE)
 import itertools
-def w8(p):
+def w32(p):
     s = "WNil{}"
-    for i in reversed(range(8)): s = "WCon{%s%d, %s}" % (p, i, s)
+    for i in reversed(range(32)): s = "WCon{%s%d, %s}" % (p, i, s)
     return s
-P = "U.Uuid{" + ", ".join(w8("x%s_" % chr(97+k)) for k in range(16)) + "}"
+# a Uuid is four U32 words: split each into its 32 bits
+P = "U.Uuid{" + ", ".join("U32{%s}" % w32("x%s_" % chr(97+k)) for k in range(4)) + "}"
 L = []
 def w(s=""): L.append(s)
 w("import Base")
@@ -68,8 +69,6 @@ for name, rd, dg in [("hexlist_digits", "rd", "U.Uuid.digits"), ("hexlist_udigit
     w("      %%%s(t) : {Some{Con{b, t}} == U.Uuid.cons_m(Some{b}, _) : %s}" % (name, T))
     w("      {==}")
     w()
-F = ", ".join("+b%d" % i for i in range(16))
-F2 = ", ".join("b%d" % i for i in range(16))
 R = "Result<&2, &2, U.UuidError, U.Uuid>"
 for law, enc, dec in [("bytes_round_trip", "U.Uuid.to_list", "U.Uuid.of_list"), ("guid_round_trip", "U.Uuid.guid_list", "U.Uuid.of_guid_list")]:
     w("def Laws.%s(u):" % law)
@@ -98,13 +97,13 @@ w()
 for name, lem in [("text_round_trip", "hexlist_digits"), ("text_upper_round_trip", "hexlist_udigits")]:
     w("def Laws.%s(u):" % name)
     w("  match u:")
-    w("    case U.Uuid{%s}:" % F)
-    w("      %%%s([%s]) : {U.Uuid.of_digits(_) == Done{U.Uuid{%s}} : Result<&2, &2, U.UuidError, U.Uuid>}" % (lem, F2, F2))
+    w("    case %s:" % P)
+    w("      %%%s(U.Uuid.octets(%s)) : {U.Uuid.of_digits(_) == Done{%s} : Result<&2, &2, U.UuidError, U.Uuid>}" % (lem, P, P))
     w("      {==}")
     w()
 w("def Laws.text_length(u):")
 w("  match u:")
-w("    case U.Uuid{%s}:" % F2)
+w("    case U.Uuid{w0, w1, w2, w3}:")
 w("      {==}")
 w()
 import re

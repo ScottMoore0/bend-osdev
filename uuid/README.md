@@ -41,19 +41,39 @@ belong to the caller (`Uuid.make` builds one from its bytes).
 
 ## Extension points
 
-* **The representation of `Uuid` is internal** (today 16 `Word(8n)` octets).
-  Other packages, and their proofs, see a UUID only as its bytes: the law
+* **The representation of `Uuid` is internal** (today four native `U32`
+  words; see Representation). Other packages, and their proofs, see a UUID
+  only as its bytes: the law
   `make_bytes` (`make(byte(u, 0), …, byte(u, 15)) == u`) lets a proof treat
   any `Uuid` as 16 `U32`s without opening the type, as partition's proofs do.
 * **Generating UUIDs** (versions 4 and 7 from randomness and a clock, 3 and
   5 from MD5 and SHA-1) can be added on top of `Uuid.make`, which sets no
   version or variant bits itself.
 
+## Representation
+
+A `Uuid` is four native `U32` words, each holding four octets most
+significant first (`w0` octets 0 to 3, ..., `w3` octets 12 to 15), so every
+value of the type is a UUID. Bytes are read out with native shifts and masks
+(`U32.and(255, U32.shrn(w, k))`) and joined by bit slicing (word64's
+`W64.bits.cat`), which proofs compute through on symbolic bits. Bend's C
+backend lays a `Word(n)` out as n slots, so the sixteen `Word(8n)` octets
+used before cost 128 slots a UUID, and the widest segment of `check.bend`
+was 256 (`Uuid.is_nil`), past the 247 the backend compiles
+(bendlang/bend#1069); a `Uuid` now costs 4, and the widest segment is 97.
+The text form is still written and read through `Word(8n)` octets and
+`Word(4n)` nibbles (internal), which is what the text round trip is proved
+on.
+
+The package uses only bytes' public defs (`Octets.*`, `at`) and, in proofs,
+its law `octets_to_of` and `mask`.
+
 ## Laws
 
 `LAWS.bend` (a draft, not yet reviewed by the maintainer):
 
-* **for every UUID:**
+* **for every UUID** (proved by splitting each of its four words into its 32
+  bits and computing):
   * `from_bytes(to_bytes(u)) == Done{u}` and `from_guid(to_guid(u)) == Done{u}`,
     and `from_guid_list(to_guid_list(u)) == Done{u}`;
   * `make(byte(u, 0), …, byte(u, 15)) == u`;
@@ -90,4 +110,9 @@ version field and the variant.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 112 cases match.
+`check.bend` passes and `ref/run.sh` 112 cases match, both as native binaries
+(`VERDICT=1 scripts/check.sh uuid`: no JavaScript-lane fallback);
+`scripts/deps.sh uuid` ok. Native sizes: `check.bend` builds in 2 s
+(170 MB) to a 206 KB binary that runs in under 0.01 s in 2.4 MB; the ref
+cases build in 5 s (430 MB) to a 690 KB binary (under 0.01 s, 2.9 MB).
+partition and ext2, which use `Uuid`, pass their checks unchanged.

@@ -2,9 +2,13 @@
 # Unique IDentifiers (UUIDs)", May 2024, which obsoletes RFC 4122).
 #
 # A Uuid holds its 16 octets in the RFC's order (network byte order: octet 0
-# is the most significant). Each octet is a Word(8n), so a Uuid can never hold
-# a value above 255. The text form is 8-4-4-4-12 hex digits (RFC 9562 section
-# 4): read in either case, written in lower case.
+# is the most significant) as four native U32 words, each four octets most
+# significant first: w0 holds octets 0 to 3, w3 octets 12 to 15. Four machine
+# words, where sixteen Word(8n) octets (used before) cost 128 and were more
+# than Bend's C backend compiles in the records that hold UUIDs
+# (bendlang/bend#1069). Every value of the type is a UUID. The text form is
+# 8-4-4-4-12 hex digits (RFC 9562 section 4): read in either case, written in
+# lower case.
 #
 # GPT, and Microsoft's GUID structure generally, store the first three fields
 # (time_low, time_mid, time_hi_and_version) least significant byte first and
@@ -18,7 +22,7 @@ import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
 
 type Uuid is Data:
-  Uuid{b0: Word(8n), b1: Word(8n), b2: Word(8n), b3: Word(8n), b4: Word(8n), b5: Word(8n), b6: Word(8n), b7: Word(8n), b8: Word(8n), b9: Word(8n), b10: Word(8n), b11: Word(8n), b12: Word(8n), b13: Word(8n), b14: Word(8n), b15: Word(8n)}
+  Uuid{w0: U32, w1: U32, w2: U32, w3: U32}
 
 # The variant field (RFC 9562 section 4.1): the top bits of octet 8
 type UuidVariant is Data:
@@ -27,28 +31,78 @@ type UuidVariant is Data:
   UuidMicrosoft{}
   UuidFuture{}
 
+# Words and bytes
+
+# the low 8 bits of a word, and the byte of 8 bits
+def Uuid.bits8(b: U32) -> Word(8n):
+  match b:
+    case U32{w}:
+      W.W64.bits.lo(8n, 24n, w)
+
+# the word of four octets, most significant first
+def Uuid.word8(a: Word(8n), b: Word(8n), c: Word(8n), d: Word(8n)) -> U32:
+  U32{W.W64.bits.cat(8n, 24n, d, W.W64.bits.cat(8n, 16n, c, W.W64.bits.cat(8n, 8n, b, a)))}
+
+# the word of four bytes, most significant first (each masked to 8 bits)
+def Uuid.word(a: U32, b: U32, c: U32, d: U32) -> U32:
+  Uuid.word8(Uuid.bits8(a), Uuid.bits8(b), Uuid.bits8(c), Uuid.bits8(d))
+
+# the byte of w at bits k to k + 7
+def Uuid.byte_of(w: U32, k: Nat) -> U32:
+  U32.and(255, U32.shrn(w, k))
+
+# Byte strings
+
+def Uuid.to_list(u: Uuid) -> List<&2, U32>:
+  match u:
+    case Uuid{+w0, +w1, +w2, +w3}:
+      [Uuid.byte_of(w0, 24n), Uuid.byte_of(w0, 16n), Uuid.byte_of(w0, 8n), Uuid.byte_of(w0, 0n), Uuid.byte_of(w1, 24n), Uuid.byte_of(w1, 16n), Uuid.byte_of(w1, 8n), Uuid.byte_of(w1, 0n), Uuid.byte_of(w2, 24n), Uuid.byte_of(w2, 16n), Uuid.byte_of(w2, 8n), Uuid.byte_of(w2, 0n), Uuid.byte_of(w3, 24n), Uuid.byte_of(w3, 16n), Uuid.byte_of(w3, 8n), Uuid.byte_of(w3, 0n)]
+
+def Uuid.guid_list(u: Uuid) -> List<&2, U32>:
+  match u:
+    case Uuid{+w0, +w1, +w2, +w3}:
+      [Uuid.byte_of(w0, 0n), Uuid.byte_of(w0, 8n), Uuid.byte_of(w0, 16n), Uuid.byte_of(w0, 24n), Uuid.byte_of(w1, 16n), Uuid.byte_of(w1, 24n), Uuid.byte_of(w1, 0n), Uuid.byte_of(w1, 8n), Uuid.byte_of(w2, 24n), Uuid.byte_of(w2, 16n), Uuid.byte_of(w2, 8n), Uuid.byte_of(w2, 0n), Uuid.byte_of(w3, 24n), Uuid.byte_of(w3, 16n), Uuid.byte_of(w3, 8n), Uuid.byte_of(w3, 0n)]
+
+def Uuid.of_list(xs: List<&2, U32>) -> Maybe<&2, Uuid>:
+  match xs:
+    case Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, Con{a9, Con{a10, Con{a11, Con{a12, Con{a13, Con{a14, Con{a15, Nil{}}}}}}}}}}}}}}}}}:
+      Some{Uuid{Uuid.word(a0, a1, a2, a3), Uuid.word(a4, a5, a6, a7), Uuid.word(a8, a9, a10, a11), Uuid.word(a12, a13, a14, a15)}}
+    case _:
+      None{}
+
+def Uuid.of_guid_list(xs: List<&2, U32>) -> Maybe<&2, Uuid>:
+  match xs:
+    case Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, Con{a9, Con{a10, Con{a11, Con{a12, Con{a13, Con{a14, Con{a15, Nil{}}}}}}}}}}}}}}}}}:
+      Some{Uuid{Uuid.word(a3, a2, a1, a0), Uuid.word(a5, a4, a7, a6), Uuid.word(a8, a9, a10, a11), Uuid.word(a12, a13, a14, a15)}}
+    case _:
+      None{}
+
 # Octets
+
+def Uuid.octets.go(xs: List<&2, U32>) -> List<&2, Word(8n)>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{h, t}:
+      Con{Uuid.bits8(h), Uuid.octets.go(t)}
 
 # the octets in RFC order
 def Uuid.octets(u: Uuid) -> List<&2, Word(8n)>:
-  match u:
-    case Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}:
-      [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15]
+  Uuid.octets.go(Uuid.to_list(u))
 
 # the Uuid with these octets, if there are exactly 16
 def Uuid.of_octets(xs: List<&2, Word(8n)>) -> Maybe<&2, Uuid>:
   match xs:
     case Con{b0, Con{b1, Con{b2, Con{b3, Con{b4, Con{b5, Con{b6, Con{b7, Con{b8, Con{b9, Con{b10, Con{b11, Con{b12, Con{b13, Con{b14, Con{b15, Nil{}}}}}}}}}}}}}}}}}:
-      Some{Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}}
+      Some{Uuid{Uuid.word8(b0, b1, b2, b3), Uuid.word8(b4, b5, b6, b7), Uuid.word8(b8, b9, b10, b11), Uuid.word8(b12, b13, b14, b15)}}
     case _:
       None{}
 
 def Uuid.nil() -> Uuid:
-  Uuid{Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n), Word.zero(8n)}
+  Uuid{0, 0, 0, 0}
 
 def Uuid.max() -> Uuid:
-  +o = B.bits8(255)
-  Uuid{o, o, o, o, o, o, o, o, o, o, o, o, o, o, o, o}
+  Uuid{4294967295, 4294967295, 4294967295, 4294967295}
 
 # Errors
 
@@ -65,32 +119,6 @@ def UuidError.show(e: UuidError) -> String:
       "missing dash"
     case UuidBadDigit{}:
       "bad digit"
-
-# Byte strings
-
-def Uuid.to_list(u: Uuid) -> List<&2, U32>:
-  match u:
-    case Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}:
-      [B.of_bits8(b0), B.of_bits8(b1), B.of_bits8(b2), B.of_bits8(b3), B.of_bits8(b4), B.of_bits8(b5), B.of_bits8(b6), B.of_bits8(b7), B.of_bits8(b8), B.of_bits8(b9), B.of_bits8(b10), B.of_bits8(b11), B.of_bits8(b12), B.of_bits8(b13), B.of_bits8(b14), B.of_bits8(b15)]
-
-def Uuid.guid_list(u: Uuid) -> List<&2, U32>:
-  match u:
-    case Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}:
-      [B.of_bits8(b3), B.of_bits8(b2), B.of_bits8(b1), B.of_bits8(b0), B.of_bits8(b5), B.of_bits8(b4), B.of_bits8(b7), B.of_bits8(b6), B.of_bits8(b8), B.of_bits8(b9), B.of_bits8(b10), B.of_bits8(b11), B.of_bits8(b12), B.of_bits8(b13), B.of_bits8(b14), B.of_bits8(b15)]
-
-def Uuid.of_list(xs: List<&2, U32>) -> Maybe<&2, Uuid>:
-  match xs:
-    case Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, Con{a9, Con{a10, Con{a11, Con{a12, Con{a13, Con{a14, Con{a15, Nil{}}}}}}}}}}}}}}}}}:
-      Some{Uuid{B.bits8(a0), B.bits8(a1), B.bits8(a2), B.bits8(a3), B.bits8(a4), B.bits8(a5), B.bits8(a6), B.bits8(a7), B.bits8(a8), B.bits8(a9), B.bits8(a10), B.bits8(a11), B.bits8(a12), B.bits8(a13), B.bits8(a14), B.bits8(a15)}}
-    case _:
-      None{}
-
-def Uuid.of_guid_list(xs: List<&2, U32>) -> Maybe<&2, Uuid>:
-  match xs:
-    case Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, Con{a9, Con{a10, Con{a11, Con{a12, Con{a13, Con{a14, Con{a15, Nil{}}}}}}}}}}}}}}}}}:
-      Some{Uuid{B.bits8(a3), B.bits8(a2), B.bits8(a1), B.bits8(a0), B.bits8(a5), B.bits8(a4), B.bits8(a7), B.bits8(a6), B.bits8(a8), B.bits8(a9), B.bits8(a10), B.bits8(a11), B.bits8(a12), B.bits8(a13), B.bits8(a14), B.bits8(a15)}}
-    case _:
-      None{}
 
 def Uuid.length_ok(m: Maybe<&2, Uuid>) -> Result<&2, &2, UuidError, Uuid>:
   match m:
@@ -136,7 +164,7 @@ def Uuid.from_guid_at(o: B.Octets, i: Nat) -> Maybe<&2, Uuid>:
 
 # the UUID whose 16 bytes, in RFC order, are these (each masked to 8 bits)
 def Uuid.make(a0: U32, a1: U32, a2: U32, a3: U32, a4: U32, a5: U32, a6: U32, a7: U32, a8: U32, a9: U32, a10: U32, a11: U32, a12: U32, a13: U32, a14: U32, a15: U32) -> Uuid:
-  Uuid{B.bits8(a0), B.bits8(a1), B.bits8(a2), B.bits8(a3), B.bits8(a4), B.bits8(a5), B.bits8(a6), B.bits8(a7), B.bits8(a8), B.bits8(a9), B.bits8(a10), B.bits8(a11), B.bits8(a12), B.bits8(a13), B.bits8(a14), B.bits8(a15)}
+  Uuid{Uuid.word(a0, a1, a2, a3), Uuid.word(a4, a5, a6, a7), Uuid.word(a8, a9, a10, a11), Uuid.word(a12, a13, a14, a15)}
 
 # byte i (0 to 15) in RFC order; 0 past the end
 def Uuid.byte(u: Uuid, i: Nat) -> U32:
@@ -145,7 +173,9 @@ def Uuid.byte(u: Uuid, i: Nat) -> U32:
 # Comparing
 
 def Uuid.is_eq(a: Uuid, b: Uuid) -> Bool:
-  B.Octets.is_eq(Uuid.to_bytes(a), Uuid.to_bytes(b))
+  match a b:
+    case Uuid{a0, a1, a2, a3} Uuid{b0, b1, b2, b3}:
+      Bool.and(U32.is_eq(a0, b0), Bool.and(U32.is_eq(a1, b1), Bool.and(U32.is_eq(a2, b2), U32.is_eq(a3, b3))))
 
 def Uuid.is_nil(u: Uuid) -> Bool:
   Uuid.is_eq(u, Uuid.nil())
@@ -156,8 +186,8 @@ def Uuid.is_nil(u: Uuid) -> Bool:
 # variant is UuidRfc)
 def Uuid.version(u: Uuid) -> U32:
   match u:
-    case Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}:
-      U32.shrn(B.of_bits8(b6), 4n)
+    case Uuid{w0, w1, w2, w3}:
+      U32.and(15, U32.shrn(w1, 12n))
 
 def Uuid.variant.c(lt: Bool) -> UuidVariant:
   match lt:
@@ -183,8 +213,8 @@ def Uuid.variant.a(lt: Bool, +v: U32) -> UuidVariant:
 # 0xx: NCS; 10x: this RFC; 110: Microsoft; 111: reserved for the future
 def Uuid.variant(u: Uuid) -> UuidVariant:
   match u:
-    case Uuid{b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15}:
-      +v = B.of_bits8(b8)
+    case Uuid{w0, w1, w2, w3}:
+      +v = U32.shrn(w2, 24n)
       Uuid.variant.a(U32.is_lt(v, 128), v)
 
 def UuidVariant.show(v: UuidVariant) -> String:
@@ -207,8 +237,18 @@ def Uuid.nibble.lo(b: Word(8n)) -> Word(4n):
   W.W64.bits.lo(4n, 4n, b)
 
 # the lower-case hex digit of a nibble
+def Uuid.hexchar(lt: Bool, d: U32) -> Char:
+  match lt:
+    case True{}:
+      Chr{U32.add(48, d)}
+    case False{}:
+      Chr{U32.add(87, d)}
+
+def Uuid.hexdigit.go(+d: U32) -> Char:
+  Uuid.hexchar(U32.is_lt(d, 10), d)
+
 def Uuid.hexdigit(n: Word(4n)) -> Char:
-  B.hex.digit(U32{W.W64.bits.cat(4n, 28n, n, Word.zero(28n))})
+  Uuid.hexdigit.go(U32{W.W64.bits.cat(4n, 28n, n, Word.zero(28n))})
 
 # two hex digits per octet, high nibble first
 def Uuid.digits(bs: List<&2, Word(8n)>) -> List<&2, Char>:
