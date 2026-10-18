@@ -46,6 +46,7 @@ GPL source was read.
 | [algo](algo/) | Bit search, bitmaps, binary search |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
+| [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
 | [fdt](fdt/) | Devicetree Blobs, read and written (output byte-identical to dtc's) |
 | [fat](fat/) | FAT12/16/32, read-only |
 | [iso9660](iso9660/) | ISO 9660 with Rock Ridge, Joliet and El Torito, read-only |
