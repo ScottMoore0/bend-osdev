@@ -14,6 +14,8 @@ import ../blockdev/PROOF.bend as BDP
 import ./error.bend as E
 import ./jwrite.bend as JW
 import ./devwrite.bend as DW
+import ./overlay.bend as OV
+import ./jtx.bend as JT
 import ./LAWS.bend as Laws
 
 # Logic
@@ -1129,4 +1131,879 @@ def Laws.htree_lookup_missing():
   {==}
 
 def Laws.commit_replays_vector():
+  {==}
+
+# Journalled writes: the journalling device (overlay.bend) on a MemDev
+
+# one good write through the overlay keeps it
+def Ext4Proof.ov_write_one(+d: D.MemDev, +acc: List<&2, JW.Jbd2Write>, +n: Nat, +data: B.Octets) -> {Nat.is_eq(B.Octets.len(data), D.MemDev.block_size(d)) == True{} : Bool} -> {DW.Ext4Dev.write(~OV.Ext4Ov<D.MemDev>, ~OV.Ext4Ov.mem_block_size, ~OV.Ext4Ov.mem_write, OV.Ext4Ov{d, acc}, D.MemDev.block_size(d), n, data) == Done{OV.Ext4Ov{d, Con{JW.Jbd2Write{n, data}, acc}}} : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}:
+  +hl =>
+    +bs = D.MemDev.block_size(d)
+    +o = {OV.Ext4Ov{d, acc} : OV.Ext4Ov<D.MemDev>}
+    +r = {Done{OV.Ext4Ov{d, Con{JW.Jbd2Write{n, data}, acc}}} : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}
+    %Equal.sym(Bool, Nat.is_eq(bs, bs), True{}, Ext4Proof.eq_refl(bs)) : {DW.Ext4Dev.write.go(~OV.Ext4Ov<D.MemDev>, ~OV.Ext4Ov.mem_write, _, Bool.and(Nat.is_lt(0n, bs), Nat.is_eq(Nat.mod(bs, bs), 0n)), o, bs, bs, n, data) == r : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}
+    %Equal.sym(Bool, Nat.is_eq(B.Octets.len(data), bs), True{}, hl) : {DW.Ext4Dev.lift(OV.Ext4Ov<D.MemDev>, OV.Ext4Ov.write.check(D.MemDev, _, d, acc, n, data, bs)) == r : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}
+    {==}
+
+# good writes through the overlay are kept, last first
+def Ext4Proof.ov_write_all(ws: List<&2, JW.Jbd2Write>, +d: D.MemDev, +acc: List<&2, JW.Jbd2Write>) -> {DW.Ext4Dev.fits(D.MemDev.block_size(d), D.MemDev.block_count(d), ws) == True{} : Bool} -> {DW.Ext4Dev.write_all(~OV.Ext4Ov<D.MemDev>, ~OV.Ext4Ov.mem_block_size, ~OV.Ext4Ov.mem_write, ws, Done{OV.Ext4Ov{d, acc}}, D.MemDev.block_size(d)) == Done{OV.Ext4Ov{d, JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, acc)}} : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}:
+  match ws:
+    case Nil{}:
+      +hf => {==}
+    case Con{JW.Jbd2Write{+n, +data}, +t}:
+      +hf =>
+        +bs = D.MemDev.block_size(d)
+        +cnt = D.MemDev.block_count(d)
+        +a = Bool.and(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt))
+        +ha = Ext4Proof.and_l(a, DW.Ext4Dev.fits(bs, cnt, t), hf)
+        +hl = Ext4Proof.and_l(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt), ha)
+        +acc2 = {Con{JW.Jbd2Write{n, data}, acc} : List<&2, JW.Jbd2Write>}
+        %Equal.sym(Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>, DW.Ext4Dev.write(~OV.Ext4Ov<D.MemDev>, ~OV.Ext4Ov.mem_block_size, ~OV.Ext4Ov.mem_write, OV.Ext4Ov{d, acc}, bs, n, data), Done{OV.Ext4Ov{d, acc2}}, Ext4Proof.ov_write_one(d, acc, n, data, hl)) : {DW.Ext4Dev.write_all(~OV.Ext4Ov<D.MemDev>, ~OV.Ext4Ov.mem_block_size, ~OV.Ext4Ov.mem_write, t, _, bs) == Done{OV.Ext4Ov{d, JL.Jbd2Log.rev_onto(JW.Jbd2Write, t, acc2)}} : Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>}
+        Ext4Proof.ov_write_all(t, d, acc2, Ext4Proof.and_r(a, DW.Ext4Dev.fits(bs, cnt, t), hf))
+
+# the overlay's search, one write further on
+def Ext4Proof.find_step(b: Bool, acc: List<&2, JW.Jbd2Write>, +m: Nat, +data: B.Octets) -> {OV.Ext4Ov.find(acc, m, OV.Ext4Ov.find.pick(b, data)) == Ext4Proof.fl.pick(b, data, OV.Ext4Ov.find(acc, m, None{})) : Maybe<&2, B.Octets>}:
+  match b acc:
+    case True{} Nil{}:
+      {==}
+    case True{} Con{JW.Jbd2Write{b2, d2}, t}:
+      {==}
+    case False{} _:
+      {==}
+
+# searching the writes kept last first finds the last write
+def Ext4Proof.find_rev(ws: List<&2, JW.Jbd2Write>, +m: Nat, +acc: List<&2, JW.Jbd2Write>) -> {OV.Ext4Ov.find(JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, acc), m, None{}) == Ext4Proof.fl(ws, m, OV.Ext4Ov.find(acc, m, None{})) : Maybe<&2, B.Octets>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{+n, +data}, +t}:
+      +acc2 = {Con{JW.Jbd2Write{n, data}, acc} : List<&2, JW.Jbd2Write>}
+      Equal.trans(Maybe<&2, B.Octets>, OV.Ext4Ov.find(JL.Jbd2Log.rev_onto(JW.Jbd2Write, t, acc2), m, None{}), Ext4Proof.fl(t, m, OV.Ext4Ov.find(acc2, m, None{})), Ext4Proof.fl(t, m, Ext4Proof.fl.pick(Nat.is_eq(n, m), data, OV.Ext4Ov.find(acc, m, None{}))), Ext4Proof.find_rev(t, m, acc2), Equal.cong(Maybe<&2, B.Octets>, Maybe<&2, B.Octets>, x => Ext4Proof.fl(t, m, x), OV.Ext4Ov.find(acc2, m, None{}), Ext4Proof.fl.pick(Nat.is_eq(n, m), data, OV.Ext4Ov.find(acc, m, None{})), Ext4Proof.find_step(Nat.is_eq(n, m), acc, m, data)))
+
+def Ext4Proof.got_lp(mm: Maybe<&2, B.Octets>, +d: D.MemDev, +m: Nat) -> {OV.Ext4Ov.read.got(~D.MemDev, ~D.MemDev.read_block, mm, d, m) == Ext4Proof.lp(mm, D.MemDev.read_block(d, m)) : Result<&2, &2, D.DevError, B.Octets>}:
+  match mm:
+    case Some{v}:
+      {==}
+    case None{}:
+      {==}
+
+# reading the overlay after good writes: the last write, else the device
+def Ext4Proof.ov_read(+ws: List<&2, JW.Jbd2Write>, +d: D.MemDev, +m: Nat) -> {OV.Ext4Ov.mem_read(OV.Ext4Ov{d, JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, Nil{})}, m) == Ext4Proof.last(ws, m, D.MemDev.read_block(d, m)) : Result<&2, &2, D.DevError, B.Octets>}:
+  +x = D.MemDev.read_block(d, m)
+  +f = Ext4Proof.fl(ws, m, None{})
+  +e1 = Equal.cong(Maybe<&2, B.Octets>, Result<&2, &2, D.DevError, B.Octets>, y => OV.Ext4Ov.read.got(~D.MemDev, ~D.MemDev.read_block, y, d, m), OV.Ext4Ov.find(JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, Nil{}), m, None{}), f, Ext4Proof.find_rev(ws, m, Nil{}))
+  Equal.trans(Result<&2, &2, D.DevError, B.Octets>, OV.Ext4Ov.read.got(~D.MemDev, ~D.MemDev.read_block, OV.Ext4Ov.find(JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, Nil{}), m, None{}), d, m), OV.Ext4Ov.read.got(~D.MemDev, ~D.MemDev.read_block, f, d, m), Ext4Proof.last(ws, m, x), e1, Equal.trans(Result<&2, &2, D.DevError, B.Octets>, OV.Ext4Ov.read.got(~D.MemDev, ~D.MemDev.read_block, f, d, m), Ext4Proof.lp(f, x), Ext4Proof.last(ws, m, x), Ext4Proof.got_lp(f, d, m), Equal.sym(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.last(ws, m, x), Ext4Proof.lp(f, x), Ext4Proof.last_fl(ws, m, None{}, x))))
+
+# the device written directly, read: the last write, else the device
+def Ext4Proof.direct_read(+d: D.MemDev, +ws: List<&2, JW.Jbd2Write>, +m: Nat, +ok: {DW.Ext4Dev.fits(D.MemDev.block_size(d), D.MemDev.block_count(d), ws) == True{} : Bool}) -> {DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m) == DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, D.MemDev.read_block(d, m))) : Result<&2, &2, E.Ext4Error, B.Octets>}:
+  +bs = D.MemDev.block_size(d)
+  +cnt = D.MemDev.block_count(d)
+  %Equal.sym(Result<&2, &2, E.Ext4Error, D.MemDev>, DW.Ext4Dev.write_all(~D.MemDev, ~D.MemDev.block_size, ~DW.Ext4Dev.mem_write, ws, Done{d}, bs), Done{Ext4Proof.updates(ws, d)}, Ext4Proof.write_all(ws, d, bs, cnt, {==}, {==}, ok)) : {DW.Ext4Dev.read_mem(_, m) == DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, D.MemDev.read_block(d, m))) : Result<&2, &2, E.Ext4Error, B.Octets>}
+  Equal.cong(Result<&2, &2, D.DevError, B.Octets>, Result<&2, &2, E.Ext4Error, B.Octets>, x => DW.Ext4Dev.dev_read(x), D.MemDev.read_block(Ext4Proof.updates(ws, d), m), Ext4Proof.last(ws, m, D.MemDev.read_block(d, m)), Ext4Proof.reads(ws, d, m, bs, cnt, {==}, {==}, ok))
+
+def Laws.ov_reads(d, ws, m, ok):
+  +r = JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, Nil{})
+  %Equal.sym(Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>, Laws.Ext4Laws.ov(d, ws), Done{OV.Ext4Ov{d, r}}, Ext4Proof.ov_write_all(ws, d, Nil{}, ok)) : {OV.Ext4Ov.read_mem(_, m) == DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m) : Result<&2, &2, E.Ext4Error, B.Octets>}
+  Equal.trans(Result<&2, &2, E.Ext4Error, B.Octets>, DW.Ext4Dev.dev_read(OV.Ext4Ov.mem_read(OV.Ext4Ov{d, r}, m)), DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, D.MemDev.read_block(d, m))), DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m), Equal.cong(Result<&2, &2, D.DevError, B.Octets>, Result<&2, &2, E.Ext4Error, B.Octets>, x => DW.Ext4Dev.dev_read(x), OV.Ext4Ov.mem_read(OV.Ext4Ov{d, r}, m), Ext4Proof.last(ws, m, D.MemDev.read_block(d, m)), Ext4Proof.ov_read(ws, d, m)), Equal.sym(Result<&2, &2, E.Ext4Error, B.Octets>, DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m), DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, D.MemDev.read_block(d, m))), Ext4Proof.direct_read(d, ws, m, ok)))
+
+# The overlay's kept writes (each block once, its last contents), written
+# home: reading them gives the last write of every block
+
+def Ext4Proof.or_l_false(+a: Bool, +b: Bool) -> {Bool.or(a, b) == False{} : Bool} -> {a == False{} : Bool}:
+  match a:
+    case True{}:
+      +h => h
+    case False{}:
+      +h => {==}
+
+def Ext4Proof.or_r_false(+a: Bool, +b: Bool) -> {Bool.or(a, b) == False{} : Bool} -> {b == False{} : Bool}:
+  match a:
+    case True{}:
+      +h => Ext4Proof.no({b == False{} : Bool}, Equal.sym(Bool, True{}, False{}, h))
+    case False{}:
+      +h => h
+
+# whether some write of ws is to block m
+def Ext4Proof.inb(ws: List<&2, JW.Jbd2Write>, +m: Nat) -> Bool:
+  match ws:
+    case Nil{}:
+      False{}
+    case Con{JW.Jbd2Write{b, d}, t}:
+      Bool.or(Nat.is_eq(b, m), Ext4Proof.inb(t, m))
+
+# the dedup walk's invariant at m: m was seen, or acc holds no write to it
+def Ext4Proof.inv(+seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat) -> Bool:
+  Bool.or(OV.Ext4Ov.seen(seen, m), Bool.not(Ext4Proof.inb(acc, m)))
+
+def Ext4Proof.not_t(+a: Bool) -> {Bool.not(a) == True{} : Bool} -> {a == False{} : Bool}:
+  match a:
+    case True{}:
+      +h => Equal.sym(Bool, False{}, True{}, h)
+    case False{}:
+      +h => {==}
+
+def Ext4Proof.inv_use(+seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat) -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {OV.Ext4Ov.seen(seen, m) == False{} : Bool} -> {Ext4Proof.inb(acc, m) == False{} : Bool}:
+  +hi => +hs =>
+    +h2 = {Equal.trans(Bool, Bool.not(Ext4Proof.inb(acc, m)), Bool.or(OV.Ext4Ov.seen(seen, m), Bool.not(Ext4Proof.inb(acc, m))), True{}, Equal.cong(Bool, Bool, y => Bool.or(y, Bool.not(Ext4Proof.inb(acc, m))), False{}, OV.Ext4Ov.seen(seen, m), Equal.sym(Bool, OV.Ext4Ov.seen(seen, m), False{}, hs)), hi) : {Bool.not(Ext4Proof.inb(acc, m)) == True{} : Bool}}
+    Ext4Proof.not_t(Ext4Proof.inb(acc, m), h2)
+
+# writes none of which is to m leave m's read as it was
+def Ext4Proof.last_none(ws: List<&2, JW.Jbd2Write>, +m: Nat, +y: Result<&2, &2, D.DevError, B.Octets>) -> {Ext4Proof.inb(ws, m) == False{} : Bool} -> {Ext4Proof.last(ws, m, y) == y : Result<&2, &2, D.DevError, B.Octets>}:
+  match ws:
+    case Nil{}:
+      +h => {==}
+    case Con{JW.Jbd2Write{+b, +data}, +t}:
+      +h =>
+        +e = Ext4Proof.or_l_false(Nat.is_eq(b, m), Ext4Proof.inb(t, m), h)
+        %Equal.sym(Bool, Nat.is_eq(b, m), False{}, e) : {Ext4Proof.last(t, m, Ext4Proof.last.pick(_, data, y)) == y : Result<&2, &2, D.DevError, B.Octets>}
+        Ext4Proof.last_none(t, m, y, Ext4Proof.or_r_false(Nat.is_eq(b, m), Ext4Proof.inb(t, m), h))
+
+def Ext4Proof.seen_ne.at(c: Bool, +x: Nat, +t: List<&2, Nat>, +b: Nat, +m: Nat, ih: {OV.Ext4Ov.seen(t, b) == True{} : Bool} -> {OV.Ext4Ov.seen(t, m) == False{} : Bool} -> {Nat.is_eq(b, m) == False{} : Bool}) -> {Nat.is_eq(x, b) == c : Bool} -> {Bool.or(c, OV.Ext4Ov.seen(t, b)) == True{} : Bool} -> {Nat.is_eq(x, m) == False{} : Bool} -> {OV.Ext4Ov.seen(t, m) == False{} : Bool} -> {Nat.is_eq(b, m) == False{} : Bool}:
+  match c:
+    case True{}:
+      +hc => +h1 => +hx => +ht =>
+        %Ext4Proof.eq_sound(x, b, hc) : {Nat.is_eq(_, m) == False{} : Bool}
+        hx
+    case False{}:
+      +hc => +h1 => +hx => +ht => ih(h1, ht)
+
+# a block seen and a block not seen differ
+def Ext4Proof.seen_ne(xs: List<&2, Nat>, +b: Nat, +m: Nat) -> {OV.Ext4Ov.seen(xs, b) == True{} : Bool} -> {OV.Ext4Ov.seen(xs, m) == False{} : Bool} -> {Nat.is_eq(b, m) == False{} : Bool}:
+  match xs:
+    case Nil{}:
+      +h1 => +h2 => Ext4Proof.no({Nat.is_eq(b, m) == False{} : Bool}, h1)
+    case Con{+x, +t}:
+      +h1 => +h2 =>
+        +hx = Ext4Proof.or_l_false(Nat.is_eq(x, m), OV.Ext4Ov.seen(t, m), h2)
+        +ht = Ext4Proof.or_r_false(Nat.is_eq(x, m), OV.Ext4Ov.seen(t, m), h2)
+        Ext4Proof.seen_ne.at(Nat.is_eq(x, b), x, t, b, m, p => q => Ext4Proof.seen_ne(t, b, m, p, q), {==}, h1, hx, ht)
+
+def Ext4Proof.find_some(ws: List<&2, JW.Jbd2Write>, +m: Nat, +v: B.Octets) -> {OV.Ext4Ov.find(ws, m, Some{v}) == Some{v} : Maybe<&2, B.Octets>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{b, d}, t}:
+      {==}
+
+# what reading after the deduplicated writes gives: sm says whether m was
+# seen already (then acc holds its write, if any), else the first write to
+# m in l (the newest), if any
+def Ext4Proof.dr(sm: Bool, +l: List<&2, JW.Jbd2Write>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>) -> Result<&2, &2, D.DevError, B.Octets>:
+  match sm:
+    case True{}:
+      Ext4Proof.last(acc, m, x)
+    case False{}:
+      Ext4Proof.lp(OV.Ext4Ov.find(l, m, None{}), x)
+
+# a seen block's write skipped
+def Ext4Proof.dr_skip(sm: Bool, +b: Nat, +data: B.Octets, +t: List<&2, JW.Jbd2Write>, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>) -> {OV.Ext4Ov.seen(seen, b) == True{} : Bool} -> {OV.Ext4Ov.seen(seen, m) == sm : Bool} -> {Ext4Proof.dr(sm, t, acc, m, x) == Ext4Proof.dr(sm, Con{JW.Jbd2Write{b, data}, t}, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}:
+  match sm:
+    case True{}:
+      +hd => +hs => {==}
+    case False{}:
+      +hd => +hs =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), False{}, Ext4Proof.seen_ne(seen, b, m, hd, hs)) : {Ext4Proof.lp(OV.Ext4Ov.find(t, m, None{}), x) == Ext4Proof.lp(OV.Ext4Ov.find(t, m, OV.Ext4Ov.find.pick(_, data)), x) : Result<&2, &2, D.DevError, B.Octets>}
+        {==}
+
+# a new block's write kept
+def Ext4Proof.dr_keep(e: Bool, sm: Bool, +b: Nat, +data: B.Octets, +t: List<&2, JW.Jbd2Write>, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>) -> {Nat.is_eq(b, m) == e : Bool} -> {OV.Ext4Ov.seen(seen, b) == False{} : Bool} -> {OV.Ext4Ov.seen(seen, m) == sm : Bool} -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {Ext4Proof.dr(Bool.or(e, sm), t, Con{JW.Jbd2Write{b, data}, acc}, m, x) == Ext4Proof.dr(sm, Con{JW.Jbd2Write{b, data}, t}, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}:
+  match e sm:
+    case True{} True{}:
+      +he => +hb => +hs => +hi =>
+        +bad = {Equal.trans(Bool, False{}, OV.Ext4Ov.seen(seen, b), True{}, Equal.sym(Bool, OV.Ext4Ov.seen(seen, b), False{}, hb), Equal.trans(Bool, OV.Ext4Ov.seen(seen, b), OV.Ext4Ov.seen(seen, m), True{}, Equal.cong(Nat, Bool, k => OV.Ext4Ov.seen(seen, k), b, m, Ext4Proof.eq_sound(b, m, he)), hs)) : {False{} == True{} : Bool}}
+        Ext4Proof.no({Ext4Proof.dr(True{}, t, Con{JW.Jbd2Write{b, data}, acc}, m, x) == Ext4Proof.dr(True{}, Con{JW.Jbd2Write{b, data}, t}, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}, bad)
+    case True{} False{}:
+      +he => +hb => +hs => +hi =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), True{}, he) : {Ext4Proof.last(acc, m, Ext4Proof.last.pick(_, data, x)) == Ext4Proof.lp(OV.Ext4Ov.find(t, m, OV.Ext4Ov.find.pick(_, data)), x) : Result<&2, &2, D.DevError, B.Octets>}
+        %Equal.sym(Maybe<&2, B.Octets>, OV.Ext4Ov.find(t, m, Some{data}), Some{data}, Ext4Proof.find_some(t, m, data)) : {Ext4Proof.last(acc, m, Done{data}) == Ext4Proof.lp(_, x) : Result<&2, &2, D.DevError, B.Octets>}
+        Ext4Proof.last_none(acc, m, Done{data}, Ext4Proof.inv_use(seen, acc, m, hi, hs))
+    case False{} True{}:
+      +he => +hb => +hs => +hi =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), False{}, he) : {Ext4Proof.last(acc, m, Ext4Proof.last.pick(_, data, x)) == Ext4Proof.last(acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}
+        {==}
+    case False{} False{}:
+      +he => +hb => +hs => +hi =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), False{}, he) : {Ext4Proof.lp(OV.Ext4Ov.find(t, m, None{}), x) == Ext4Proof.lp(OV.Ext4Ov.find(t, m, OV.Ext4Ov.find.pick(_, data)), x) : Result<&2, &2, D.DevError, B.Octets>}
+        {==}
+
+# the new state's invariant, when a write to a block not seen is kept
+def Ext4Proof.inv_keep(e: Bool, +b: Nat, +data: B.Octets, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat) -> {Nat.is_eq(b, m) == e : Bool} -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {Ext4Proof.inv(Con{b, seen}, Con{JW.Jbd2Write{b, data}, acc}, m) == True{} : Bool}:
+  match e:
+    case True{}:
+      +he => +hi =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), True{}, he) : {Bool.or(Bool.or(_, OV.Ext4Ov.seen(seen, m)), Bool.not(Bool.or(_, Ext4Proof.inb(acc, m)))) == True{} : Bool}
+        {==}
+    case False{}:
+      +he => +hi =>
+        %Equal.sym(Bool, Nat.is_eq(b, m), False{}, he) : {Bool.or(Bool.or(_, OV.Ext4Ov.seen(seen, m)), Bool.not(Bool.or(_, Ext4Proof.inb(acc, m)))) == True{} : Bool}
+        hi
+
+def Ext4Proof.dedup_nil(sm: Bool, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>) -> {OV.Ext4Ov.seen(seen, m) == sm : Bool} -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {Ext4Proof.last(acc, m, x) == Ext4Proof.dr(sm, Nil{}, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}:
+  match sm:
+    case True{}:
+      +hs => +hi => {==}
+    case False{}:
+      +hs => +hi => Ext4Proof.last_none(acc, m, x, Ext4Proof.inv_use(seen, acc, m, hi, hs))
+
+def Ext4Proof.dedup_read.at(dup: Bool, +b: Nat, +data: B.Octets, +t: List<&2, JW.Jbd2Write>, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>, +sm: Bool, ih: @s2: List<&2, Nat> -> @a2: List<&2, JW.Jbd2Write> -> @sm2: Bool -> {OV.Ext4Ov.seen(s2, m) == sm2 : Bool} -> {Ext4Proof.inv(s2, a2, m) == True{} : Bool} -> {Ext4Proof.last(OV.Ext4Ov.dedup(t, (s2, a2)), m, x) == Ext4Proof.dr(sm2, t, a2, m, x) : Result<&2, &2, D.DevError, B.Octets>}) -> {OV.Ext4Ov.seen(seen, b) == dup : Bool} -> {OV.Ext4Ov.seen(seen, m) == sm : Bool} -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {Ext4Proof.last(OV.Ext4Ov.dedup(t, OV.Ext4Ov.keep(dup, JW.Jbd2Write{b, data}, b, seen, acc)), m, x) == Ext4Proof.dr(sm, Con{JW.Jbd2Write{b, data}, t}, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}:
+  match dup:
+    case True{}:
+      +hd => +hs => +hi =>
+        Equal.trans(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.last(OV.Ext4Ov.dedup(t, (seen, acc)), m, x), Ext4Proof.dr(sm, t, acc, m, x), Ext4Proof.dr(sm, Con{JW.Jbd2Write{b, data}, t}, acc, m, x), ih(seen, acc, sm, hs, hi), Ext4Proof.dr_skip(sm, b, data, t, seen, acc, m, x, hd, hs))
+    case False{}:
+      +hd => +hs => +hi =>
+        +w = {JW.Jbd2Write{b, data} : JW.Jbd2Write}
+        +sm2 = Bool.or(Nat.is_eq(b, m), sm)
+        +hs2 = {Equal.cong(Bool, Bool, y => Bool.or(Nat.is_eq(b, m), y), OV.Ext4Ov.seen(seen, m), sm, hs) : {OV.Ext4Ov.seen(Con{b, seen}, m) == sm2 : Bool}}
+        Equal.trans(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.last(OV.Ext4Ov.dedup(t, (Con{b, seen}, Con{w, acc})), m, x), Ext4Proof.dr(sm2, t, Con{w, acc}, m, x), Ext4Proof.dr(sm, Con{w, t}, acc, m, x), ih(Con{b, seen}, Con{w, acc}, sm2, hs2, Ext4Proof.inv_keep(Nat.is_eq(b, m), b, data, seen, acc, m, {==}, hi)), Ext4Proof.dr_keep(Nat.is_eq(b, m), sm, b, data, t, seen, acc, m, x, {==}, hd, hs, hi))
+
+def Ext4Proof.dedup_read(l: List<&2, JW.Jbd2Write>, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +m: Nat, +x: Result<&2, &2, D.DevError, B.Octets>, +sm: Bool) -> {OV.Ext4Ov.seen(seen, m) == sm : Bool} -> {Ext4Proof.inv(seen, acc, m) == True{} : Bool} -> {Ext4Proof.last(OV.Ext4Ov.dedup(l, (seen, acc)), m, x) == Ext4Proof.dr(sm, l, acc, m, x) : Result<&2, &2, D.DevError, B.Octets>}:
+  match l:
+    case Nil{}:
+      +hs => +hi => Ext4Proof.dedup_nil(sm, seen, acc, m, x, hs, hi)
+    case Con{JW.Jbd2Write{+b, +data}, +t}:
+      +hs => +hi => Ext4Proof.dedup_read.at(OV.Ext4Ov.seen(seen, b), b, data, t, seen, acc, m, x, sm, s2 => a2 => sm2 => p => q => Ext4Proof.dedup_read(t, s2, a2, m, x, sm2, p, q), {==}, hs, hi)
+
+# the kept writes fit the device as the writes did
+def Ext4Proof.fits_rev(ws: List<&2, JW.Jbd2Write>, +bs: Nat, +cnt: Nat, +acc: List<&2, JW.Jbd2Write>) -> {DW.Ext4Dev.fits(bs, cnt, ws) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, acc) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, acc)) == True{} : Bool}:
+  match ws:
+    case Nil{}:
+      +hw => +ha => ha
+    case Con{JW.Jbd2Write{+n, +data}, +t}:
+      +hw => +ha =>
+        +a = Bool.and(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt))
+        Ext4Proof.fits_rev(t, bs, cnt, Con{JW.Jbd2Write{n, data}, acc}, Ext4Proof.and_r(a, DW.Ext4Dev.fits(bs, cnt, t), hw), Ext4Proof.and_i(a, DW.Ext4Dev.fits(bs, cnt, acc), Ext4Proof.and_l(a, DW.Ext4Dev.fits(bs, cnt, t), hw), ha))
+
+def Ext4Proof.fits_dedup.at(dup: Bool, +n: Nat, +data: B.Octets, +t: List<&2, JW.Jbd2Write>, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>, +bs: Nat, +cnt: Nat, ih: @s2: List<&2, Nat> -> @a2: List<&2, JW.Jbd2Write> -> {DW.Ext4Dev.fits(bs, cnt, a2) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, OV.Ext4Ov.dedup(t, (s2, a2))) == True{} : Bool}) -> {Bool.and(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt)) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, acc) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, OV.Ext4Ov.dedup(t, OV.Ext4Ov.keep(dup, JW.Jbd2Write{n, data}, n, seen, acc))) == True{} : Bool}:
+  match dup:
+    case True{}:
+      +hw => +ha => ih(seen, acc, ha)
+    case False{}:
+      +hw => +ha => ih(Con{n, seen}, Con{JW.Jbd2Write{n, data}, acc}, Ext4Proof.and_i(Bool.and(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt)), DW.Ext4Dev.fits(bs, cnt, acc), hw, ha))
+
+def Ext4Proof.fits_dedup(l: List<&2, JW.Jbd2Write>, +bs: Nat, +cnt: Nat, +seen: List<&2, Nat>, +acc: List<&2, JW.Jbd2Write>) -> {DW.Ext4Dev.fits(bs, cnt, l) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, acc) == True{} : Bool} -> {DW.Ext4Dev.fits(bs, cnt, OV.Ext4Ov.dedup(l, (seen, acc))) == True{} : Bool}:
+  match l:
+    case Nil{}:
+      +hl => +ha => ha
+    case Con{JW.Jbd2Write{+n, +data}, +t}:
+      +hl => +ha =>
+        +a = Bool.and(Nat.is_eq(B.Octets.len(data), bs), Nat.is_lt(n, cnt))
+        +ht = Ext4Proof.and_r(a, DW.Ext4Dev.fits(bs, cnt, t), hl)
+        Ext4Proof.fits_dedup.at(OV.Ext4Ov.seen(seen, n), n, data, t, seen, acc, bs, cnt, s2 => a2 => q => Ext4Proof.fits_dedup(t, bs, cnt, s2, a2, ht, q), Ext4Proof.and_l(a, DW.Ext4Dev.fits(bs, cnt, t), hl), ha)
+
+def Laws.ov_flush(d, ws, m, ok):
+  +bs = D.MemDev.block_size(d)
+  +cnt = D.MemDev.block_count(d)
+  +r = JL.Jbd2Log.rev_onto(JW.Jbd2Write, ws, Nil{})
+  +dd = OV.Ext4Ov.dedup(r, (Nil{}, Nil{}))
+  +x = D.MemDev.read_block(d, m)
+  +fd = Ext4Proof.fits_dedup(r, bs, cnt, Nil{}, Nil{}, Ext4Proof.fits_rev(ws, bs, cnt, Nil{}, ok, {==}), {==})
+  %Equal.sym(Result<&2, &2, E.Ext4Error, OV.Ext4Ov<D.MemDev>>, Laws.Ext4Laws.ov(d, ws), Done{OV.Ext4Ov{d, r}}, Ext4Proof.ov_write_all(ws, d, Nil{}, ok)) : {DW.Ext4Dev.read_mem(OV.Ext4Ov.flush(~D.MemDev, ~D.MemDev.block_size, ~DW.Ext4Dev.mem_write, _), m) == DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m) : Result<&2, &2, E.Ext4Error, B.Octets>}
+  %Equal.sym(Result<&2, &2, E.Ext4Error, D.MemDev>, DW.Ext4Dev.write_all(~D.MemDev, ~D.MemDev.block_size, ~DW.Ext4Dev.mem_write, dd, Done{d}, bs), Done{Ext4Proof.updates(dd, d)}, Ext4Proof.write_all(dd, d, bs, cnt, {==}, {==}, fd)) : {DW.Ext4Dev.read_mem(_, m) == DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m) : Result<&2, &2, E.Ext4Error, B.Octets>}
+  +f = Ext4Proof.fl(ws, m, None{})
+  +e1 = Ext4Proof.reads(dd, d, m, bs, cnt, {==}, {==}, fd)
+  +e2 = Ext4Proof.dedup_read(r, Nil{}, Nil{}, m, x, False{}, {==}, {==})
+  +e3 = Equal.cong(Maybe<&2, B.Octets>, Result<&2, &2, D.DevError, B.Octets>, y => Ext4Proof.lp(y, x), OV.Ext4Ov.find(r, m, None{}), f, Ext4Proof.find_rev(ws, m, Nil{}))
+  +e4 = Equal.sym(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.last(ws, m, x), Ext4Proof.lp(f, x), Ext4Proof.last_fl(ws, m, None{}, x))
+  +same = Equal.trans(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(Ext4Proof.updates(dd, d), m), Ext4Proof.last(dd, m, x), Ext4Proof.last(ws, m, x), e1, Equal.trans(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.last(dd, m, x), Ext4Proof.lp(OV.Ext4Ov.find(r, m, None{}), x), Ext4Proof.last(ws, m, x), e2, Equal.trans(Result<&2, &2, D.DevError, B.Octets>, Ext4Proof.lp(OV.Ext4Ov.find(r, m, None{}), x), Ext4Proof.lp(f, x), Ext4Proof.last(ws, m, x), e3, e4)))
+  Equal.trans(Result<&2, &2, E.Ext4Error, B.Octets>, DW.Ext4Dev.dev_read(D.MemDev.read_block(Ext4Proof.updates(dd, d), m)), DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, x)), DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m), Equal.cong(Result<&2, &2, D.DevError, B.Octets>, Result<&2, &2, E.Ext4Error, B.Octets>, y => DW.Ext4Dev.dev_read(y), D.MemDev.read_block(Ext4Proof.updates(dd, d), m), Ext4Proof.last(ws, m, x), same), Equal.sym(Result<&2, &2, E.Ext4Error, B.Octets>, DW.Ext4Dev.read_mem(Laws.Ext4Laws.direct(d, ws), m), DW.Ext4Dev.dev_read(Ext4Proof.last(ws, m, x)), Ext4Proof.direct_read(d, ws, m, ok)))
+
+# Journalled writes: a transaction's plan (jtx.bend)
+
+def Ext4Proof.cons_nil(-A: Data, +x: A, +t: List<&2, A>, h: {Con{x, t} == Nil{} : List<&2, A>}) -> Empty:
+  Ext4Proof.clash(Equal.cong(List<&2, A>, Bool, l => List.is_empty(&2, A, l), Con{x, t}, Nil{}, h))
+
+def Ext4Proof.take_zero(-A: Data, xs: List<&2, A>) -> {List.take(&2, A, xs, 0n) == Nil{} : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      {==}
+
+def Ext4Proof.drop_zero(-A: Data, xs: List<&2, A>) -> {List.drop(&2, A, xs, 0n) == xs : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      {==}
+
+def Ext4Proof.rev_onto_app(-A: Data, xs: List<&2, A>, +ys: List<&2, A>, +acc: List<&2, A>) -> {JL.Jbd2Log.rev_onto(A, List.append(&2, A, xs, ys), acc) == JL.Jbd2Log.rev_onto(A, ys, JL.Jbd2Log.rev_onto(A, xs, acc)) : List<&2, A>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
+      Ext4Proof.rev_onto_app(A, t, ys, Con{x, acc})
+
+def Ext4Proof.app_nil2(-A: Data, +xs: List<&2, A>, +ys: List<&2, A>) -> {xs == Nil{} : List<&2, A>} -> {ys == Nil{} : List<&2, A>} -> {List.append(&2, A, xs, ys) == Nil{} : List<&2, A>}:
+  +hx => +hy =>
+    %Equal.sym(List<&2, A>, xs, Nil{}, hx) : {List.append(&2, A, _, ys) == Nil{} : List<&2, A>}
+    hy
+
+# k < 1 + l: k <= l
+def Ext4Proof.lt_succ_le(+k: Nat, +l: Nat) -> {Nat.is_lt(k, 1n+l) == True{} : Bool} -> {Nat.is_le(k, l) == True{} : Bool}:
+  match k l:
+    case 0n _:
+      +h => Ext4Proof.le_zero(l)
+    case 1n+kp 0n:
+      +h => Ext4Proof.no({Nat.is_le(1n+kp, 0n) == True{} : Bool}, Ext4Proof.lt_zero(kp, h))
+    case 1n+kp 1n+lp:
+      +h => Ext4Proof.lt_succ_le(kp, lp, h)
+
+# Steps: what each reading answers of a join
+
+def Ext4Proof.records_app(+s: Nat, xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, xs, ys)) == List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, xs), JT.Ext4JTx.records(s, ys)) : List<&2, JL.Jbd2Rec>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{JT.Ext4JDesc{+p, +o, +ps}, +t}:
+      Equal.cong(List<&2, JL.Jbd2Rec>, List<&2, JL.Jbd2Rec>, r => Con{JL.Jbd2RDesc{s, ps}, r}, JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, t, ys)), List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, t), JT.Ext4JTx.records(s, ys)), Ext4Proof.records_app(s, t, ys))
+    case Con{JT.Ext4JCommit{+p, +o}, +t}:
+      Equal.cong(List<&2, JL.Jbd2Rec>, List<&2, JL.Jbd2Rec>, r => Con{JL.Jbd2RCommit{s}, r}, JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, t, ys)), List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, t), JT.Ext4JTx.records(s, ys)), Ext4Proof.records_app(s, t, ys))
+    case Con{JT.Ext4JHome{w}, +t}:
+      Ext4Proof.records_app(s, t, ys)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      Ext4Proof.records_app(s, t, ys)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      Ext4Proof.records_app(s, t, ys)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      Ext4Proof.records_app(s, t, ys)
+
+def Ext4Proof.dp_app(xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, xs, ys)) == List.append(&2, JL.Jbd2Put, JT.Ext4JTx.data_puts(xs), JT.Ext4JTx.data_puts(ys)) : List<&2, JL.Jbd2Put>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{JT.Ext4JData{+p, +u, +o}, +t}:
+      Equal.cong(List<&2, JL.Jbd2Put>, List<&2, JL.Jbd2Put>, r => Con{u, r}, JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, t, ys)), List.append(&2, JL.Jbd2Put, JT.Ext4JTx.data_puts(t), JT.Ext4JTx.data_puts(ys)), Ext4Proof.dp_app(t, ys))
+    case Con{JT.Ext4JHome{w}, +t}:
+      Ext4Proof.dp_app(t, ys)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      Ext4Proof.dp_app(t, ys)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      Ext4Proof.dp_app(t, ys)
+    case Con{JT.Ext4JCommit{p, o}, +t}:
+      Ext4Proof.dp_app(t, ys)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      Ext4Proof.dp_app(t, ys)
+
+def Ext4Proof.rw_app(xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.replay_writes(List.append(&2, JT.Ext4JStep, xs, ys)) == List.append(&2, JW.Jbd2Write, JT.Ext4JTx.replay_writes(xs), JT.Ext4JTx.replay_writes(ys)) : List<&2, JW.Jbd2Write>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{JT.Ext4JData{+p, JL.Jbd2Put{+b, +src, +f, +c}, +o}, +t}:
+      +w = {JW.Jbd2Write{b, JB.Jbd2.unescape(J.Jbd2.has(f, JB.Jbd2.flag_escape()), o)} : JW.Jbd2Write}
+      Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => Con{w, r}, JT.Ext4JTx.replay_writes(List.append(&2, JT.Ext4JStep, t, ys)), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.replay_writes(t), JT.Ext4JTx.replay_writes(ys)), Ext4Proof.rw_app(t, ys))
+    case Con{JT.Ext4JHome{w}, +t}:
+      Ext4Proof.rw_app(t, ys)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      Ext4Proof.rw_app(t, ys)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      Ext4Proof.rw_app(t, ys)
+    case Con{JT.Ext4JCommit{p, o}, +t}:
+      Ext4Proof.rw_app(t, ys)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      Ext4Proof.rw_app(t, ys)
+
+def Ext4Proof.homes_app(xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, xs, ys)) == List.append(&2, JW.Jbd2Write, JT.Ext4JTx.homes(xs), JT.Ext4JTx.homes(ys)) : List<&2, JW.Jbd2Write>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{JT.Ext4JHome{+w}, +t}:
+      Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => Con{w, r}, JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, t, ys)), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.homes(t), JT.Ext4JTx.homes(ys)), Ext4Proof.homes_app(t, ys))
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      Ext4Proof.homes_app(t, ys)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      Ext4Proof.homes_app(t, ys)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      Ext4Proof.homes_app(t, ys)
+    case Con{JT.Ext4JCommit{p, o}, +t}:
+      Ext4Proof.homes_app(t, ys)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      Ext4Proof.homes_app(t, ys)
+
+def Ext4Proof.committed_app(xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.committed(xs) == False{} : Bool} -> {JT.Ext4JTx.committed(ys) == False{} : Bool} -> {JT.Ext4JTx.committed(List.append(&2, JT.Ext4JStep, xs, ys)) == False{} : Bool}:
+  match xs:
+    case Nil{}:
+      +hx => +hy => hy
+    case Con{JT.Ext4JCommit{p, o}, t}:
+      +hx => +hy => Ext4Proof.no({JT.Ext4JTx.committed(List.append(&2, JT.Ext4JStep, Con{JT.Ext4JCommit{p, o}, t}, ys)) == False{} : Bool}, Equal.sym(Bool, True{}, False{}, hx))
+    case Con{JT.Ext4JHome{w}, +t}:
+      +hx => +hy => Ext4Proof.committed_app(t, ys, hx, hy)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      +hx => +hy => Ext4Proof.committed_app(t, ys, hx, hy)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      +hx => +hy => Ext4Proof.committed_app(t, ys, hx, hy)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      +hx => +hy => Ext4Proof.committed_app(t, ys, hx, hy)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      +hx => +hy => Ext4Proof.committed_app(t, ys, hx, hy)
+
+# steps without the commit leave records without one
+def Ext4Proof.no_commit_records(+s: Nat, xs: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.committed(xs) == False{} : Bool} -> {JL.Jbd2Log.no_commit(JT.Ext4JTx.records(s, xs)) == True{} : Bool}:
+  match xs:
+    case Nil{}:
+      +h => {==}
+    case Con{JT.Ext4JCommit{p, o}, t}:
+      +h => Ext4Proof.no({JL.Jbd2Log.no_commit(JT.Ext4JTx.records(s, Con{JT.Ext4JCommit{p, o}, t})) == True{} : Bool}, Equal.sym(Bool, True{}, False{}, h))
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      +h => Ext4Proof.no_commit_records(s, t, h)
+    case Con{JT.Ext4JHome{w}, +t}:
+      +h => Ext4Proof.no_commit_records(s, t, h)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      +h => Ext4Proof.no_commit_records(s, t, h)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      +h => Ext4Proof.no_commit_records(s, t, h)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      +h => Ext4Proof.no_commit_records(s, t, h)
+
+# a prefix no longer than steps without the commit has none
+def Ext4Proof.committed_take(xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>, k: Nat) -> {JT.Ext4JTx.committed(xs) == False{} : Bool} -> {Nat.is_le(k, List.length(&2, JT.Ext4JStep, xs)) == True{} : Bool} -> {JT.Ext4JTx.committed(List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, xs, ys), k)) == False{} : Bool}:
+  match xs k:
+    case Nil{} 0n:
+      +hc => +hk => Equal.cong(List<&2, JT.Ext4JStep>, Bool, l => JT.Ext4JTx.committed(l), List.take(&2, JT.Ext4JStep, ys, 0n), Nil{}, Ext4Proof.take_zero(JT.Ext4JStep, ys))
+    case Nil{} 1n+q:
+      +hc => +hk => Ext4Proof.no({JT.Ext4JTx.committed(List.take(&2, JT.Ext4JStep, ys, 1n+q)) == False{} : Bool}, hk)
+    case Con{x, t} 0n:
+      +hc => +hk => {==}
+    case Con{JT.Ext4JCommit{p, o}, t} 1n+q:
+      +hc => +hk => Ext4Proof.no({JT.Ext4JTx.committed(List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, Con{JT.Ext4JCommit{p, o}, t}, ys), 1n+q)) == False{} : Bool}, Equal.sym(Bool, True{}, False{}, hc))
+    case Con{JT.Ext4JHome{w}, +t} 1n+q:
+      +hc => +hk => Ext4Proof.committed_take(t, ys, q, hc, hk)
+    case Con{JT.Ext4JLog{p, o}, +t} 1n+q:
+      +hc => +hk => Ext4Proof.committed_take(t, ys, q, hc, hk)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t} 1n+q:
+      +hc => +hk => Ext4Proof.committed_take(t, ys, q, hc, hk)
+    case Con{JT.Ext4JData{p, u, o}, +t} 1n+q:
+      +hc => +hk => Ext4Proof.committed_take(t, ys, q, hc, hk)
+    case Con{JT.Ext4JFlag{a, b}, +t} 1n+q:
+      +hc => +hk => Ext4Proof.committed_take(t, ys, q, hc, hk)
+
+# a prefix of steps without records has none
+def Ext4Proof.records_nil_take(+s: Nat, xs: List<&2, JT.Ext4JStep>, k: Nat) -> {JT.Ext4JTx.records(s, xs) == Nil{} : List<&2, JL.Jbd2Rec>} -> {JT.Ext4JTx.records(s, List.take(&2, JT.Ext4JStep, xs, k)) == Nil{} : List<&2, JL.Jbd2Rec>}:
+  match xs k:
+    case Nil{} _:
+      +h => {==}
+    case Con{x, t} 0n:
+      +h => {==}
+    case Con{JT.Ext4JDesc{p, +o, +ps}, +t} 1n+q:
+      +h => Ext4Proof.absurd({JT.Ext4JTx.records(s, List.take(&2, JT.Ext4JStep, Con{JT.Ext4JDesc{p, o, ps}, t}, 1n+q)) == Nil{} : List<&2, JL.Jbd2Rec>}, Ext4Proof.cons_nil(JL.Jbd2Rec, JL.Jbd2RDesc{s, ps}, JT.Ext4JTx.records(s, t), h))
+    case Con{JT.Ext4JCommit{p, +o}, +t} 1n+q:
+      +h => Ext4Proof.absurd({JT.Ext4JTx.records(s, List.take(&2, JT.Ext4JStep, Con{JT.Ext4JCommit{p, o}, t}, 1n+q)) == Nil{} : List<&2, JL.Jbd2Rec>}, Ext4Proof.cons_nil(JL.Jbd2Rec, JL.Jbd2RCommit{s}, JT.Ext4JTx.records(s, t), h))
+    case Con{JT.Ext4JHome{w}, +t} 1n+q:
+      +h => Ext4Proof.records_nil_take(s, t, q, h)
+    case Con{JT.Ext4JLog{p, o}, +t} 1n+q:
+      +h => Ext4Proof.records_nil_take(s, t, q, h)
+    case Con{JT.Ext4JData{p, u, o}, +t} 1n+q:
+      +h => Ext4Proof.records_nil_take(s, t, q, h)
+    case Con{JT.Ext4JFlag{a, b}, +t} 1n+q:
+      +h => Ext4Proof.records_nil_take(s, t, q, h)
+
+def Ext4Proof.fh_app(+f: List<&2, Nat>, xs: List<&2, JT.Ext4JStep>, +ys: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.fresh_homes(f, xs) == True{} : Bool} -> {JT.Ext4JTx.fresh_homes(f, ys) == True{} : Bool} -> {JT.Ext4JTx.fresh_homes(f, List.append(&2, JT.Ext4JStep, xs, ys)) == True{} : Bool}:
+  match xs:
+    case Nil{}:
+      +hx => +hy => hy
+    case Con{JT.Ext4JHome{+w}, +t}:
+      +hx => +hy =>
+        +a = JL.Jbd2Log.member(f, JW.Jbd2Write.block(w))
+        Ext4Proof.and_i(a, JT.Ext4JTx.fresh_homes(f, List.append(&2, JT.Ext4JStep, t, ys)), Ext4Proof.and_l(a, JT.Ext4JTx.fresh_homes(f, t), hx), Ext4Proof.fh_app(f, t, ys, Ext4Proof.and_r(a, JT.Ext4JTx.fresh_homes(f, t), hx), hy))
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      +hx => +hy => Ext4Proof.fh_app(f, t, ys, hx, hy)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      +hx => +hy => Ext4Proof.fh_app(f, t, ys, hx, hy)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      +hx => +hy => Ext4Proof.fh_app(f, t, ys, hx, hy)
+    case Con{JT.Ext4JCommit{p, o}, +t}:
+      +hx => +hy => Ext4Proof.fh_app(f, t, ys, hx, hy)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      +hx => +hy => Ext4Proof.fh_app(f, t, ys, hx, hy)
+
+def Ext4Proof.fh_nohomes(+f: List<&2, Nat>, xs: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.homes(xs) == Nil{} : List<&2, JW.Jbd2Write>} -> {JT.Ext4JTx.fresh_homes(f, xs) == True{} : Bool}:
+  match xs:
+    case Nil{}:
+      +h => {==}
+    case Con{JT.Ext4JHome{+w}, +t}:
+      +h => Ext4Proof.absurd({JT.Ext4JTx.fresh_homes(f, Con{JT.Ext4JHome{w}, t}) == True{} : Bool}, Ext4Proof.cons_nil(JW.Jbd2Write, w, JT.Ext4JTx.homes(t), h))
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      +h => Ext4Proof.fh_nohomes(f, t, h)
+    case Con{JT.Ext4JDesc{p, o, ps}, +t}:
+      +h => Ext4Proof.fh_nohomes(f, t, h)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      +h => Ext4Proof.fh_nohomes(f, t, h)
+    case Con{JT.Ext4JCommit{p, o}, +t}:
+      +h => Ext4Proof.fh_nohomes(f, t, h)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      +h => Ext4Proof.fh_nohomes(f, t, h)
+
+# Cutting the steps around the commit
+
+def Ext4Proof.take_commit(a: List<&2, JT.Ext4JStep>, +c: JT.Ext4JStep, +p: List<&2, JT.Ext4JStep>, +j: Nat) -> {List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, p}), 1n+Nat.add(List.length(&2, JT.Ext4JStep, a), j)) == List.append(&2, JT.Ext4JStep, a, Con{c, List.take(&2, JT.Ext4JStep, p, j)}) : List<&2, JT.Ext4JStep>}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
+      Equal.cong(List<&2, JT.Ext4JStep>, List<&2, JT.Ext4JStep>, r => Con{x, r}, List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, t, Con{c, p}), 1n+Nat.add(List.length(&2, JT.Ext4JStep, t), j)), List.append(&2, JT.Ext4JStep, t, Con{c, List.take(&2, JT.Ext4JStep, p, j)}), Ext4Proof.take_commit(t, c, p, j))
+
+def Ext4Proof.take_commit0(a: List<&2, JT.Ext4JStep>, +c: JT.Ext4JStep, +p: List<&2, JT.Ext4JStep>) -> {List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, p}), 1n+List.length(&2, JT.Ext4JStep, a)) == List.append(&2, JT.Ext4JStep, a, [c]) : List<&2, JT.Ext4JStep>}:
+  match a:
+    case Nil{}:
+      Equal.cong(List<&2, JT.Ext4JStep>, List<&2, JT.Ext4JStep>, r => Con{c, r}, List.take(&2, JT.Ext4JStep, p, 0n), Nil{}, Ext4Proof.take_zero(JT.Ext4JStep, p))
+    case Con{+x, +t}:
+      Equal.cong(List<&2, JT.Ext4JStep>, List<&2, JT.Ext4JStep>, r => Con{x, r}, List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, t, Con{c, p}), 1n+List.length(&2, JT.Ext4JStep, t)), List.append(&2, JT.Ext4JStep, t, [c]), Ext4Proof.take_commit0(t, c, p))
+
+def Ext4Proof.drop_commit(a: List<&2, JT.Ext4JStep>, +c: JT.Ext4JStep, +p: List<&2, JT.Ext4JStep>) -> {List.drop(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, p}), 1n+List.length(&2, JT.Ext4JStep, a)) == p : List<&2, JT.Ext4JStep>}:
+  match a:
+    case Nil{}:
+      Ext4Proof.drop_zero(JT.Ext4JStep, p)
+    case Con{x, +t}:
+      Ext4Proof.drop_commit(t, c, p)
+
+# Home steps
+
+def Ext4Proof.rec_hs(+s: Nat, ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.records(s, os) == Nil{} : List<&2, JL.Jbd2Rec>} -> {JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ws), os)) == Nil{} : List<&2, JL.Jbd2Rec>}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{w, +t}:
+      +h => Ext4Proof.rec_hs(s, t, os, h)
+
+def Ext4Proof.com_hs(ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.committed(os) == False{} : Bool} -> {JT.Ext4JTx.committed(List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ws), os)) == False{} : Bool}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{w, +t}:
+      +h => Ext4Proof.com_hs(t, os, h)
+
+def Ext4Proof.dp_hs(ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.data_puts(os) == Nil{} : List<&2, JL.Jbd2Put>} -> {JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ws), os)) == Nil{} : List<&2, JL.Jbd2Put>}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{w, +t}:
+      +h => Ext4Proof.dp_hs(t, os, h)
+
+def Ext4Proof.rw_hs(ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.replay_writes(os) == Nil{} : List<&2, JW.Jbd2Write>} -> {JT.Ext4JTx.replay_writes(List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ws), os)) == Nil{} : List<&2, JW.Jbd2Write>}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{w, +t}:
+      +h => Ext4Proof.rw_hs(t, os, h)
+
+def Ext4Proof.homes_hs(ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.homes(os) == Nil{} : List<&2, JW.Jbd2Write>} -> {JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ws), os)) == ws : List<&2, JW.Jbd2Write>}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{+w, +t}:
+      +h => Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => Con{w, r}, JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(t), os)), t, Ext4Proof.homes_hs(t, os, h))
+
+def Ext4Proof.fh_fresh_in.at(b: Bool, +fresh: List<&2, Nat>, +w: JW.Jbd2Write, +t: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>, ih: {JT.Ext4JTx.fresh_homes(fresh, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(JT.Ext4JTx.fresh_in(fresh, t)), os)) == True{} : Bool}) -> {JL.Jbd2Log.member(fresh, JW.Jbd2Write.block(w)) == b : Bool} -> {JT.Ext4JTx.fresh_homes(fresh, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(JT.Ext4JTx.keep(b, w, JT.Ext4JTx.fresh_in(fresh, t))), os)) == True{} : Bool}:
+  match b:
+    case True{}:
+      +hb =>
+        %Equal.sym(Bool, JL.Jbd2Log.member(fresh, JW.Jbd2Write.block(w)), True{}, hb) : {Bool.and(_, JT.Ext4JTx.fresh_homes(fresh, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(JT.Ext4JTx.fresh_in(fresh, t)), os))) == True{} : Bool}
+        ih
+    case False{}:
+      +hb => ih
+
+# data=ordered: every block written in place is fresh
+def Ext4Proof.fh_fresh_in(+fresh: List<&2, Nat>, ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.fresh_homes(fresh, os) == True{} : Bool} -> {JT.Ext4JTx.fresh_homes(fresh, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(JT.Ext4JTx.fresh_in(fresh, ws)), os)) == True{} : Bool}:
+  match ws:
+    case Nil{}:
+      +h => h
+    case Con{+w, +t}:
+      +h => Ext4Proof.fh_fresh_in.at(JL.Jbd2Log.member(fresh, JW.Jbd2Write.block(w)), fresh, w, t, os, Ext4Proof.fh_fresh_in(fresh, t, os, h), {==})
+
+def Ext4Proof.fh_in_place(m: JT.Jbd2Mode, +fresh: List<&2, Nat>, +ws: List<&2, JW.Jbd2Write>, +os: List<&2, JT.Ext4JStep>) -> {JT.Ext4JTx.fresh_homes(fresh, os) == True{} : Bool} -> {JT.Ext4JTx.fresh_homes(fresh, List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(JT.Ext4JTx.in_place(m, fresh, ws)), os)) == True{} : Bool}:
+  match m:
+    case JT.Jbd2DataJournal{}:
+      +h => h
+    case JT.Jbd2DataOrdered{}:
+      +h => Ext4Proof.fh_fresh_in(fresh, ws, os, h)
+
+# A group's logged copies
+
+def Ext4Proof.flags_esc(+e: Bool, +f: Bool, +l: Bool) -> {J.Jbd2.has(JW.Jbd2Write.flags(e, f, l), JB.Jbd2.flag_escape()) == e : Bool}:
+  match e f l:
+    case True{} True{} True{}:
+      {==}
+    case True{} True{} False{}:
+      {==}
+    case True{} False{} True{}:
+      {==}
+    case True{} False{} False{}:
+      {==}
+    case False{} True{} True{}:
+      {==}
+    case False{} True{} False{}:
+      {==}
+    case False{} False{} True{}:
+      {==}
+    case False{} False{} False{}:
+      {==}
+
+def Ext4Proof.rec_datas(+sq: Nat, ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, first: Bool, +pos: Nat) -> {JT.Ext4JTx.records(sq, JT.Ext4JTx.datas(ws, g, s, first, pos)) == Nil{} : List<&2, JL.Jbd2Rec>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{b, d}, +t}:
+      Ext4Proof.rec_datas(sq, t, g, s, False{}, Nat.add(pos, 1n))
+
+def Ext4Proof.com_datas(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, first: Bool, +pos: Nat) -> {JT.Ext4JTx.committed(JT.Ext4JTx.datas(ws, g, s, first, pos)) == False{} : Bool}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{b, d}, +t}:
+      Ext4Proof.com_datas(t, g, s, False{}, Nat.add(pos, 1n))
+
+def Ext4Proof.homes_datas(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, first: Bool, +pos: Nat) -> {JT.Ext4JTx.homes(JT.Ext4JTx.datas(ws, g, s, first, pos)) == Nil{} : List<&2, JW.Jbd2Write>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{b, d}, +t}:
+      Ext4Proof.homes_datas(t, g, s, False{}, Nat.add(pos, 1n))
+
+# the copies, replayed, are the writes (escaping undone: escape_round_trip)
+def Ext4Proof.rw_datas(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, +first: Bool, +pos: Nat) -> {JT.Ext4JTx.replay_writes(JT.Ext4JTx.datas(ws, g, s, first, pos)) == ws : List<&2, JW.Jbd2Write>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{JW.Jbd2Write{+b, +d}, +t}:
+      +rest = JT.Ext4JTx.replay_writes(JT.Ext4JTx.datas(t, g, s, False{}, Nat.add(pos, 1n)))
+      %Equal.sym(Bool, J.Jbd2.has(JW.Jbd2Write.flags(JB.Jbd2.needs_escape(d), first, JW.Jbd2Write.is_nil(t)), JB.Jbd2.flag_escape()), JB.Jbd2.needs_escape(d), Ext4Proof.flags_esc(JB.Jbd2.needs_escape(d), first, JW.Jbd2Write.is_nil(t))) : {Con{JW.Jbd2Write{b, JB.Jbd2.unescape(_, JB.Jbd2.escape(d))}, rest} == Con{JW.Jbd2Write{b, d}, t} : List<&2, JW.Jbd2Write>}
+      %Equal.sym(B.Octets, JB.Jbd2.unescape(JB.Jbd2.needs_escape(d), JB.Jbd2.escape(d)), d, Laws.escape_round_trip(d)) : {Con{JW.Jbd2Write{b, _}, rest} == Con{JW.Jbd2Write{b, d}, t} : List<&2, JW.Jbd2Write>}
+      Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => Con{JW.Jbd2Write{b, d}, r}, rest, t, Ext4Proof.rw_datas(t, g, s, False{}, Nat.add(pos, 1n)))
+
+# The log
+
+def Ext4Proof.com_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s: U32, +uuid: B.Octets, +pos: Nat) -> {JT.Ext4JTx.committed(JT.Ext4JTx.logs(gs, g, s, uuid, pos)) == False{} : Bool}:
+  match gs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      Ext4Proof.committed_app(JT.Ext4JTx.group(h, g, s, uuid, pos), JT.Ext4JTx.logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))), Ext4Proof.com_datas(h, g, s, True{}, Nat.add(pos, 1n)), Ext4Proof.com_logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))))
+
+def Ext4Proof.homes_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s: U32, +uuid: B.Octets, +pos: Nat) -> {JT.Ext4JTx.homes(JT.Ext4JTx.logs(gs, g, s, uuid, pos)) == Nil{} : List<&2, JW.Jbd2Write>}:
+  match gs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      +gr = JT.Ext4JTx.group(h, g, s, uuid, pos)
+      +lt = JT.Ext4JTx.logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h)))
+      Equal.trans(List<&2, JW.Jbd2Write>, JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, gr, lt)), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.homes(gr), JT.Ext4JTx.homes(lt)), Nil{}, Ext4Proof.homes_app(gr, lt), Ext4Proof.app_nil2(JW.Jbd2Write, JT.Ext4JTx.homes(gr), JT.Ext4JTx.homes(lt), Ext4Proof.homes_datas(h, g, s, True{}, Nat.add(pos, 1n)), Ext4Proof.homes_logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h)))))
+
+def Ext4Proof.rw_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s: U32, +uuid: B.Octets, +pos: Nat) -> {JT.Ext4JTx.replay_writes(JT.Ext4JTx.logs(gs, g, s, uuid, pos)) == List.concat(&2, JW.Jbd2Write, gs) : List<&2, JW.Jbd2Write>}:
+  match gs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      +gr = JT.Ext4JTx.group(h, g, s, uuid, pos)
+      +lt = JT.Ext4JTx.logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h)))
+      %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(List.append(&2, JT.Ext4JStep, gr, lt)), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.replay_writes(gr), JT.Ext4JTx.replay_writes(lt)), Ext4Proof.rw_app(gr, lt)) : {_ == List.concat(&2, JW.Jbd2Write, Con{h, t}) : List<&2, JW.Jbd2Write>}
+      %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(gr), h, Ext4Proof.rw_datas(h, g, s, True{}, Nat.add(pos, 1n))) : {List.append(&2, JW.Jbd2Write, _, JT.Ext4JTx.replay_writes(lt)) == List.concat(&2, JW.Jbd2Write, Con{h, t}) : List<&2, JW.Jbd2Write>}
+      Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => List.append(&2, JW.Jbd2Write, h, r), JT.Ext4JTx.replay_writes(lt), List.concat(&2, JW.Jbd2Write, t), Ext4Proof.rw_logs(t, g, s, uuid, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))))
+
+# the groups hold the writes, in order
+def Ext4Proof.chunks_add(full: Bool, +w: JW.Jbd2Write, +g: List<&2, JW.Jbd2Write>, +rest: List<&2, List<&2, JW.Jbd2Write>>) -> {List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks.add(full, w, g, rest)) == Con{w, List.concat(&2, JW.Jbd2Write, Con{g, rest})} : List<&2, JW.Jbd2Write>}:
+  match full:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Ext4Proof.chunks_put(+w: JW.Jbd2Write, gs: List<&2, List<&2, JW.Jbd2Write>>, +cap: Nat) -> {List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks.put(w, gs, cap)) == Con{w, List.concat(&2, JW.Jbd2Write, gs)} : List<&2, JW.Jbd2Write>}:
+  match gs:
+    case Nil{}:
+      {==}
+    case Con{+g, +rest}:
+      Ext4Proof.chunks_add(Nat.is_le(cap, List.length(&2, JW.Jbd2Write, g)), w, g, rest)
+
+def Ext4Proof.chunks(xs: List<&2, JW.Jbd2Write>, +cap: Nat) -> {List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks(xs, cap)) == xs : List<&2, JW.Jbd2Write>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+w, +t}:
+      Equal.trans(List<&2, JW.Jbd2Write>, List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks.put(w, JT.Ext4JTx.chunks(t, cap), cap)), Con{w, List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks(t, cap))}, Con{w, t}, Ext4Proof.chunks_put(w, JT.Ext4JTx.chunks(t, cap), cap), Equal.cong(List<&2, JW.Jbd2Write>, List<&2, JW.Jbd2Write>, r => Con{w, r}, List.concat(&2, JW.Jbd2Write, JT.Ext4JTx.chunks(t, cap)), t, Ext4Proof.chunks(t, cap)))
+
+# Recovery of the log: the scan finds one transaction holding every copy
+
+def Ext4Proof.fits_commit(+s: Nat, xs: List<&2, JT.Ext4JStep>) -> {JL.Jbd2Log.fits(List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, xs), [JL.Jbd2RCommit{s}]), s) == True{} : Bool}:
+  match xs:
+    case Nil{}:
+      Ext4Proof.eq_refl(s)
+    case Con{JT.Ext4JDesc{p, o, ps}, t}:
+      Ext4Proof.eq_refl(s)
+    case Con{JT.Ext4JCommit{p, o}, t}:
+      Ext4Proof.eq_refl(s)
+    case Con{JT.Ext4JHome{w}, +t}:
+      Ext4Proof.fits_commit(s, t)
+    case Con{JT.Ext4JLog{p, o}, +t}:
+      Ext4Proof.fits_commit(s, t)
+    case Con{JT.Ext4JData{p, u, o}, +t}:
+      Ext4Proof.fits_commit(s, t)
+    case Con{JT.Ext4JFlag{a, b}, +t}:
+      Ext4Proof.fits_commit(s, t)
+
+def Ext4Proof.scan_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s32: U32, +uuid: B.Octets, +pos: Nat, +s: Nat, +ps: List<&2, JL.Jbd2Put>) -> {JL.Jbd2Log.scan.go(List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, JT.Ext4JTx.logs(gs, g, s32, uuid, pos)), [JL.Jbd2RCommit{s}]), True{}, s, ps, Nil{}, Nil{}) == [JL.Jbd2Tx{s, List.reverse(&2, JL.Jbd2Put, JL.Jbd2Log.rev_onto(JL.Jbd2Put, JT.Ext4JTx.data_puts(JT.Ext4JTx.logs(gs, g, s32, uuid, pos)), ps)), Nil{}}] : List<&2, JL.Jbd2Tx>}:
+  match gs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      +ds = JT.Ext4JTx.datas(h, g, s32, True{}, Nat.add(pos, 1n))
+      +gr = JT.Ext4JTx.group(h, g, s32, uuid, pos)
+      +pos2 = Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))
+      +lt = JT.Ext4JTx.logs(t, g, s32, uuid, pos2)
+      +dp = JT.Ext4JTx.data_puts(ds)
+      +dl = JT.Ext4JTx.data_puts(lt)
+      +rc = {[JL.Jbd2RCommit{s}] : List<&2, JL.Jbd2Rec>}
+      +rl = JT.Ext4JTx.records(s, lt)
+      +tl = List.append(&2, JL.Jbd2Rec, rl, rc)
+      +er = {Equal.trans(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, gr, lt)), List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(s, gr), rl), Con{JL.Jbd2RDesc{s, dp}, rl}, Ext4Proof.records_app(s, gr, lt), Equal.cong(List<&2, JL.Jbd2Rec>, List<&2, JL.Jbd2Rec>, r => Con{JL.Jbd2RDesc{s, dp}, List.append(&2, JL.Jbd2Rec, r, rl)}, JT.Ext4JTx.records(s, ds), Nil{}, Ext4Proof.rec_datas(s, h, g, s32, True{}, Nat.add(pos, 1n)))) : {JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, gr, lt)) == Con{JL.Jbd2RDesc{s, dp}, rl} : List<&2, JL.Jbd2Rec>}}
+      +rhs = {[JL.Jbd2Tx{s, List.reverse(&2, JL.Jbd2Put, JL.Jbd2Log.rev_onto(JL.Jbd2Put, JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, gr, lt)), ps)), Nil{}}] : List<&2, JL.Jbd2Tx>}
+      %Equal.sym(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(s, List.append(&2, JT.Ext4JStep, gr, lt)), Con{JL.Jbd2RDesc{s, dp}, rl}, er) : {JL.Jbd2Log.scan.go(List.append(&2, JL.Jbd2Rec, _, rc), True{}, s, ps, Nil{}, Nil{}) == rhs : List<&2, JL.Jbd2Tx>}
+      %Equal.sym(Bool, JL.Jbd2Log.fits(tl, s), True{}, Ext4Proof.fits_commit(s, lt)) : {JL.Jbd2Log.scan.go(tl, _, s, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dp, ps), Nil{}, Nil{}) == rhs : List<&2, JL.Jbd2Tx>}
+      %Equal.sym(List<&2, JL.Jbd2Put>, JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, gr, lt)), List.append(&2, JL.Jbd2Put, dp, dl), Ext4Proof.dp_app(gr, lt)) : {JL.Jbd2Log.scan.go(tl, True{}, s, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dp, ps), Nil{}, Nil{}) == [JL.Jbd2Tx{s, List.reverse(&2, JL.Jbd2Put, JL.Jbd2Log.rev_onto(JL.Jbd2Put, _, ps)), Nil{}}] : List<&2, JL.Jbd2Tx>}
+      %Equal.sym(List<&2, JL.Jbd2Put>, JL.Jbd2Log.rev_onto(JL.Jbd2Put, List.append(&2, JL.Jbd2Put, dp, dl), ps), JL.Jbd2Log.rev_onto(JL.Jbd2Put, dl, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dp, ps)), Ext4Proof.rev_onto_app(JL.Jbd2Put, dp, dl, ps)) : {JL.Jbd2Log.scan.go(tl, True{}, s, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dp, ps), Nil{}, Nil{}) == [JL.Jbd2Tx{s, List.reverse(&2, JL.Jbd2Put, _), Nil{}}] : List<&2, JL.Jbd2Tx>}
+      Ext4Proof.scan_logs(t, g, s32, uuid, pos2, s, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dp, ps))
+
+# one transaction revoking nothing replays its blocks
+def Ext4Proof.plan_one(+s: Nat, +ps: List<&2, JL.Jbd2Put>) -> {JL.Jbd2Log.plan([JL.Jbd2Tx{s, ps, Nil{}}]) == JL.Jbd2Log.unrevoked(s, Nil{}, ps) : List<&2, JL.Jbd2Do>}:
+  +u = JL.Jbd2Log.unrevoked(s, Nil{}, ps)
+  +fi = Ext4Proof.filt(ps, s, Nil{})
+  %Equal.sym(List<&2, JL.Jbd2Do>, JL.Jbd2Log.keep(ps, s, Nil{}, Nil{}), List.reverse.go(&2, JL.Jbd2Do, fi, Nil{}), Ext4Proof.keep_filt(ps, s, Nil{}, Nil{})) : {List.reverse(&2, JL.Jbd2Do, _) == u : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Do>, List.reverse.go(&2, JL.Jbd2Do, List.reverse.go(&2, JL.Jbd2Do, fi, Nil{}), Nil{}), List.append(&2, JL.Jbd2Do, fi, Nil{}), Ext4Proof.rev_rev(JL.Jbd2Do, fi, Nil{}, Nil{})) : {_ == u : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Do>, List.append(&2, JL.Jbd2Do, fi, Nil{}), fi, Ext4Proof.append_nil(JL.Jbd2Do, fi)) : {_ == u : List<&2, JL.Jbd2Do>}
+  Ext4Proof.filt_unrevoked(ps, s, Nil{})
+
+# The laws of a plan. Its parts, for build's inputs: pre (in-place writes
+# and the opening steps), log, the commit, post (the checkpoint and the
+# closing steps); steps = (pre ++ log) ++ commit :: post.
+
+def Laws.jtx_uncommitted(g, uuid, jsb, seq, m, fresh, ws, sec, nsec, k, h):
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +ip = JT.Ext4JTx.in_place(m, fresh, ws)
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +pre = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ip), os)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, pre, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = JT.Ext4JTx.post(tx)
+  +ca = Ext4Proof.committed_app(pre, log, Ext4Proof.com_hs(ip, os, {==}), Ext4Proof.com_logs(JT.Ext4JTx.chunks(lg, JT.Ext4JTx.cap(g)), g, s32, uuid, first))
+  +hle = Ext4Proof.lt_succ_le(k, List.length(&2, JT.Ext4JStep, a), h)
+  +tk = List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, post}), k)
+  +rs = JT.Ext4JTx.records(seq, tk)
+  +nc = Ext4Proof.no_commit_records(seq, tk, Ext4Proof.committed_take(a, Con{c, post}, k, ca, hle))
+  Equal.cong(List<&2, JL.Jbd2Tx>, List<&2, JL.Jbd2Do>, x => JL.Jbd2Log.plan(x), JL.Jbd2Log.scan(seq, rs), Nil{}, Laws.scan_incomplete(seq, Nil{}, rs, nc))
+
+def Laws.jtx_committed(g, uuid, jsb, seq, m, fresh, ws, sec, nsec, j):
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +gs = JT.Ext4JTx.chunks(lg, JT.Ext4JTx.cap(g))
+  +ip = JT.Ext4JTx.in_place(m, fresh, ws)
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +cs = JT.Ext4JTx.close_steps(jsb, seq)
+  +pre = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ip), os)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, pre, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(lg), cs)
+  +pj = List.take(&2, JT.Ext4JStep, post, j)
+  +rc = {[JL.Jbd2RCommit{seq}] : List<&2, JL.Jbd2Rec>}
+  +rlog = JT.Ext4JTx.records(seq, log)
+  +rs = List.append(&2, JL.Jbd2Rec, rlog, rc)
+  +dl = JT.Ext4JTx.data_puts(log)
+  +da = JT.Ext4JTx.data_puts(a)
+  +rhs0 = JL.Jbd2Log.unrevoked(seq, Nil{}, JT.Ext4JTx.data_puts(JT.Ext4JTx.steps(tx)))
+  %Equal.sym(List<&2, JT.Ext4JStep>, List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, post}), 1n+Nat.add(List.length(&2, JT.Ext4JStep, a), j)), List.append(&2, JT.Ext4JStep, a, Con{c, pj}), Ext4Proof.take_commit(a, c, post, j)) : {JL.Jbd2Log.recover(seq, JT.Ext4JTx.records(seq, _)) == rhs0 : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(seq, List.append(&2, JT.Ext4JStep, a, Con{c, pj})), List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(seq, a), JT.Ext4JTx.records(seq, Con{c, pj})), Ext4Proof.records_app(seq, a, Con{c, pj})) : {JL.Jbd2Log.recover(seq, _) == rhs0 : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(seq, pj), Nil{}, Ext4Proof.records_nil_take(seq, post, j, Ext4Proof.rec_hs(seq, lg, cs, {==}))) : {JL.Jbd2Log.recover(seq, List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(seq, a), Con{JL.Jbd2RCommit{seq}, _})) == rhs0 : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(seq, a), List.append(&2, JL.Jbd2Rec, JT.Ext4JTx.records(seq, pre), rlog), Ext4Proof.records_app(seq, pre, log)) : {JL.Jbd2Log.recover(seq, List.append(&2, JL.Jbd2Rec, _, rc)) == rhs0 : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Rec>, JT.Ext4JTx.records(seq, pre), Nil{}, Ext4Proof.rec_hs(seq, ip, os, {==})) : {JL.Jbd2Log.recover(seq, List.append(&2, JL.Jbd2Rec, List.append(&2, JL.Jbd2Rec, _, rlog), rc)) == rhs0 : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, JT.Ext4JTx.data_puts(List.append(&2, JT.Ext4JStep, a, Con{c, post})), List.append(&2, JL.Jbd2Put, da, JT.Ext4JTx.data_puts(post)), Ext4Proof.dp_app(a, Con{c, post})) : {JL.Jbd2Log.recover(seq, rs) == JL.Jbd2Log.unrevoked(seq, Nil{}, _) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, JT.Ext4JTx.data_puts(post), Nil{}, Ext4Proof.dp_hs(lg, cs, {==})) : {JL.Jbd2Log.recover(seq, rs) == JL.Jbd2Log.unrevoked(seq, Nil{}, List.append(&2, JL.Jbd2Put, da, _)) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, List.append(&2, JL.Jbd2Put, da, Nil{}), da, Ext4Proof.append_nil(JL.Jbd2Put, da)) : {JL.Jbd2Log.recover(seq, rs) == JL.Jbd2Log.unrevoked(seq, Nil{}, _) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, da, List.append(&2, JL.Jbd2Put, JT.Ext4JTx.data_puts(pre), dl), Ext4Proof.dp_app(pre, log)) : {JL.Jbd2Log.recover(seq, rs) == JL.Jbd2Log.unrevoked(seq, Nil{}, _) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, JT.Ext4JTx.data_puts(pre), Nil{}, Ext4Proof.dp_hs(ip, os, {==})) : {JL.Jbd2Log.recover(seq, rs) == JL.Jbd2Log.unrevoked(seq, Nil{}, List.append(&2, JL.Jbd2Put, _, dl)) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(Bool, JL.Jbd2Log.fits(rs, seq), True{}, Ext4Proof.fits_commit(seq, log)) : {JL.Jbd2Log.plan(JL.Jbd2Log.scan.go(rs, _, seq, Nil{}, Nil{}, Nil{})) == JL.Jbd2Log.unrevoked(seq, Nil{}, dl) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Tx>, JL.Jbd2Log.scan.go(rs, True{}, seq, Nil{}, Nil{}, Nil{}), [JL.Jbd2Tx{seq, List.reverse(&2, JL.Jbd2Put, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dl, Nil{})), Nil{}}], Ext4Proof.scan_logs(gs, g, s32, uuid, first, seq, Nil{})) : {JL.Jbd2Log.plan(_) == JL.Jbd2Log.unrevoked(seq, Nil{}, dl) : List<&2, JL.Jbd2Do>}
+  %Equal.sym(List<&2, JL.Jbd2Put>, List.reverse(&2, JL.Jbd2Put, JL.Jbd2Log.rev_onto(JL.Jbd2Put, dl, Nil{})), dl, Ext4Proof.rr(JL.Jbd2Put, dl)) : {JL.Jbd2Log.plan([JL.Jbd2Tx{seq, _, Nil{}}]) == JL.Jbd2Log.unrevoked(seq, Nil{}, dl) : List<&2, JL.Jbd2Do>}
+  Ext4Proof.plan_one(seq, dl)
+
+# the logged copies, replayed, are the logged writes
+def Ext4Proof.copies(+g: J.Jbd2Geom, +uuid: B.Octets, +jsb: B.Octets, +seq: Nat, +m: JT.Jbd2Mode, +fresh: List<&2, Nat>, +ws: List<&2, JW.Jbd2Write>, +sec: U32, +nsec: U32) -> {JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec))) == JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws) : List<&2, JW.Jbd2Write>}:
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +gs = JT.Ext4JTx.chunks(lg, JT.Ext4JTx.cap(g))
+  +ip = JT.Ext4JTx.in_place(m, fresh, ws)
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +cs = JT.Ext4JTx.close_steps(jsb, seq)
+  +pre = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ip), os)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, pre, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(lg), cs)
+  +ra = JT.Ext4JTx.replay_writes(a)
+  %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(List.append(&2, JT.Ext4JStep, a, Con{c, post})), List.append(&2, JW.Jbd2Write, ra, JT.Ext4JTx.replay_writes(post)), Ext4Proof.rw_app(a, Con{c, post})) : {_ == lg : List<&2, JW.Jbd2Write>}
+  %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(post), Nil{}, Ext4Proof.rw_hs(lg, cs, {==})) : {List.append(&2, JW.Jbd2Write, ra, _) == lg : List<&2, JW.Jbd2Write>}
+  %Equal.sym(List<&2, JW.Jbd2Write>, List.append(&2, JW.Jbd2Write, ra, Nil{}), ra, Ext4Proof.append_nil(JW.Jbd2Write, ra)) : {_ == lg : List<&2, JW.Jbd2Write>}
+  %Equal.sym(List<&2, JW.Jbd2Write>, ra, List.append(&2, JW.Jbd2Write, JT.Ext4JTx.replay_writes(pre), JT.Ext4JTx.replay_writes(log)), Ext4Proof.rw_app(pre, log)) : {_ == lg : List<&2, JW.Jbd2Write>}
+  %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(pre), Nil{}, Ext4Proof.rw_hs(ip, os, {==})) : {List.append(&2, JW.Jbd2Write, _, JT.Ext4JTx.replay_writes(log)) == lg : List<&2, JW.Jbd2Write>}
+  %Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(log), List.concat(&2, JW.Jbd2Write, gs), Ext4Proof.rw_logs(gs, g, s32, uuid, first)) : {_ == lg : List<&2, JW.Jbd2Write>}
+  Ext4Proof.chunks(lg, JT.Ext4JTx.cap(g))
+
+def Laws.jtx_copies(g, uuid, jsb, seq, m, fresh, ws, sec, nsec):
+  Ext4Proof.copies(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+
+def Laws.jtx_checkpoint(g, uuid, jsb, seq, m, fresh, ws, sec, nsec):
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +ip = JT.Ext4JTx.in_place(m, fresh, ws)
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +cs = JT.Ext4JTx.close_steps(jsb, seq)
+  +pre = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ip), os)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, pre, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(lg), cs)
+  %Equal.sym(List<&2, JT.Ext4JStep>, List.drop(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, post}), 1n+List.length(&2, JT.Ext4JStep, a)), post, Ext4Proof.drop_commit(a, c, post)) : {JT.Ext4JTx.homes(_) == JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(tx)) : List<&2, JW.Jbd2Write>}
+  Equal.trans(List<&2, JW.Jbd2Write>, JT.Ext4JTx.homes(post), lg, JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(tx)), Ext4Proof.homes_hs(lg, cs, {==}), Equal.sym(List<&2, JW.Jbd2Write>, JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(tx)), lg, Ext4Proof.copies(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)))
+
+def Laws.jtx_in_place(g, uuid, jsb, seq, m, fresh, ws, sec, nsec):
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +gs = JT.Ext4JTx.chunks(lg, JT.Ext4JTx.cap(g))
+  +ip = JT.Ext4JTx.in_place(m, fresh, ws)
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +pre = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.home_steps(ip), os)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, pre, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = JT.Ext4JTx.post(tx)
+  %Equal.sym(List<&2, JT.Ext4JStep>, List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, post}), 1n+List.length(&2, JT.Ext4JStep, a)), List.append(&2, JT.Ext4JStep, a, [c]), Ext4Proof.take_commit0(a, c, post)) : {JT.Ext4JTx.fresh_homes(fresh, _) == True{} : Bool}
+  Ext4Proof.fh_app(fresh, a, [c], Ext4Proof.fh_app(fresh, pre, log, Ext4Proof.fh_in_place(m, fresh, ws, os, {==}), Ext4Proof.fh_nohomes(fresh, log, Ext4Proof.homes_logs(gs, g, s32, uuid, first))), {==})
+
+def Laws.jtx_journal_mode(g, uuid, jsb, seq, fresh, ws, sec, nsec):
+  +m = {JT.Jbd2DataJournal{} : JT.Jbd2Mode}
+  +tx = Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
+  +s32 = U32.from_nat(seq)
+  +first = J.Jbd2Geom.first(g)
+  +lg = JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws)
+  +gs = JT.Ext4JTx.chunks(lg, JT.Ext4JTx.cap(g))
+  +os = JT.Ext4JTx.open_steps(jsb, first, s32)
+  +log = JT.Ext4JTx.log_of(g, uuid, seq, lg)
+  +a = List.append(&2, JT.Ext4JStep, os, log)
+  +c = JT.Ext4JTx.commit(tx)
+  +post = JT.Ext4JTx.post(tx)
+  %Equal.sym(List<&2, JT.Ext4JStep>, List.take(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, a, Con{c, post}), 1n+List.length(&2, JT.Ext4JStep, a)), List.append(&2, JT.Ext4JStep, a, [c]), Ext4Proof.take_commit0(a, c, post)) : {JT.Ext4JTx.homes(_) == Nil{} : List<&2, JW.Jbd2Write>}
+  +ea = {Equal.trans(List<&2, JW.Jbd2Write>, JT.Ext4JTx.homes(a), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.homes(os), JT.Ext4JTx.homes(log)), Nil{}, Ext4Proof.homes_app(os, log), Ext4Proof.app_nil2(JW.Jbd2Write, JT.Ext4JTx.homes(os), JT.Ext4JTx.homes(log), {==}, Ext4Proof.homes_logs(gs, g, s32, uuid, first))) : {JT.Ext4JTx.homes(a) == Nil{} : List<&2, JW.Jbd2Write>}}
+  Equal.trans(List<&2, JW.Jbd2Write>, JT.Ext4JTx.homes(List.append(&2, JT.Ext4JStep, a, [c])), List.append(&2, JW.Jbd2Write, JT.Ext4JTx.homes(a), JT.Ext4JTx.homes([c])), Nil{}, Ext4Proof.homes_app(a, [c]), Ext4Proof.app_nil2(JW.Jbd2Write, JT.Ext4JTx.homes(a), JT.Ext4JTx.homes([c]), ea, {==}))
+
+def Laws.jtx_uncommitted_witness():
   {==}

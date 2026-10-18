@@ -8,9 +8,14 @@ inode); extended attributes (in the inode body, in an attribute block, and
 in EA inodes); and the jbd2 journal: its superblock, descriptor, revoke and
 commit blocks with their checksums, the three-pass recovery applied to a
 device, writing a transaction (a list of block writes) into the journal,
-and journalled updates (any writer's block writes, committed and replayed).
+and journalled updates (any writer's block writes, committed and replayed);
+and ext2's writer run through the journal (`jext2.bend`): mkdir, create,
+write, link, rename, truncate and the rest, logged, committed and
+checkpointed as one jbd2 transaction, in data=journal or data=ordered mode,
+so that a crash at any point recovers to the old filesystem or the new one.
 Everything takes blockdev's device interface, and builds on ext2's public
-reader: this package adds no second superblock, inode or extent reader.
+reader and writer: this package adds no second superblock, inode, extent
+reader or file writer.
 
 ## Specification
 
@@ -91,7 +96,8 @@ Where the documentation is incomplete, and how the package settles it:
 | Inline data | files of up to an inode's size (i_block, then system.data); directories, entries in i_block and system.data |
 | Extended attributes | the inode body and the attribute block (header, checksum, entry hashes, block hash), EA inode values (hash checked); full names with their prefixes |
 | The journal | internal journals (s_journal_inum); superblock v1 and v2; features revoke, 64bit, async_commit, csum_v2, csum_v3 (fast_commit refused); recovery in three passes on a device; writing a transaction; journalled updates |
-| Not done | external journals, fast commits, the old compat checksum (read, not checked), casefolded and encrypted directories (hash version 6) |
+| Journalled writes | every operation of ext2's writer, one or several to a transaction, on ext3 and ext4 images with an internal journal (no checksums, csum_v2, csum_v3; 32- and 64-bit tags); data=journal (every block logged) or data=ordered (the blocks the transaction allocates written in place before the commit, every other block logged); the plan of the transaction's device writes, applied whole or cut anywhere (a crash) |
+| Not done | external journals, fast commits, the old compat checksum (read, not checked; a journal with it is refused for writing), casefolded and encrypted directories (hash version 6) |
 
 ## Files
 
@@ -115,12 +121,15 @@ Where the documentation is incomplete, and how the package settles it:
 | `jscan.bend` | reading log blocks as records, one block at a time |
 | `jwrite.bend` | a transaction's log blocks from block writes and revokes |
 | `journal.bend` | the journal on a device: open, recover, commit, transact |
-| `overlay.bend` | `Ext4Ov`: a device that keeps writes aside, for journalled updates |
+| `overlay.bend` | `Ext4Ov`: the journalling device: a device that keeps writes aside (reads see them), for journalled updates; `Ext4Ov.flush` writes them straight through |
+| `jtx.bend` | a journalled transaction as a plan of device writes (`Ext4JTx`): the data modes, the steps (in place, the journal's superblock, descriptors, copies, the commit, the checkpoint), applying a plan or a prefix of it |
+| `jext2.bend` | ext2's writer through the journal: its operations on an `Ext4Ov`, the blocks they allocate (from the old bitmaps), the plan, the run |
 | `devwrite.bend` | writing filesystem blocks and the superblock through blockdev's pure write |
 | `sample.bend` | test fixture (not interface): the image `check.bend` reads, written by `ref/sample.py` |
+| `jsample.bend` | test fixture (not interface): the image with a journal `check.bend` writes through it, written by `ref/jsample.py` |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `check.bend` | a runnable check on the sample image |
-| `ref/` | the differential test |
+| `ref/` | the differential tests (`gen.py`, `run.bend`; journalled writes: `jgen.py`, `jmain.bend`) |
 
 Bend imports do not re-export: import the file that holds what you use.
 
@@ -204,8 +213,60 @@ JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~D
 
 | Def | Meaning |
 |---|---|
-| `Ext4Ov{base, writes}`, `start`, `block_size`, `read_block`, `write_block`, `writes`, `base` | a device keeping writes aside |
+| `Ext4Ov{base, writes}`, `start`, `block_size`, `read_block`, `write_block`, `writes`, `base` | a device keeping writes aside (`writes`: each block once, its last contents, in the order of those last writes) |
+| `Ext4Ov.flush(wdev, r)` | the device underneath with an overlay's writes written on it: the same writer without a journal |
+| `Ext4Ov.mem_block_size`, `mem_read`, `mem_write`, `read_mem` | the overlay of a `MemDev`, with plain parameters (template arguments), and a read of an overlay a writing gave |
 | `Ext4Dev.write(wdev, bs, n, data)`, `write_all(ws, r, bs)`, `set_incompat(wdev, fs, set, clear)`, `super_with`, `mem_write`, `fits`, `read_mem` | writing |
+
+### Journalled writes: jtx.bend, jext2.bend
+
+A transaction's device writes are a plan, `Ext4JTx{seq, pre, log, commit,
+post}`, of steps (`Ext4JStep`, an open type): `Ext4JHome{write}` (a
+filesystem block in place), `Ext4JLog{pos, data}` (journal block `pos`: its
+superblock), `Ext4JDesc{pos, data, puts}` (a descriptor and the tags it
+holds), `Ext4JData{pos, put, stored}` (a block's logged copy, escaped),
+`Ext4JCommit{pos, data}`, `Ext4JFlag{set, clear}` (the superblock's
+incompat bits). In order: the blocks written in place (data=ordered),
+needs_recovery set and the journal's superblock pointed at the log, the
+descriptors and copies, the commit block, every logged block written home
+(the checkpoint), the journal marked empty and needs_recovery cleared. The
+logged copy of the block holding the primary superblock has needs_recovery
+set, so a crash during the checkpoint still leaves a recovery due.
+
+| Def | Meaning |
+|---|---|
+| `Jbd2Mode`: `Jbd2DataJournal{}`, `Jbd2DataOrdered{}` | what is logged: every block; or every block but those free before the transaction, which are written in place before the commit |
+| `Ext4JTx.build(g, uuid, jsb, seq, mode, fresh, ws, sec, nsec)` | the plan of transaction `seq` of writes `ws` (each block once) in a journal of geometry `g`; `fresh`: the blocks free before it |
+| `Ext4JTx.plan(dev, fs, jopts, mode, fresh, ws)`, `Ext4JPlan{journal, tx}`, `.length`, `.commit_at` | the same on a device: the journal opened (it must be empty: `Ext4JournalNotEmpty`; the old compat checksum: `Ext4JournalUnsupported`), the writes checked, the log's room (`Ext4JournalFull`) |
+| `Ext4JTx.apply(wdev, fs, plan, k)` | the device after the plan's first `k` steps (a crash after them; `k` at least the length: all of it) |
+| `Ext4JTx.run(wdev, fs, jopts, mode, fresh, ws)` | planned and applied whole |
+| `Ext4JTx.steps`, `commit_at`, `seq`, `pre`, `log`, `commit`, `post`, `log_blocks`; `in_place`, `logged`, `marks`, `chunks`, `open_steps`, `close_steps`, `log_of` | a plan's parts, and the pieces `build` makes them from |
+| `Ext4JTx.records(s, xs)`, `committed(xs)`, `data_puts(xs)`, `replay_writes(xs)`, `homes(xs)`, `fresh_homes(fresh, xs)` | what steps hold: the log records a recovery reads, whether the commit is among them, the logged copies' tags, what replaying them writes, what is written in place (the laws are stated with these) |
+| `Ext4JExt2.writes(dev, ops, d, fs, wo)` | the writes ext2's operations make (`Ext2Op.run`, each checked as ext2's write options say), on an `Ext4Ov` of `d`: nothing written to `d` |
+| `Ext4JExt2.fresh(dev, d, fs, ws)` | the blocks of `ws` free in `d`'s block bitmaps (an uninit group's computed by ext2) |
+| `Ext4JExt2.plan(dev, ops, d, fs, wo, jopts, mode)`, `Ext4JExt2.run(wdev, ops, d, fs, wo, jopts, mode)`, `Ext4JExt2.op(wdev, op, d, fs, wo, jopts, mode)` | ext2's operations as one transaction: planned; run whole; one operation, its own transaction. A refused operation (ext2's `Ext2Error` as `Ext4Ext2{e}`) writes nothing |
+
+```
+import ./jext2.bend as JX
+import ./jtx.bend as JT
+
+JX.Ext4JExt2.run(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, [XP.Ext2OpMkdir{B.Octets.of_string("/d"), 493}], d, fs, XW.Ext2WriteOptions.default(), O.Jbd2Options.default(), JT.Jbd2DataOrdered{})
+```
+
+**The data modes.** data=journal logs every block the transaction writes,
+data and metadata, so a crash leaves the old or the new contents of every
+block. data=ordered follows the kernel's rule for new data, that it reaches
+its home before the commit that refers to it: the blocks the transaction
+allocates (free in the old bitmaps: new file data, and new directory,
+index and extent blocks too) are written in place first, and every block in
+use before the transaction is logged. That is stricter than the kernel's
+ordered mode, which also writes overwritten data blocks in place,
+unjournalled; here an overwrite is logged, so it too is all or nothing.
+data=ordered logs far less for large writes (a 1.2 MB write that does not
+fit a 1 MB journal in data=journal mode fits in data=ordered; see Tests).
+Each transaction is checkpointed at once and the journal left empty, so the
+next starts at the log's first block again; the next ID is the one after
+the transaction's.
 
 ## Extension points
 
@@ -213,14 +274,21 @@ JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~D
   (blockdev's `Dev.own_write_block` adapts one to its owned interface; a
   device whose blocks divide the filesystem's is written a piece at a
   time).
-* **Journalled updates of any writer:** `Ext4Journal.transact` takes any
-  operation written over a pure device interface and a pure write, runs it
-  on an `Ext4Ov` and journals its writes. ext2's writer (being written in
-  `ext2/`, not yet in its public interface) is such an operation: in a
-  scratch test, `Ext2W.mkdir` through `transact` gave a transaction that
-  e2fsck replays to a clean filesystem with the new directory. Once ext2's
-  writing API is published, journalled metadata updates are `transact` over
-  its operations (and a test of them belongs in `ref/`).
+* **Journalled writes of any writer:** the journalling device is `Ext4Ov`,
+  passed to a writer as blockdev's template arguments; the writer is
+  unchanged (`jext2.bend` passes ext2's `Ext2Op.run` the overlay's
+  operations). The transaction is data, a plan (`Ext4JTx`), made from the
+  writes and a set of fresh blocks by `Ext4JTx.build` and written by
+  `Ext4JTx.apply`, so each piece can be replaced: another writer is another
+  binding like `jext2.bend` (its writes from an overlay, its free blocks
+  from its own allocator); another mode is another `Jbd2Mode` and a branch
+  in `in_place` and `unlogged`; another write order (several transactions
+  in the log before a checkpoint, revoke records for freed metadata) is
+  another builder of the same steps, held to the same laws; a device that
+  crashes or reorders is `Ext4JTx.apply` with a step count, or a wrapper of
+  the device. `Ext4Ov.flush` is the no-journal policy over the same device
+  (law `ov_flush`). `Ext4Journal.transact` (commit, then recover) stays,
+  for writers that only need a replayable transaction.
 * **Options:** which features ext2's reader accepts, checksum verification
   (ours and ext2's), the hash signedness default, index depth; the
   journal's verification, skipping bad blocks, the commit time stamped.
@@ -266,6 +334,35 @@ JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~D
     journalled (escaping a block that starts with the magic number is
     undone; proved through bytes' laws and the soundness of bytes'
     `list_eq`, itself proved from Base's `Word.cmp`);
+* **for every input, journalled writes** (drafts, not yet reviewed by the
+  maintainer):
+  * `ov_reads`: on blockdev's `MemDev`, after any list of good writes, the
+    journalling device (`Ext4Ov`) reads every block as the device written
+    directly does; so a writer that reaches its device only through block
+    reads and writes (ext2's) does on the overlay what it would do on the
+    device (the overlay's search of its writes, newest first, finds the
+    last write; proved from `replay_idempotent`'s lemmas on `MemDev`);
+  * `ov_flush`: the writes the overlay keeps (each block once, its last
+    contents: what a transaction logs), written home, give every block the
+    device written directly has: a complete transaction, checkpointed, is
+    the unjournalled write (proved through the deduplication's invariant: a
+    block seen is never kept again, one not seen has no write kept);
+  * for every plan `Ext4JTx.build` makes (every geometry, journal
+    superblock, ID, mode, set of fresh blocks, writes and commit time), with
+    a crash after its first `k` steps leaving the records of those steps:
+    `jtx_uncommitted`, a crash before the commit step recovers nothing;
+    `jtx_committed`, a crash at the commit step or any number of steps
+    after it recovers every logged copy, in log order, none revoked;
+    `jtx_copies`, replaying the logged copies (each home, unescaped as its
+    tag says) writes exactly the transaction's writes that are not done in
+    place, in order (the superblock's copy marked needs_recovery; through
+    `escape_round_trip` and the tag flags); `jtx_checkpoint`, the steps
+    after the commit write home exactly what that recovery replays;
+    `jtx_in_place`, up to the commit every block written in place is a
+    fresh one; `jtx_journal_mode`, and in data=journal mode there is none.
+    So, at the level of records: a crash before the commit leaves the old
+    filesystem (plus writes to blocks it does not use) and recovers nothing,
+    and a crash after it recovers to what the complete transaction writes;
 * **witnesses** that every hypothesis can hold;
 * **vectors:** 12 directory hashes debugfs computes (every version, signed
   and unsigned names, long names, a seed), a hash version's unsigned twin,
@@ -281,7 +378,17 @@ the device the writes give) is tested, not proved: the writer's blocks are
 byte-identical to an independent model's, and debugfs and e2fsck replay
 them to exactly the writes (see Tests). Proving the codec needs bytes' field
 readers at offsets inside appended strings, which bytes' interface laws do
-not cover yet.
+not cover yet. For journalled writes the same holds: the laws are about the
+plan's records and copies, and that its blocks encode those records is
+tested (`check.bend` feeds the plan's log to the streaming scanner and gets
+the plan's records back; the reference test has e2fsck replay every crash),
+as is the step from the plan to the device (`Ext4JTx.apply`, which maps
+journal positions to blocks through the journal's inode) and the
+superblock's needs_recovery mark and clear (the complete run's image is
+compared, outside the journal, with the direct run's). Whether ext2's
+writer does on the overlay what it does directly follows from `ov_reads`
+only informally (Bend has no parametricity theorem to state it with); the
+reference test compares the two runs on every case.
 
 ## Tests
 
@@ -295,7 +402,20 @@ not cover yet.
   through the overlay; corruptions refused or handled (index checksum, a
   checksum ignored when verification is off, leaf and attribute block
   checksums, a bad commit, a bad descriptor, a bad data block skipped or
-  refused, a bad journal superblock); the htree writer.
+  refused, a bad journal superblock); the htree writer. Then journalled
+  writes, on a second sample (`jsample.bend`, written by `ref/jsample.py`:
+  ext4 with metadata_csum, 1 KiB blocks, a 1024-block journal given
+  csum_v3): five of ext2's operations (mkdir, create, a 3000-byte write, a
+  rename into the new directory, an append) as one transaction, in
+  data=journal and data=ordered mode: the image differs from the same
+  operations done directly only in the journal's blocks, reads back as
+  written and passes ext2's `Ext2Fsck.full`; crashes after 2 steps, just
+  before the commit, at it and during the checkpoint, each recovered by the
+  package, give the old tree (outside the journal and the blocks written in
+  place, the old image) or the new one (outside the journal, the complete
+  run's image); the plan's log, fed to the streaming scanner, reads back as
+  the plan's records; a refused operation (rmdir of a directory that is not
+  empty) writes nothing.
 * `ref/run.sh` (`ref/gen.py`, `ref/model.py`, `ref/run.bend`): images made
   by mke2fs 1.47.0 with `-O dir_index,has_journal,inline_data,ea_inode,
   metadata_csum` from random trees (`mke2fs -d`: a directory of 3000 long
@@ -331,6 +451,40 @@ not cover yet.
   against debugfs and e2fsck wherever they answer. It needs python3 and
   e2fsprogs (exit 77 without them); `run.bend` is built once and runs both
   query files.
+* `ref/run.sh`, journalled writes (`ref/jgen.py`, `ref/jmain.bend`,
+  `ref/jdriver.bend`): ten images made by mke2fs 1.47.0 from random trees
+  (`mke2fs -d`): ext3 and ext4, 1 KiB and 4 KiB blocks, without 64bit, with
+  journals without checksums and given csum_v2 and csum_v3, and a 1 MB
+  journal; on each, one to four transactions of one to eight of ext2's
+  operations drawn at random and meant to succeed (mkdir, create, write at
+  an offset, append, truncate shorter and longer, fast and slow symbolic
+  links, hard links, unlink, rmdir, rename; one write of 200 KB, one of
+  1.2 MB), run by the package journalled, in data=journal or data=ordered
+  mode, and directly by ext2's writer. Every journalled image must differ
+  from the direct one only in the journal's blocks, pass `e2fsck -fn`, and
+  hold the tree a model of the operations (in `jgen.py`, written from
+  POSIX's documented behaviour) expects, read back with debugfs (`rdump`
+  for contents and link targets, `ls -p` for kinds and shared inodes). The
+  1.2 MB write does not fit the 1 MB journal in data=journal mode
+  (`Ext4JournalFull`, nothing written) and does in data=ordered mode. In
+  seven cases the last transaction is crashed after six numbers of its
+  steps (nothing logged yet, half the log, all but the commit block, just
+  committed, half the checkpoint, all but the last step); every crashed
+  image is recovered by e2fsck (`-fy -E journal_only`, on a copy) and by
+  the package, and the two must agree on every block outside the journal
+  (but for the superblock fields e2fsck stamps from the clock: s_wtime,
+  s_lastcheck, s_kbytes_written, and the checksum over them; and the group
+  descriptors' INODE_UNINIT flag, bg_itable_unused and checksum, which
+  e2fsck recomputes from the bitmaps as it writes the descriptors back: a
+  transaction that frees every inode it took in a group leaves its
+  descriptor as ext2's writer left it, which e2fsck rewrites as an
+  untouched group's) and leave the journal empty; the package's recovered
+  image must pass `e2fsck -fn` and hold the tree from before the
+  transaction (crashed before the commit: every block but the journal's
+  and those free before the transaction as it was) or after it (crashed at or after the commit: every block outside
+  the journal the complete run's). 10 cases, 15 transactions, 42 crashes
+  recovered as e2fsck recovers them, 52 images accepted by `e2fsck -fn`,
+  with the default seed 2026; seed 7 passes too.
 
 ## Speed and size
 
@@ -343,8 +497,9 @@ Measured natively (Bend 2.0.37, WSL2), on throwaway images (not in CI):
 | `Ext4Journal.recover` | 100 transactions, 7582 blocks replayed (1 KiB, csum_v3) | 3.3 s | 0.26 GB beyond the 0.84 GB device |
 | `Ext4Journal.commit` | 2000 blocks of 4 KiB | about 1 s | 0.8 GB (the blocks as Octets) |
 | `Ext4Htree.build` | 10,000 entries; 40,000 entries | 2.5 s; 45 s | 0.08 GB; 0.29 GB |
-| `check.bend` | | 0.1 s | |
-| `ref/run.sh` | (a native build of `run.bend`, about 40 s, included) | about 70 s | 1 GB peak |
+| `check.bend` | the reading checks, and the journalled writes (both modes, eight crashes recovered) | 0.7 s (its native build 142 s, 3.7 GB) | 23 MB |
+| `ref/jmain.bend` | the journalled-writes test's 10 cases (15 transactions, 42 crashes with their recoveries, the direct runs) | 88 s (its native build about 2 min) | 0.58 GB |
+| `ref/run.sh` | (native builds of `run.bend`, about 40 s, and `jmain.bend` included) | about 6 min | 1 GB peak |
 
 A lookup in a hashed directory reads the directory's root, its index nodes
 and one leaf, whatever the directory's size; a linear search reads blocks
@@ -358,17 +513,37 @@ lookup and the laws' specifications recurse on the leaves. An `Octets`
 holds about 150 bytes of memory a byte (bytes' storage), which dominates
 the memory figures.
 
+A journalled write costs ext2's writer's own work on the overlay, whose
+reads search the writes kept so far (newest first: linear in the
+operation's writes, a few thousand at most), then one write per logged
+block twice (the log and the checkpoint) plus the descriptors, commit and
+two superblocks; data=ordered writes the allocated blocks once. The
+transaction's steps hold every logged block's data (an `Octets` each), so
+a transaction is bounded by memory as well as by the journal's size: write
+large files in pieces of a megabyte or so, each its own transaction. The
+plan's builders recurse on the writes, the groups and a group's tags (at
+most a descriptor's capacity), which a native build's stack holds for any
+transaction a journal can take.
+
 ## Dependencies
 
 `bytes`, `word64` (the commit block's 64-bit time, an attribute block's
 number in its checksum), `blockdev` (devices), `ext2` (the reader this
 package extends: superblock, descriptors, inodes, block maps and extents,
-linear directories, ext2's checksums), and `crc` (only `check.bend`'s
-CRC-32 of contents; the package's crc32c comes through ext2's `Ext2Csum`).
+linear directories, ext2's checksums; and, for journalled writes, its
+writer's public interface: `Ext2Op.run`, `Ext2Op`, `Ext2WriteOptions`,
+`Ext2Meta.desc_read`, `desc`, `block_bitmap`, `Ext2Bitmap.test`, and
+`Ext2Fsck.full` in `check.bend`), and `crc` (only `check.bend`'s CRC-32 of
+contents; the package's crc32c comes through ext2's `Ext2Csum`). ext2 does
+not depend on this package, so the journalled writer lives here, beside
+the journal it writes.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (natively), `ref/run.sh` 3422 answers on 25 images,
 20 tool checks and 1981 answers on 4 built directories match (seed 7 too),
-`scripts/deps.sh ext4` passes.
+and journalled writes: 10 cases, 15 transactions, 42 crashes recovered as
+e2fsck recovers them, 52 images accepted by `e2fsck -fn` (seed 7 too);
+`scripts/deps.sh ext4` passes. The journalled-write laws (`ov_reads`,
+`ov_flush`, `jtx_*`) are drafts, not yet reviewed by the maintainer.
