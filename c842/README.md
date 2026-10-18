@@ -93,7 +93,10 @@ or kernel test vector was read. That is the basis for its MIT licence.
   output. After 1 to 7 bytes (possible only after short data), it reads before
   its output buffer: E7 and E8 crashed the VM's kernel this way, with the
   16-byte stream `eb616263d81e00000000000000000000`. The package refuses such
-  a stream (`C842BadRepeat`). This finding has not been reported anywhere.
+  a stream (`C842BadRepeat`). This was found here on 2026-10-18 in Ubuntu's
+  6.8.0-147 kernel; the same bug was found independently and fixed upstream: Karl Mehltretter's
+  series "lib/842: reject malformed streams before invalid memory accesses"
+  (linux-crypto, 2026-08-29), applied to the crypto tree on 2026-09-11.
 * **The size of a stream.** Linux's crypto API path refuses compressing more
   than 128 KiB, and decompressing into more (E5). That is the API's limit, not
   the format's; the package has none beyond its maximum output.

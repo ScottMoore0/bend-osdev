@@ -256,7 +256,10 @@ the VM survives.
 ## E8: the repeat bug
 
 See E7. Stream `eb616263d81e00000000000000000000`, capacity 4096 → kernel
-oops. It was not pursued further, and nothing was reported upstream.
+oops. It was not pursued further: the same bug was found independently and fixed upstream: Karl Mehltretter's
+series "lib/842: reject malformed streams before invalid memory accesses"
+(linux-crypto, 2026-08-29), applied to the crypto tree on 2026-09-11. Kernels without that series (Ubuntu's 6.8.0-147,
+for one) still have it.
 
 ## The recorded vectors
 
