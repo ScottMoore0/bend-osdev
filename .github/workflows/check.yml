@@ -12,7 +12,7 @@ jobs:
           scripts/install-bend.sh "$HOME/.bend"
           echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
       - name: Reference tools for the differential tests
-        run: sudo apt-get install -y --no-install-recommends binutils xz-utils e2fsprogs gdisk fdisk python3-cryptography clang dosfstools mtools xorriso genisoimage device-tree-compiler lz4 lzop gcc-multilib iproute2 iputils-ping bzip2 zstd nftables secilc
+        run: sudo apt-get install -y --no-install-recommends binutils xz-utils e2fsprogs gdisk fdisk python3-cryptography clang dosfstools mtools xorriso genisoimage device-tree-compiler lz4 lzop gcc-multilib iproute2 iputils-ping bzip2 zstd nftables secilc acpica-tools
       - name: Check every package's imports against its DEPS
         run: scripts/deps.sh
       - name: Check every package
