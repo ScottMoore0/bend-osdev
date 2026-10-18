@@ -154,6 +154,18 @@ Fields are read and written by bit slicing, so that the round trips can be
 proved; that is fine for headers. The checksum assembles each 16-bit word by
 bit slicing too, so it is slower than native arithmetic on large payloads.
 
+## Sizes
+
+The checksum and every reader walk their bytes with tail calls, so packet
+size has no limit beyond memory (no conversion was needed for Bend 2.0.37's
+stack limit). Measured on Bend 2.0.37 (native build, WSL2), in one run:
+building and verifying a 65,515-byte UDP datagram over IPv4 inside a
+65,535-byte IPv4 packet (header checksum, parse, payload, UDP checksum), a
+65,515-byte TCP segment, a 65,515-byte ICMP message and a 65,535-byte UDP
+datagram over IPv6, with every checksum checked against Python: 2.4 s,
+550 MB peak. `check.bend` builds and verifies the 64 KB UDP datagram as a
+regression test (0.7 s, 280 MB).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

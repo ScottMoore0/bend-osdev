@@ -143,7 +143,26 @@ def tcp6() -> B.Octets:
 def ping6() -> B.Octets:
   C.IcmpHeader.build_ipv6(a6(), b6(), C.IcmpHeader{128, 0, 0, 65537}, B.Octets.of_string("ab"))
 
+# A full-size datagram, as a regression test for long inputs: UDP over IPv4
+# with 65,507 bytes of pseudo-random payload (a linear congruential
+# generator), the most an IPv4 packet can carry
+def bulk.go(n: Nat, +s: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      +s2 = U32.add(U32.mul(s, 1103515245), 12345)
+      bulk.go(p, s2, Con{U32.and(U32.shrn(s2, 16n), 255), acc})
+
+def show_m16(m: Maybe<&2, U32>) -> String:
+  match m:
+    case Some{v}:
+      hex16(v)
+    case None{}:
+      "none"
+
 def main() -> IO(Unit):
+  +big = U.UdpHeader.build_ipv4(167772161, 167772162, U.UdpHeader{1234, 53, 65515, 0}, B.Octets.of_list(bulk.go(65507n, 7, Nil{})))
   do IO<Unit>:
     IO.print(hex16(K.inet_sum(B.Octets.of_list([0, 1, 242, 3, 244, 245, 246, 247]))))
     IO.print(hex16(K.inet_checksum(B.Octets.of_list([0, 1, 242, 3, 244, 245, 246, 247]))))
@@ -167,6 +186,7 @@ def main() -> IO(Unit):
     IO.print(show_udp(U.UdpHeader.parse(B.Octets.of_list([0, 1, 0, 2, 0, 8]))))
     IO.print(show_eth(E.EthHeader.parse(B.Octets.zeros(13n))))
     IO.print(show_tcp(T.TcpHeader.parse(B.Octets.of_list([0, 80, 0, 80, 0, 0, 0, 1, 0, 0, 0, 0, 64, 2, 255, 255, 0, 0, 0, 0]))))
+    IO.print("udp " ++ Nat.show(B.Octets.len(big)) ++ " bytes, checksum " ++ show_m16(B.Octets.be16_at(big, 6n)) ++ ", verifies " ++ show_bool(U.UdpHeader.verify_ipv4(167772161, 167772162, big)))
 
 #|ddf2
 #|220d
@@ -190,3 +210,4 @@ def main() -> IO(Unit):
 #|truncated
 #|truncated
 #|bad data offset
+#|udp 65515 bytes, checksum 3bd2, verifies true
