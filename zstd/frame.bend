@@ -89,6 +89,23 @@ def frm.le(k: Nat, +xs: List<&2, U32>, +i: Nat) -> Nat:
     case 1n+p:
       Nat.add(frm.nat(xs, i), Nat.mul(256n, frm.le(p, xs, 1n+i)))
 
+# the Frame_Content_Size field: k bytes from xs[i], little-endian, except
+# that a value of 2^48 or more (an 8-byte field whose top two bytes are not
+# both zero) is held as 2^48 - 1, the largest Nat a native build holds. No
+# frame this decoder can finish produces that many bytes, so the frames
+# accepted and the errors given are unchanged: a single-segment frame's
+# window is still over any limit (ZstdWindowTooLarge), and any other frame
+# still fails its content size check
+def frm.fcs_raw(fits: Bool, +k: Nat, +xs: List<&2, U32>, +i: Nat) -> Nat:
+  match fits:
+    case True{}:
+      frm.le(k, xs, i)
+    case False{}:
+      Nat.add(Nat.mul(16777215n, 16777216n), 16777215n)
+
+def frm.fcs_le(+k: Nat, +xs: List<&2, U32>, +i: Nat) -> Nat:
+  frm.fcs_raw(Bool.or(Nat.is_le(k, 6n), Nat.is_eq(Nat.add(frm.nat(xs, Nat.add(i, 6n)), frm.nat(xs, Nat.add(i, 7n))), 0n)), k, xs, i)
+
 def ZstdFrame.u32le(+xs: List<&2, U32>) -> U32:
   Bi.ZstdBits.u32le(xs)
 
@@ -385,7 +402,7 @@ def frm.parse_hdr(+fhd: Nat, +xs: List<&2, U32>) -> ZsHdr:
   +pos = frm.wd_size(single)
   +dsz = frm.did_size(Nat.mod(fhd, 4n))
   +fsz = frm.fcs_size(Nat.div(fhd, 64n), single)
-  +fcs = frm.fcs_value(fsz, frm.le(fsz, xs, Nat.add(pos, dsz)))
+  +fcs = frm.fcs_value(fsz, frm.fcs_le(fsz, xs, Nat.add(pos, dsz)))
   ZsHdr{frm.window(single, fcs, xs), ZstdFrame.u32le(B.take(dsz, B.drop(pos, xs))), fcs, frm.bool(Nat.mod(Nat.div(fhd, 4n), 2n))}
 
 def frm.new(+window: Nat, check: Bool, fcs: Maybe<&2, Nat>, cfg: ZsCfg) -> ZsFrm:

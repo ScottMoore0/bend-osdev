@@ -95,6 +95,8 @@ def main() -> IO(Unit):
     IO.print(show(Z.decompress(frame_abc())))
     IO.print(show(Z.decompress(B.Octets.of_list([40, 181, 47, 253, 32, 20, 101, 0, 0, 48, 98, 101, 110, 100, 45, 33, 1, 0, 144, 139, 22]))))
     IO.print(show(Z.decompress(B.Octets.of_list([1, 2, 3, 4, 5]))))
+    IO.print(show(Z.decompress(B.Octets.of_list([40, 181, 47, 253, 240, 132, 56, 1, 0, 0, 0, 0, 11, 0, 0, 173, 65, 44, 97]))))
+    IO.print(show(Z.decompress(B.Octets.of_list([40, 181, 47, 253, 192, 0, 132, 56, 1, 0, 0, 0, 0, 11, 25, 0, 0, 97, 98, 99]))))
     IO.print(show(Z.decompress_with(Z.ZstdOptions{Fr.ZstdLimit{2}, True{}, B.Octets.empty(), 134217728}, frame_abc())))
     IO.print(show(Z.decompress_with(Z.ZstdOptions{Fr.ZstdLimit{100}, True{}, B.Octets.of_string("0123456789abcdef"), 134217728}, B.Octets.of_list([40, 181, 47, 253, 32, 8, 53, 0, 0, 0, 1, 0, 67, 76, 32]))))
     IO.print(stream([B.Octets.of_list([40, 181, 47, 253, 32, 3]), B.Octets.of_list([25, 0, 0, 97]), B.Octets.of_list([98, 99, 40, 181, 47, 253, 32, 2, 17, 0, 0, 100, 101])], Z.ZstdPiece{Z.Zstd.start(Z.ZstdOptions.default()), B.Octets.empty()}, ""))
@@ -111,6 +113,8 @@ def main() -> IO(Unit):
 #|abc
 #|bend-bend-bend-bend!
 #|error BadMagic
+#|error WindowTooLarge
+#|error BadContentSize
 #|error OutputTooLarge
 #|01234567
 #|[][][a][bcde] end: <>

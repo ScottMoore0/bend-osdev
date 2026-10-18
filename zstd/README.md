@@ -328,6 +328,14 @@ length limit but memory: the decoder's loops are tail-recursive and its
 window an `Array`. `check.bend` compresses and decodes 100 KB as a
 regression test.
 
+A frame's content size field can say up to 2^64 - 1 bytes, but a native
+build holds a `Nat` only up to 2^48 - 1 (a larger one stops the program).
+So a content size of 2^48 or more is read as 2^48 - 1 (`frm.fcs_le` in
+`frame.bend`). No frame that this decoder can finish produces that many
+bytes, so this changes no answer: a single-segment frame with such a size
+still fails with `WindowTooLarge`, and any other frame with `BadContentSize`
+(`check.bend` decodes one of each).
+
 ## Dependencies
 
 `bytes` (Octets) and `word64` (W64, for XXH64).
@@ -335,5 +343,5 @@ regression test.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 749 decoding and 100 compression cases
+`check.bend` passes, `ref/run.sh` 739 decoding and 100 compression cases
 match (libzstd 1.5.5), `scripts/deps.sh` passes.
