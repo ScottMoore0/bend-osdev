@@ -3,12 +3,15 @@
 One set of typed interfaces for every cryptographic algorithm in bend-osdev,
 the Bend counterpart of Linux's crypto API: block cipher, stream cipher,
 hash, MAC, AEAD, KDF, signature and key agreement, each with its laws; the
-generic algorithms built on them (HMAC and HKDF over any hash; ECB, CBC and
-CTR over any block cipher of any block size); and the existing algorithms
-(cipher-modes' AES, CMAC and CCM; legacy-ciphers' DES, 3DES, SM4, Camellia,
-Serpent, Twofish and RC4; crc's CRCs) and bend-collections' SHA-256 and
-SHA-512 as instances, with their interface laws proved or tested; and
-HMAC-SHA-256, HMAC-SHA-512 and HKDF-SHA-256 over those.
+generic algorithms built on them (HMAC and HKDF over any hash; ECB, CBC,
+CTR, PCBC and CBC-CS3 ciphertext stealing over any block cipher of any block
+size; LRW over any 128-bit one; the MACs XCBC and VMAC over any block
+cipher); and the existing algorithms (cipher-modes' AES, CMAC and CCM;
+legacy-ciphers' DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256,
+Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4; crc's CRCs) and
+bend-collections' SHA-256 and SHA-512 as instances, with their interface
+laws proved or tested; and HMAC-SHA-256, HMAC-SHA-512 and HKDF-SHA-256 over
+those.
 
 The directory is `crypto` and the entry file `crypto/crypto.bend`; the hub
 name is `bend-osdev-crypto`.
@@ -20,6 +23,22 @@ Written from the public specifications only:
 * **ECB, CBC, CTR:** NIST SP 800-38A, *Recommendation for Block Cipher Modes
   of Operation* (2001), sections 6.1, 6.2 and 6.5, and Appendix B.1 (the
   standard incrementing function); vectors from Appendix F.1, F.2 and F.5.
+* **PCBC:** the FCrypt specification's "Modes of operation" (T. Anderson,
+  openafs-devel, December 2000), as Kerberos version 4 uses it; vector from
+  the same text.
+* **LRW:** M. Liskov, R. Rivest, D. Wagner, *Tweakable Block Ciphers*
+  (CRYPTO 2002), theorem 2, as the IEEE P1619 draft proposal *Tweakable
+  Narrow-block Encryption* (draft 1.00, October 2004) specifies LRW-AES;
+  vectors from its Annex B.
+* **CBC-CS3:** NIST SP 800-38A Addendum, *Three Variants of Ciphertext
+  Stealing for CBC Mode* (2010); vectors from RFC 3962, *Advanced
+  Encryption Standard (AES) Encryption for Kerberos 5* (2005), Appendix B
+  (Kerberos's CTS is CS3).
+* **XCBC-MAC:** RFC 3566, *The AES-XCBC-MAC-96 Algorithm and Its Use With
+  IPsec* (2003), and its test cases 1 to 7.
+* **VMAC:** T. Krovetz, W. Dai, *VMAC: Message Authentication Code using
+  Universal Hashing* (draft-krovetz-vmac-01, 2007); vectors from its
+  appendix (VMAC-64 and VMAC-128 over AES-128).
 * **HMAC:** RFC 2104, *HMAC: Keyed-Hashing for Message Authentication*
   (1997), and FIPS 198-1, *The Keyed-Hash Message Authentication Code*
   (2008).
@@ -34,7 +53,9 @@ Written from the public specifications only:
   Authenticated Encryption* (2008).
 * The instances follow their own packages' specifications (FIPS 197, FIPS
   46-3, SP 800-67, GB/T 32907-2016, RFC 3713, the Serpent and Twofish
-  papers, RFC 6229, SP 800-38B and RFC 4493, SP 800-38C and RFC 3610, the
+  papers, RFC 5794 (ARIA), RFC 2612 (CAST-256), Schneier's Blowfish paper,
+  RFC 2144 (CAST-128), the TEA and XTEA papers, the FCrypt specification,
+  RFC 6229, SP 800-38B and RFC 4493, SP 800-38C and RFC 3610, the
   Rocksoft CRC model); `check.bend` runs those specifications' vectors
   through the interfaces.
 
@@ -52,6 +73,12 @@ Written from the public specifications only:
 | `sign.bend` | the signature interface, key pairs, and verification from a public key's bytes |
 | `kex.bend` | the key-agreement interface, and agreement from key bytes |
 | `modes.bend` | ECB and CBC (on blocks and on bytes) and CTR (a keystream generator) over any block cipher |
+| `octets.bend` | byte-string helpers the newer modes share: XOR over the first operand's length, a byte repeated, a message cut into pieces of a block size |
+| `pcbc.bend` | PCBC over any block cipher (on blocks and on bytes) |
+| `lrw.bend` | LRW over any 128-bit block cipher (on blocks and on bytes), its tweaks through bend-osdev-gf's GF(2^128) |
+| `cts.bend` | CBC-CS3 ciphertext stealing over any block cipher, on bytes |
+| `xcbc.bend` | XCBC-MAC over any block cipher as a MAC |
+| `vmac.bend` | VMAC (64- and 128-bit tags) over any 128-bit block cipher as a MAC |
 | `hmac.bend` | HMAC over any hash: one call, or in pieces |
 | `hkdf.bend` | HKDF over any hash: extract, expand, derive |
 | `inst_cm.bend` | the adapter for cipher-modes: `CmError` onto `CrError`, and the format of its 128-bit block `CmBlock` |
@@ -225,6 +252,13 @@ and then CBC over it is `Md.CrCbc.encrypt(~S.LcSm4Key, ~M.CmBlock, ~16n,
 |---|---|---|---|
 | DES, 3DES (64-bit, `LcBlock64`) | block cipher | round_trip, round_trip_dual (from legacy-ciphers), format (legacy-ciphers'), xor, key_length; ECB and CBC round trips over it | vectors both ways, ECB/CBC/CTR vs cryptography |
 | SM4, Camellia, Serpent, Twofish (128-bit, `CmBlock`) | block cipher | the same | vectors both ways; ECB/CBC/CTR vs cryptography (SM4, Camellia) or legacy-ciphers' models (Serpent, Twofish) |
+| ARIA, CAST-256 (128-bit, `CmBlock`) | block cipher | the same (from legacy-ciphers' `aria_round_trip`, `cast6_round_trip` and their duals) | RFC 5794 and RFC 2612 vectors both ways; ECB/CBC/CTR vs the openssl command (ARIA) or legacy-ciphers' model (CAST-256) |
+| Blowfish, CAST-128, TEA, XTEA, FCrypt (64-bit, `LcBlock64`) | block cipher | the same | vectors both ways (the set Schneier publishes, RFC 2144 B.1, the FCrypt specification's; TEA and XTEA on the model's values: their papers give none); ECB/CBC/CTR vs cryptography (Blowfish, CAST-128) or the model (TEA, XTEA, FCrypt) |
+| PCBC over every block cipher whose round trip is proved | (mode) | `<c>_pcbc_round_trip` on blocks, for every key, IV and list of blocks | the FCrypt specification's PCBC vector; vs `ref/gen.py`'s PCBC over every cipher (AES included) |
+| LRW over every 128-bit block cipher whose round trip is proved | (mode) | `<c>_lrw_round_trip` on blocks, for every key, tweak key, first index and list of blocks | IEEE P1619 Annex B vectors 1 to 5 (AES-128 and AES-256) both ways; vs the Linux kernel's lrw(aes) through AF_ALG, and `ref/gen.py`'s LRW over the others |
+| CBC-CS3 over every block cipher | (mode) | none (below) | RFC 3962 B's four vectors both ways and a short message refused; vs the kernel's cts(cbc(aes)), and `ref/gen.py`'s CS3 over the others |
+| XCBC-MAC over every block cipher | MAC | `xcbc_accepts` (every cipher) | RFC 3566 test cases 1 to 7; vs `ref/gen.py`'s XCBC over AES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256; a changed tag refused |
+| VMAC over every 128-bit block cipher | MAC | `vmac_accepts` (every cipher and nonce length) | draft-krovetz-vmac-01's vectors (64- and 128-bit tags); vs `ref/gen.py`'s VMAC over the 128-bit ciphers, nonces of 1 to 15 bytes; a changed tag refused |
 | AES-128, AES-256 (`CrAes.key`; `CrAes.key_enc` without the decryption round keys) | block cipher | format, xor, key_length; FIPS 197 C.1 through the interface | round_trip (cipher-modes tests AES decryption but proves no law about it); C.1 and C.3 both ways; ECB/CBC/CTR vs cryptography |
 | CTR over every block cipher above | stream cipher | involution, streaming_data, streaming_state, for every block cipher | SP 800-38A F.5.1; in two pieces vs cryptography / models, a counter wrapping |
 | RC4, RC4-drop[n] | stream cipher | involution, streaming_data, streaming_state (from legacy-ciphers); key and IV refusals | RFC 6229 whole and in pieces, drop[1536]; vs cryptography's ARC4 and the model |
@@ -289,6 +323,12 @@ only bytes.
 | `sign.bend` | `CrKeypair<SK, PK>{secret, public}`, `CrSign.keypair`, `CrSign.verify_bytes` |
 | `kex.bend` | `CrKex.agree` |
 | `modes.bend` | `CrEcb.encrypt_blocks`, `CrEcb.decrypt_blocks`, `CrCbc.encrypt_blocks`, `CrCbc.decrypt_blocks` (blocks; CBC's last block is the next call's IV); `CrModes.blocks_of` (`CrNotBlockMultiple`), `CrModes.octets_of`; `CrEcb.encrypt`, `CrEcb.decrypt`, `CrCbc.encrypt`, `CrCbc.decrypt` (bytes, whole blocks, a one-block IV); `CrCtrState<K>`, `CrCtr.start` (a one-block initial counter, `CrBadIvLength`), `CrCtr.next`, `CrCtr.update` |
+| `octets.bend` | `CrOct.xor`, `CrOct.rep`, `CrOct.pieces` |
+| `pcbc.bend` | `CrPcbc.encrypt_blocks`, `CrPcbc.decrypt_blocks`, `CrPcbc.next_iv` (the chaining value after a list of blocks); `CrPcbc.encrypt`, `CrPcbc.decrypt` (bytes, whole blocks, a one-block IV) |
+| `lrw.bend` | `CrLrwKey<K>{k, t}`, `CrLrw.key` (the cipher's key then a 16-byte tweak key), `CrLrw.encrypt_blocks`, `CrLrw.decrypt_blocks` (from a first index), `CrLrw.encrypt`, `CrLrw.decrypt` (bytes; the IV is the first block's 16-byte big-endian index) |
+| `cts.bend` | `CrCts.encrypt`, `CrCts.decrypt` (any length of at least one block, `CrTooShort` below; a one-block IV) |
+| `xcbc.bend` | `CrXcbcKey<K>`, `CrXcbc.key`, `CrXcbc.mac`, `CrXcbc.mac96` (RFC 3566's 96-bit tag), `CrXcbc.verify` |
+| `vmac.bend` | `CrVmacKey<K>`, `CrVmac.key` (`~words`: 1 for VMAC-64, 2 for VMAC-128), `CrVmac.tag` (a nonce of 1 to bsize - 1 bytes, `CrBadNonceLength`), `CrVmac.mac` (`~nlen`: the message's first nlen bytes are the nonce), `CrVmac.verify` |
 | `hmac.bend` | `CrHmacKey{ipad, opad}`, `CrHmacState<H>`, `CrHmac.key`, `CrHmac.key_of`, `CrHmac.mac`, `CrHmac.verify`, `CrHmac.start`, `CrHmac.update`, `CrHmac.finish` |
 | `hkdf.bend` | `CrHkdf.extract`, `CrHkdf.expand` (`CrBadOutputLength` past 255 digests), `CrHkdf.derive` |
 | `inst_cm.bend` | `CrCm.err`, `CrCm.lift`, `CrCm.key`; `CrBlk128.of_octets`, `CrBlk128.to_octets`, `CrBlk128.xor` |
@@ -335,7 +375,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-`LAWS.bend` has 87 laws.
+`LAWS.bend` has 143 laws.
 
 **Generic, for every input and every algorithm of the shape:**
 `xor_involution`, `xor_streaming_data`, `xor_streaming_state` (CrXor, every
@@ -343,7 +383,8 @@ keystream generator); `ctr_involution`, `ctr_streaming_data`,
 `ctr_streaming_state` (CTR, every block cipher); `cmblock_format`,
 `cmblock_xor`, `lcblock64_format`, `lcblock64_xor` (the two block formats);
 `mac_verify_tag_accepts`, `mac_verify_tag_agrees`, `hmac_accepts` (every
-hash), `cmac_accepts` (every 128-bit cipher); `crc32_hash_streaming`,
+hash), `cmac_accepts` (every 128-bit cipher), `xcbc_accepts` (every block
+cipher), `vmac_accepts` (every block cipher and nonce length); `crc32_hash_streaming`,
 `crc32_hash_split`, `crc32_hash_split3`, `crc32_hash_length`,
 `crc64_hash_streaming`, `crc64_hash_split`, `crc64_hash_split3` (every
 parameter set); `sha256_spec`, `sha256_hash_split`, `sha256_hash_split3`,
@@ -355,9 +396,11 @@ hypothesis): `lift_round_trip`, `ccm_round_trip_if`,
 `sign_verify_bytes_if`, `kex_agree_if`.
 
 **Per instance** (generated): `<c>_block_round_trip`,
-`<c>_block_round_trip_dual`, `<c>_ecb_round_trip`, `<c>_cbc_round_trip`
-for c = des, tdes, sm4, camellia, serpent, twofish; `<c>_key_length` for
-those and aes, aes_enc; `rc4_stream_involution`,
+`<c>_block_round_trip_dual`, `<c>_ecb_round_trip`, `<c>_cbc_round_trip`,
+`<c>_pcbc_round_trip` for c = des, tdes, sm4, camellia, serpent, twofish,
+aria, cast6, blowfish, cast5, tea, xtea, fcrypt; `<c>_lrw_round_trip` for
+the 128-bit ones among them (sm4, camellia, serpent, twofish, aria, cast6);
+`<c>_key_length` for those and aes, aes_enc; `rc4_stream_involution`,
 `rc4_stream_streaming_data`, `rc4_stream_streaming_state`;
 `hmac_crc32_streaming`, `hmac_crc32_split`, `hmac_crc64_streaming`,
 `hmac_crc64_split` (every parameter set), `hmac_sha256_split`,
@@ -376,7 +419,18 @@ that are not whole blocks, an HKDF output past 255 digests, over CRC-32
 and over SHA-256).
 
 **Not proved, and tested:** AES's round trip (cipher-modes tests it and
-proves no law); the CCM round trip unconditionally (above); an AEAD's and a
+proves no law), and so ECB, CBC, PCBC and LRW round trips over AES; the
+CBC-CS3 round trip: decryption cuts the ciphertext into pieces again, so a
+proof needs `CrOct.pieces` of a concatenation of encrypted blocks to give
+those blocks back (every block's length through the format, the stolen
+bytes' `take` and `drop`, the XOR with a zero-padded piece undone over its
+length), for every block size; those lemmas are not done in this version,
+and `PROOF.bend` already takes about 2.6 GB of the checker's memory under
+`--verdict` (tested: RFC 3962's vectors both ways, and 32 cases against the
+kernel's cts(cbc(aes)) and `ref/gen.py`'s CS3); the byte layer of PCBC and
+LRW (as of ECB and CBC: the laws are on lists of blocks); VMAC's and XCBC's
+values (the MAC laws hold whatever the tag is; the values are tested on
+the specifications' vectors); the CCM round trip unconditionally (above); an AEAD's and a
 MAC's refusal of changed input (a forgery succeeds with probability
 2^-8tlen, so it is no law for every input; tested on every instance); the
 KDF laws (HKDF's length needs arithmetic on ceilings not done here); CRC-64's
@@ -404,15 +458,27 @@ cryptography).
   HMAC-SHA-256 in pieces with verify; HKDF-SHA-256 on RFC 5869's A.1 to
   A.3. The SHA-2 values are those of Python's hashlib, hmac and
   cryptography, which the script that wrote them first checked against the
-  RFCs' published values.
+  RFCs' published values. Then the newer instances: ARIA (RFC 5794 A.1),
+  CAST-256 (RFC 2612's 128-bit vector), Blowfish (a vector of the set
+  Schneier publishes), CAST-128 (RFC 2144 B.1), TEA and XTEA (the
+  model's values), FCrypt (its specification's) both ways; PCBC over FCrypt
+  (the specification's PCBC vector); LRW-AES on IEEE P1619 Annex B's five
+  vectors both ways; CBC-CS3 over AES on RFC 3962's 17-, 31-, 32- and
+  64-byte vectors both ways, and a 13-byte message refused; AES-XCBC-MAC on
+  RFC 3566's seven test cases; VMAC-AES on draft-krovetz-vmac-01's four
+  messages with 64- and 128-bit tags.
 * `ref/run.sh` compares every instance through its interface with
-  implementations outside this package (188 cases: 93 against Python's
-  cryptography, directly or through `ref/gen.py`'s CTR, CMAC and CCM over
-  its block ciphers; 36 against legacy-ciphers' `ref/model.py`, for Serpent,
-  Twofish, and RC4 at the key sizes cryptography lacks; 59 against Python's
-  `hashlib`, `hmac`, `binascii` and `gen.py`'s Rocksoft-model CRCs): one block both
-  ways for every block cipher and key size; ECB, CBC and CTR (in two pieces)
-  over every block cipher; RC4 in two pieces for keys of 1 to 256 bytes;
+  implementations outside this package (385 cases: 170 against Python's
+  cryptography, directly or through `ref/gen.py`'s modes over its block
+  ciphers; 22 against the openssl command's ARIA; 9 against the Linux
+  kernel's lrw(aes) and cts(cbc(aes)) through AF_ALG; 123 against
+  legacy-ciphers' `ref/model.py`, for Serpent, Twofish, CAST-256, TEA, XTEA,
+  FCrypt, and RC4 at the key sizes cryptography lacks; 61 against Python's
+  `hashlib`, `hmac`, `binascii` and `gen.py`'s Rocksoft-model CRCs, and the
+  refusals): one block both ways for every block cipher and key size; ECB,
+  CBC, CTR (in two pieces), PCBC and CBC-CS3 over every block cipher; LRW,
+  XCBC-MAC and VMAC (64- and 128-bit tags, nonces of 1 to 15 bytes) over
+  the 128-bit ones; RC4 in two pieces for keys of 1 to 256 bytes;
   CMAC over five ciphers with verify; CCM over five ciphers with every tag
   length, changed tag, ciphertext and associated data refused; SHA-256,
   SHA-512 and the three CRC hashes in pieces; HMAC over all five (keys of 0
@@ -420,8 +486,17 @@ cryptography).
   cryptography's HKDF) and over CRC-32 and CRC-64/XZ. `gen.py` first checks its own
   CTR, CMAC and CCM against cryptography for AES, its HKDF against
   cryptography's HKDF on RFC 5869's test case 1, and its CRCs against the
-  catalogue's check values. **legacy-ciphers' models share an author with
-  that package**: Serpent and Twofish are compared with them alone.
+  catalogue's check values; its PCBC, LRW, CS3, XCBC and VMAC on the
+  specifications' vectors above, and its LRW and CS3 against the kernel's
+  (when AF_ALG has them; the cases fall back to `gen.py`'s modes when it
+  does not). **legacy-ciphers' models share an author with that package**:
+  Serpent, Twofish, CAST-256, TEA, XTEA and FCrypt are compared with them
+  alone; **`gen.py`'s PCBC, LRW, CS3, XCBC and VMAC share an author with
+  this package**: PCBC, XCBC and VMAC, and LRW and CS3 over ciphers other
+  than AES, are compared with them alone (no outside implementation here
+  has those modes), checked first on the specifications' own vectors. The
+  ref's cases file is too large for a native build in 3 GB, so
+  `scripts/bend-run.sh` runs it on the JavaScript lane.
 
 ## Sizes
 
@@ -431,7 +506,7 @@ beyond memory. Native builds (Bend 2.0.37, WSL2), each run building a 1 MB
 pseudo-random message: AES-CTR through the stream interface, encryption and
 decryption back, 9.6 s and 297 MB; SM4-CBC through `modes.bend`, both ways,
 6.4 s and 302 MB; HMAC over CRC-32 (one call, in pieces, and verify) 0.8 s.
-`check.bend` takes about 36 s with its build; the ref test about 55 s.
+`check.bend` takes about 58 s with its build; the ref test about 45 s.
 
 ## Notes on use
 
@@ -439,8 +514,11 @@ decryption back, 9.6 s and 297 MB; SM4-CBC through `modes.bend`, both ways,
   MAC**: the CRC instances are checksums, and the HMAC and HKDF instances
   over them exercise those algorithms' genericity. Use SHA-256 or SHA-512
   (and HMAC and HKDF over them) for security.
-* DES, 3DES and RC4 are here for compatibility only (see legacy-ciphers);
-  never reuse a CTR counter, an RC4 state or a CCM nonce under one key.
+* DES, 3DES, RC4, Blowfish, CAST-128, TEA, XTEA and FCrypt are here for
+  compatibility only (see legacy-ciphers), and so are PCBC (a swap of two
+  ciphertext blocks goes undetected) and LRW (IEEE 1619 replaced it with
+  XTS); never reuse a CTR counter, an RC4 state, a CCM nonce or a VMAC
+  nonce under one key.
 * None of this code is constant-time, and Bend's runtime promises nothing
   about running time; `CrMac.verify_tag` compares every byte, which is a
   property of the code, not a timing guarantee.
@@ -448,7 +526,8 @@ decryption back, 9.6 s and 297 MB; SM4-CBC through `modes.bend`, both ways,
 ## Dependencies
 
 `DEPS`: `bytes` (Octets, and its laws in the proofs), `word64` (the bit
-slicing of the 128-bit format, `W64` for CRC-64), `cipher-modes` (AES,
+slicing of the 128-bit format, `W64` for CRC-64 and VMAC), `gf` (GF(2^128)
+for LRW's tweaks), `cipher-modes` (AES,
 CMAC, CCM and the `CmBlock` type, for the instances), `legacy-ciphers` (its
 ciphers and RC4, and their laws), `crc` (its CRCs and their laws), and the
 hub package `bend-collections-laws-crypto@1.0.0.0` (SHA-256 and SHA-512 and
@@ -459,6 +538,6 @@ bend-collections, through cipher-modes' `aes.bend`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 30 s), `--verdict` ALL
-PROOFS CHECK (about 80 s), `check.bend` passes, `ref/run.sh` 188 cases
-match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 40 s), `--verdict` ALL
+PROOFS CHECK (about 2 minutes, 2.6 GB), `check.bend` passes, `ref/run.sh`
+385 cases match, `scripts/deps.sh` passes.
