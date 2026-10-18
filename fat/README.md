@@ -255,7 +255,10 @@ packages `dosfstools mtools` (run.sh exits 77 without them).
 
 Measured with Bend 2.0.37 under bun in WSL2 (not a native build; times are
 whole runs, including loading the test device). Every operation reads
-through `Octets`, which costs about 940 bytes of memory per byte held.
+through `Octets`, which cost about 940 bytes of memory per byte
+(when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured).
 
 `check.bend` runs in about 1.3 s. The reference test's generated program
 (1.8 MB, 956 operations on 39 images) checks in 0.5 s and runs in about 17 s

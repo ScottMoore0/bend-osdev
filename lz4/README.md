@@ -250,8 +250,9 @@ and limits were run by hand against the lz4 tool, not in CI.
   text is this repository's sources). At 256 KB, `compress` takes 3.9 s and
   660 MB, `decompress` 3.4 s and 720 MB; at 100 KB, 1.5 s and 400 MB, and
   1.7 s and 380 MB. Before this release, 100 KB overflowed the stack.
-* The limit now is memory, not the stack: an `Octets` costs about 940 bytes
-  of memory per byte in bytes today, and a 1 MB input and its 1 MB output
+* The limit now is memory, not the stack: an `Octets` cost about 940 bytes
+  of memory per byte when measured (bytes' compact `OctByte` storage, merged
+  since, holds one in about a third of that; not re-measured here), and a 1 MB input and its 1 MB output
   are almost 2 GB between them, so keep a single call to a few MB, or work a
   block at a time (`block_decompress_dict`, the streaming writer), until
   bytes' storage is compact. Time is mostly that too: converting 1 MB to and

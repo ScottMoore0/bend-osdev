@@ -177,7 +177,10 @@ from disk, every count and sum checked against `readelf`:
 | 1.13 MB object (`-ffunction-sections`), 6,013 sections, 12,004 symbols | `ElfFile.read`, `.symtab` found by name, its symbols read | 4.5 s | 1.6 GB |
 | 480 KB symbol table, 20,000 symbols | `ElfSym.write_table`, then `read_table` and compared with `normal_table` | 2.8 s | 1.1 GB |
 
-Most of the memory is the file's `Octets` (about 940 bytes per byte today)
+Most of the memory is the file's `Octets` (about 940 bytes per byte
+when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured)
 and the list `File.read_bytes` gives; files of a few MB need a compact
 `Octets`. Before this, a 164 KB executable (2,506 symbols) overflowed the
 stack, and every reader converted the whole file to a list. `check.bend`

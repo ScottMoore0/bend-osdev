@@ -150,7 +150,10 @@ checked against a Python encoder):
 | 1 MB: one 512 KB file and 2,790 files of 64 bytes | 6.9 s | 2.6 GB |
 | 1 MB: 8,000 empty files | 15.7 s | 1.3 GB |
 
-Most of the memory is `Octets` (about 940 bytes per byte today) and the list
+Most of the memory is `Octets` (about 940 bytes per byte
+when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured) and the list
 forms the parser reads. Before this, a 64 KB file overflowed the stack (the
 data was split and measured by structural recursion), and so did parsing
 3,000 entries. `check.bend` builds and parses a 96 KB archive (a 48 KB file

@@ -40,7 +40,10 @@ pseudo-random bytes:
 | `of_octets`, 1 MB | 6.9 s | 1.35 GB |
 | `round_trip` (both ways), 1 MB | 9.6 s | 1.86 GB |
 
-Most of the memory is the `Octets` itself (about 940 bytes per byte today)
+Most of the memory is the `Octets` itself (about 940 bytes per byte
+when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured)
 and its list form. `check.bend` round-trips 100 KB as a regression test.
 Before this, `of_octets` overflowed the runtime's stack at 64 KB (it took
 the length through bytes' structural `B.len`; it now uses `B.len.fast`).

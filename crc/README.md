@@ -101,7 +101,10 @@ zlib and xz):
 | all seven named CRCs, bitwise | 60 s | 1.74 GB |
 | all seven named CRCs, table-driven | 35 s | 1.79 GB |
 
-Most of the memory is the 1 MB `Octets` (about 940 bytes per byte today)
+Most of the memory is the 1 MB `Octets` (about 940 bytes per byte
+when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured)
 and its list form. `check.bend` runs CRC32C both ways and CRC-64/XZ
 table-driven over 100 KB as a regression test.
 

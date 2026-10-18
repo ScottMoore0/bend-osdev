@@ -277,7 +277,10 @@ halves are compared.
 
 Measured with Bend 2.0.37 under bun in WSL2 (not a native build; times are
 whole runs, including loading the test device). Byte strings are `Octets`,
-which cost about 940 bytes of memory per byte held. The differential test
+which cost about 940 bytes of memory per byte
+(when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured). The differential test
 (34 images of up to 480 KB, 48 cases, every file streamed and CRC'd) runs in
 about 12 s; `check.bend` in about 2.6 s; the proofs check in about 1.5 s,
 with `--verdict` in about 4.3 s.

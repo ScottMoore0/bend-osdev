@@ -261,8 +261,10 @@ messages, every ciphertext checked against Python's `cryptography`:
 | CCM encryption and decryption back, 512 KB | 11.4 s | 1.9 GB |
 
 Most of the memory is the message as `Octets` (about 940 bytes per byte
-today) and as the lists and blocks the modes work on; a round trip of 1 MB
-needs more than 3 GB until `Octets` is compact. Before this, CBC, XTS and
+when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured) and as the lists and blocks the modes work on; a round trip of 1 MB
+needed more than 3 GB before `Octets` became compact. Before this, CBC, XTS and
 CCM overflowed the stack at 32 KB (CMAC was already a loop), and PKCS #7
 padding walked the message as a list (it now works on `Octets`).
 `check.bend` runs CBC and CCM over 32 KB and XTS over 32 KB and 5 bytes,

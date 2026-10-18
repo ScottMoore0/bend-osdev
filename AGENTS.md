@@ -89,8 +89,10 @@ package: copy its shape.
   the reference and prove the tail form equal to it, as bytes does
   (`PROOF.bend`, the `F_*` lemmas). `Octets` operations have no length limit;
   the `List<&2, U32>` list layer in bytes is structural.
-- **Octets memory:** about 940 bytes of memory per byte (each byte is an
-  8-bit `Word`). Hold images of more than a few MB a block at a time.
+- **Octets memory:** about 150 bytes of memory per byte held (each byte is
+  one `OctByte` record of eight `Bool`s); a pipeline that builds, copies and
+  reads data peaks at several times its size. Hold images of more than a few
+  MB a block at a time.
 - **List literals** of more than about 3,000 elements overflow: build long
   test inputs in pieces or with a generator function.
 - **Native builds:** a record with four or more `W64` fields fails to compile

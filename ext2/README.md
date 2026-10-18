@@ -142,7 +142,7 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
 | `Ext2File.read_block(dev, fs, i, l)` | the bytes of logical block `l` (the last cut at the size; holes as zeros) |
 | `Ext2File.start(i)`, `Ext2File.next(dev, fs, r)`, `Ext2Reader{inode, next}`, `Ext2Chunk` (`Ext2Piece{data, rest}`, `Ext2Eof`) | streaming, a block at a time |
 | `Ext2File.read_range(dev, fs, i, off, len)` | bytes from `off`, never past the size; reads only the blocks the range covers |
-| `Ext2File.read_all(dev, fs, i)` | the whole file (an `Octets` costs about 940 bytes of memory a byte today: stream anything over a megabyte or so; see Speed and size) |
+| `Ext2File.read_all(dev, fs, i)` | the whole file (an `Octets` holds about 150 bytes of memory per byte: stream anything over a few megabytes; see Speed and size) |
 | `Ext2File.readlink(dev, fs, i)`, `Ext2File.is_fast_symlink(fs, i)` | link targets; `Ext2NotSymlink` |
 
 ### blockmap.bend and extent.bend
@@ -305,8 +305,10 @@ overflowed the runtime's stack somewhere between 10,000 and 40,000 blocks.)
 A block read through blockdev's `Dev.read_bytes` recurses once per device
 block it spans: at most 128 (a 64 KiB block on a 512-byte device).
 
-What limits one call now is memory: an `Octets` costs about 940 bytes a
-byte today, and a range read peaks at about 1.5 KB a byte, so read files
+What limits one call now is memory: an `Octets` cost about 940 bytes a
+byte (when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured), and a range read peaks at about 1.5 KB a byte, so read files
 over a megabyte or so by streaming or in ranges; a listing holds every
 entry's name (20,000 short names take about 0.1 GB). Streaming reads the
 block map or extent tree again for every block (about 1.4 ms a block for a

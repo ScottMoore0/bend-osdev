@@ -350,8 +350,10 @@ Before these loops were made tail-recursive, a 300-node tree (39 KB) did
 not parse and a 1,000-node tree did not build: Bend 2.0.37's runtime
 overflows its stack after some 10,000 to 40,000 nested calls.
 
-The limit now is memory: an `Octets` costs about 940 bytes of RAM per byte
-in bytes' current representation, and the reader holds the blob, its byte
+The limit now is memory: an `Octets` cost about 940 bytes of RAM per byte
+(when measured; bytes' compact `OctByte` storage, merged since, holds an
+`Octets` in about a third of that, about 150 bytes per byte, and these
+figures have not been re-measured), and the reader holds the blob, its byte
 list and the tree at once, so reading a 1 MB blob would need more than
 2 GB (not run here, on a shared machine). That will shrink when bytes makes
 `Octets` compact.

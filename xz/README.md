@@ -215,8 +215,10 @@ CRC32 exactly:
 | `XzDecoder.feed` in 4 KiB pieces, CRC32 | 1 MB | 12 s | 1.8 GB |
 
 (The times include reading the file, and the test's own CRC32 of the
-output.) What limits size now is memory, not the stack: an `Octets` costs
-about 1 KB of memory per byte today, and the decoder holds its input and
+output.) What limits size now is memory, not the stack: an `Octets` cost
+about 1 KB of memory per byte when measured (bytes' compact `OctByte`
+storage, merged since, holds one in about a third of that; not re-measured
+here), and the decoder holds its input and
 its output, so a 1 MB output needs about 2 GB. A 1 MB file with a delta
 filter (660 KB compressed) used more than 3 GB, and 4 MB was not tried for
 that reason (it would need about 8 GB). That limit goes when `Octets`
