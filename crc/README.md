@@ -5,8 +5,9 @@ Painless Guide to CRC Error Detection Algorithms", 1993; parameters from the
 CRC catalogue at reveng.sourceforge.io).
 
 Inputs are `Octets` (bend-osdev-bytes). A CRC is fixed by its width, polynomial (normal, most significant bit first),
-initial register value, bit order and final XOR. `Crc32Spec` covers widths 8
-to 32 on `U32`; `Crc64Spec` covers width 64 on `W64` (bend-osdev-word64).
+initial register value, bit order and final XOR. `Crc32Spec` covers widths 1
+to 32 on `U32` (below 8, a most-significant-first CRC takes its input a bit
+at a time, since a byte does not fit at the register's top); `Crc64Spec` covers width 64 on `W64` (bend-osdev-word64).
 
 ## Files
 
@@ -26,6 +27,16 @@ to 32 on `U32`; `Crc64Spec` covers width 64 on `W64` (bend-osdev-word64).
 | `crc64_xz` | CRC-64/XZ | the XZ format's check | 0x995DC9BBDF1939FA |
 | `crc64_nvme` | CRC-64/NVME | NVMe | 0xAE8B14860A799888 |
 | `crc32` | CRC-32/ISO-HDLC | zlib, Ethernet (also in bend-kit-hash) | 0xCBF43926 |
+| `crc4_itu` | CRC-4/G-704 (CRC-4/ITU), poly 0x3, reflected | ITU-T G.704 framing | 0x7 |
+| `crc7_mmc` | CRC-7/MMC, poly 0x09 | SD/MMC commands | 0x75 |
+| `crc8_smbus` | CRC-8/SMBUS, poly 0x07 | SMBus packet error checking | 0xF4 |
+| `crc8_itu` | CRC-8/I-432-1 (CRC-8/ITU), poly 0x07, xorout 0x55 | ATM header error control | 0xA1 |
+| `crc8_maxim` | CRC-8/MAXIM-DOW, poly 0x31, reflected | Dallas/Maxim 1-Wire | 0xA1 |
+| `crc8_dvb_s2` | CRC-8/DVB-S2, poly 0xD5 | DVB-S2 | 0xBC |
+| `crc8_autosar` | CRC-8/AUTOSAR, poly 0x2F, init and xorout 0xFF | AUTOSAR | 0xDF |
+| `crc16_kermit` | CRC-16/KERMIT (CRC-16/CCITT), poly 0x1021, reflected | the kernel's `crc_ccitt` | 0x2189 |
+| `crc16_ccitt_false` | CRC-16/IBM-3740 (CRC-16/CCITT-FALSE), poly 0x1021, init 0xFFFF | | 0x29B1 |
+| `crc16_xmodem` | CRC-16/XMODEM (CRC-16/ITU-T), poly 0x1021 | the kernel's `crc_itu_t` | 0x31C3 |
 
 ## Computing a CRC in pieces
 
@@ -37,7 +48,7 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 
 ## Extension points
 
-* **Any CRC of width 8 to 32 or 64:** build a `Crc32Spec` or `Crc64Spec` with
+* **Any CRC of width 1 to 32 or 64:** build a `Crc32Spec` or `Crc64Spec` with
   its catalogue parameters; the named CRCs are just such values. A CRC whose
   input and output bit orders differ (refin ≠ refout) is not covered yet.
 * **Streaming:** `start`/`update`/`finish` let a caller feed data in pieces
@@ -58,14 +69,15 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 * **vectors:** the catalogue's check value for each named CRC, and the empty
   input;
 * **the fast path, as vectors:** the check values computed table-driven, and
-  agreement with the reference on a longer input. A law for every input would
-  need lemmas about `Array`'s internals, so the fast path is tied to the
+  agreement with the reference on a longer input. Below width 8, a
+  most-significant-first CRC's fast path is the bitwise engine (no table).
+  A law for every input would need lemmas about `Array`'s internals, so the fast path is tied to the
   reference by these vectors and by the differential test.
 
 ## Tests
 
 `ref/run.sh` compares every CRC, through both the reference and the fast
-path, on random inputs (277 cases) with:
+path, on random inputs (737 cases) with:
 
 * an independent implementation of the parameter model (`ref/gen.py`);
 * Python's `binascii.crc32` (zlib), for CRC-32;
@@ -114,4 +126,4 @@ table-driven over 100 KB as a regression test.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 277 cases match, `scripts/deps.sh` passes.
+`check.bend` passes, `ref/run.sh` 737 cases match, `scripts/deps.sh` passes.

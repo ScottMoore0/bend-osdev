@@ -33,6 +33,17 @@ def main() -> IO(Unit):
     IO.print(B.hex(B.be32(C.crc32c(big))))
     IO.print(B.hex(B.be32(T.Crc32Spec.compute_fast(C.crc32c.spec(), big))))
     IO.print(W.W64.show_hex(T.Crc64Spec.compute_fast(C.crc64_xz.spec(), big)))
+    IO.print(U32.show(C.crc4_itu(nine())))
+    IO.print(U32.show(C.crc7_mmc(nine())))
+    IO.print(U32.show(C.crc8_smbus(nine())))
+    IO.print(U32.show(C.crc8_itu(nine())))
+    IO.print(U32.show(C.crc8_maxim(nine())))
+    IO.print(U32.show(C.crc8_dvb_s2(nine())))
+    IO.print(U32.show(C.crc8_autosar(nine())))
+    IO.print(B.hex(B.be16(C.crc16_kermit(nine()))))
+    IO.print(B.hex(B.be16(C.crc16_ccitt_false(nine()))))
+    IO.print(B.hex(B.be16(C.crc16_xmodem(nine()))))
+    IO.print(U32.show(C.Crc32Spec.finish(C.crc7_mmc.spec(), C.Crc32Spec.update(C.crc7_mmc.spec(), C.Crc32Spec.update(C.crc7_mmc.spec(), C.Crc32Spec.start(C.crc7_mmc.spec()), B.Octets.of_string("1234")), B.Octets.of_string("56789")))))
 
 #|e3069283
 #|cbf43926
@@ -45,3 +56,14 @@ def main() -> IO(Unit):
 #|70cabb82
 #|70cabb82
 #|5fffa685dfdeb9c0
+#|7
+#|117
+#|244
+#|161
+#|161
+#|188
+#|223
+#|2189
+#|29b1
+#|31c3
+#|117

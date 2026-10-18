@@ -75,3 +75,47 @@ law fast_crc64_xz:
 
 law fast_agrees_crc32c:
   {T.Crc32Spec.compute_fast(C.crc32c.spec(), B.Octets.of_string("bend-osdev: componentised, changeable, proved")) == C.crc32c(B.Octets.of_string("bend-osdev: componentised, changeable, proved")) : U32}
+
+# More named CRCs from the reveng catalogue, with their check values: CRC-4/
+# G-704 0x7, CRC-7/MMC 0x75, CRC-8/SMBUS 0xF4, CRC-8/I-432-1 0xA1,
+# CRC-8/MAXIM-DOW 0xA1, CRC-8/DVB-S2 0xBC, CRC-8/AUTOSAR 0xDF, CRC-16/KERMIT
+# 0x2189, CRC-16/IBM-3740 0x29B1, CRC-16/XMODEM 0x31C3
+
+law check_crc4_itu:
+  {C.crc4_itu(B.Octets.of_string("123456789")) == 7 : U32}
+
+law check_crc7_mmc:
+  {C.crc7_mmc(B.Octets.of_string("123456789")) == 117 : U32}
+
+law check_crc8_smbus:
+  {C.crc8_smbus(B.Octets.of_string("123456789")) == 244 : U32}
+
+law check_crc8_itu:
+  {C.crc8_itu(B.Octets.of_string("123456789")) == 161 : U32}
+
+law check_crc8_maxim:
+  {C.crc8_maxim(B.Octets.of_string("123456789")) == 161 : U32}
+
+law check_crc8_dvb_s2:
+  {C.crc8_dvb_s2(B.Octets.of_string("123456789")) == 188 : U32}
+
+law check_crc8_autosar:
+  {C.crc8_autosar(B.Octets.of_string("123456789")) == 223 : U32}
+
+law check_crc16_kermit:
+  {C.crc16_kermit(B.Octets.of_string("123456789")) == 8585 : U32}
+
+law check_crc16_ccitt_false:
+  {C.crc16_ccitt_false(B.Octets.of_string("123456789")) == 10673 : U32}
+
+law check_crc16_xmodem:
+  {C.crc16_xmodem(B.Octets.of_string("123456789")) == 12739 : U32}
+
+law fast_crc7_mmc:
+  {T.Crc32Spec.compute_fast(C.crc7_mmc.spec(), B.Octets.of_string("123456789")) == 117 : U32}
+
+law fast_crc4_itu:
+  {T.Crc32Spec.compute_fast(C.crc4_itu.spec(), B.Octets.of_string("123456789")) == 7 : U32}
+
+law fast_crc16_xmodem:
+  {T.Crc32Spec.compute_fast(C.crc16_xmodem.spec(), B.Octets.of_string("123456789")) == 12739 : U32}
