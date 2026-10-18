@@ -142,7 +142,7 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
 | `Ext2File.read_block(dev, fs, i, l)` | the bytes of logical block `l` (the last cut at the size; holes as zeros) |
 | `Ext2File.start(i)`, `Ext2File.next(dev, fs, r)`, `Ext2Reader{inode, next}`, `Ext2Chunk` (`Ext2Piece{data, rest}`, `Ext2Eof`) | streaming, a block at a time |
 | `Ext2File.read_range(dev, fs, i, off, len)` | bytes from `off`, never past the size; reads only the blocks the range covers |
-| `Ext2File.read_all(dev, fs, i)` | the whole file (small files: an `Octets` is a list today) |
+| `Ext2File.read_all(dev, fs, i)` | the whole file (an `Octets` costs about 940 bytes of memory a byte today: stream anything over a megabyte or so; see Speed and size) |
 | `Ext2File.readlink(dev, fs, i)`, `Ext2File.is_fast_symlink(fs, i)` | link targets; `Ext2NotSymlink` |
 
 ### blockmap.bend and extent.bend
@@ -236,43 +236,86 @@ reading of real images is covered by `check.bend` and the differential test.
   corruptions refused (bad magic, superblock, inode and directory checksums,
   an unsupported feature, a bad rec_len), one accepted again with
   verification off, and a plain-ext2 reader refusing extents.
-* `ref/run.sh`: `ref/gen.py` builds 15 images with mke2fs (ext2 with 1 KiB and
+* `ref/run.sh`: `ref/gen.py` builds 16 images with mke2fs (ext2 with 1 KiB and
   4 KiB blocks, several groups, revision 0, htree directories after
   `e2fsck -D`; ext3; ext2 with gdt_csum; ext4 with and without metadata_csum,
   without 64bit, with meta_bg over 20 groups, with several groups, with
   metadata_csum_seed after a UUID change, with htree directories and an
-  unwritten extent), each from a random tree (nested directories, empty, small
-  and large files, sparse files including one reaching the triply indirect
-  block, fast and slow symbolic links, absolute links, chains and loops, a
-  long name, a directory of many entries), and 27 more runs over corrupted
-  copies (or with a narrower reader or other options). It
+  unwritten extent, and with larger inputs: a directory of 3000 entries and
+  a file of 100 to 160 KB read whole by range), each from a random tree
+  (nested directories, empty, small and large files, sparse files including
+  one reaching the triply indirect block, fast and slow symbolic links,
+  absolute links, chains and loops, a long name, a directory of many
+  entries), and 27 more runs over corrupted copies (or with a narrower
+  reader or other options). It
   compares the listings, inode numbers, sizes, modes and link counts with
   the tree and with `debugfs -R "ls -l"` and `stat`; contents (streamed,
   CRC-32) and byte ranges with the files (checked against `debugfs -R cat`);
   block numbers with `debugfs -R bmap`; link targets with `os.readlink`;
   lookups that follow links with a model of path resolution in `gen.py`
   (written here, so it shares an author with the package); and requires each
-  corruption to be refused with the error it calls for. 42 images, 2819
-  queries (3958 lines of output) with the default seed 2026; seed 7 passes
+  corruption to be refused with the error it calls for. 43 images, 2949
+  queries (7130 lines of output) with the default seed 2026; seed 7 passes
   too. The images live in a
   temporary directory and are read a block at a time (`ref/image.bend` holds
-  their non-zero blocks, each read from the file on its own); each image runs
-  in its own process. It needs python3 and e2fsprogs (exit 77 without them).
+  their non-zero blocks, each read from the file on its own and kept as a
+  list of bytes until it is read); each image runs in its own process. It
+  needs python3 and e2fsprogs (exit 77 without them).
 
 ## Speed and size
 
 Measured with Bend 2.0.37's JavaScript runtime (bun; no clang on the test
-machine): `check.bend` runs in about 1 s; the differential test takes about
-30 s to build its images and 70 s to read them (1 to 10 s an image, 0.5 to
-0.8 GB of memory each: Bend 2.0.37 does not give memory back between
-images, so each runs in a process of its own). Field reads go through
-bytes' bit-sliced readers; checksums use crc's bitwise reference engine.
-Streaming reads the block map or extent tree again for every block, so a
-70 MB sparse file (all holes) takes about half a minute to stream; the test
-reads that file's far blocks by range and by map instead.
+machine): `check.bend` runs in about 1.5 s; the differential test takes
+about 100 s in all (0.7 to 12 s an image, 0.2 to 0.55 GB of memory each:
+Bend 2.0.37 does not give memory back between images, so each runs in a
+process of its own). Field reads go through bytes' bit-sliced readers;
+checksums use crc's bitwise reference engine.
+
+Large inputs, on images of 24 to 64 MB written by mke2fs and read a block
+at a time through a sparse device (throwaway size tests, not kept in the
+repository; the memory is the whole process's, the test device's own
+blocks included):
+
+| Operation | Input | Time | Memory |
+|---|---|---|---|
+| streaming (`Ext2File.start`, `next`) | 8 MB file, 1 KiB blocks, block map into the doubly indirect block | 25 s | 0.4 GB |
+| streaming | 48 MB file, 4 KiB blocks, extents | 93 s | 0.4 GB |
+| streaming | 6000-block sparse file of 3000 one-block extents (a tree of depth 2: one index block, 37 leaves) | 28 s | 0.7 GB |
+| streaming | 70 MB sparse file, 4300 data blocks under 36 indirect, 2 doubly and 1 triply indirect blocks | 96 s | 0.7 GB |
+| `read_range`, `read_all` | 1 MB (block map, extents, 1 and 4 KiB blocks) | 4 to 10 s | 1.3 to 1.9 GB |
+| `read_range`, `read_all` | 100 KB | 1.1 s | 0.3 GB |
+| `Ext2File.map` | any block of the files above | about 1 s | 0.2 to 0.5 GB |
+| `Ext2.list` | 20,000 entries (1 KiB blocks, linear and htree; 4 KiB; 64 KiB) | 2.3 to 2.8 s | 1.0 to 1.3 GB |
+| `Ext2.list` | a directory of 10,000 blocks (30,000 entries, all but 8 removed) | 13 s | 0.44 GB |
+| `Ext2.list` | a directory of 30,000 blocks (90,000 entries, all but 8 removed) | 38 s | 0.48 GB |
+| `Ext2.lookup` | the last of 20,000 entries; a missing name in 10,000 and in 30,000 blocks | 2 s; 12 s and 29 s | 0.9 GB; 0.45 and 0.48 GB |
+| `Ext2.lookup`, `Ext2.read` | inodes in the last of 256 groups (ext2; ext4 with meta_bg) | 1 s | 0.35 GB |
+
+No operation recurses once per block, entry or group. Reading a range and
+listing a directory are tail calls a block at a time (the blocks or entries
+are collected last first and joined once at the end), and so are the walk
+along a block's entries, the search of a block for a name, the scan of an
+extent node and the search of a directory; the block map and the extent
+tree are walked by recursion on their depth (at most three indirect levels,
+at most the options' `max_depth` nodes), and a group's descriptor and an
+inode are found by arithmetic, whatever the number of groups. (Before,
+reading a range and listing a directory recursed once per block: listing
+the 10,000-block directory took 2.5 GB and 16 s, and either would have
+overflowed the runtime's stack somewhere between 10,000 and 40,000 blocks.)
+A block read through blockdev's `Dev.read_bytes` recurses once per device
+block it spans: at most 128 (a 64 KiB block on a 512-byte device).
+
+What limits one call now is memory: an `Octets` costs about 940 bytes a
+byte today, and a range read peaks at about 1.5 KB a byte, so read files
+over a megabyte or so by streaming or in ranges; a listing holds every
+entry's name (20,000 short names take about 0.1 GB). Streaming reads the
+block map or extent tree again for every block (about 1.4 ms a block for a
+hole, 2 to 8 ms for a block of data), so a 70 MB sparse file takes about a
+minute and a half; the differential test reads that file's far blocks by
+range and by map instead.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 3958 lines (2819 queries, 42 images) match,
-`scripts/deps.sh` passes.
+`check.bend` passes, `ref/run.sh` 7130 lines (2949 queries, 43 images) match
+(seed 7: 7132 lines, 2945 queries), `scripts/deps.sh` passes.

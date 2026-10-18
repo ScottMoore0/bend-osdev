@@ -118,6 +118,16 @@ def make_tree(rng, root, cfg):
             with open(p, "wb") as f:
                 f.write(str(i).encode())
             files.append(p)
+    if cfg.get("wide"):
+        # a directory of many empty files: listed, and its last file looked
+        # up, but not read one by one
+        d = os.path.join(root, name_in(root))
+        os.mkdir(d)
+        dirs.append(d)
+        for i in range(cfg["wide"]):
+            p = os.path.join(d, name_in(d, 8, 16))
+            open(p, "wb").close()
+        files.append(p)
     # a long name
     d = rdir()
     p = os.path.join(d, name_in(d, 200, 255))
@@ -281,10 +291,12 @@ class Image:
                     nz.append(k)
         # long lists are built from pieces (a literal over a few thousand
         # elements is too deep for the runtime)
+        # (each piece in front of the rest, so no append walks more than
+        # one piece)
         pieces = ["[%s]" % ", ".join("%dn" % k for k in nz[i:i + 500]) for i in range(0, len(nz), 500)] or ["[]"]
-        lst = pieces[0]
-        for p in pieces[1:]:
-            lst = "List.append(&2, Nat, %s, %s)" % (lst, p)
+        lst = pieces[-1]
+        for p in reversed(pieces[:-1]):
+            lst = "List.append(&2, Nat, %s, %s)" % (p, lst)
         return 'R.Ext2Img{"%s", "%s", %dn, %dn, %s, %s, [%s]}' % (self.name, self.path, self.devbs, count, lst, self.options, ", ".join(self.queries))
 
 def fs_info(img):
@@ -311,7 +323,7 @@ def kind(p):
     st = os.lstat(p)
     return "symlink" if stat.S_ISLNK(st.st_mode) else "dir" if stat.S_ISDIR(st.st_mode) else "file"
 
-def tree_queries(rng, im, img, root, dirs, files, links):
+def tree_queries(rng, im, img, root, dirs, files, links, sums=()):
     bs, blocks, groups, feats = fs_info(img)
     filetype = "filetype" in feats
     im.expect.append("open ok %d %d %d" % (bs, blocks, groups))
@@ -374,6 +386,11 @@ def tree_queries(rng, im, img, root, dirs, files, links):
         off = rng.randint(0, len(data) + 5)
         n = rng.randint(0, 120)
         im.q("R.Ext2QRange{%s, %dn, %dn}" % (bend_path(rp), off, n), "range %s %d %d =%s" % (h(rp.encode()), off, n, h(data[off:off + n])))
+    # whole files by range, as length and CRC-32
+    for p in sums:
+        rp = rel(p)
+        data = open(p, "rb").read()
+        im.q("R.Ext2QSum{%s, 0n, %dn}" % (bend_path(rp), len(data)), "sum %s 0 %d %d %d" % (h(rp.encode()), len(data), len(data), zlib.crc32(data)))
     # block numbers
     far = [p for p in files if os.path.getsize(p) > 1 << 20]
     for p in far + rng.sample(sorted(files), min(4, len(files))):
@@ -458,6 +475,9 @@ CONFIGS = [  # name, mke2fs arguments, size in MiB, device block size, tree opti
     ("ext4-groups", ["-t", "ext4", "-b", "1024", "-g", "1024", "-N", "96"], 3, 4096, {"many": 40}, None),
     ("ext4-csumseed", ["-t", "ext4", "-b", "1024", "-O", "metadata_csum_seed"], 3, 1024, {}, "newuuid"),
     ("ext4-htree", ["-t", "ext4", "-b", "1024"], 3, 1024, {"many": 150}, "e2fsck+fallocate"),
+    # larger inputs: a file of 100 to 160 KB read whole by range, and a
+    # directory of 3000 entries
+    ("ext4-large", ["-t", "ext4", "-b", "1024", "-N", "3200"], 6, 1024, {"big": 160000, "wide": 3000, "sum": True}, None),
 ]
 
 def build(work, rng, name, args, mib, cfg):
@@ -494,7 +514,8 @@ def main():
         assert subprocess.run(["e2fsck", "-fn", img], capture_output=True).returncode == 0, name
         im = Image(name, img, devbs)
         im.expect.append("== " + name)
-        inode_of = tree_queries(rng, im, img, root, dirs, files, links)
+        sums = [p for p in files if cfg.get("sum") and p != sparse[0] and 20000 < os.path.getsize(p) <= 1 << 20]
+        inode_of = tree_queries(rng, im, img, root, dirs, files, links, sums)
         im.expect.append("end")
         images.append(im)
         built[name] = (img, root, files, inode_of)

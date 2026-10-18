@@ -230,38 +230,43 @@ def Ext2Dir.block(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> R
     limit : Nat <- Ext2Dir.region(S.Ext2Fs.verify_meta(fs), fs, i, blk, k)
     Ext2Dir.parse_block(S.Ext2Fs.has_incompat(fs, S.Ext2Super.incompat_filetype()), blk, limit, S.Ext2Fs.inodes_count(fs), n, Nat.mul(k, bs))
 
-def Ext2Dir.all(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, count: Nat, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +k: Nat) -> Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>:
-  match count:
-    case 0n:
-      Done{Nil{}}
-    case 1n+c:
-      do Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>:
-        es : List<&2, Ext2Dirent> <- Ext2Dir.block(~Dv, ~block_size, ~read_block, d, fs, i, k)
-        rest : List<&2, Ext2Dirent> <- Ext2Dir.all(~Dv, ~block_size, ~read_block, c, d, fs, i, Nat.add(k, 1n))
-        return List.append(&2, Ext2Dirent, es, rest)
+# the used entries of count blocks from block k on, a tail call per block:
+# r is the read of the block before k (Done{Nil} at the start), acc the
+# entries before it, last first. The first failure is the answer.
+def Ext2Dir.all(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, count: Nat, r: Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +k: Nat, acc: List<&2, Ext2Dirent>) -> Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>:
+  match count r:
+    case _ Fail{e}:
+      Fail{e}
+    case 0n Done{es}:
+      Done{List.reverse(&2, Ext2Dirent, List.reverse.go(&2, Ext2Dirent, es, acc))}
+    case 1n+c Done{es}:
+      Ext2Dir.all(~Dv, ~block_size, ~read_block, c, Ext2Dir.block(~Dv, ~block_size, ~read_block, d, fs, i, k), d, fs, i, Nat.add(k, 1n), List.reverse.go(&2, Ext2Dirent, es, acc))
 
 # every used entry of directory i (with "." and ".."), in the order the
 # blocks hold them; Ext2NotDir for any other inode
 def Ext2Dir.entries(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode) -> Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>:
   do Result<&2, &2, E.Ext2Error, List<&2, Ext2Dirent>>:
     S.Ext2.require(N.Ext2Inode.is_dir(i), E.Ext2NotDir{N.Ext2Inode.number_of(i)})
-    Ext2Dir.all(~Dv, ~block_size, ~read_block, FL.Ext2File.blocks_needed(fs, i), d, fs, i, 0n)
+    Ext2Dir.all(~Dv, ~block_size, ~read_block, FL.Ext2File.blocks_needed(fs, i), Done{Nil{}}, d, fs, i, 0n, Nil{})
 
 # Looking a name up
 
-def Ext2Dir.find_in.pick(hit: Bool, e: Ext2Dirent, rest: Maybe<&2, Ext2Dirent>) -> Maybe<&2, Ext2Dirent>:
+def Ext2Dir.find_in.pick(hit: Bool, e: Ext2Dirent) -> Maybe<&2, Ext2Dirent>:
   match hit:
     case True{}:
       Some{e}
     case False{}:
-      rest
-
-def Ext2Dir.find_in(es: List<&2, Ext2Dirent>, +name: B.Octets) -> Maybe<&2, Ext2Dirent>:
-  match es:
-    case Nil{}:
       None{}
-    case Con{+e, t}:
-      Ext2Dir.find_in.pick(B.Octets.is_eq(Ext2Dirent.name(e), name), e, Ext2Dir.find_in(t, name))
+
+# the first entry of es named name (found: what the entries before es gave)
+def Ext2Dir.find_in(es: List<&2, Ext2Dirent>, +name: B.Octets, found: Maybe<&2, Ext2Dirent>) -> Maybe<&2, Ext2Dirent>:
+  match es found:
+    case _ Some{e}:
+      Some{e}
+    case Nil{} None{}:
+      None{}
+    case Con{+e, t} None{}:
+      Ext2Dir.find_in(t, name, Ext2Dir.find_in.pick(B.Octets.is_eq(Ext2Dirent.name(e), name), e))
 
 def Ext2Dir.find.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, count: Nat, found: Maybe<&2, Ext2Dirent>, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +name: B.Octets, +k: Nat) -> Result<&2, &2, E.Ext2Error, Maybe<&2, Ext2Dirent>>:
   match count found:
@@ -272,7 +277,7 @@ def Ext2Dir.find.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat ->
     case 1n+c None{}:
       do Result<&2, &2, E.Ext2Error, Maybe<&2, Ext2Dirent>>:
         es : List<&2, Ext2Dirent> <- Ext2Dir.block(~Dv, ~block_size, ~read_block, d, fs, i, k)
-        Ext2Dir.find.go(~Dv, ~block_size, ~read_block, c, Ext2Dir.find_in(es, name), d, fs, i, name, Nat.add(k, 1n))
+        Ext2Dir.find.go(~Dv, ~block_size, ~read_block, c, Ext2Dir.find_in(es, name, None{}), d, fs, i, name, Nat.add(k, 1n))
 
 # the entry named name in directory i, if any; reads the directory's blocks
 # only up to the one that holds it

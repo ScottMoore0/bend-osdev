@@ -23,6 +23,7 @@ type Ext2Query is Data:
   Ext2QLink{path: B.Octets}
   Ext2QFollow{path: B.Octets, hops: Nat}
   Ext2QMap{path: B.Octets, block: Nat}
+  Ext2QSum{path: B.Octets, off: Nat, len: Nat}
 
 type Ext2Img is Data:
   Ext2Img{name: String, path: String, bs: Nat, count: Nat, nonzero: List<&2, Nat>, opts: O.Ext2Options, queries: List<&2, Ext2Query>}
@@ -37,17 +38,19 @@ def Ext2Drv.err.detail(e: E.Ext2Error) -> String:
     case _:
       Ext2Drv.err(e)
 
-def Ext2Drv.ls.ents(+p: String, es: List<&2, DR.Ext2Dirent>) -> String:
-  match es:
+# the listing's lines, built from the last entry back (rs: the entries
+# reversed), so each line is joined once
+def Ext2Drv.ls.ents(+p: String, rs: List<&2, DR.Ext2Dirent>, acc: String) -> String:
+  match rs:
     case Nil{}:
-      ""
+      acc
     case Con{+e, t}:
-      "ls " ++ p ++ " " ++ B.Octets.hex(DR.Ext2Dirent.name(e)) ++ " " ++ U32.show(DR.Ext2Dirent.inode(e)) ++ " " ++ U32.show(DR.Ext2Dirent.file_type(e)) ++ "\n" ++ Ext2Drv.ls.ents(p, t)
+      Ext2Drv.ls.ents(p, t, "ls " ++ p ++ " " ++ B.Octets.hex(DR.Ext2Dirent.name(e)) ++ " " ++ U32.show(DR.Ext2Dirent.inode(e)) ++ " " ++ U32.show(DR.Ext2Dirent.file_type(e)) ++ "\n" ++ acc)
 
 def Ext2Drv.ls(+p: String, r: Result<&2, &2, E.Ext2Error, List<&2, DR.Ext2Dirent>>) -> String:
   match r:
     case Done{es}:
-      Ext2Drv.ls.ents(p, es) ++ "ls " ++ p ++ " end"
+      Ext2Drv.ls.ents(p, List.reverse(&2, DR.Ext2Dirent, es), "ls " ++ p ++ " end")
     case Fail{e}:
       "ls " ++ p ++ " " ++ Ext2Drv.err(e)
 
@@ -91,6 +94,21 @@ def Ext2Drv.range(+p: String, +d: I.Ext2ImgDev, +fs: S.Ext2Fs, +off: Nat, +len: 
     case Fail{e}:
       "range " ++ p ++ " " ++ Ext2Drv.err(e)
 
+# a range's length and CRC-32 (for ranges too long to print)
+def Ext2Drv.sum(r: Result<&2, &2, E.Ext2Error, B.Octets>) -> String:
+  match r:
+    case Done{+o}:
+      Nat.show(B.Octets.len(o)) ++ " " ++ U32.show(C.Crc32Spec.finish(C.crc32.spec(), C.Crc32Spec.update(C.crc32.spec(), C.Crc32Spec.start(C.crc32.spec()), o)))
+    case Fail{e}:
+      Ext2Drv.err(e)
+
+def Ext2Drv.rsum(+p: String, +d: I.Ext2ImgDev, +fs: S.Ext2Fs, +off: Nat, +len: Nat, r: Result<&2, &2, E.Ext2Error, N.Ext2Inode>) -> String:
+  match r:
+    case Done{+i}:
+      "sum " ++ p ++ " " ++ Nat.show(off) ++ " " ++ Nat.show(len) ++ " " ++ Ext2Drv.sum(FL.Ext2File.read_range(~I.Ext2ImgDev, ~I.Ext2ImgDev.block_size, ~I.Ext2ImgDev.read_block, d, fs, i, off, len))
+    case Fail{e}:
+      "sum " ++ p ++ " " ++ Ext2Drv.err(e)
+
 def Ext2Drv.follow(+p: String, +hops: Nat, r: Result<&2, &2, E.Ext2Error, N.Ext2Inode>) -> String:
   match r:
     case Done{+i}:
@@ -130,6 +148,8 @@ def Ext2Drv.run(q: Ext2Query, +d: I.Ext2ImgDev, +fs: S.Ext2Fs) -> String:
       Ext2Drv.follow(B.Octets.hex(p), h, X.Ext2.lookup(~I.Ext2ImgDev, ~I.Ext2ImgDev.block_size, ~I.Ext2ImgDev.read_block, d, S.Ext2Fs.with_symlink_hops(fs, h), p))
     case Ext2QMap{+p, l}:
       Ext2Drv.bmap(B.Octets.hex(p), d, fs, l, X.Ext2.lookup_link(~I.Ext2ImgDev, ~I.Ext2ImgDev.block_size, ~I.Ext2ImgDev.read_block, d, fs, p))
+    case Ext2QSum{+p, off, len}:
+      Ext2Drv.rsum(B.Octets.hex(p), d, fs, off, len, X.Ext2.lookup_link(~I.Ext2ImgDev, ~I.Ext2ImgDev.block_size, ~I.Ext2ImgDev.read_block, d, fs, p))
 
 def Ext2Drv.queries(qs: List<&2, Ext2Query>, +d: I.Ext2ImgDev, +fs: S.Ext2Fs) -> IO(Unit):
   match qs:

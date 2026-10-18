@@ -1,12 +1,14 @@
 # Test support for ref/cases.bend: a device that holds an image file's
 # non-zero blocks, each read from the file on its own (File.read_at), so no
-# whole image is ever one Octets. Every other block reads as zeros.
+# whole image is ever one Octets. Every other block reads as zeros. A block
+# is kept as the list File.read_at answers (about 40 bytes of memory a byte,
+# against an Octets' 940) and becomes an Octets when it is read.
 import Base
 import ../../bytes/bytes.bend as B
 import ../../blockdev/blockdev.bend as D
 
 type Ext2ImgBlk is Data:
-  Ext2ImgBlk{n: Nat, data: B.Octets}
+  Ext2ImgBlk{n: Nat, data: List<&2, U32>}
 
 type Ext2ImgDev is Data:
   Ext2ImgDev{bs: Nat, count: Nat, blocks: List<&2, Ext2ImgBlk>}
@@ -16,24 +18,27 @@ def Ext2ImgDev.block_size(d: Ext2ImgDev) -> Nat:
     case Ext2ImgDev{bs, c, l}:
       bs
 
-def Ext2ImgDev.find.pick(hit: Bool, data: B.Octets, rest: B.Octets) -> B.Octets:
+def Ext2ImgDev.find.pick(hit: Bool, data: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
   match hit:
     case True{}:
-      data
+      Some{data}
     case False{}:
-      rest
+      None{}
 
-def Ext2ImgDev.find(l: List<&2, Ext2ImgBlk>, +n: Nat, +bs: Nat) -> B.Octets:
-  match l:
-    case Nil{}:
+# block n of the listed blocks, a tail call per block passed
+def Ext2ImgDev.find(l: List<&2, Ext2ImgBlk>, +n: Nat, +bs: Nat, found: Maybe<&2, List<&2, U32>>) -> B.Octets:
+  match l found:
+    case _ Some{xs}:
+      B.Octets.of_list(xs)
+    case Nil{} None{}:
       B.Octets.zeros(bs)
-    case Con{Ext2ImgBlk{k, data}, t}:
-      Ext2ImgDev.find.pick(Nat.is_eq(k, n), data, Ext2ImgDev.find(t, n, bs))
+    case Con{Ext2ImgBlk{k, data}, t} None{}:
+      Ext2ImgDev.find(t, n, bs, Ext2ImgDev.find.pick(Nat.is_eq(k, n), data))
 
 def Ext2ImgDev.read.pick(ok: Bool, +n: Nat, +bs: Nat, l: List<&2, Ext2ImgBlk>) -> Result<&2, &2, D.DevError, B.Octets>:
   match ok:
     case True{}:
-      Done{Ext2ImgDev.find(l, n, bs)}
+      Done{Ext2ImgDev.find(l, n, bs, None{})}
     case False{}:
       Fail{D.DevOutOfRange{n}}
 
@@ -46,7 +51,7 @@ def Ext2ImgDev.read_block(d: Ext2ImgDev, n: Nat) -> Result<&2, &2, D.DevError, B
 def Ext2ImgDev.got(+n: Nat, res: Result<&1, &1, U32 & String, List<&2, U32>>, acc: List<&2, Ext2ImgBlk>) -> List<&2, Ext2ImgBlk>:
   match res:
     case Done{xs}:
-      Con{Ext2ImgBlk{n, B.Octets.of_list(xs)}, acc}
+      Con{Ext2ImgBlk{n, xs}, acc}
     case Fail{e}:
       acc
 

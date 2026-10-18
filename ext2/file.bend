@@ -98,15 +98,17 @@ def Ext2File.next(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> R
 
 # Byte ranges
 
-def Ext2File.range.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, count: Nat, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +l: Nat) -> Result<&2, &2, E.Ext2Error, B.Octets>:
-  match count:
-    case 0n:
-      Done{B.Octets.empty()}
-    case 1n+c:
-      do Result<&2, &2, E.Ext2Error, B.Octets>:
-        o : B.Octets <- Ext2File.read_block(~Dv, ~block_size, ~read_block, d, fs, i, l)
-        rest : B.Octets <- Ext2File.range.go(~Dv, ~block_size, ~read_block, c, d, fs, i, Nat.add(l, 1n))
-        return B.Octets.append(o, rest)
+# the blocks of a range, a tail call each: r is the read of the block before
+# logical block l (Done{empty} at the start), acc the blocks read before it,
+# last first; count blocks are left. The first failure is the answer.
+def Ext2File.range.go(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, count: Nat, r: Result<&2, &2, E.Ext2Error, B.Octets>, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +l: Nat, acc: List<&2, B.Octets>) -> Result<&2, &2, E.Ext2Error, B.Octets>:
+  match count r:
+    case _ Fail{e}:
+      Fail{e}
+    case 0n Done{o}:
+      Done{B.Octets.concat(List.reverse(&2, B.Octets, Con{o, acc}))}
+    case 1n+c Done{o}:
+      Ext2File.range.go(~Dv, ~block_size, ~read_block, c, Ext2File.read_block(~Dv, ~block_size, ~read_block, d, fs, i, l), d, fs, i, Nat.add(l, 1n), Con{o, acc})
 
 def Ext2File.range.some(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, empty: Bool, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode, +off: Nat, +end: Nat) -> Result<&2, &2, E.Ext2Error, B.Octets>:
   match empty:
@@ -116,7 +118,7 @@ def Ext2File.range.some(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Na
       +bs = S.Ext2Fs.block_size(fs)
       +first = Nat.div(off, bs)
       do Result<&2, &2, E.Ext2Error, B.Octets>:
-        o : B.Octets <- Ext2File.range.go(~Dv, ~block_size, ~read_block, Nat.sub(Nat.div(Nat.add(end, Nat.sub(bs, 1n)), bs), first), d, fs, i, first)
+        o : B.Octets <- Ext2File.range.go(~Dv, ~block_size, ~read_block, Nat.sub(Nat.div(Nat.add(end, Nat.sub(bs, 1n)), bs), first), Done{B.Octets.empty()}, d, fs, i, first, Nil{})
         return B.Octets.slice(Nat.sub(off, Nat.mul(first, bs)), Nat.sub(end, off), o)
 
 # the bytes of a file from byte off, len of them, or fewer where the file
@@ -125,8 +127,8 @@ def Ext2File.read_range(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Na
   +end = Nat.min(Nat.add(off, len), N.Ext2Inode.size_nat(i))
   Ext2File.range.some(~Dv, ~block_size, ~read_block, Nat.is_le(end, off), d, fs, i, off, end)
 
-# the whole file, as one Octets (for small files: Octets is a list today, so
-# keep to a few kilobytes and stream anything larger)
+# the whole file, as one Octets (an Octets costs about 940 bytes of memory a
+# byte today, so stream anything over a megabyte or so)
 def Ext2File.read_all(~Dv: Data, ~block_size: Dv -> Nat, ~read_block: Dv -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +d: Dv, +fs: S.Ext2Fs, +i: N.Ext2Inode) -> Result<&2, &2, E.Ext2Error, B.Octets>:
   Ext2File.read_range(~Dv, ~block_size, ~read_block, d, fs, i, 0n, N.Ext2Inode.size_nat(i))
 
