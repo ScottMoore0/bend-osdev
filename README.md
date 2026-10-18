@@ -58,6 +58,7 @@ GPL source was read.
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
 | [errseq](errseq/) | Error sequence counters (`errseq_t`): a writer records errors, each observer learns of one it has not seen exactly once |
 | [ratelimit](ratelimit/) | Rate limiting as a pure state machine: at most `burst` events per `interval` (sliding or fixed window), with the suppressed count |
+| [timerqueue](timerqueue/) | Timers keyed by expiry as a pure state machine: add, delete, next expiry, expire all due; any priority queue or ordered map as the store |
 | [algo](algo/) | Bit search, bitmaps, binary search |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
