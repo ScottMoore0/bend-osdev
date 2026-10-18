@@ -7,7 +7,8 @@ Each package x is published as bend-osdev-x@<x/VERSION> (CONVENTIONS.md).
 Its files are staged in a temporary directory first:
 
   * every top-level .bend file of x/ (the code, LAWS.bend, PROOF.bend and
-    check.bend), any file of x/ they import, and its LICENSE; the rest of
+    check.bend), any file of x/ they import (a foreign def's C and
+    JavaScript sides too, `import "./x.c"`), and its LICENSE; the rest of
     ref/ and gen/ stays out;
   * each import of a sibling package, `import ../y/f.bend as Y`, becomes the
     hub import `import bend-osdev-y@<y/VERSION>/f.bend as Y`;
@@ -38,6 +39,10 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMPORT = re.compile(r"^(import\s+)(\S+\.bend)(\s+as\s+\S+)", re.M)
+# a foreign def's sources, in its body: import "./effs/x.c"
+FOREIGN = re.compile(r'^\s+import\s+"([^"]+\.(?:c|js))"', re.M)
+# the verdict on a file that type-checks but relies on foreign code
+FOREIGN_VERDICT = re.compile(r"SOME PROOFS FAIL\nError: (\d+) defs? rel(?:y|ies) on unsafe or foreign code:\n(?:- \S+\n)+\s*$")
 HUB = os.environ.get("BEND_HUB", "https://hub.bend-lang.com")
 
 
@@ -69,7 +74,18 @@ def sibling(p, f, target):
 
 
 def imports(p, f):
+    if not f.endswith(".bend"):
+        return []
     return IMPORT.findall(open(os.path.join(ROOT, p, f), encoding="utf-8").read())
+
+
+def foreign(p, f):
+    """the C and JavaScript files of p that file f's foreign defs import"""
+    if not f.endswith(".bend"):
+        return []
+    text = open(os.path.join(ROOT, p, f), encoding="utf-8").read()
+    return [os.path.normpath(os.path.join(os.path.dirname(f), t)).replace("\\", "/")
+            for t in FOREIGN.findall(text)]
 
 
 def files(p):
@@ -87,6 +103,7 @@ def files(p):
             g = os.path.normpath(os.path.join(os.path.dirname(f), target)).replace("\\", "/")
             if g != "Base" and not g.startswith(".."):
                 todo.append(g)
+        todo += [g for g in foreign(p, f) if not g.startswith("..")]
     return sorted(seen)
 
 
@@ -200,7 +217,15 @@ def main(args):
             r = subprocess.run(bend + [os.path.join(into, "package.bend"), "--check-only"], env=env,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             ok = r.returncode == 0 and "ALL PROOFS CHECK" in r.stdout
-            print("   " + ("ok" if ok else "FAIL\n" + r.stdout[-3000:]), flush=True)
+            note = ""
+            # a package with foreign defs (library effects) type-checks, but
+            # the verdict then names every def that relies on them, as it
+            # does for @unsafe: the checker reads an effect's type, never
+            # its code
+            m = FOREIGN_VERDICT.match(r.stdout)
+            if not ok and m and any(f.endswith((".c", ".js")) for f in files(p)):
+                ok, note = True, " (%s defs rely on its foreign effects, as expected)" % m.group(1)
+            print("   " + ("ok" + note if ok else "FAIL\n" + r.stdout[-3000:]), flush=True)
             if not ok:
                 failed.append(p)
             fake_publish(lib, name, into)
