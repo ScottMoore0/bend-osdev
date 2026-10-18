@@ -181,7 +181,7 @@ answer `Maybe`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). Laws that need
+`LAWS.bend`. Laws that need
 decryption to undo encryption take the hypothesis `~inv: @k -> @b ->
 {dec(k, enc(k, b)) == b}`, so they hold for every cipher that satisfies it.
 

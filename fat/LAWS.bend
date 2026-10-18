@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * a short directory entry reads back as written: decoding the 32 bytes
 #     FatDirent.encode writes gives the entry as stored (FatDirent.norm: the

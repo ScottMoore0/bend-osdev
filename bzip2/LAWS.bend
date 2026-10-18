@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * RLE1: decoding the encoding of any byte string gives it back;
 #   * move-to-front and RLE2: decoding the symbols of any byte string gives

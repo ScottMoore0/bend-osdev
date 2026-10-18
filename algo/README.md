@@ -82,7 +82,7 @@ Bits are numbered from the least significant, 0 to 31 (63).
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every `U32` and every `W64`:** `popcount` is at most the width, and a
   word's popcount plus its complement's is 32; the bit `first_set` names is

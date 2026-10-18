@@ -130,7 +130,7 @@ constructors are part of the interface. `Lz4Writer` is opaque.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 50 laws.
+`LAWS.bend` has 50 laws.
 
 **For every input** (properties, proved by induction):
 

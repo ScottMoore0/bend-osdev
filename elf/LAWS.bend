@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #
 # * Each writer and its reader agree, in both classes and both byte orders:

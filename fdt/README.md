@@ -207,7 +207,7 @@ forms, `FdtFrame`, `FdtTb`, `FdtFlatX`, `FdtIx`, `FdtNt`, `FdtDict`,
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 68 laws.
+`LAWS.bend` has 68 laws.
 
 The package runs tail-recursive forms of its writers, its reader's slicing
 and its checks (the `.fast` and `.go` defs; see Speed and size). The proofs

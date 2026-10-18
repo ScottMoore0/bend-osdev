@@ -403,7 +403,7 @@ reference run.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). **For every
+`LAWS.bend`. **For every
 input**, proved by induction in `PROOF.bend`:
 
 * `glob_seq_model`: the backtracking matcher agrees with the list model,

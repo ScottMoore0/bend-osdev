@@ -366,7 +366,7 @@ formatting's `FatFormatBadType{clusters}` and `FatFormatBadParam`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer), 78 laws.
+`LAWS.bend`, 78 laws.
 
 **For every input** (31):
 

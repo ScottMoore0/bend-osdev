@@ -111,7 +111,7 @@ directory, or `CAP_FOWNER`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). **For every
+`LAWS.bend`. **For every
 input** (process, file, mode, umask, ACL, request):
 
 * the umask never adds a permission bit: `Mode.create(mode, umask) & ~mode == 0`;

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 # * sequence numbers (seq.bend): comparison is irreflexive, asymmetric, and
 #   total but for numbers exactly 2^31 apart; within a window of 2^31 it is

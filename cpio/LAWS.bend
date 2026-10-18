@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: a 32-bit value's eight hex digits read back as
 # the value; a header reads back as itself; and parsing an archive built from
 # any list of entries, in either format, gives the entries back. The last

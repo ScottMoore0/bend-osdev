@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * MBR: parsing a built sector gives the table back, for every boot code
 #     and table, as stored (Mbr.norm: status and type to 8 bits, CHS fields

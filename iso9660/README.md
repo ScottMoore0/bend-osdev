@@ -217,7 +217,7 @@ directory records are); volume sets of more than one volume are not joined.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input**:
   * both-endian fields: 32-bit write-then-read gives the value, 16-bit its

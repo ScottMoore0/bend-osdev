@@ -53,7 +53,7 @@ The same operations on `List<&2, U32>` directly. Packages written before
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every value:** each of the five field formats reads back what was
   written (16-bit reads give `low16(v)`); `byte(b)` is below 256; and

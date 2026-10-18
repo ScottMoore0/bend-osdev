@@ -120,7 +120,7 @@ dozen steps per entry listed.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 47 laws, all
+`LAWS.bend` has 47 laws, all
 over the public interface.
 
 **41 hold for every array, every index and every value** (and every value

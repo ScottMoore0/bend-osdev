@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: whatever block decompression is given, it never
 # answers more bytes than the maximum output size; a block of literals
 # (block_literals) decodes back to its bytes whenever the maximum holds them,

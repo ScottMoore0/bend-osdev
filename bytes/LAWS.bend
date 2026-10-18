@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Every field writer and its reader agree, for every value; a byte is always
 # below 256; and a byte string split anywhere joins back to itself. The
 # vectors fix the byte orders, the hex text, and what a short input reads.

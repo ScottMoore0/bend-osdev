@@ -290,7 +290,7 @@ a use appears.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer), every law proved
+`LAWS.bend`, every law proved
 in `PROOF.bend` for every input:
 
 * **access** (`av_allowed_exact`): permission k is in the allowed vector of

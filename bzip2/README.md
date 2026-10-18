@@ -186,7 +186,7 @@ bend-osdev.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 27 laws.
+`LAWS.bend` has 27 laws.
 
 **For every input** (proved by induction):
 

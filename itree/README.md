@@ -149,7 +149,7 @@ insertion and removal, and removal stays simple.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). The properties
+`LAWS.bend`. The properties
 are proved **for every tree, interval, query and value type**, for the named
 default `ITree32`; "valid" is `ITree32.valid`:
 

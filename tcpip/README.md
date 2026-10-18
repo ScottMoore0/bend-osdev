@@ -198,7 +198,7 @@ so a host may fire timers late or twice.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer); every law is
+`LAWS.bend`; every law is
 proved in `PROOF.bend`.
 
 **For every input:**

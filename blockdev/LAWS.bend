@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties of the in-memory device, for every device, block index and
 # block: reading a block back after writing it gives what was written; a
 # write changes no other block; a write keeps the block size and count.

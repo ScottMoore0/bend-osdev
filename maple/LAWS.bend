@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # The laws are stated for the named default, Maple32 (U32 indices in
 # U32.cmp's order), and for every value type V. "valid" is Maple32.valid:
 # the entries are in index order, no two share an index, each has

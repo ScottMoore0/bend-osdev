@@ -237,7 +237,7 @@ JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~D
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input:**
   * `htree_lookup_scan`: on every ordered model (each leaf's index hash at

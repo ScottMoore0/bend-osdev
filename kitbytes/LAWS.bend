@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Vectors: converting to bend-kit's Bytes and back gives the same Octets, and
 # a buffer bend-kit built itself converts to the bytes it holds. A proof for
 # every input would have to reason about bend-kit's array internals, which

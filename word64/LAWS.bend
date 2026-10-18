@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # The edge cases of 64-bit arithmetic, as vectors: wrapping at 2^64, the two
 # 32-bit halves, shifts across the halves, a multiply that overflows, and the
 # text forms. 0xDEADBEEF = 3735928559, 0xCAFEBABE = 3405691582.

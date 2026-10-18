@@ -87,7 +87,7 @@ Everything else in the two files (the list-level `fields.*`, `hdr.*`,
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input:**
   * `hexfield_round_trip`: for every `U32`, its eight digits read back as it

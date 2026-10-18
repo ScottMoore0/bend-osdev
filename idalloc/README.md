@@ -71,7 +71,7 @@ this package's own words; no kernel source was read.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). For **every**
+`LAWS.bend`. For **every**
 state, range, ID and value:
 
 * **allocation (IDA and IDR):** the ID answered was free before and is in use

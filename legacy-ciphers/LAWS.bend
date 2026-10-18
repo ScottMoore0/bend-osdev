@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Laws about the public interface of every cipher in the package.
 #
 # Properties, for every input: each block cipher's decryption undoes its

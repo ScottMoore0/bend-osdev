@@ -70,7 +70,7 @@ its law `octets_to_of` and `mask`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every UUID** (proved by splitting each of its four words into its 32
   bits and computing):

@@ -49,7 +49,7 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input, and every parameter set:** a CRC computed in pieces is the
   CRC of the whole: `update(spec, c, a ++ b) == update(spec, update(spec, c, a),

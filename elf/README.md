@@ -193,7 +193,7 @@ needs: relocations from a section neither `SHT_REL` nor `SHT_RELA`, ...).
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 61 laws.
+`LAWS.bend` has 61 laws.
 
 **31 hold for every input:**
 

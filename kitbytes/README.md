@@ -23,7 +23,7 @@ package.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has **vectors
+`LAWS.bend` has **vectors
 only**: round trips on text, on the byte values at the edges (0, 127, 128,
 255) and on the empty string, and a buffer built by bend-kit's own
 `from_string`. A proof for every input would have to reason about bend-kit's

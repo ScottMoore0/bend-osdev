@@ -36,7 +36,7 @@ Base's when that arrives.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has:
+`LAWS.bend` has:
 
 * **vectors** for the edge cases: wrapping at 2^64, shifts across the halves, a
   multiply that overflows, and the text forms;

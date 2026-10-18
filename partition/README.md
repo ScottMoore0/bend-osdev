@@ -96,7 +96,7 @@ open: their fields are part of the interface.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input:**
   * `Mbr.parse(Mbr.build(boot, m)) == Done{Mbr.norm(m)}`, for every boot code

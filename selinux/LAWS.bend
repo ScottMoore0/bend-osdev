@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input (every policy, context, class, permission,
 # boolean state and set):
 #

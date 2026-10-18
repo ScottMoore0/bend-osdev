@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Laws about Base's Array (Array.size, Array.get, Array.set, Array.new), as
 # Base 2.0.37 defines them, for every input:
 #

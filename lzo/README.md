@@ -228,7 +228,7 @@ does not write M1 (which only pays for 2- and 3-byte matches). Matches are
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 64 laws: 8 properties, 3 witnesses and 53 vectors.
+`LAWS.bend` has 64 laws: 8 properties, 3 witnesses and 53 vectors.
 
 **For every input** (properties, proved by induction):
 

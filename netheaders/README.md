@@ -103,7 +103,7 @@ The pseudo-header's length is the number of bytes checksummed.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer), all on the public
+`LAWS.bend`, all on the public
 interface:
 
 * **for every input** (16 properties):

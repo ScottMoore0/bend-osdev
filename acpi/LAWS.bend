@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   - the AML encodings read back as written: a PkgLength below 2^28, and a
 #     NameString of NameSegs (at most 255, not rooted and going up at once),

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: the header, the reservation block, the
 # structure block's tokens and the typed property values each read back as
 # written; the lexer can be fed in pieces; and parsing a blob that Fdt.build

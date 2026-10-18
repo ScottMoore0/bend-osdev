@@ -139,7 +139,7 @@ perfect array of depth below 32 with room for every block.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 **`MemDev`, for every device, block number and block:** reading a block back
 after writing it gives what was written, when the block exists and has the

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * both-endian fields: a 32-bit field written and read back gives the
 #     value; a 16-bit one gives its low 16 bits; trusting one half reads

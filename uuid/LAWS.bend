@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every UUID: a UUID is made of its 16 bytes; the byte form and the GUID layout read back
 # what they wrote; the text form reads back what it wrote, in lower case and
 # in upper case; the text form is 36 characters. For every 16 bytes: reading

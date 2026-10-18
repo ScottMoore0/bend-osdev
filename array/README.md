@@ -41,7 +41,7 @@ proofs. At run time Base's `Array.to_list(~T, a)` lists the same slots.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer), 34 laws: 25 for
+`LAWS.bend`, 34 laws: 25 for
 every input, 4 witnesses, 5 vectors. `T` is any `Data` element type.
 
 **For every array, of any shape** (no hypothesis):

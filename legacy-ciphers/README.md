@@ -232,7 +232,7 @@ blocks. The 128-bit modes report cipher-modes' own `CmError`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer).
+`LAWS.bend`.
 
 **For every input:**
 

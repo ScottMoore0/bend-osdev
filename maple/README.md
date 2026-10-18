@@ -172,7 +172,7 @@ the gap search; `Maple32.x(V, ...)` is the named default on `U32`
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) states 67 laws:
+`LAWS.bend` states 67 laws:
 42 **for every input** (every tree, range, index, size and value type, for
 the `U32` default), and 25 vectors.
 

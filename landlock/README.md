@@ -231,7 +231,7 @@ per rule, then `restrict_self`), and a domain grows one layer at a time.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer): 72 laws, 33 for
+`LAWS.bend`: 72 laws, 33 for
 every input, 20 witnesses and 19 vectors, proved in `PROOF.bend` by
 induction on the layers, the rules and the paths. Set facts are proved once
 for lists of Bools (`LandlockBits`) and carried to each set by a generated

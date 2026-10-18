@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: whatever LZO1X decompression is given, it
 # never answers more bytes than the maximum output size; a stream of
 # literals (lzo1x_literals) decodes back to its bytes whenever the maximum

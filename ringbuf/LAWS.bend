@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every ring, element, list and count:
 #
 # * the invariant: a new ring is valid, and push, pop, peek, push_list and

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # The laws are stated for the named default, ITree32 (U32 keys in U32.cmp's
 # order), and for every value type V. "valid" is ITree32.valid: the keys of
 # the contents strictly increase, and every node stores the largest last of

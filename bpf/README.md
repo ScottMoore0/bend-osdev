@@ -148,7 +148,7 @@ Everything not listed here is internal.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). For every input:
+`LAWS.bend`. For every input:
 
 * `validated_returns`: for every set of options, program and input, if
   `bpf_validate_with` accepts the program (so also `bpf_validate`), `bpf_run` answers `Done` (the run

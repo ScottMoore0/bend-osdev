@@ -169,7 +169,7 @@ verify, run).
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer).
+`LAWS.bend`.
 
 **Properties, for every input (proved):**
 

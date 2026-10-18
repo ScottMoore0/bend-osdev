@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Laws for bend-osdev-ebpf, over its public interface.
 #
 # Properties, for every input:

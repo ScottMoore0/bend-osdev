@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * a validated program always answers, whatever the validator's options:
 #     bpf_run gives Done, whatever the input (it never runs past its end or

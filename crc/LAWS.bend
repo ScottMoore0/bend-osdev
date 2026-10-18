@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: a CRC computed in pieces is the CRC of the
 # whole, for every parameter set, at both word sizes. The register passes from
 # one piece to the next through update; start and finish apply once.

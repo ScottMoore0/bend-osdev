@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   globs: the backtracking matcher agrees with the list model (a path
 #     matches a pattern when it can be cut into one piece per pattern

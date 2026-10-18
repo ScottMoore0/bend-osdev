@@ -130,7 +130,7 @@ verified implementation already on the hub, used only by `integrity.bend`.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input:**
   * `xz_decode` never answers more output than `max_out` (proved through the

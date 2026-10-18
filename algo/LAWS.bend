@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #
 # * bit search in a U32 and in a W64: popcount is at most the width, and the

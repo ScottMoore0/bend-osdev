@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input (every kernel parameter record, credential,
 # file and request):
 #   execve: the effective set ends within the permitted set, and the ambient

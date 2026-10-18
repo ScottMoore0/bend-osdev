@@ -322,7 +322,7 @@ journal, htree directories) to reuse:
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer):
+`LAWS.bend`:
 
 * **for every input:**
   * `inode_locate_number`, `inode_locate_index`, `inode_number_locate`: inode

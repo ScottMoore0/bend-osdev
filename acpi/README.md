@@ -421,7 +421,7 @@ Everything else (the `hd.*`, `sdt.*`, `rs.*`, `madt.*`, `fadt.*`, `ld.*`,
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 35 laws.
+`LAWS.bend` has 35 laws.
 
 **Properties, for every input (10):**
 

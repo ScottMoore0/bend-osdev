@@ -80,7 +80,7 @@ masking) is unchanged.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer).
+`LAWS.bend`.
 
 **The model, for every model, element, list and count** (proved by
 induction): the queue laws, so that interleaved pushes and pops behave as a

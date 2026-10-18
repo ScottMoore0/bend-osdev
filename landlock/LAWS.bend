@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input (every domain, ruleset, path, port, right,
 # operation, ABI version and option):
 #   restriction is monotone: adding a layer never allows an operation the

@@ -254,7 +254,7 @@ one returned, so counters count and limits limit across packets.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer), on the public
+`LAWS.bend`, on the public
 interface only: 15 laws for every input, 8 vectors, and 12 witnesses.
 
 For every input:

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * inode numbers and (group, index) pairs convert both ways, for every
 #     number of inodes per group (from 1), and the index stays below it;

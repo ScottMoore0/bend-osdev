@@ -215,7 +215,7 @@ raw-content ones. The compressor does not take a dictionary yet.
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer) has 52 laws.
+`LAWS.bend` has 52 laws.
 
 **For every input** (properties, proved by induction):
 

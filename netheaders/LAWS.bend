@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 # * round trips: parsing a built header, followed by any bytes, gives back the
 #   header with its fields masked to their widths (X.norm). For IPv4 and TCP

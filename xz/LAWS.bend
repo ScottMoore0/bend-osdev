@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * xz_decode never answers more output than the caller's maximum;
 #   * an input whose first byte is not 0xFD is refused as bad magic, whatever

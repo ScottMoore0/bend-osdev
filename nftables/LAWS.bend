@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   * evaluation stays within the jump-depth bound: the deepest level of
 #     chains a chain's evaluation enters is at most its fuel, and a hook's

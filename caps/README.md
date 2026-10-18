@@ -128,7 +128,7 @@ then `CapSet.full()` would differ from the set of capabilities 0 to 40, and
 
 ## Laws
 
-`LAWS.bend` (a draft, not yet reviewed by the maintainer). **For every
+`LAWS.bend`. **For every
 input** (every kernel record, credential, file, request and capability
 number), proved by induction on the width of the words: each fact about sets
 is a per-bit lemma over `Word(n)`, applied to a set's low `U32` (as its 32

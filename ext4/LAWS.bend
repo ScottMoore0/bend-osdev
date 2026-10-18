@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input:
 #   hashed directories: on every ordered model (htree.bend) the index
 #     lookup finds what a linear scan of all leaves finds, for every name

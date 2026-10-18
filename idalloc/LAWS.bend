@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every state, range, ID and value:
 #
 # * IDA allocation: an allocated ID was free before and is in use after; it

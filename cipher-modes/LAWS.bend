@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Laws about the public interface of every mode. The block cipher is the
 # template arguments ~K, ~enc, ~dec; laws that need decryption to undo
 # encryption take that as a hypothesis, ~inv, so they hold for every cipher

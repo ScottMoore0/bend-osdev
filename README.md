@@ -13,11 +13,10 @@ GPL source was read.
 
 ## Status
 
-- **Draft.** Every package's `LAWS.bend` still opens with `# DRAFT: not yet
-  reviewed by the maintainer`. The laws are proved, and `--verdict` (Bend's
-  Lean-formalised kernel) accepts them all except four laws in cipher-modes
-  that its kernel cannot yet model (see that README), but the choice of laws
-  has not been reviewed.
+- **Laws reviewed.** The maintainer has reviewed and accepted every
+  package's laws. They are proved, and `--verdict` (Bend's Lean-formalised
+  kernel) accepts them all except four laws in cipher-modes that its kernel
+  cannot yet model (see that README).
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
 - **Not yet published** on the Bend hub; every package is at version
   0.1.0.0.

@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input: decompression never answers more bytes than
 # its limit; the one-shot decoder is the streaming decoder fed everything,
 # and feeding in pieces is feeding the whole; four bytes that are no magic

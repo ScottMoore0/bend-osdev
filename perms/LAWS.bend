@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Properties, for every input (every process, file, mode, umask, ACL and
 # request):
 #   the umask never adds a permission bit;

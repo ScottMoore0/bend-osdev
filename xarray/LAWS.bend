@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # The laws of the XArray, for every array t, every index and every value
 # (and every value type V), over the public interface only. Indices are U32,
 # compared with Base's U32.cmp; "i != j" is U32.is_eq(i, j) == False.

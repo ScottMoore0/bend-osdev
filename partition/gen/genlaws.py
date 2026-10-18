@@ -27,9 +27,7 @@ ENT0 = "G.GptEntry.norm(G.GptEntry{%s, %s, %s, %s, W.W64.zero(), G.Gpt.name_unit
 ENTRY = lambda n: "M.MbrEntry{%d, M.MbrChs{%d, %d, %d}, %d, M.MbrChs{%d, %d, %d}, %d, %d}" % n
 EMPTY = "M.MbrEntry.empty()"
 MBRV = "M.Mbr{305419896, %s, %s, %s, %s}" % (ENTRY((128, 32, 33, 0, 131, 48, 48, 0, 2048, 1024)), ENTRY((0, 48, 49, 0, 12, 65, 1, 0, 3072, 1024)), EMPTY, EMPTY)
-out = '''# DRAFT: not yet reviewed by the maintainer
-#
-# Properties, for every input:
+out = '''# Properties, for every input:
 #   * MBR: parsing a built sector gives the table back, for every boot code
 #     and table, as stored (Mbr.norm: status and type to 8 bits, CHS fields
 #     to 8, 6 and 10 bits);
