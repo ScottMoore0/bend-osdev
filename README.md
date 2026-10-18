@@ -56,6 +56,7 @@ GPL source was read.
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
+| [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 
 Each package's README lists its files, public interface, extension points,
 laws, tests, limits and status.
