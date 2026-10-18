@@ -23,7 +23,9 @@ over the template arguments (LAWS.bend, first part).
 
 Adding an instance: a row in BLOCK, STREAM or HASH (its defs, as template
 arguments, and the names of the laws its own package proves), then run this
-script. A new schema: a function below, and its rows.
+script. A hash of the hashes package is a hs_row: its interface laws are
+written here too, each its own package's law. A new schema: a function
+below, and its rows.
 """
 import os, sys
 
@@ -105,6 +107,31 @@ HASH = [
     dict(name="sha512", title="SHA-512 (bend-collections)", tparams=[], H="SH.CrSha2State",
          init="SH.CrSha2.init512()", update="SH.CrSha2.update", final="SH.CrSha2.final", digest="SH.CrSha2.sha512",
          streaming=None, split="Laws.sha512_hash_split(%s, %s)", split3="Laws.sha512_hash_split3(%s, %s, %s)"),
+]
+
+
+def hs_row(name, title, H, mod, init, final, digest, dsize, upd=None, laws=None):
+    """a hash of the hashes package: its interface laws (streaming for every
+    state, split, split3, length) are written here from that package's own
+    laws (iface: HSL.<laws>_streaming and so on), and the HMAC laws from
+    them"""
+    return dict(name=name, title=title + " (hashes)", tparams=[], H=H, init=init, update=upd or mod + ".update",
+                final=final, digest=digest, dsize=dsize, iface=laws or name,
+                streaming="Laws.%s_hash_streaming(%%s, %%s, %%s)" % name, split="Laws.%s_hash_split(%%s, %%s)" % name,
+                split3="Laws.%s_hash_split3(%%s, %%s, %%s)" % name)
+
+
+HASH += [
+    hs_row("md4", "MD4", "Hs.HsMdState<Hs.HsW4>", "HM4.HsMd4", "HM4.HsMd4.init()", "HM4.HsMd4.final", "HM4.HsMd4.digest", 16),
+    hs_row("md5", "MD5", "Hs.HsMdState<Hs.HsW4>", "HM5.HsMd5", "HM5.HsMd5.init()", "HM5.HsMd5.final", "HM5.HsMd5.digest", 16),
+    hs_row("sha1", "SHA-1", "Hs.HsMdState<Hs.HsW5>", "HS1.HsSha1", "HS1.HsSha1.init()", "HS1.HsSha1.final", "HS1.HsSha1.digest", 20),
+    hs_row("ripemd160", "RIPEMD-160", "Hs.HsMdState<Hs.HsW5>", "HRM.HsRipemd160", "HRM.HsRipemd160.init()", "HRM.HsRipemd160.final",
+           "HRM.HsRipemd160.digest", 20),
+    hs_row("sm3", "SM3", "Hs.HsMdState<Hs.HsW8>", "HSM.HsSm3", "HSM.HsSm3.init()", "HSM.HsSm3.final", "HSM.HsSm3.digest", 32),
+    hs_row("streebog256", "Streebog-256", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init256()",
+           "HST.HsStreebog.final256", "HST.HsStreebog.digest256", 32),
+    hs_row("streebog512", "Streebog-512", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init512()",
+           "HST.HsStreebog.final512", "HST.HsStreebog.digest512", 64),
 ]
 
 # ---------------------------------------------------------------- schemas
@@ -212,6 +239,28 @@ def stream_laws(c):
     proof("def Laws.%s_stream_streaming_state(s, a, b):\n  %s(s, a, b)\n" % (n, c["sstate"]))
 
 
+def hash_iface_laws(h):
+    """the hash interface's laws for a hash of the hashes package, each its
+    own package's law (HSL) at the instance's defs"""
+    n, H, t, src = h["name"], h["H"], h["title"], h["iface"]
+    U = lambda s, m: call(h["update"], s, m)
+    F = lambda s: call(h["final"], s)
+    D = lambda m: call(h["digest"], m)
+    I = h["init"]
+    law("%s_hash_streaming" % n, "%s: update over a ++ b is update over a, then b, for every state" % t,
+        ["s: %s" % H, "+a: B.Octets", "+b: B.Octets"], "{%s == %s : %s}" % (U("s", "B.Octets.append(a, b)"), U(U("s", "a"), "b"), H))
+    proof("def Laws.%s_hash_streaming(s, a, b):\n  HSL.%s_streaming(s, a, b)\n" % (n, src))
+    law("%s_hash_split" % n, "%s: streaming equals one-shot, for every split" % t, ["+a: B.Octets", "+b: B.Octets"],
+        "{%s == %s : B.Octets}" % (F(U(U(I, "a"), "b")), D("B.Octets.append(a, b)")))
+    proof("def Laws.%s_hash_split(a, b):\n  HSL.%s_split(a, b)\n" % (n, src))
+    law("%s_hash_split3" % n, "%s: and for every split into three" % t, ["+a: B.Octets", "+b: B.Octets", "+c: B.Octets"],
+        "{%s == %s : B.Octets}" % (F(U(U(U(I, "a"), "b"), "c")), D("B.Octets.append(a, B.Octets.append(b, c))")))
+    proof("def Laws.%s_hash_split3(a, b, c):\n  HSL.%s_split3(a, b, c)\n" % (n, src))
+    law("%s_hash_length" % n, "%s: final(s) has %d bytes, for every state" % (t, h["dsize"]), ["+s: %s" % H],
+        "{B.Octets.len(%s) == %dn : Nat}" % (F("s"), h["dsize"]))
+    proof("def Laws.%s_hash_length(s):\n  HSL.%s_length(s)\n" % (n, src))
+
+
 def hash_laws(h):
     """HMAC over the hash (hmac.bend): in pieces, from the hash's laws (the
     streaming law, where it has one, for HMAC's state in pieces; split and
@@ -261,6 +310,8 @@ for c in BLOCK:
 for c in STREAM:
     stream_laws(c)
 for h in HASH:
+    if h.get("iface"):
+        hash_iface_laws(h)
     hash_laws(h)
 
 # ---------------------------------------------------------------- regions
