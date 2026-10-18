@@ -14,6 +14,9 @@
 #
 # Vectors: superblocks accepted and refused (features named), checksums as
 # mke2fs wrote them, inode locations, directory entries, block-map paths.
+#
+# The writer's laws (directory blocks, the checked operations, mkfs) follow
+# the reader's, below.
 import Base
 import ../bytes/bytes.bend as B
 import ../blockdev/blockdev.bend as D
@@ -26,6 +29,17 @@ import ./blockmap.bend as M
 import ./extent.bend as X
 import ./file.bend as FL
 import ./dir.bend as DR
+import ./patch.bend as PA
+import ./bitmap.bend as BM
+import ./meta.bend as T
+import ./wopts.bend as WO
+import ./extentw.bend as EW
+import ./dirw.bend as DW
+import ./fsck.bend as FK
+import ./ops.bend as P
+import ./run.bend as RN
+import ./mkfs.bend as MK
+import ./ext2.bend as EX
 
 # Inode numbers: inode 1 + k with 1 + p inodes per group
 
@@ -194,3 +208,246 @@ law path_triple:
 
 law path_beyond:
   {M.Ext2Map.path(96n, 4n) == None{} : Maybe<&2, M.Ext2MapPath>}
+
+# ---------------------------------------------------------------- writing
+#
+# The writer's laws. For every input:
+#   * directory blocks (dirw.bend, a block's entries as slots): inserting an
+#     entry or removing one keeps the total of the records (the block stays
+#     exactly covered: rec_len is split or merged, never lost); inserting an
+#     entry whose name the block does not hold leaves every other entry as
+#     it was, in order; removing one leaves exactly the others;
+#   * the checked operations (run.bend): every device Ext2Op.run answers,
+#     for every operation, device, filesystem and options that check
+#     anything, has bitmaps that agree with its free counts, and is what
+#     the operation promised (a write reads back as written, an entry
+#     created or removed leaves its directory's other entries as they
+#     were, ...); with the full check it passes Ext2Fsck.full (no block
+#     owned twice, the bitmaps exact, every link count the number of
+#     entries naming the inode);
+#   * mkfs (mkfs.bend): every filesystem Ext2Mkfs.make answers, for every
+#     device and options, opens with the reader's default options and
+#     passes Ext2Fsck.full.
+# These hold because each operation checks its result before answering it
+# (a result that fails is refused, Ext2CheckFailed, and the caller's device
+# is as it was): they say what every answer satisfies, not that an
+# operation succeeds. That operations do succeed is what the tests show
+# (ref/wgen.py: every operation its model expects to succeed does, and
+# e2fsck accepts every image); the kernel that checks these laws counts in
+# unary, so an operation on an image is beyond what a law can evaluate.
+# Every law with a hypothesis has a witness.
+
+def Ext2Laws.total_or(m: Maybe<&2, List<&2, DW.Ext2Slot>>, d: Nat) -> Nat:
+  match m:
+    case None{}:
+      d
+    case Some{xs}:
+      DW.Ext2Slots.total(xs)
+
+def Ext2Laws.unnamed_or(m: Maybe<&2, List<&2, DW.Ext2Slot>>, +nm: B.Octets, d: List<&2, DW.Ext2Name>) -> List<&2, DW.Ext2Name>:
+  match m:
+    case None{}:
+      d
+    case Some{xs}:
+      DW.Ext2Names.unname(DW.Ext2Slots.names(xs), nm)
+
+def Ext2Laws.names_or(m: Maybe<&2, List<&2, DW.Ext2Slot>>, d: List<&2, DW.Ext2Name>) -> List<&2, DW.Ext2Name>:
+  match m:
+    case None{}:
+      d
+    case Some{xs}:
+      DW.Ext2Slots.names(xs)
+
+law slots_insert_total:
+  for +ss: List<&2, DW.Ext2Slot>
+  for +n: DW.Ext2Slot
+  for +ss2: List<&2, DW.Ext2Slot>
+  for h: {DW.Ext2Slots.insert(ss, n) == Some{ss2} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+  {DW.Ext2Slots.total(ss2) == DW.Ext2Slots.total(ss) : Nat}
+
+law slots_remove_total:
+  for +ss: List<&2, DW.Ext2Slot>
+  for +name: B.Octets
+  for +ss2: List<&2, DW.Ext2Slot>
+  for h: {DW.Ext2Slots.remove(ss, name) == Some{ss2} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+  {DW.Ext2Slots.total(ss2) == DW.Ext2Slots.total(ss) : Nat}
+
+law slots_insert_names:
+  for +ss: List<&2, DW.Ext2Slot>
+  for +n: DW.Ext2Slot
+  for +ss2: List<&2, DW.Ext2Slot>
+  for hl: {DW.Ext2Slots.lookup(ss, DW.Ext2Slot.name(n)) == None{} : Maybe<&2, DW.Ext2Slot>}
+  for hu: {DW.Ext2Slot.used(n) == True{} : Bool}
+  for h: {DW.Ext2Slots.insert(ss, n) == Some{ss2} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+  {DW.Ext2Names.unname(DW.Ext2Slots.names(ss2), DW.Ext2Slot.name(n)) == DW.Ext2Slots.names(ss) : List<&2, DW.Ext2Name>}
+
+law slots_remove_names:
+  for +ss: List<&2, DW.Ext2Slot>
+  for +name: B.Octets
+  for +ss2: List<&2, DW.Ext2Slot>
+  for h: {DW.Ext2Slots.remove(ss, name) == Some{ss2} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+  {DW.Ext2Slots.names(ss2) == DW.Ext2Names.unname(DW.Ext2Slots.names(ss), name) : List<&2, DW.Ext2Name>}
+
+# A block of 1 KiB holding "." and "..", and a new entry "a"
+def Ext2Laws.dots() -> List<&2, DW.Ext2Slot>:
+  [DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 1012n, 2, B.Octets.of_string("..")}]
+
+def Ext2Laws.entry_a() -> DW.Ext2Slot:
+  DW.Ext2Slot{12, 0n, 1, B.Octets.of_string("a")}
+
+# the hypotheses hold together: "a" goes into the room after ".."
+law slots_insert_witness:
+  {Bool.and(Maybe.is_none(&2, DW.Ext2Slot, DW.Ext2Slots.lookup(Ext2Laws.dots(), B.Octets.of_string("a"))), Bool.and(DW.Ext2Slot.used(Ext2Laws.entry_a()), Maybe.is_some(&2, List<&2, DW.Ext2Slot>, DW.Ext2Slots.insert(Ext2Laws.dots(), Ext2Laws.entry_a())))) == True{} : Bool}
+
+law slots_remove_witness:
+  {Maybe.is_some(&2, List<&2, DW.Ext2Slot>, DW.Ext2Slots.remove([DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 12n, 2, B.Octets.of_string("..")}, DW.Ext2Slot{12, 1000n, 1, B.Octets.of_string("a")}], B.Octets.of_string("a"))) == True{} : Bool}
+
+# vectors: the split and the merge as the layout describes them
+law slots_insert_vector:
+  {DW.Ext2Slots.insert(Ext2Laws.dots(), Ext2Laws.entry_a()) == Some{[DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 12n, 2, B.Octets.of_string("..")}, DW.Ext2Slot{12, 1000n, 1, B.Octets.of_string("a")}]} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+
+law slots_remove_vector:
+  {DW.Ext2Slots.remove([DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 12n, 2, B.Octets.of_string("..")}, DW.Ext2Slot{12, 1000n, 1, B.Octets.of_string("a")}], B.Octets.of_string("a")) == Some{[DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 1012n, 2, B.Octets.of_string("..")}]} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+
+# the first entry of a block removed: marked unused, its record kept
+law slots_remove_first_vector:
+  {DW.Ext2Slots.remove([DW.Ext2Slot{12, 1024n, 1, B.Octets.of_string("a")}], B.Octets.of_string("a")) == Some{[DW.Ext2Slot{0, 1024n, 1, B.Octets.of_string("a")}]} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+
+# no room: refused
+law slots_insert_full_vector:
+  {DW.Ext2Slots.insert([DW.Ext2Slot{2, 12n, 2, B.Octets.of_string(".")}, DW.Ext2Slot{2, 12n, 2, B.Octets.of_string("..")}], Ext2Laws.entry_a()) == None{} : Maybe<&2, List<&2, DW.Ext2Slot>>}
+
+# The checked operations, on an in-memory device
+
+# whether every device a result answers satisfies q (a refusal answers none)
+def Ext2Laws.after(r: Result<&2, &2, E.Ext2Error, D.MemDev>, q: D.MemDev -> Bool) -> Bool:
+  match r:
+    case Fail{e}:
+      True{}
+    case Done{d2}:
+      q(d2)
+
+def Ext2Laws.holds(r: Result<&2, &2, E.Ext2Error, Unit>) -> Bool:
+  match r:
+    case Done{u}:
+      True{}
+    case Fail{e}:
+      False{}
+
+def Ext2Laws.yes(r: Result<&2, &2, E.Ext2Error, Bool>) -> Bool:
+  match r:
+    case Done{b}:
+      b
+    case Fail{e}:
+      False{}
+
+def Ext2Laws.run(+op: P.Ext2Op, +d: D.MemDev, +fs: S.Ext2Fs, +wo: WO.Ext2WriteOptions) -> Result<&2, &2, E.Ext2Error, D.MemDev>:
+  RN.Ext2Op.run(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, op, d, fs, wo)
+
+# the bitmaps and the free counts agree
+law run_counts:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +op: P.Ext2Op
+  for h: {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(op, d, fs, wo), d2 => Ext2Laws.holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs))) == True{} : Bool}
+
+# the operation did what it promised (Ext2Guard.promise: for each kind of
+# operation, what its result must show)
+law run_promise:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +op: P.Ext2Op
+  for h: {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(op, d, fs, wo), d2 => Ext2Laws.yes(RN.Ext2Guard.promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs))) == True{} : Bool}
+
+# after writing a file, reading it gives the data back (the file at path
+# read from byte off, len(data) bytes, is data)
+law write_reads_back:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +path: B.Octets
+  for +off: Nat
+  for +data: B.Octets
+  for h: {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(P.Ext2OpWrite{path, off, data}, d, fs, wo), d2 => Ext2Laws.yes(RN.Ext2Guard.reads_back(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs, path, off, data))) == True{} : Bool}
+
+# creating an entry leaves every other entry of its directory unchanged
+# (and the entry is there); removing one likewise (and it is gone)
+law create_keeps_others:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +path: B.Octets
+  for +mode: U32
+  for h: {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(P.Ext2OpCreate{path, mode}, d, fs, wo), d2 => Ext2Laws.yes(RN.Ext2Guard.at(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, True{}, d, d2, fs, path))) == True{} : Bool}
+
+law unlink_keeps_others:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +path: B.Octets
+  for h: {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(P.Ext2OpUnlink{path}, d, fs, wo), d2 => Ext2Laws.yes(RN.Ext2Guard.at(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, False{}, d, d2, fs, path))) == True{} : Bool}
+
+# the default options check (local): the hypothesis of the laws above
+law run_check_witness:
+  {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(WO.Ext2WriteOptions.default())) == True{} : Bool}
+
+# with the full check: no block belongs to two owners, every bitmap is
+# exact, every link count is the number of entries naming the inode
+law run_full:
+  for +d: D.MemDev
+  for +fs: S.Ext2Fs
+  for +wo: WO.Ext2WriteOptions
+  for +op: P.Ext2Op
+  for h: {WO.Ext2CheckLevel.full(WO.Ext2WriteOptions.check(wo)) == True{} : Bool}
+  {Ext2Laws.after(Ext2Laws.run(op, d, fs, wo), d2 => Ext2Laws.holds(FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs))) == True{} : Bool}
+
+law run_full_witness:
+  {WO.Ext2CheckLevel.full(WO.Ext2WriteOptions.check(WO.Ext2WriteOptions.with_check(WO.Ext2WriteOptions.default(), WO.Ext2CheckFull{}))) == True{} : Bool}
+
+# mkfs gives a volume that opens, and that passes the full check: every
+# device Ext2Mkfs.make answers, for every device and options, opens with the
+# reader's default options and passes Ext2Fsck.full (make checks what
+# Ext2Mkfs.build wrote before answering it)
+law mkfs_opens:
+  for d: D.MemDev
+  for o: MK.Ext2MkfsOptions
+  {Ext2Laws.after(MK.Ext2Mkfs.make(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, d, o), d2 => Result.is_done(&2, &2, E.Ext2Error, S.Ext2Fs, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()))) == True{} : Bool}
+
+law mkfs_consistent:
+  for d: D.MemDev
+  for o: MK.Ext2MkfsOptions
+  {Ext2Laws.after(MK.Ext2Mkfs.make(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, d, o), d2 => Ext2Laws.holds(Result.bind(&2, &2, E.Ext2Error, S.Ext2Fs, Unit, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()), fs => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)))) == True{} : Bool}
+
+# Vectors: bitmaps, field patches, extent lists
+
+# 4 bytes: bits 0-10 used, 11-28 free, 29-31 padding
+law bitmap_make_vector:
+  {B.Octets.hex(BM.Ext2Bitmap.make(4n, 11n, 29n)) == "ff0700e0" : String}
+
+law bitmap_find_vector:
+  {BM.Ext2Bitmap.find(BM.Ext2Bitmap.make(4n, 11n, 29n), 0n, 29n, 3n) == [11n, 12n, 13n] : List<&2, Nat>}
+
+law bitmap_count_vector:
+  {BM.Ext2Bitmap.count_clear(BM.Ext2Bitmap.update(BM.Ext2Bitmap.make(4n, 11n, 29n), [11n, 20n], True{}), 29n) == 16n : Nat}
+
+law patch_vector:
+  {B.Octets.hex(PA.Ext2Patch.u32(B.Octets.zeros(8n), 2n, 305419896)) == "0000785634120000" : String}
+
+# a block appended right after an extent's last joins it
+law extent_insert_vector:
+  {EW.Ext2ExtW.insert([X.Ext2Extent{0n, 2n, 100n, True{}}], 2n, 102n) == [X.Ext2Extent{0n, 3n, 100n, True{}}] : List<&2, X.Ext2Extent>}
+
+# a block that continues neither neighbour is an extent of its own
+law extent_insert_gap_vector:
+  {EW.Ext2ExtW.insert([X.Ext2Extent{0n, 2n, 100n, True{}}], 5n, 200n) == [X.Ext2Extent{0n, 2n, 100n, True{}}, X.Ext2Extent{5n, 1n, 200n, True{}}] : List<&2, X.Ext2Extent>}
+
+# a cut in the middle of an extent: the rest freed
+law extent_cut_vector:
+  {EW.Ext2ExtW.cut([X.Ext2Extent{0n, 4n, 100n, True{}}], 1n) == EW.Ext2ExtCut{[X.Ext2Extent{0n, 1n, 100n, True{}}], [103n, 102n, 101n]} : EW.Ext2ExtCut}

@@ -30,6 +30,41 @@ def Ext2Group.checksum(g: Ext2Group) -> U32:
     case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
       ck
 
+def Ext2Group.block_bitmap(g: Ext2Group) -> Nat:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      bb
+
+def Ext2Group.inode_bitmap(g: Ext2Group) -> Nat:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      ib
+
+def Ext2Group.free_blocks(g: Ext2Group) -> U32:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      fb
+
+def Ext2Group.free_inodes(g: Ext2Group) -> U32:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      fi
+
+def Ext2Group.used_dirs(g: Ext2Group) -> U32:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      ud
+
+def Ext2Group.flags(g: Ext2Group) -> U32:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      fl
+
+def Ext2Group.itable_unused(g: Ext2Group) -> U32:
+  match g:
+    case Ext2Group{bb, ib, it, fb, fi, ud, fl, iu, ck}:
+      iu
+
 def Ext2Group.wide(wide: Bool, +o: B.Octets, i: Nat) -> U32:
   match wide:
     case True{}:

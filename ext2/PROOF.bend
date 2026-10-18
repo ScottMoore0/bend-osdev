@@ -12,6 +12,17 @@ import ./blockmap.bend as M
 import ./extent.bend as X
 import ./file.bend as FL
 import ./dir.bend as DR
+import ./patch.bend as PA
+import ./bitmap.bend as BM
+import ./meta.bend as T
+import ./wopts.bend as WO
+import ./extentw.bend as EW
+import ./dirw.bend as DW
+import ./fsck.bend as FK
+import ./ops.bend as P
+import ./run.bend as RN
+import ./mkfs.bend as MK
+import ./ext2.bend as EX
 import ./LAWS.bend as Laws
 
 # Natural numbers: the arithmetic the laws about inode numbers need, proved
@@ -424,4 +435,563 @@ def Laws.extent_depth_bound(d, fs, ino, gen, iblock, l, h):
 
 def Laws.next_at_end(d, fs, i, k, h):
   %Equal.sym(Bool, Nat.is_lt(k, FL.Ext2File.blocks_needed(fs, i)), False{}, h) : {FL.Ext2File.next.go(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, _, d, fs, i, k) == Done{FL.Ext2Eof{}} : Result<&2, &2, E.Ext2Error, FL.Ext2Chunk>}
+  {==}
+
+# ---------------------------------------------------------------- writing
+# a + (r - a) == r when a + b <= r
+def Ext2Proof.add_sub(a: Nat, +b: Nat, r: Nat) -> {Nat.is_le(Nat.add(a, b), r) == True{} : Bool} -> {Nat.add(a, Nat.sub(r, a)) == r : Nat}:
+  match a r:
+    case 0n 0n:
+      h => {==}
+    case 0n 1n+rp:
+      h => {==}
+    case 1n+ap 0n:
+      h => Ext2Proof.ex_falso({Nat.add(1n+ap, Nat.sub(0n, 1n+ap)) == 0n : Nat}, Ext2Proof.bool_clash(h))
+    case 1n+ap 1n+rp:
+      h =>
+        %Equal.sym(Nat, Nat.add(ap, Nat.sub(rp, ap)), rp, Ext2Proof.add_sub(ap, b, rp, h)) : {1n+_ == 1n+rp : Nat}
+        {==}
+
+def Ext2Proof.total_append(xs: List<&2, DW.Ext2Slot>, +ys: List<&2, DW.Ext2Slot>) -> {DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, xs, ys)) == Nat.add(DW.Ext2Slots.total(xs), DW.Ext2Slots.total(ys)) : Nat}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
+      +r = DW.Ext2Slot.rec_len(x)
+      +tt = DW.Ext2Slots.total(t)
+      +ty = DW.Ext2Slots.total(ys)
+      %Equal.sym(Nat, Nat.add(Nat.add(r, tt), ty), Nat.add(r, Nat.add(tt, ty)), Ext2Proof.add_assoc(r, tt, ty)) : {Nat.add(r, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, t, ys))) == _ : Nat}
+      %Ext2Proof.total_append(t, ys) : {Nat.add(r, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, t, ys))) == Nat.add(r, _) : Nat}
+      {==}
+
+# splitting a slot that fits keeps its record
+def Ext2Proof.split_total(u: Bool, s: DW.Ext2Slot, n: DW.Ext2Slot) -> {DW.Ext2Slot.fits.pick(u, s, DW.Ext2Slot.need(n)) == True{} : Bool} -> {DW.Ext2Slots.total(DW.Ext2Slot.split.pick(u, s, n)) == DW.Ext2Slot.rec_len(s) : Nat}:
+  match u s n:
+    case True{} DW.Ext2Slot{i, +r, f, +nm} DW.Ext2Slot{ni, nr, nf, +nnm}:
+      h =>
+        +a = DR.Ext2Dirent.min_rec_len(B.Octets.len(nm))
+        %Equal.sym(Nat, Nat.add(Nat.sub(r, a), 0n), Nat.sub(r, a), Ext2Proof.add_zero(Nat.sub(r, a))) : {Nat.add(a, _) == r : Nat}
+        Ext2Proof.add_sub(a, DR.Ext2Dirent.min_rec_len(B.Octets.len(nnm)), r, h)
+    case False{} DW.Ext2Slot{i, +r, f, nm} DW.Ext2Slot{ni, nr, nf, nnm}:
+      h => Ext2Proof.add_zero(r)
+
+def Ext2Proof.cons_total(s: DW.Ext2Slot, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +d: Nat) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.cons_some(s, r), Nat.add(DW.Ext2Slot.rec_len(s), d)) == Nat.add(DW.Ext2Slot.rec_len(s), Laws.Ext2Laws.total_or(r, d)) : Nat}:
+  match r:
+    case None{}:
+      {==}
+    case Some{xs}:
+      {==}
+
+def Ext2Proof.ins_pick(b: Bool, +u: Bool, +s: DW.Ext2Slot, +t: List<&2, DW.Ext2Slot>, +n: DW.Ext2Slot) -> {DW.Ext2Slot.fits.pick(u, s, DW.Ext2Slot.need(n)) == b : Bool} -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.insert(t, n), DW.Ext2Slots.total(t)) == DW.Ext2Slots.total(t) : Nat} -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.insert.pick(b, u, s, t, n, DW.Ext2Slots.insert(t, n)), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}:
+  match b:
+    case True{}:
+      hb => ih =>
+        +sp = DW.Ext2Slot.split.pick(u, s, n)
+        %Equal.sym(Nat, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, sp, t)), Nat.add(DW.Ext2Slots.total(sp), DW.Ext2Slots.total(t)), Ext2Proof.total_append(sp, t)) : {_ == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}
+        %Equal.sym(Nat, DW.Ext2Slots.total(sp), DW.Ext2Slot.rec_len(s), Ext2Proof.split_total(u, s, n, hb)) : {Nat.add(_, DW.Ext2Slots.total(t)) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}
+        {==}
+    case False{}:
+      hb => ih =>
+        %Equal.sym(Nat, Laws.Ext2Laws.total_or(DW.Ext2Slots.cons_some(s, DW.Ext2Slots.insert(t, n)), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))), Nat.add(DW.Ext2Slot.rec_len(s), Laws.Ext2Laws.total_or(DW.Ext2Slots.insert(t, n), DW.Ext2Slots.total(t))), Ext2Proof.cons_total(s, DW.Ext2Slots.insert(t, n), DW.Ext2Slots.total(t))) : {_ == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}
+        %Equal.sym(Nat, Laws.Ext2Laws.total_or(DW.Ext2Slots.insert(t, n), DW.Ext2Slots.total(t)), DW.Ext2Slots.total(t), ih) : {Nat.add(DW.Ext2Slot.rec_len(s), _) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}
+        {==}
+
+# inserting keeps the total of the records (as a function: no hypothesis)
+def Ext2Proof.ins_total(ss: List<&2, DW.Ext2Slot>, +n: DW.Ext2Slot) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.insert(ss, n), DW.Ext2Slots.total(ss)) == DW.Ext2Slots.total(ss) : Nat}:
+  match ss:
+    case Nil{}:
+      {==}
+    case Con{+s, +t}:
+      Ext2Proof.ins_pick(DW.Ext2Slot.fits.pick(DW.Ext2Slot.used(s), s, DW.Ext2Slot.need(n)), DW.Ext2Slot.used(s), s, t, n, {==}, Ext2Proof.ins_total(t, n))
+
+def Ext2Proof.unused_rec(s: DW.Ext2Slot) -> {DW.Ext2Slot.rec_len(DW.Ext2Slot.unused(s)) == DW.Ext2Slot.rec_len(s) : Nat}:
+  match s:
+    case DW.Ext2Slot{i, r, f, n}:
+      {==}
+
+def Ext2Proof.absorb_rec(p: DW.Ext2Slot, +s: DW.Ext2Slot) -> {DW.Ext2Slot.rec_len(DW.Ext2Slot.absorb(p, s)) == Nat.add(DW.Ext2Slot.rec_len(p), DW.Ext2Slot.rec_len(s)) : Nat}:
+  match p:
+    case DW.Ext2Slot{i, r, f, n}:
+      {==}
+
+def Ext2Proof.rm_pick(b: Bool, +prev: DW.Ext2Slot, +s: DW.Ext2Slot, +t: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.rm(t, s, name), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat} -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.rm.pick(b, prev, s, t, DW.Ext2Slots.rm(t, s, name)), Nat.add(DW.Ext2Slot.rec_len(prev), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)))) == Nat.add(DW.Ext2Slot.rec_len(prev), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))) : Nat}:
+  match b:
+    case True{}:
+      ih =>
+        +rp = DW.Ext2Slot.rec_len(prev)
+        +rs = DW.Ext2Slot.rec_len(s)
+        +tt = DW.Ext2Slots.total(t)
+        %Equal.sym(Nat, DW.Ext2Slot.rec_len(DW.Ext2Slot.absorb(prev, s)), Nat.add(rp, rs), Ext2Proof.absorb_rec(prev, s)) : {Nat.add(_, tt) == Nat.add(rp, Nat.add(rs, tt)) : Nat}
+        Ext2Proof.add_assoc(rp, rs, tt)
+    case False{}:
+      ih =>
+        +rp = DW.Ext2Slot.rec_len(prev)
+        +d = Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))
+        %Equal.sym(Nat, Laws.Ext2Laws.total_or(DW.Ext2Slots.cons_some(prev, DW.Ext2Slots.rm(t, s, name)), Nat.add(rp, d)), Nat.add(rp, Laws.Ext2Laws.total_or(DW.Ext2Slots.rm(t, s, name), d)), Ext2Proof.cons_total(prev, DW.Ext2Slots.rm(t, s, name), d)) : {_ == Nat.add(rp, d) : Nat}
+        %Equal.sym(Nat, Laws.Ext2Laws.total_or(DW.Ext2Slots.rm(t, s, name), d), d, ih) : {Nat.add(rp, _) == Nat.add(rp, d) : Nat}
+        {==}
+
+# the slots after prev, one merged into the slot before it: the total kept
+def Ext2Proof.rm_total(ss: List<&2, DW.Ext2Slot>, +prev: DW.Ext2Slot, +name: B.Octets) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.rm(ss, prev, name), Nat.add(DW.Ext2Slot.rec_len(prev), DW.Ext2Slots.total(ss))) == Nat.add(DW.Ext2Slot.rec_len(prev), DW.Ext2Slots.total(ss)) : Nat}:
+  match ss:
+    case Nil{}:
+      {==}
+    case Con{+s, +t}:
+      Ext2Proof.rm_pick(DW.Ext2Slot.hit(s, name), prev, s, t, name, Ext2Proof.rm_total(t, s, name))
+
+def Ext2Proof.rem_pick(b: Bool, +s: DW.Ext2Slot, +t: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.remove.pick(b, s, t, name), Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t))) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}:
+  match b:
+    case True{}:
+      %Equal.sym(Nat, DW.Ext2Slot.rec_len(DW.Ext2Slot.unused(s)), DW.Ext2Slot.rec_len(s), Ext2Proof.unused_rec(s)) : {Nat.add(_, DW.Ext2Slots.total(t)) == Nat.add(DW.Ext2Slot.rec_len(s), DW.Ext2Slots.total(t)) : Nat}
+      {==}
+    case False{}:
+      Ext2Proof.rm_total(t, s, name)
+
+def Ext2Proof.rem_total(ss: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.remove(ss, name), DW.Ext2Slots.total(ss)) == DW.Ext2Slots.total(ss) : Nat}:
+  match ss:
+    case Nil{}:
+      {==}
+    case Con{+s, +t}:
+      Ext2Proof.rem_pick(DW.Ext2Slot.hit(s, name), s, t, name)
+
+def Ext2Proof.opt_disc(m: Maybe<&2, DW.Ext2Slot>) -> Type:
+  match m:
+    case None{}:
+      Empty
+    case Some{x}:
+      Unit
+
+def Ext2Proof.some_clash(x: DW.Ext2Slot, h: {Some{x} == None{} : Maybe<&2, DW.Ext2Slot>}) -> Empty:
+  %h : Ext2Proof.opt_disc(_)
+  Unit{}
+
+# an unused slot in front of an answer: the names are the answer's
+def Ext2Proof.cons_unused(+s: DW.Ext2Slot, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +nnm: B.Octets, +d: List<&2, DW.Ext2Name>) -> {DW.Ext2Slot.used(s) == False{} : Bool} -> {Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.cons_some(s, r), nnm, d) == Laws.Ext2Laws.unnamed_or(r, nnm, d) : List<&2, DW.Ext2Name>}:
+  match r:
+    case None{}:
+      hu => {==}
+    case Some{+xs}:
+      hu =>
+        %Equal.sym(Bool, DW.Ext2Slot.used(s), False{}, hu) : {DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, s, DW.Ext2Slots.names(xs)), nnm) == DW.Ext2Names.unname(DW.Ext2Slots.names(xs), nnm) : List<&2, DW.Ext2Name>}
+        {==}
+
+# a used slot, named otherwise, in front of an answer: its name, then the
+# answer's
+def Ext2Proof.cons_used(+i: U32, +r0: Nat, +f: U32, +nm: B.Octets, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +nnm: B.Octets, +d: List<&2, DW.Ext2Name>) -> {Bool.not(U32.is_eq(i, 0)) == True{} : Bool} -> {B.Octets.is_eq(nm, nnm) == False{} : Bool} -> {Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{i, r0, f, nm}, r), nnm, Con{DW.Ext2Name{i, f, nm}, d}) == Con{DW.Ext2Name{i, f, nm}, Laws.Ext2Laws.unnamed_or(r, nnm, d)} : List<&2, DW.Ext2Name>}:
+  match r:
+    case None{}:
+      hu => he => {==}
+    case Some{+xs}:
+      hu => he =>
+        +rest = DW.Ext2Slots.names(xs)
+        %Equal.sym(Bool, Bool.not(U32.is_eq(i, 0)), True{}, hu) : {DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{i, r0, f, nm}, rest), nnm) == Con{DW.Ext2Name{i, f, nm}, DW.Ext2Names.unname(rest, nnm)} : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(nm, nnm), False{}, he) : {DW.Ext2Names.unname.pick(_, DW.Ext2Name{i, f, nm}, rest, DW.Ext2Names.unname(rest, nnm)) == Con{DW.Ext2Name{i, f, nm}, DW.Ext2Names.unname(rest, nnm)} : List<&2, DW.Ext2Name>}
+        {==}
+
+def Ext2Proof.pick_none_false(c: Bool, +s: DW.Ext2Slot, r: Maybe<&2, DW.Ext2Slot>) -> {DW.Ext2Slots.lookup.pick(c, s, r) == None{} : Maybe<&2, DW.Ext2Slot>} -> {c == False{} : Bool}:
+  match c:
+    case True{}:
+      h => Ext2Proof.ex_falso({True{} == False{} : Bool}, Ext2Proof.some_clash(s, h))
+    case False{}:
+      h => {==}
+
+def Ext2Proof.pick_none_rest(c: Bool, +s: DW.Ext2Slot, r: Maybe<&2, DW.Ext2Slot>) -> {DW.Ext2Slots.lookup.pick(c, s, r) == None{} : Maybe<&2, DW.Ext2Slot>} -> {r == None{} : Maybe<&2, DW.Ext2Slot>}:
+  match c:
+    case True{}:
+      h => Ext2Proof.ex_falso({r == None{} : Maybe<&2, DW.Ext2Slot>}, Ext2Proof.some_clash(s, h))
+    case False{}:
+      h => h
+
+# the new entry, used, at the front of the slots after it: unnamed, the
+# names after it
+def Ext2Proof.front_new(+ni: U32, +x: Nat, +nf: U32, +nnm: B.Octets, +rest: List<&2, DW.Ext2Name>) -> {Bool.not(U32.is_eq(ni, 0)) == True{} : Bool} -> {DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(ni, 0)), DW.Ext2Slot{ni, x, nf, nnm}, rest), nnm) == rest : List<&2, DW.Ext2Name>}:
+  hn =>
+    %Equal.sym(Bool, Bool.not(U32.is_eq(ni, 0)), True{}, hn) : {DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{ni, x, nf, nnm}, rest), nnm) == rest : List<&2, DW.Ext2Name>}
+    %Equal.sym(Bool, B.Octets.is_eq(nnm, nnm), True{}, BL.octets_is_eq_refl(nnm)) : {DW.Ext2Names.unname.pick(_, DW.Ext2Name{ni, nf, nnm}, rest, DW.Ext2Names.unname(rest, nnm)) == rest : List<&2, DW.Ext2Name>}
+    {==}
+
+def Ext2Proof.ins_names.at(u: Bool, e: Bool, b: Bool, +s: DW.Ext2Slot, +t: List<&2, DW.Ext2Slot>, +ni: U32, +nr: Nat, +nf: U32, +nnm: B.Octets) -> {DW.Ext2Slot.used(s) == u : Bool} -> {B.Octets.is_eq(DW.Ext2Slot.name(s), nnm) == e : Bool} -> {DW.Ext2Slots.lookup.pick(Bool.and(u, e), s, DW.Ext2Slots.lookup(t, nnm)) == None{} : Maybe<&2, DW.Ext2Slot>} -> {Bool.not(U32.is_eq(ni, 0)) == True{} : Bool} -> ({DW.Ext2Slots.lookup(t, nnm) == None{} : Maybe<&2, DW.Ext2Slot>} -> {Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.insert(t, DW.Ext2Slot{ni, nr, nf, nnm}), nnm, DW.Ext2Slots.names(t)) == DW.Ext2Slots.names(t) : List<&2, DW.Ext2Name>}) -> {Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.insert.pick(b, u, s, t, DW.Ext2Slot{ni, nr, nf, nnm}, DW.Ext2Slots.insert(t, DW.Ext2Slot{ni, nr, nf, nnm})), nnm, DW.Ext2Slots.names.keep(u, s, DW.Ext2Slots.names(t))) == DW.Ext2Slots.names.keep(u, s, DW.Ext2Slots.names(t)) : List<&2, DW.Ext2Name>}:
+  match u e b:
+    case True{} True{} _:
+      hu => he => hc => hn => ih => Ext2Proof.ex_falso({Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.insert.pick(b, True{}, s, t, DW.Ext2Slot{ni, nr, nf, nnm}, DW.Ext2Slots.insert(t, DW.Ext2Slot{ni, nr, nf, nnm})), nnm, DW.Ext2Slots.names.keep(True{}, s, DW.Ext2Slots.names(t))) == DW.Ext2Slots.names.keep(True{}, s, DW.Ext2Slots.names(t)) : List<&2, DW.Ext2Name>}, Ext2Proof.some_clash(s, hc))
+    case True{} False{} True{}:
+      match s:
+        case DW.Ext2Slot{+i, +r, +f, +nm}:
+          hu => he => hc => hn => ih =>
+            +need = DR.Ext2Dirent.min_rec_len(B.Octets.len(nm))
+            +a = {DW.Ext2Slot{i, need, f, nm} : DW.Ext2Slot}
+            +bs = {DW.Ext2Slot{ni, Nat.sub(r, need), nf, nnm} : DW.Ext2Slot}
+            +nt = DW.Ext2Slots.names(t)
+            +k = DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(ni, 0)), bs, nt)
+            +nn = {DW.Ext2Name{i, f, nm} : DW.Ext2Name}
+            %Equal.sym(Bool, Bool.not(U32.is_eq(i, 0)), True{}, hu) : {DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, a, k), nnm) == Con{nn, nt} : List<&2, DW.Ext2Name>}
+            %Equal.sym(Bool, B.Octets.is_eq(nm, nnm), False{}, he) : {DW.Ext2Names.unname.pick(_, nn, k, DW.Ext2Names.unname(k, nnm)) == Con{nn, nt} : List<&2, DW.Ext2Name>}
+            %Equal.sym(List<&2, DW.Ext2Name>, DW.Ext2Names.unname(k, nnm), nt, Ext2Proof.front_new(ni, Nat.sub(r, need), nf, nnm, nt, hn)) : {Con{nn, _} == Con{nn, nt} : List<&2, DW.Ext2Name>}
+            {==}
+    case True{} False{} False{}:
+      match s:
+        case DW.Ext2Slot{+i, +r, +f, +nm}:
+          hu => he => hc => hn => ih =>
+            +rr = DW.Ext2Slots.insert(t, DW.Ext2Slot{ni, nr, nf, nnm})
+            +nt = DW.Ext2Slots.names(t)
+            +nn = {DW.Ext2Name{i, f, nm} : DW.Ext2Name}
+            %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{i, r, f, nm}, rr), nnm, Con{nn, nt}), Con{nn, Laws.Ext2Laws.unnamed_or(rr, nnm, nt)}, Ext2Proof.cons_used(i, r, f, nm, rr, nnm, nt, hu, he)) : {_ == Con{nn, nt} : List<&2, DW.Ext2Name>}
+            %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.unnamed_or(rr, nnm, nt), nt, ih(Ext2Proof.pick_none_rest(False{}, DW.Ext2Slot{i, r, f, nm}, DW.Ext2Slots.lookup(t, nnm), hc))) : {Con{nn, _} == Con{nn, nt} : List<&2, DW.Ext2Name>}
+            {==}
+    case False{} _ True{}:
+      hu => he => hc => hn => ih => Ext2Proof.front_new(ni, DW.Ext2Slot.rec_len(s), nf, nnm, DW.Ext2Slots.names(t), hn)
+    case False{} _ False{}:
+      hu => he => hc => hn => ih =>
+        +r = DW.Ext2Slots.insert(t, DW.Ext2Slot{ni, nr, nf, nnm})
+        %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.cons_some(s, r), nnm, DW.Ext2Slots.names(t)), Laws.Ext2Laws.unnamed_or(r, nnm, DW.Ext2Slots.names(t)), Ext2Proof.cons_unused(s, r, nnm, DW.Ext2Slots.names(t), hu)) : {_ == DW.Ext2Slots.names(t) : List<&2, DW.Ext2Name>}
+        ih(Ext2Proof.pick_none_rest(False{}, s, DW.Ext2Slots.lookup(t, nnm), hc))
+
+def Ext2Proof.ins_names(ss: List<&2, DW.Ext2Slot>, +ni: U32, +nr: Nat, +nf: U32, +nnm: B.Octets) -> {DW.Ext2Slots.lookup(ss, nnm) == None{} : Maybe<&2, DW.Ext2Slot>} -> {Bool.not(U32.is_eq(ni, 0)) == True{} : Bool} -> {Laws.Ext2Laws.unnamed_or(DW.Ext2Slots.insert(ss, DW.Ext2Slot{ni, nr, nf, nnm}), nnm, DW.Ext2Slots.names(ss)) == DW.Ext2Slots.names(ss) : List<&2, DW.Ext2Name>}:
+  match ss:
+    case Nil{}:
+      hl => hn => {==}
+    case Con{+s, +t}:
+      hl => +hn => Ext2Proof.ins_names.at(DW.Ext2Slot.used(s), B.Octets.is_eq(DW.Ext2Slot.name(s), nnm), DW.Ext2Slot.fits.pick(DW.Ext2Slot.used(s), s, DW.Ext2Slot.need(DW.Ext2Slot{ni, nr, nf, nnm})), s, t, ni, nr, nf, nnm, {==}, {==}, hl, hn, ht => Ext2Proof.ins_names(t, ni, nr, nf, nnm, ht, hn))
+
+def Ext2Proof.and_l(a: Bool, +b: Bool) -> {Bool.and(a, b) == True{} : Bool} -> {a == True{} : Bool}:
+  match a:
+    case True{}:
+      h => {==}
+    case False{}:
+      h => Ext2Proof.ex_falso({False{} == True{} : Bool}, Ext2Proof.bool_clash(h))
+
+def Ext2Proof.and_r(a: Bool, +b: Bool) -> {Bool.and(a, b) == True{} : Bool} -> {b == True{} : Bool}:
+  match a:
+    case True{}:
+      h => h
+    case False{}:
+      h => Ext2Proof.ex_falso({b == True{} : Bool}, Ext2Proof.bool_clash(h))
+
+def Ext2Proof.and_true_r(a: Bool, +b: Bool) -> {a == True{} : Bool} -> {Bool.and(a, b) == False{} : Bool} -> {b == False{} : Bool}:
+  match a:
+    case True{}:
+      ha => h => h
+    case False{}:
+      ha => h => Ext2Proof.ex_falso({b == False{} : Bool}, Ext2Proof.bool_clash(ha))
+
+# a used slot (named otherwise) in front of an answer of rm: its name first
+def Ext2Proof.cons_names_used(+pi: U32, +pr: Nat, +pf: U32, +pnm: B.Octets, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +d: List<&2, DW.Ext2Name>) -> {Bool.not(U32.is_eq(pi, 0)) == True{} : Bool} -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, r), Con{DW.Ext2Name{pi, pf, pnm}, d}) == Con{DW.Ext2Name{pi, pf, pnm}, Laws.Ext2Laws.names_or(r, d)} : List<&2, DW.Ext2Name>}:
+  match r:
+    case None{}:
+      hu => {==}
+    case Some{+xs}:
+      hu =>
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), True{}, hu) : {DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names(xs)) == Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names(xs)} : List<&2, DW.Ext2Name>}
+        {==}
+
+def Ext2Proof.cons_names_unused(+pi: U32, +pr: Nat, +pf: U32, +pnm: B.Octets, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +d: List<&2, DW.Ext2Name>) -> {Bool.not(U32.is_eq(pi, 0)) == False{} : Bool} -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, r), d) == Laws.Ext2Laws.names_or(r, d) : List<&2, DW.Ext2Name>}:
+  match r:
+    case None{}:
+      hu => {==}
+    case Some{+xs}:
+      hu =>
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), False{}, hu) : {DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names(xs)) == DW.Ext2Slots.names(xs) : List<&2, DW.Ext2Name>}
+        {==}
+
+def Ext2Proof.rm_names.step(up: Bool, b2: Bool, +pi: U32, +pr: Nat, +pf: U32, +pnm: B.Octets, +i2: U32, +r2: Nat, +f2: U32, +nm2: B.Octets, +t2: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Bool.not(U32.is_eq(pi, 0)) == up : Bool} -> {Bool.and(Bool.not(U32.is_eq(pi, 0)), B.Octets.is_eq(pnm, name)) == False{} : Bool} -> {Bool.and(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name)) == b2 : Bool} -> ({Bool.and(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name)) == False{} : Bool} -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name) : List<&2, DW.Ext2Name>}) -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.rm.pick(b2, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slot{i2, r2, f2, nm2}, t2, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(pi, 0)), DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(pi, 0)), DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name) : List<&2, DW.Ext2Name>}:
+  match up b2:
+    case True{} True{}:
+      +hup => hp => +hb2 => ih =>
+        +hu2 = Ext2Proof.and_l(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name), hb2)
+        +he2 = Ext2Proof.and_r(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name), hb2)
+        +hep = Ext2Proof.and_true_r(Bool.not(U32.is_eq(pi, 0)), B.Octets.is_eq(pnm, name), hup, hp)
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), True{}, hup) : {DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, Nat.add(pr, r2), pf, pnm}, DW.Ext2Slots.names(t2)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(pnm, name), False{}, hep) : {Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names(t2)} == DW.Ext2Names.unname.pick(_, DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, Bool.not(U32.is_eq(i2, 0)), True{}, hu2) : {Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names(t2)} == Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)} : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(nm2, name), True{}, he2) : {Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names(t2)} == Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Names.unname.pick(_, DW.Ext2Name{i2, f2, nm2}, DW.Ext2Slots.names(t2), DW.Ext2Names.unname(DW.Ext2Slots.names(t2), name))} : List<&2, DW.Ext2Name>}
+        {==}
+    case True{} False{}:
+      +hup => hp => +hb2 => ih =>
+        +hep = Ext2Proof.and_true_r(Bool.not(U32.is_eq(pi, 0)), B.Octets.is_eq(pnm, name), hup, hp)
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), True{}, hup) : {Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(pnm, name), False{}, hep) : {Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), DW.Ext2Names.unname.pick(_, DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name))) == DW.Ext2Names.unname.pick(_, DW.Ext2Name{pi, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)) : List<&2, DW.Ext2Name>}
+        %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)}), Con{DW.Ext2Name{pi, pf, pnm}, Laws.Ext2Laws.names_or(DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name))}, Ext2Proof.cons_names_used(pi, pr, pf, pnm, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name), hup)) : {_ == Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)} : List<&2, DW.Ext2Name>}
+        %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.names_or(DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name), ih(hb2)) : {Con{DW.Ext2Name{pi, pf, pnm}, _} == Con{DW.Ext2Name{pi, pf, pnm}, DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)} : List<&2, DW.Ext2Name>}
+        {==}
+    case False{} True{}:
+      +hup => hp => +hb2 => ih =>
+        +hu2 = Ext2Proof.and_l(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name), hb2)
+        +he2 = Ext2Proof.and_r(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name), hb2)
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), False{}, hup) : {DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, Nat.add(pr, r2), pf, pnm}, DW.Ext2Slots.names(t2)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, Bool.not(U32.is_eq(i2, 0)), True{}, hu2) : {DW.Ext2Slots.names(t2) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(nm2, name), True{}, he2) : {DW.Ext2Slots.names(t2) == DW.Ext2Names.unname.pick(_, DW.Ext2Name{i2, f2, nm2}, DW.Ext2Slots.names(t2), DW.Ext2Names.unname(DW.Ext2Slots.names(t2), name)) : List<&2, DW.Ext2Name>}
+        {==}
+    case False{} False{}:
+      +hup => hp => +hb2 => ih =>
+        %Equal.sym(Bool, Bool.not(U32.is_eq(pi, 0)), False{}, hup) : {Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2))), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(List<&2, DW.Ext2Name>, Laws.Ext2Laws.names_or(DW.Ext2Slots.cons_some(DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name)), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)), Laws.Ext2Laws.names_or(DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name)), Ext2Proof.cons_names_unused(pi, pr, pf, pnm, DW.Ext2Slots.rm(t2, DW.Ext2Slot{i2, r2, f2, nm2}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name), hup)) : {_ == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i2, 0)), DW.Ext2Slot{i2, r2, f2, nm2}, DW.Ext2Slots.names(t2)), name) : List<&2, DW.Ext2Name>}
+        ih(hb2)
+
+# the slots after prev (used or not, not named name), one entry named name
+# merged into the slot before it: the names are the old ones without it
+def Ext2Proof.rm_names(ss: List<&2, DW.Ext2Slot>, +pi: U32, +pr: Nat, +pf: U32, +pnm: B.Octets, +name: B.Octets) -> {Bool.and(Bool.not(U32.is_eq(pi, 0)), B.Octets.is_eq(pnm, name)) == False{} : Bool} -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.rm(ss, DW.Ext2Slot{pi, pr, pf, pnm}, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(pi, 0)), DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names(ss)), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(pi, 0)), DW.Ext2Slot{pi, pr, pf, pnm}, DW.Ext2Slots.names(ss)), name) : List<&2, DW.Ext2Name>}:
+  match ss:
+    case Nil{}:
+      hp => {==}
+    case Con{DW.Ext2Slot{+i2, +r2, +f2, +nm2}, +t2}:
+      hp => Ext2Proof.rm_names.step(Bool.not(U32.is_eq(pi, 0)), Bool.and(Bool.not(U32.is_eq(i2, 0)), B.Octets.is_eq(nm2, name)), pi, pr, pf, pnm, i2, r2, f2, nm2, t2, name, {==}, hp, {==}, hp2 => Ext2Proof.rm_names(t2, i2, r2, f2, nm2, name, hp2))
+
+def Ext2Proof.rem_names.step(b: Bool, +i: U32, +r: Nat, +f: U32, +nm: B.Octets, +t: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Bool.and(Bool.not(U32.is_eq(i, 0)), B.Octets.is_eq(nm, name)) == b : Bool} -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.remove.pick(b, DW.Ext2Slot{i, r, f, nm}, t, name), DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i, 0)), DW.Ext2Slot{i, r, f, nm}, DW.Ext2Slots.names(t)), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(Bool.not(U32.is_eq(i, 0)), DW.Ext2Slot{i, r, f, nm}, DW.Ext2Slots.names(t)), name) : List<&2, DW.Ext2Name>}:
+  match b:
+    case True{}:
+      +hb =>
+        +hu = Ext2Proof.and_l(Bool.not(U32.is_eq(i, 0)), B.Octets.is_eq(nm, name), hb)
+        +he = Ext2Proof.and_r(Bool.not(U32.is_eq(i, 0)), B.Octets.is_eq(nm, name), hb)
+        %Equal.sym(Bool, Bool.not(U32.is_eq(i, 0)), True{}, hu) : {DW.Ext2Slots.names(t) == DW.Ext2Names.unname(DW.Ext2Slots.names.keep(_, DW.Ext2Slot{i, r, f, nm}, DW.Ext2Slots.names(t)), name) : List<&2, DW.Ext2Name>}
+        %Equal.sym(Bool, B.Octets.is_eq(nm, name), True{}, he) : {DW.Ext2Slots.names(t) == DW.Ext2Names.unname.pick(_, DW.Ext2Name{i, f, nm}, DW.Ext2Slots.names(t), DW.Ext2Names.unname(DW.Ext2Slots.names(t), name)) : List<&2, DW.Ext2Name>}
+        {==}
+    case False{}:
+      hb => Ext2Proof.rm_names(t, i, r, f, nm, name, hb)
+
+# removing an entry: the names are the old ones without it
+def Ext2Proof.rem_names(ss: List<&2, DW.Ext2Slot>, +name: B.Octets) -> {Laws.Ext2Laws.names_or(DW.Ext2Slots.remove(ss, name), DW.Ext2Names.unname(DW.Ext2Slots.names(ss), name)) == DW.Ext2Names.unname(DW.Ext2Slots.names(ss), name) : List<&2, DW.Ext2Name>}:
+  match ss:
+    case Nil{}:
+      {==}
+    case Con{DW.Ext2Slot{+i, +r, +f, +nm}, +t}:
+      Ext2Proof.rem_names.step(Bool.and(Bool.not(U32.is_eq(i, 0)), B.Octets.is_eq(nm, name)), i, r, f, nm, t, name, {==})
+
+def Ext2Proof.res_disc(r: Result<&2, &2, E.Ext2Error, Unit>) -> Type:
+  match r:
+    case Done{u}:
+      Unit
+    case Fail{e}:
+      Empty
+
+def Ext2Proof.res_clash(e: E.Ext2Error, h: {Fail{e} == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>}) -> Empty:
+  %Equal.sym(Result<&2, &2, E.Ext2Error, Unit>, Fail{e}, Done{Unit{}}, h) : Ext2Proof.res_disc(_)
+  Unit{}
+
+# a check that passed: what its first step checked passed
+def Ext2Proof.first_holds(c: Result<&2, &2, E.Ext2Error, Unit>, rest: Unit -> Result<&2, &2, E.Ext2Error, Unit>) -> {Result.bind(&2, &2, E.Ext2Error, Unit, Unit, c, rest) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {Laws.Ext2Laws.holds(c) == True{} : Bool}:
+  match c:
+    case Done{u}:
+      h => {==}
+    case Fail{e}:
+      h => Ext2Proof.ex_falso({Laws.Ext2Laws.holds(Fail{e}) == True{} : Bool}, Ext2Proof.res_clash(e, h))
+
+# a confirmed result: its device passed the check
+def Ext2Proof.confirm_after(p: Result<&2, &2, E.Ext2Error, Unit>, +d2: D.MemDev, q: D.MemDev -> Bool) -> ({p == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {Laws.Ext2Laws.after(RN.Ext2Op.confirm(D.MemDev, p, d2), q) == True{} : Bool}:
+  match p:
+    case Done{u}:
+      match u:
+        case Unit{}:
+          hp => hp({==})
+    case Fail{e}:
+      hp => {==}
+
+# every device a checked result answers passes its check (and so satisfies
+# q, when the check implies q)
+def Ext2Proof.checked_after(r: Result<&2, &2, E.Ext2Error, D.MemDev>, k: D.MemDev -> Result<&2, &2, E.Ext2Error, Unit>, q: D.MemDev -> Bool) -> (@d2: D.MemDev -> {k(d2) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {Laws.Ext2Laws.after(RN.Ext2Op.checked(D.MemDev, r, k), q) == True{} : Bool}:
+  match r:
+    case Fail{e}:
+      hk => {==}
+    case Done{+d2}:
+      hk => Ext2Proof.confirm_after(k(d2), d2, q, hk(d2))
+
+# A check that passed: the steps after its first passed
+def Ext2Proof.then_holds(c: Result<&2, &2, E.Ext2Error, Unit>, rest: Result<&2, &2, E.Ext2Error, Unit>) -> {Result.bind(&2, &2, E.Ext2Error, Unit, Unit, c, v => rest) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {rest == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>}:
+  match c:
+    case Done{u}:
+      h => h
+    case Fail{e}:
+      h => Ext2Proof.ex_falso({rest == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>}, Ext2Proof.res_clash(e, h))
+
+# ... and its first step passed
+def Ext2Proof.first_done(c: Result<&2, &2, E.Ext2Error, Unit>, rest: Unit -> Result<&2, &2, E.Ext2Error, Unit>) -> {Result.bind(&2, &2, E.Ext2Error, Unit, Unit, c, rest) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {c == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>}:
+  match c:
+    case Done{u}:
+      match u:
+        case Unit{}:
+          h => {==}
+    case Fail{e}:
+      h => Ext2Proof.ex_falso({Fail{e} == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>}, Ext2Proof.res_clash(e, h))
+
+# a promise required to hold: it held
+def Ext2Proof.yes_of(pr: Result<&2, &2, E.Ext2Error, Bool>, +e: E.Ext2Error) -> {Result.bind(&2, &2, E.Ext2Error, Bool, Unit, pr, b => S.Ext2.require(b, e)) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {Laws.Ext2Laws.yes(pr) == True{} : Bool}:
+  match pr:
+    case Done{b}:
+      match b:
+        case True{}:
+          h => {==}
+        case False{}:
+          h => Ext2Proof.ex_falso({False{} == True{} : Bool}, Ext2Proof.res_clash(e, h))
+    case Fail{x}:
+      h => Ext2Proof.ex_falso({False{} == True{} : Bool}, Ext2Proof.res_clash(x, h))
+
+# every device a checked operation answers satisfies q, when passing the
+# local check and passing the full one each imply q
+def Ext2Proof.run_after(wo: WO.Ext2WriteOptions, +d: D.MemDev, +fs: S.Ext2Fs, +op: P.Ext2Op, q: D.MemDev -> Bool, hl: @d2: D.MemDev -> {RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckLocal{}, op, d, d2, fs) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}, hf: @d2: D.MemDev -> {RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckFull{}, op, d, d2, fs) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool} -> {Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, wo), q) == True{} : Bool}:
+  match wo:
+    case WO.Ext2WriteOptions{+a, +c, k, +x, +t, +u, +g}:
+      match k:
+        case WO.Ext2CheckNone{}:
+          h => Ext2Proof.ex_falso({Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckNone{}, x, t, u, g}), q) == True{} : Bool}, Ext2Proof.bool_clash(h))
+        case WO.Ext2CheckLocal{}:
+          h => Ext2Proof.checked_after(P.Ext2Op.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckLocal{}, x, t, u, g}), d2 => RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckLocal{}, op, d, d2, fs), q, hl)
+        case WO.Ext2CheckFull{}:
+          h => Ext2Proof.checked_after(P.Ext2Op.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckFull{}, x, t, u, g}), d2 => RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckFull{}, op, d, d2, fs), q, hf)
+
+# the same with the full check alone
+def Ext2Proof.run_after_full(wo: WO.Ext2WriteOptions, +d: D.MemDev, +fs: S.Ext2Fs, +op: P.Ext2Op, q: D.MemDev -> Bool, hf: @d2: D.MemDev -> {RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckFull{}, op, d, d2, fs) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {WO.Ext2CheckLevel.full(WO.Ext2WriteOptions.check(wo)) == True{} : Bool} -> {Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, wo), q) == True{} : Bool}:
+  match wo:
+    case WO.Ext2WriteOptions{+a, +c, k, +x, +t, +u, +g}:
+      match k:
+        case WO.Ext2CheckNone{}:
+          h => Ext2Proof.ex_falso({Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckNone{}, x, t, u, g}), q) == True{} : Bool}, Ext2Proof.bool_clash(h))
+        case WO.Ext2CheckLocal{}:
+          h => Ext2Proof.ex_falso({Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckLocal{}, x, t, u, g}), q) == True{} : Bool}, Ext2Proof.bool_clash(h))
+        case WO.Ext2CheckFull{}:
+          h => Ext2Proof.checked_after(P.Ext2Op.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, op, d, fs, WO.Ext2WriteOptions{a, c, WO.Ext2CheckFull{}, x, t, u, g}), d2 => RN.Ext2Guard.post(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, WO.Ext2CheckFull{}, op, d, d2, fs), q, hf)
+
+def Ext2Proof.promise_error() -> E.Ext2Error:
+  E.Ext2CheckFailed{"the operation did not do what it promised"}
+
+# every answer of a checked operation is what it promised
+def Ext2Proof.promise_after(wo: WO.Ext2WriteOptions, +d: D.MemDev, +fs: S.Ext2Fs, +op: P.Ext2Op) -> {WO.Ext2CheckLevel.any(WO.Ext2WriteOptions.check(wo)) == True{} : Bool} -> {Laws.Ext2Laws.after(Laws.Ext2Laws.run(op, d, fs, wo), d2 => Laws.Ext2Laws.yes(RN.Ext2Guard.promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs))) == True{} : Bool}:
+  Ext2Proof.run_after(wo, d, fs, op, d2 => Laws.Ext2Laws.yes(RN.Ext2Guard.promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs)), +d2 => hp => Ext2Proof.yes_of(RN.Ext2Guard.promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), Ext2Proof.promise_error(), Ext2Proof.then_holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), hp)), +d2 => hp => Ext2Proof.yes_of(RN.Ext2Guard.promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), Ext2Proof.promise_error(), Ext2Proof.first_done(RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), w => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), Ext2Proof.then_holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), Result.bind(&2, &2, E.Ext2Error, Unit, Unit, RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), w => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)), hp))))
+
+def Laws.run_counts(d, fs, wo, op, h):
+  Ext2Proof.run_after(wo, d, fs, op, d2 => Laws.Ext2Laws.holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)), +d2 => hp => Ext2Proof.first_holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), v => RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), hp), +d2 => hp => Ext2Proof.first_holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), v => Result.bind(&2, &2, E.Ext2Error, Unit, Unit, RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), w => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)), hp), h)
+
+def Laws.run_promise(d, fs, wo, op, h):
+  Ext2Proof.promise_after(wo, d, fs, op, h)
+
+def Laws.write_reads_back(d, fs, wo, path, off, data, h):
+  Ext2Proof.promise_after(wo, d, fs, P.Ext2OpWrite{path, off, data}, h)
+
+def Laws.create_keeps_others(d, fs, wo, path, mode, h):
+  Ext2Proof.promise_after(wo, d, fs, P.Ext2OpCreate{path, mode}, h)
+
+def Laws.unlink_keeps_others(d, fs, wo, path, h):
+  Ext2Proof.promise_after(wo, d, fs, P.Ext2OpUnlink{path}, h)
+
+def Laws.run_full(d, fs, wo, op, h):
+  Ext2Proof.run_after_full(wo, d, fs, op, d2 => Laws.Ext2Laws.holds(FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)), +d2 => hp => %Equal.sym(Result<&2, &2, E.Ext2Error, Unit>, FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), Done{Unit{}}, Ext2Proof.then_holds(RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), Ext2Proof.then_holds(FK.Ext2Fsck.counts(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), Result.bind(&2, &2, E.Ext2Error, Unit, Unit, RN.Ext2Guard.kept_promise(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, op, d, d2, fs), w => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)), hp))) : {Laws.Ext2Laws.holds(_) == True{} : Bool}; {==}, h)
+
+def Laws.run_check_witness():
+  {==}
+
+def Laws.run_full_witness():
+  {==}
+
+# mkfs: its answers passed Ext2Mkfs.check (they open, and pass the full
+# check)
+def Ext2Proof.mk_confirm(p: Result<&2, &2, E.Ext2Error, Unit>, +d2: D.MemDev, q: D.MemDev -> Bool) -> ({p == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {Laws.Ext2Laws.after(MK.Ext2Mkfs.confirm(D.MemDev, p, d2), q) == True{} : Bool}:
+  match p:
+    case Done{u}:
+      match u:
+        case Unit{}:
+          hp => hp({==})
+    case Fail{e}:
+      hp => {==}
+
+def Ext2Proof.mk_after(r: Result<&2, &2, E.Ext2Error, D.MemDev>, q: D.MemDev -> Bool) -> (@d2: D.MemDev -> {MK.Ext2Mkfs.check(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {q(d2) == True{} : Bool}) -> {Laws.Ext2Laws.after(MK.Ext2Mkfs.checked(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, r), q) == True{} : Bool}:
+  match r:
+    case Fail{e}:
+      hq => {==}
+    case Done{+d2}:
+      hq => Ext2Proof.mk_confirm(MK.Ext2Mkfs.check(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2), d2, q, hq(d2))
+
+def Ext2Proof.fs_disc(r: Result<&2, &2, E.Ext2Error, S.Ext2Fs>) -> Type:
+  match r:
+    case Done{x}:
+      Unit
+    case Fail{e}:
+      Empty
+
+def Ext2Proof.opened(x: Result<&2, &2, E.Ext2Error, S.Ext2Fs>, k: S.Ext2Fs -> Result<&2, &2, E.Ext2Error, Unit>) -> {Result.bind(&2, &2, E.Ext2Error, S.Ext2Fs, Unit, x, k) == Done{Unit{}} : Result<&2, &2, E.Ext2Error, Unit>} -> {Result.is_done(&2, &2, E.Ext2Error, S.Ext2Fs, x) == True{} : Bool}:
+  match x:
+    case Done{fs}:
+      h => {==}
+    case Fail{e}:
+      h => Ext2Proof.ex_falso({Result.is_done(&2, &2, E.Ext2Error, S.Ext2Fs, Fail{e}) == True{} : Bool}, Ext2Proof.res_clash(e, h))
+
+def Ext2Proof.mkfs_opens(r: Result<&2, &2, E.Ext2Error, D.MemDev>) -> {Laws.Ext2Laws.after(MK.Ext2Mkfs.checked(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, r), d2 => Result.is_done(&2, &2, E.Ext2Error, S.Ext2Fs, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()))) == True{} : Bool}:
+  Ext2Proof.mk_after(r, +d2 => Result.is_done(&2, &2, E.Ext2Error, S.Ext2Fs, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default())), +d2 => hc => Ext2Proof.opened(EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()), fs => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs), hc))
+
+def Ext2Proof.mkfs_consistent(r: Result<&2, &2, E.Ext2Error, D.MemDev>) -> {Laws.Ext2Laws.after(MK.Ext2Mkfs.checked(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, r), d2 => Laws.Ext2Laws.holds(Result.bind(&2, &2, E.Ext2Error, S.Ext2Fs, Unit, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()), fs => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs)))) == True{} : Bool}:
+  Ext2Proof.mk_after(r, +d2 => Laws.Ext2Laws.holds(Result.bind(&2, &2, E.Ext2Error, S.Ext2Fs, Unit, EX.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, O.Ext2Options.default()), fs => FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2, fs))), +d2 => hc => %Equal.sym(Result<&2, &2, E.Ext2Error, Unit>, MK.Ext2Mkfs.check(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d2), Done{Unit{}}, hc) : {Laws.Ext2Laws.holds(_) == True{} : Bool}; {==})
+
+# make is checked applied to what build wrote
+def Laws.mkfs_opens(d, o):
+  Ext2Proof.mkfs_opens(MK.Ext2Mkfs.build(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, d, o))
+
+def Laws.mkfs_consistent(d, o):
+  Ext2Proof.mkfs_consistent(MK.Ext2Mkfs.build(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, d, o))
+
+# Directory blocks
+
+def Laws.slots_insert_total(ss, n, ss2, h):
+  +tot = DW.Ext2Slots.total(ss)
+  %Equal.sym(Nat, DW.Ext2Slots.total(ss2), Laws.Ext2Laws.total_or(Some{ss2}, tot), {==}) : {_ == tot : Nat}
+  %h : {Laws.Ext2Laws.total_or(_, tot) == tot : Nat}
+  Ext2Proof.ins_total(ss, n)
+
+def Laws.slots_remove_total(ss, name, ss2, h):
+  +tot = DW.Ext2Slots.total(ss)
+  %Equal.sym(Nat, DW.Ext2Slots.total(ss2), Laws.Ext2Laws.total_or(Some{ss2}, tot), {==}) : {_ == tot : Nat}
+  %h : {Laws.Ext2Laws.total_or(_, tot) == tot : Nat}
+  Ext2Proof.rem_total(ss, name)
+
+def Ext2Proof.insert_names(n: DW.Ext2Slot, +ss: List<&2, DW.Ext2Slot>, +ss2: List<&2, DW.Ext2Slot>) -> {DW.Ext2Slots.lookup(ss, DW.Ext2Slot.name(n)) == None{} : Maybe<&2, DW.Ext2Slot>} -> {DW.Ext2Slot.used(n) == True{} : Bool} -> {DW.Ext2Slots.insert(ss, n) == Some{ss2} : Maybe<&2, List<&2, DW.Ext2Slot>>} -> {DW.Ext2Names.unname(DW.Ext2Slots.names(ss2), DW.Ext2Slot.name(n)) == DW.Ext2Slots.names(ss) : List<&2, DW.Ext2Name>}:
+  match n:
+    case DW.Ext2Slot{+ni, +nr, +nf, +nnm}:
+      hl => hu => h =>
+        +ns = DW.Ext2Slots.names(ss)
+        %Equal.sym(List<&2, DW.Ext2Name>, DW.Ext2Names.unname(DW.Ext2Slots.names(ss2), nnm), Laws.Ext2Laws.unnamed_or(Some{ss2}, nnm, ns), {==}) : {_ == ns : List<&2, DW.Ext2Name>}
+        %h : {Laws.Ext2Laws.unnamed_or(_, nnm, ns) == ns : List<&2, DW.Ext2Name>}
+        Ext2Proof.ins_names(ss, ni, nr, nf, nnm, hl, hu)
+
+def Laws.slots_insert_names(ss, n, ss2, hl, hu, h):
+  Ext2Proof.insert_names(n, ss, ss2, hl, hu, h)
+
+def Laws.slots_remove_names(ss, name, ss2, h):
+  +dd = DW.Ext2Names.unname(DW.Ext2Slots.names(ss), name)
+  %Equal.sym(List<&2, DW.Ext2Name>, DW.Ext2Slots.names(ss2), Laws.Ext2Laws.names_or(Some{ss2}, dd), {==}) : {_ == dd : List<&2, DW.Ext2Name>}
+  %h : {Laws.Ext2Laws.names_or(_, dd) == dd : List<&2, DW.Ext2Name>}
+  Ext2Proof.rem_names(ss, name)
+
+def Laws.slots_insert_witness():
+  {==}
+
+def Laws.slots_remove_witness():
+  {==}
+
+def Laws.slots_insert_vector():
+  {==}
+
+def Laws.slots_remove_vector():
+  {==}
+
+def Laws.slots_remove_first_vector():
+  {==}
+
+def Laws.slots_insert_full_vector():
+  {==}
+
+def Laws.bitmap_make_vector():
+  {==}
+
+def Laws.bitmap_find_vector():
+  {==}
+
+def Laws.bitmap_count_vector():
+  {==}
+
+def Laws.patch_vector():
+  {==}
+
+def Laws.extent_insert_vector():
+  {==}
+
+def Laws.extent_insert_gap_vector():
+  {==}
+
+def Laws.extent_cut_vector():
   {==}

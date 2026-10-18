@@ -1,9 +1,16 @@
 # bend-osdev-ext2
 
-A read-only reader of ext2, ext3 and ext4 filesystems over blockdev's device
-interface: the superblock and its checks, block group descriptors, inodes,
-file data through the classic block map and through extent trees, directories,
-path lookup and symbolic links, and the metadata checksums of ext4.
+A reader and writer of ext2, ext3 and ext4 filesystems over blockdev's device
+interface. Reading: the superblock and its checks, block group descriptors,
+inodes, file data through the classic block map and through extent trees,
+directories, path lookup and symbolic links, and the metadata checksums of
+ext4. Writing: mkfs (revision 1, an ext2 and an ext4 profile), allocation
+through the bitmaps with the descriptors' and superblock's free counts kept
+in step, files, directories, fast and slow symbolic links, hard links,
+unlink, rmdir, rename, writes, appends and truncation through the block map
+or extents, directory entries split and merged, the metadata checksums
+updated; every operation checked before it answers (a whole-filesystem
+check, `Ext2Fsck.full`, is there too).
 
 Specifications:
 
@@ -18,7 +25,7 @@ Specifications:
 Both are documentation; the package was written from them only. No Linux
 kernel code and no e2fsprogs source was read. The e2fsprogs tools (mke2fs,
 debugfs, e2fsck, dumpe2fs, tune2fs) are used as black boxes by the
-differential test.
+differential tests.
 
 ## What it reads
 
@@ -37,11 +44,36 @@ differential test.
 Not read: inline data, extended attributes, the journal (no replay), the
 bitmaps (a reader never needs them, so their checksums are not verified),
 and the checksums of htree index blocks (their entries are read linearly; the
-leaf blocks' checksums are verified). Writing is out of scope.
+leaf blocks' checksums are verified). The writer below reads and writes
+the bitmaps and their checksums.
 
 Block numbers and sizes are `Nat`, at most 48 bits (ext4's own limit, and the
 largest immediate `Nat` of Bend 2.0.37); a 64-bit field's high half beyond
 that is ignored rather than overflow. Sizes in records are `W64`.
+
+## What it writes
+
+| | |
+|---|---|
+| Operations | create (regular files), mkdir (`.`, `..`, the parent's link), symlink (fast up to 59 bytes, slow beyond), link (hard links to files), unlink (the inode and its blocks freed with the last link), rmdir (empty directories only), rename (files and directories, over an existing file or empty directory; a directory never into itself), write at an offset (holes left as holes, a block written only where data goes), append, truncate (shorter: blocks freed; longer: a hole) |
+| Features written | filetype, meta_bg, extent, 64bit, flex_bg, metadata_csum_seed, large_dir (incompat); sparse_super, large_file, huge_file, gdt_csum, dir_nlink, extra_isize, metadata_csum (ro_compat); the compat ones (a journal is left as it is). Anything else is refused before anything is written: `Ext2CannotWrite{why}` names it |
+| Checksums | metadata_csum: superblock, descriptors, both bitmaps, inodes, extent blocks, directory leaf blocks (their tails); gdt_csum's crc16; or, with `Ext2CsumRefuse`, a filesystem that has them is refused |
+| File data | the block map (direct, singly, doubly, triply indirect blocks, allocated as needed, freed when empty) on any filesystem; extents (depth 0, or depth 1 with up to four leaves: 336 extents with 1 KiB blocks, 1360 with 4 KiB) where the filesystem has them and the options ask (`extents`, default on) |
+| mkfs | revision 1; ext2 profile: sparse_super, filetype, large_file (1 KiB blocks, 256-byte inodes); ext4 profile: also extent, 64bit, metadata_csum, dir_nlink, extra_isize (4 KiB blocks); any block size from 1 to 32 KiB, inode size, inode ratio, blocks per group, reserved percentage, UUID, label and time as options; the root (`/`, links 3) and `lost+found` |
+| Refused, named | htree (indexed) directories (`Ext2HtreeDir`: entries go into a linear directory only; the index would go stale), an inode with an extended attribute block on release (`Ext2Xattr`), extent trees deeper than 1 or past four leaves (`Ext2ExtentFull`), a write into an unwritten extent (`Ext2Unwritten`), a block past the triply indirect block (`Ext2FileTooBig`), a file of 2 GiB or more without large_file, a 65,000th link (`Ext2TooManyLinks`), names with "/" or NUL or over 255 bytes (`Ext2BadName`), 64 KiB blocks (rec_len cannot hold them), a filesystem marked as having errors |
+
+Not written: the journal (a filesystem with one is written around it: its
+inode and blocks are left alone, and nothing is journalled), htree indexes,
+extended attributes, inline data, flex_bg's packing at mkfs (an opened
+filesystem with flex_bg is written correctly, its bitmaps and tables
+wherever they are), resize_inode, uninit_bg's lazy groups at mkfs (all
+groups are initialised; uninit groups of an opened filesystem are
+initialised as they are first used), quota, orphan lists.
+
+Every operation is all or nothing: it answers the device after it, or why
+it was refused (`Ext2Error`), and a refused operation hands back no device,
+so the caller's is as it was. Times, owner and the allocation policy come
+from the options; a write takes the time it is given (no clock is read).
 
 ## Files
 
@@ -59,10 +91,21 @@ that is ignored rather than overflow. Sizes in records are `W64`.
 | `options.bend` | `Ext2Options` and its default |
 | `error.bend` | `Ext2Error` |
 | `field.bend` | internal: little-endian field reads of records of known length |
+| `wopts.bend` | writing: `Ext2WriteOptions` (allocation policy, checksums, the check after each operation, extents, time, owner) and their defaults |
+| `run.bend` | writing, the entry: `Ext2Op.run`, an operation checked before it answers (`Ext2Guard`: what each operation promises) |
+| `ops.bend` | writing: the operations on paths (`Ext2W.create`, `mkdir`, `symlink`, `link`, `unlink`, `rmdir`, `rename`, `write`, `append`, `truncate`), `Ext2Op`, which filesystems may be written |
+| `mkfs.bend` | writing: making a filesystem (`Ext2Mkfs.make`), its options and geometry |
+| `fsck.bend` | writing: the checks, `Ext2Fsck.counts` (bitmaps against free counts) and `Ext2Fsck.full` (ownership, bitmaps, the tree, link counts) |
+| `meta.bend` | writing: device writes, the superblock, descriptors and bitmaps written with their checksums and counts, `Ext2Out` |
+| `alloc.bend` | writing: inode and block allocation and freeing through the bitmaps, by the options' policy |
+| `bitmap.bend`, `patch.bend` | writing: bit operations on bitmaps; little-endian field patches of records |
+| `inodew.bend` | writing: inode records (fields, a fresh inode, the checksum) |
+| `mapw.bend`, `extentw.bend`, `filew.bend` | writing: the block map (set, truncate), extent lists and trees (insert, cut, store), file data (write, truncate) |
+| `dirw.bend` | writing: directory blocks as slots (insert splitting a record, remove merging one), entries added, removed, retargeted |
 | `sample.bend` | test fixture (not interface): the small image `check.bend` reads, written by `ref/sample.py` |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
-| `check.bend` | a runnable check on the sample image |
-| `ref/` | the differential test against mke2fs and debugfs |
+| `check.bend` | a runnable check: the sample image read, volumes made by mkfs written |
+| `ref/` | the differential tests against e2fsprogs: reading (`gen.py`) and writing (`wgen.py`) |
 
 Bend imports do not re-export: import the file that holds what you use.
 
@@ -176,6 +219,59 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
 | `Ext2Options.all_incompat()`, `Ext2Options.ext2_incompat()` | feature sets: everything this package reads; plain ext2 (filetype only) |
 | `Ext2Error`, `Ext2Error.show`, `Ext2Error.kind` | one constructor per failure; a message; the constructor's name |
 
+### Writing
+
+Every writing function takes the device as blockdev's pure interface plus a
+pure write, `~D`, `~block_size`, `~read_block`, `~write_block` (`D -> Nat ->
+Octets -> Result<&2, &2, DevError, D>`), and the device `d`; below, `(wdev)`
+stands for those five. On a `MemDev` the write is `Ext2Dev.mem_write`
+(meta.bend), `MemDev.write_block` with plain parameters. The filesystem
+`fs` is the one `Ext2.open` answered, and stays valid across writes: the
+writer reads the superblock's counts, the descriptors and the bitmaps from
+the device each time.
+
+```
+import ../blockdev/blockdev.bend as D
+import ./meta.bend as T
+import ./mkfs.bend as MK
+import ./ops.bend as P
+import ./run.bend as RN
+import ./wopts.bend as WO
+
+MK.Ext2Mkfs.make(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, D.MemDev.blank(4096n, 2048n), MK.Ext2MkfsOptions.ext4(2048n, uuid))
+RN.Ext2Op.run(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, P.Ext2OpWrite{B.Octets.of_string("/f"), 0n, data}, dev, fs, WO.Ext2WriteOptions.default())
+```
+
+| Def | Meaning |
+|---|---|
+| `Ext2Op` (`Ext2OpCreate{path, mode}`, `Ext2OpMkdir{path, mode}`, `Ext2OpSymlink{path, target}`, `Ext2OpLink{target, path}`, `Ext2OpUnlink{path}`, `Ext2OpRmdir{path}`, `Ext2OpRename{from, to}`, `Ext2OpWrite{path, off, data}`, `Ext2OpAppend{path, data}`, `Ext2OpTruncate{path, size}`) (ops.bend) | the operations; `mode` is the permission bits |
+| `Ext2Op.run(wdev, op, d, fs, wo)` (run.bend) | the operation done and then checked as the options ask (`Ext2CheckLocal` by default: the counts and the operation's promise; `Ext2CheckFull`: also `Ext2Fsck.full`); the device after it, or why not (`Ext2CheckFailed{what}` if the check fails; the caller's device is as it was) |
+| `Ext2Op.apply(wdev, op, d, fs, wo)`; `Ext2W.create`, `mkdir`, `symlink`, `link`, `unlink`, `rmdir`, `rename`, `write`, `append`, `truncate` (wdev, d, fs, wo, ...) (ops.bend) | the same, unchecked |
+| `Ext2W.writable(fs, wo)` | whether this writer may write the filesystem (the features above, checksums, error state, block size): `Ext2CannotWrite{why}` |
+| `Ext2Guard.promise(op, d, d2, fs)`, `post(level, op, d, d2, fs)` (run.bend) | what each operation promises (the data read back, the entry there or gone, the other entries kept, a size), and the check a level runs |
+| `Ext2WriteOptions{alloc, csum, check, extents, time, uid, gid}`, `.default()`, `with_alloc`, `with_csum`, `with_check`, `with_extents`, `with_time`, `with_owner`, accessors (wopts.bend) | the options (default: the default policy, checksums updated, the local check, extents where the filesystem has them, time 0, owner 0:0) |
+| `Ext2AllocPolicy{files, dirs, blocks}`, `.default()` (files near the parent's group, directories spread to the emptiest group, blocks near the goal), `.first_fit()`; `Ext2GroupPick` (`Ext2PickFirst`, `Ext2PickNear`, `Ext2PickSpread`), `Ext2BlockPick` (`Ext2BlockFirst`, `Ext2BlockNear`) | the allocation policy |
+| `Ext2CsumMode` (`Ext2CsumUpdate`, `Ext2CsumRefuse`), `Ext2CheckLevel` (`Ext2CheckNone`, `Ext2CheckLocal`, `Ext2CheckFull`) | |
+| `Ext2Mkfs.make(wdev, d, o)` (mkfs.bend) | a new filesystem on `d`, checked (`Ext2Mkfs.check`: it opens and passes `Ext2Fsck.full`) before it answers; `Ext2BadMkfs{why}` for options that cannot make one (too few blocks, a bad inode size, ...) |
+| `Ext2Mkfs.build(wdev, d, o)`, `Ext2Mkfs.check(dev)`, `Ext2Mkfs.checked(dev, r)` | the same, unchecked; the check; the check applied to a result |
+| `Ext2MkfsOptions{blocks, log_block, inode_size, inode_ratio, blocks_per_group, reserved_percent, features, uuid, label, time, zero}`, `.ext2(blocks, uuid)`, `.ext4(blocks, uuid)`, `with_block(o, log)`, `with_inodes(o, size, ratio)`, `with_group`, `with_features`, `with_label`, `with_time`, `with_zero`, `with_reserved`, accessors | mkfs's options (`blocks_per_group` 0: 8 per bit of a block; `zero`: write the inode tables' zeros, which a blank device does not need) |
+| `Ext2MkfsFeatures{sparse_super, filetype, large_file, extents, wide, metadata_csum, dir_nlink, extra_isize}`, `.ext2()`, `.ext4()` | the features mkfs writes |
+| `Ext2Fsck.counts(dev, fs)`, `Ext2Fsck.full(dev, fs)` (fsck.bend) | the bitmaps against the descriptors' and superblock's free counts; the whole check: metadata and every inode's blocks owned once, `i_blocks`, every group's bitmaps exactly what is used (padding set), the tree walked from the root (`.` and `..`, file types, every used inode reached), every link count the number of entries naming the inode; `Ext2CheckFailed{what}` |
+
+The parts the operations are built from, for a writer of more of ext4 (a
+journal, htree directories) to reuse:
+
+| Def | Meaning |
+|---|---|
+| `Ext2Out{dev, value}` (meta.bend) | a device and a value (a result's pair) |
+| `Ext2Fs.write_block(wdev, fs, n, data)`, `Ext2Dev.write_bytes(wdev, off, data)` (meta.bend) | a filesystem block; bytes anywhere (read, patched, written back) |
+| `Ext2Meta.write_super(wdev, raw)`, `adjust_super(wdev, bplus, bminus, iplus, iminus)`, `desc_read(dev, fs, g)` (the raw descriptor), `desc(fs, raw)`, `desc_write(wdev, fs, g, raw)`, `block_bitmap`, `inode_bitmap`, `put_block_bitmap`, `put_inode_bitmap`, `bitmap_csum` | the superblock and descriptors written with their checksums; the free counts moved; bitmaps read (an uninit group's computed) and written with their checksums |
+| `Ext2Alloc.inode(wdev, fs, wo, parent, dir)`, `blocks(wdev, fs, wo, goal, count)`, `free_blocks(wdev, fs, xs)`, `free_inode(wdev, fs, ino, dir)` (alloc.bend) | allocation and freeing, the bitmaps, descriptors and superblock kept in step |
+| `Ext2Bitmap.test`, `set`, `clear`, `update`, `find`, `count_clear`, `make`, `range`, `same` (bitmap.bend); `Ext2Patch.u8`, `u16`, `u32`, `lo32`, `hi32`, `split`, `bytes` (patch.bend) | bitmaps; field patches |
+| `Ext2InodeW.read_raw`, `write_raw` (checksum set), `fresh`, `csum`; `Ext2IRaw` field getters and setters (inodew.bend) | inode records |
+| `Ext2MapW.set`, `Ext2MapW.truncate` (mapw.bend); `Ext2ExtW.load`, `lookup`, `insert`, `cut`, `store` (extentw.bend); `Ext2FileW.write`, `Ext2FileW.truncate` (filew.bend) | the block map, extents, file data |
+| `Ext2Slot{inode, rec_len, file_type, name}`, `Ext2Slots.parse`, `encode`, `insert`, `remove`, `retarget`, `lookup`, `names`, `total`; `Ext2DirW.add`, `remove`, `retarget`, `is_empty`, `first_block` (dirw.bend) | directory blocks and entries |
+
 ## Extension points
 
 * **Any device:** the reader is a set of templates over blockdev's interface;
@@ -195,11 +291,28 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
   incompat bits the reader agrees to read (`ext2_incompat()` turns it into a
   plain ext2 reader that refuses extents); checksum verification, journal
   recovery, symbolic link hops and the extent depth bound are options too.
-* **Writing** is the obvious extension: the records' parsers have field
-  offsets a writer would mirror (`Ext2Dirent.encode` is the first writer),
-  and blockdev's owned interface has the write operation a writer would take
-  (`write_block`, as a fourth template argument).
-* **More of ext4:** inline data (`Ext2InlineData` marks where it would go),
+* **Writing on any device:** the writer takes blockdev's pure interface and
+  a pure write (`write_block: D -> Nat -> Octets -> Result<.., D>`) as a
+  fourth template argument; a device whose write hands back a new value
+  (a `MemDev`, a copy-on-write image) works unchanged. A refused operation
+  hands back no device, which is what makes every operation all or nothing.
+  An owned device (blockdev's `ImgDev`) would take an adapter whose write
+  copies, or a writer on the owned interface; the laws would then be about
+  pairs.
+* **Allocation policy:** `Ext2AllocPolicy` picks the group for files, for
+  directories and for blocks (first, near the parent or goal, spread to the
+  emptiest); a new policy is a new constructor and a branch in alloc.bend.
+* **How much to check:** `Ext2CheckLevel` runs no check, the local one (the
+  counts, and what the operation promised), or the whole-filesystem one
+  after every operation; a caller can also run `Ext2Fsck.full` itself.
+* **More of ext4 (the ext4 package builds on these):** a journal (every write goes
+  through the `write_block` argument, so a device that collects an
+  operation's blocks can log them before they reach their places), htree
+  directories (refused now as `Ext2HtreeDir`; `Ext2Slots` handles the leaf
+  blocks), deeper extent trees (`Ext2ExtentFull` marks the limit), writes
+  into unwritten extents, extended attribute blocks, flex_bg packing at
+  mkfs.
+* **More of ext4 (reading):** inline data (`Ext2InlineData` marks where it would go),
   htree lookups by hash (linear reading is correct, only slower), extended
   attributes, bitmap checksums, casefolded names.
 * **Faster reading:** `Ext2File.next` walks the block map or extent tree for
@@ -236,8 +349,52 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
   group descriptor's, an inode's), inode locations, directory entries with and
   without the filetype layout and their checks, block-map paths.
 
+The writer's laws:
+
+* **for every input:**
+  * `slots_insert_total`, `slots_remove_total`: inserting an entry into a
+    directory block's slots, or removing one, keeps the total of the
+    records: the block stays exactly covered (a record is split or merged,
+    never lost);
+  * `slots_insert_names`: an entry whose name the block does not hold,
+    inserted, leaves every other entry as it was and in order, the new one
+    among them; `slots_remove_names`: removing one leaves exactly the
+    others (proved by induction on the slots);
+  * `run_counts`: every device `Ext2Op.run` answers, for every operation,
+    device, filesystem and options whose check level checks anything, has
+    bitmaps that agree with the descriptors' and superblock's free counts;
+  * `run_promise`: and is what the operation promised (`Ext2Guard.promise`);
+    in particular `write_reads_back` (after a write, the file read from
+    `off` for the data's length is the data), `create_keeps_others` and
+    `unlink_keeps_others` (creating or removing an entry leaves every other
+    entry of its directory as it was, and the entry is there, or gone);
+  * `run_full`: with the full check, every device answered passes
+    `Ext2Fsck.full`: no block owned twice, every bitmap exactly what is
+    used, every link count the number of entries naming the inode;
+  * `mkfs_opens`, `mkfs_consistent`: every device `Ext2Mkfs.make` answers,
+    for every device and options, opens with the reader's default options
+    and passes `Ext2Fsck.full`;
+* **witnesses:** the slot laws' hypotheses together (`slots_*_witness`), and
+  the default options do check (`run_check_witness`, `run_full_witness`);
+* **vectors:** a record split and merged, the first entry of a block
+  removed, a full block refused; bitmaps made, searched and counted; a field
+  patch; extent lists joined, kept apart and cut.
+
+These say what every answer satisfies, not that an operation succeeds: each
+operation and mkfs check their result before answering it (the check is
+part of the operation: a result that fails it is refused,
+`Ext2CheckFailed`), and the laws follow from that, whatever the operation
+did. That the operations do succeed, and do what ext2 means, is what the
+tests show: the kernel that checks the laws counts in unary, so running an
+operation on an image is beyond what a law can evaluate. The "bitmaps agree
+with the counts" and "no block in two inodes" and "links_count = entries"
+laws hold with the check level that checks them (`Ext2CheckFull` for the
+last two; the default, `Ext2CheckLocal`, checks the counts and the
+promise); `Ext2CheckNone` gives none of them.
+
 The checker counts in unary, so the vectors keep their numbers small; the
-reading of real images is covered by `check.bend` and the differential test.
+reading and writing of real images is covered by `check.bend` and the
+differential tests.
 
 ## Tests
 
@@ -246,7 +403,14 @@ reading of real images is covered by `check.bend` and the differential test.
   fast and slow links, lookups with and without following links; six
   corruptions refused (bad magic, superblock, inode and directory checksums,
   an unsupported feature, a bad rec_len), one accepted again with
-  verification off, and a plain-ext2 reader refusing extents.
+  verification off, and a plain-ext2 reader refusing extents. Then mkfs on
+  blank devices (the ext2 profile with 1 KiB blocks, the ext4 one with
+  4 KiB blocks, extents and metadata_csum), each passing `Ext2Fsck.full`,
+  and a script of 24 operations on each (directories, files written,
+  appended, linked, renamed, truncated, a sparse file, fast and slow links;
+  six refused: a non-empty rmdir, an existing name, rmdir of a file, a
+  directory renamed into itself, a missing parent), read back and checked
+  whole.
 * `ref/run.sh`: `ref/gen.py` builds 16 images with mke2fs (ext2 with 1 KiB and
   4 KiB blocks, several groups, revision 0, htree directories after
   `e2fsck -D`; ext3; ext2 with gdt_csum; ext4 with and without metadata_csum,
@@ -270,12 +434,41 @@ reading of real images is covered by `check.bend` and the differential test.
   too. The images live in a
   temporary directory and are read a block at a time (`ref/image.bend` holds
   their non-zero blocks, each read from the file on its own and kept as a
-  list of bytes until it is read); each image runs in its own process. It
-  needs python3 and e2fsprogs (exit 77 without them).
+  list of bytes until it is read); each image runs in its own process.
+* `ref/run.sh`, writing: `ref/wgen.py` builds 12 images with mke2fs, each
+  populated from a random tree with `mke2fs -d` (ext2 with 1 KiB and 4 KiB
+  blocks, revision 0, with uninit_bg over several groups; ext3 with its
+  journal; ext4 with 1 KiB and 4 KiB blocks, without metadata_csum, without
+  64bit, over several groups, with meta_bg, with an htree directory), and
+  lists 6 filesystems for the package's mkfs to make (both profiles, 1, 2
+  and 4 KiB blocks, 128- and 256-byte inodes, several groups); on each it
+  draws a random sequence of operations (about a third meant to be
+  refused: missing parents, existing names, bad names (too long, ".",
+  ".."), non-empty directories, a directory renamed into itself, hard links
+  to directories, a directory written as a file, entries added to an htree
+  directory, ...). Further cases run the same images with the full check after
+  every operation, with first-fit allocation, without extents (block maps
+  on ext4), with checksums refused, with two files grown in turn into a
+  depth-1 extent tree, with writes into an unwritten extent (refused), and
+  on three images corrupted after the fact (a bitmap bit, a link count, a
+  free count), where `Ext2Fsck.full` must find the corruption. The
+  operations run through a model written in `wgen.py` from POSIX's and
+  ext2's documented behaviour (so it shares an author with the package, but
+  not its code), and the run compares, for every case: each operation's
+  outcome (done, or refused with the error kind the model expects); the
+  tree the package reads back (kinds, sizes, link counts, CRC-32 of the
+  contents, link targets) with the model's; and the image itself, rebuilt
+  from the program's output, with `e2fsck -fn` (which must accept every
+  image written) and `debugfs` (`ls -p`: names, kinds, sizes and which names
+  share an inode; `rdump`: contents and link targets). 27 cases, 993
+  operations with the default seed 2026. `ref/wmain.bend` is one program
+  that reads the case list from a file and runs every case, so it builds
+  once.
+* Both need python3 and e2fsprogs (exit 77 without them).
 
 ## Speed and size
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
+**Lanes.** The reading figures in this section were measured on bend's JavaScript lane
 (`bend file.bend`, which runs `main` inside the bend process). That lane's
 stack overflows at some tens of thousands of nested non-tail calls, and it
 uses several times the memory of a native build (`bend file.bend -o prog`),
@@ -335,12 +528,52 @@ hole, 2 to 8 ms for a block of data), so a 70 MB sparse file takes about a
 minute and a half; the differential test reads that file's far blocks by
 range and by map instead.
 
+### Writing (native)
+
+Measured natively (`bend file.bend -o`, clang 22) on in-memory devices
+(throwaway size tests, not kept in the repository; each figure is the whole
+program: mkfs on a blank device, the operations, then reading the result
+back and `Ext2Fsck.full`; the 1 MB of data is generated in the program):
+
+| Operation | Input | Time | Memory |
+|---|---|---|---|
+| `Ext2Mkfs.make` and `Ext2Fsck.full` | 64 MB, ext2 profile (1 KiB blocks, 8 groups, 16,384 inodes) | 1.1 s | 0.4 GB |
+| `Ext2Mkfs.make` and `Ext2Fsck.full` | 64 MB, ext4 profile (4 KiB blocks, 1 group, 4096 inodes) | 0.3 s | 0.1 GB |
+| create and write 1 MB in one write | ext4 profile (extents) | 3.6 s (3.0 s unchecked) | 0.4 GB |
+| create and write 1 MB in one write | ext2 profile (block map into the doubly indirect block) | 11 to 12 s (10 s unchecked) | 0.7 GB |
+| 64 appends of 16 KB | ext4 profile | 3.0 s | 0.3 GB |
+| 300 files created in one directory | ext2 profile (1 KiB blocks, 8 groups) | 8.9 s (4.1 s unchecked; 65 s with the full check after each) | 0.4 GB |
+| 300 files created in one directory | ext4 profile (4 KiB blocks, metadata_csum) | 18 to 20 s (11 s unchecked) | 0.1 GB |
+| write 1 MB, truncate to 0, unlink | ext4 profile | 3.3 s | 0.4 GB |
+
+"Unchecked" is `Ext2CheckNone`; the default, `Ext2CheckLocal`, reads every
+group's bitmaps and descriptor after each operation (the counts) and what
+the operation promised (a written range read back, the directory listed
+again), which costs about as much as the operation again. A create walks
+the directory's blocks for the name and for room, so creating n entries in
+one directory is quadratic (htree directories, which would make it
+logarithmic, are refused, not written); with metadata_csum every block
+written is checksummed with crc's bitwise crc32c, which is what makes the
+ext4 creates slower. Writes hold their data as an `Octets` (about 150 bytes
+of memory a byte), so write large files in pieces of a megabyte or so.
+Some of the writer's walks recurse once per element (a block's slots,
+the list of blocks one write allocates, merging sorted block lists); on
+the native lane's 2 GB stack the largest above (1,024 blocks allocated and
+mapped in one write) runs within it, but on the JavaScript lane a write of
+several thousand blocks at once could overflow it. `check.bend` builds in
+56 s (1.8 GB) and runs in 1.1 s;
+`ref/wmain.bend` builds in 58 s (1.7 GB) and runs the 27 writing cases in
+46 s (52 MB).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 7130 lines (2949 queries, 43 images) match
-(seed 7: 7132 lines, 2945 queries), `scripts/deps.sh` passes; all re-run on
-blockdev's tree-backed `MemDev`. Every program, `check.bend` and all 43 case
-files, builds and runs natively (`ref/gen.py` builds each image's query list
-from helper defs of at most 40 queries, so no def passes the C backend's 247
-live values, bendlang/bend#1069).
+`check.bend` passes, `ref/run.sh` passes (reading: 7130 lines, 2949
+queries, 43 images match; writing: 27 cases, 993 operations match, every
+image accepted by `e2fsck -fn` and read back by debugfs), `scripts/deps.sh`
+passes; the whole `scripts/check.sh ext2` (with `VERDICT=1`) takes about 17
+minutes natively, most of it building the reading test's 43 case files.
+Every program, `check.bend`, `ref/wmain.bend` and all 43 reading case
+files, builds and runs natively (`ref/gen.py` builds each image's query
+list from helper defs of at most 40 queries, so no def passes the C
+backend's 247 live values, bendlang/bend#1069).

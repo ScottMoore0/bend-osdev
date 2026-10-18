@@ -12,6 +12,13 @@ import ./file.bend as FL
 import ./dir.bend as DR
 import ./ext2.bend as X
 import ./sample.bend as SM
+import ../uuid/uuid.bend as U
+import ./wopts.bend as WO
+import ./meta.bend as T
+import ./fsck.bend as FK
+import ./ops.bend as P
+import ./run.bend as RN
+import ./mkfs.bend as MK
 
 # The sample image (sample.bend: ext4 with metadata_csum, made by mke2fs):
 #   /hello.txt (16, "Hello, ext4!\n"), /docs (12), /docs/notes.txt (15,
@@ -181,6 +188,97 @@ def Ext2Check.corrupt(+d: D.MemDev, r: Result<&2, &2, E.Ext2Error, S.Ext2Fs>) ->
     case Fail{e}:
       ["open " ++ Ext2Check.err(e)]
 
+# Writing: volumes made by mkfs (ext2 profile, 1 KiB blocks; ext4 profile,
+# 4 KiB blocks, extents and metadata_csum), then a script of operations,
+# each through Ext2Op.run (which checks the counts and the operation's
+# promise after each one), some meant to be refused; then the tree read
+# back and the whole-filesystem check. (The sample image keeps only the
+# blocks a reader needs, so it is not written on here.)
+
+def Ext2Check.wres(r: Result<&2, &2, E.Ext2Error, D.MemDev>) -> String:
+  match r:
+    case Done{d}:
+      "ok"
+    case Fail{e}:
+      E.Ext2Error.kind(e)
+
+def Ext2Check.keep(r: Result<&2, &2, E.Ext2Error, D.MemDev>, d: D.MemDev) -> D.MemDev:
+  match r:
+    case Done{d2}:
+      d2
+    case Fail{e}:
+      d
+
+def Ext2Check.unit(r: Result<&2, &2, E.Ext2Error, Unit>) -> String:
+  match r:
+    case Done{u}:
+      "fsck ok"
+    case Fail{e}:
+      "fsck " ++ Ext2Check.err(e)
+
+def Ext2Check.ops() -> List<&2, P.Ext2Op>:
+  [P.Ext2OpMkdir{Ext2Check.p("/docs"), 493},
+   P.Ext2OpCreate{Ext2Check.p("/docs/empty"), 420},
+   P.Ext2OpCreate{Ext2Check.p("/hello.txt"), 420},
+   P.Ext2OpWrite{Ext2Check.p("/hello.txt"), 0n, Ext2Check.p("Hello, ext2!")},
+   P.Ext2OpCreate{Ext2Check.p("/sparse"), 420},
+   P.Ext2OpWrite{Ext2Check.p("/sparse"), 20000n, Ext2Check.p("tail")},
+   P.Ext2OpMkdir{Ext2Check.p("/new"), 493},
+   P.Ext2OpCreate{Ext2Check.p("/new/a.txt"), 420},
+   P.Ext2OpWrite{Ext2Check.p("/new/a.txt"), 0n, Ext2Check.p("Hello, writer!")},
+   P.Ext2OpAppend{Ext2Check.p("/new/a.txt"), Ext2Check.p(" Again.")},
+   P.Ext2OpLink{Ext2Check.p("/new/a.txt"), Ext2Check.p("/new/b.txt")},
+   P.Ext2OpSymlink{Ext2Check.p("/new/l"), Ext2Check.p("b.txt")},
+   P.Ext2OpSymlink{Ext2Check.p("/new/long"), Ext2Check.p("../../../../../../../../../../../../../../../../../../../../../../../new/hello.txt")},
+   P.Ext2OpRename{Ext2Check.p("/hello.txt"), Ext2Check.p("/new/hello.txt")},
+   P.Ext2OpRmdir{Ext2Check.p("/new")},
+   P.Ext2OpUnlink{Ext2Check.p("/new/a.txt")},
+   P.Ext2OpTruncate{Ext2Check.p("/new/b.txt"), 5n},
+   P.Ext2OpCreate{Ext2Check.p("/docs/empty"), 420},
+   P.Ext2OpRmdir{Ext2Check.p("/docs/empty")},
+   P.Ext2OpWrite{Ext2Check.p("/sparse"), 1030n, Ext2Check.p("xyz")},
+   P.Ext2OpRename{Ext2Check.p("/docs"), Ext2Check.p("/docs/sub")},
+   P.Ext2OpCreate{Ext2Check.p("/new/bad/name"), 420},
+   P.Ext2OpUnlink{Ext2Check.p("/docs/empty")},
+   P.Ext2OpRmdir{Ext2Check.p("/docs")}]
+
+def Ext2Check.after(+d: D.MemDev, +fs: S.Ext2Fs) -> List<String>:
+  [Ext2Check.ls(X.Ext2.list(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, Ext2Check.p("/"))),
+   Ext2Check.ls(X.Ext2.list(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, Ext2Check.p("/new"))),
+   Ext2Check.text(X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, Ext2Check.p("/new/b.txt"))) ++ ", " ++ Ext2Check.text(X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, Ext2Check.p("/new/hello.txt"))),
+   Ext2Check.text(X.Ext2.readlink(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, Ext2Check.p("/new/l"))) ++ ", " ++ Ext2Check.look(d, fs, 8n, "/new/long"),
+   Ext2Check.stream(d, fs, Ext2Check.lookup(d, fs, "/sparse")),
+   Ext2Check.range(d, fs, 1028n, 8n, Ext2Check.lookup(d, fs, "/sparse")),
+   Ext2Check.unit(FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs))]
+
+def Ext2Check.script(ops: List<&2, P.Ext2Op>, +d: D.MemDev, +fs: S.Ext2Fs, +wo: WO.Ext2WriteOptions, +acc: String) -> List<String>:
+  match ops:
+    case Nil{}:
+      Con{acc, Ext2Check.after(d, fs)}
+    case Con{+op, t}:
+      +r = RN.Ext2Op.run(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, op, d, fs, wo)
+      Ext2Check.script(t, Ext2Check.keep(r, d), fs, wo, acc ++ " " ++ Ext2Check.wres(r))
+
+def Ext2Check.write_on(r: Result<&2, &2, E.Ext2Error, S.Ext2Fs>, +d: D.MemDev) -> List<String>:
+  match r:
+    case Done{+fs}:
+      Con{"open " ++ Nat.show(S.Ext2Fs.block_size(fs)) ++ " " ++ Nat.show(S.Ext2Fs.blocks(fs)) ++ " " ++ Nat.show(S.Ext2Fs.groups(fs)) ++ " " ++ S.Ext2Super.label(S.Ext2Fs.sb(fs)) ++ " " ++ Ext2Check.unit(FK.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs)), Ext2Check.script(Ext2Check.ops(), d, fs, WO.Ext2WriteOptions.default(), "ops")}
+    case Fail{e}:
+      ["open " ++ Ext2Check.err(e)]
+
+def Ext2Check.made(r: Result<&2, &2, E.Ext2Error, D.MemDev>) -> List<String>:
+  match r:
+    case Done{+d}:
+      Ext2Check.write_on(X.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, O.Ext2Options.default()), d)
+    case Fail{e}:
+      ["mkfs " ++ Ext2Check.err(e)]
+
+def Ext2Check.uuid() -> U.Uuid:
+  Maybe.default(&2, U.Uuid, U.Uuid.from_bytes_at(Ext2Check.p("bend-osdev-ext2!"), 0n), U.Uuid.nil())
+
+def Ext2Check.mkfs(+bs: Nat, +count: Nat, +o: MK.Ext2MkfsOptions) -> List<String>:
+  Ext2Check.made(MK.Ext2Mkfs.make(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~T.Ext2Dev.mem_write, D.MemDev.blank(bs, count), MK.Ext2MkfsOptions.with_label(o, Ext2Check.p("made"))))
+
 def Ext2Check.print_all(xs: List<String>) -> IO(Unit):
   match xs:
     case Nil{}:
@@ -195,6 +293,8 @@ def main() -> IO(Unit):
   do IO<Unit>:
     Ext2Check.print_all(Ext2Check.opened(X.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, O.Ext2Options.default()), d))
     Ext2Check.print_all(Ext2Check.corrupt(d, X.Ext2.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, O.Ext2Options.default())))
+    Ext2Check.print_all(Ext2Check.mkfs(1024n, 600n, MK.Ext2MkfsOptions.ext2(600n, Ext2Check.uuid())))
+    Ext2Check.print_all(Ext2Check.mkfs(4096n, 2048n, MK.Ext2MkfsOptions.ext4(2048n, Ext2Check.uuid())))
 
 #|open 1024 256 1 sample
 #|ls .:2:2 ..:2:2 lost+found:11:2 docs:12:2 hello.txt:16:1 link:17:7 sparse:18:1 up:19:7
@@ -221,3 +321,21 @@ def main() -> IO(Unit):
 #|err Ext2BadInodeCsum
 #|err Ext2BadDirCsum
 #|err Ext2BadDirent
+#|open 1024 600 1 made fsck ok
+#|ops ok ok ok ok ok ok ok ok ok ok ok ok ok ok Ext2NotEmpty ok ok Ext2Exists Ext2NotDir ok Ext2RenameLoop Ext2NotFound ok ok
+#|ls .:2:2 ..:2:2 lost+found:11:2 sparse:15:1 new:16:2
+#|ls .:16:2 ..:2:2 b.txt:17:1 l:18:7 long:19:7 hello.txt:14:1
+#|Hello, Hello, ext2!
+#|b.txt, 14 file 12
+#|20 blocks, 20004 bytes, crc32 283821308
+#|000078797a000000
+#|fsck ok
+#|open 4096 2048 1 made fsck ok
+#|ops ok ok ok ok ok ok ok ok ok ok ok ok ok ok Ext2NotEmpty ok ok Ext2Exists Ext2NotDir ok Ext2RenameLoop Ext2NotFound ok ok
+#|ls .:2:2 ..:2:2 lost+found:11:2 sparse:15:1 new:16:2
+#|ls .:16:2 ..:2:2 b.txt:17:1 l:18:7 long:19:7 hello.txt:14:1
+#|Hello, Hello, ext2!
+#|b.txt, 14 file 12
+#|5 blocks, 20004 bytes, crc32 283821308
+#|000078797a000000
+#|fsck ok

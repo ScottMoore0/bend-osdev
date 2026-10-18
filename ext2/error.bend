@@ -1,4 +1,4 @@
-# bend-osdev-ext2: why an image, or a read from it, was refused.
+# bend-osdev-ext2: why an image, a read from it or a write to it was refused.
 #
 # One constructor per failure, so a caller can tell them apart. Block and
 # inode numbers are Nat; stored and computed checksums are U32.
@@ -42,6 +42,23 @@ type Ext2Error is Data:
   Ext2NotFound{name: String}
   Ext2SymlinkLoop{}
   Ext2SymlinkInPath{ino: Nat}
+  # writing (added with the writer; the reading errors above are unchanged)
+  Ext2CannotWrite{why: String}
+  Ext2NoSpace{}
+  Ext2NoInodes{}
+  Ext2Exists{name: String}
+  Ext2NotEmpty{ino: Nat}
+  Ext2IsDir{ino: Nat}
+  Ext2BadName{why: String}
+  Ext2TooManyLinks{ino: Nat}
+  Ext2HtreeDir{ino: Nat}
+  Ext2ExtentFull{ino: Nat}
+  Ext2Unwritten{ino: Nat, block: Nat}
+  Ext2FileTooBig{ino: Nat}
+  Ext2Xattr{ino: Nat}
+  Ext2RenameLoop{}
+  Ext2BadMkfs{why: String}
+  Ext2CheckFailed{what: String}
 
 def Ext2Error.dev_show(e: D.DevError) -> String:
   match e:
@@ -120,6 +137,38 @@ def Ext2Error.show(e: Ext2Error) -> String:
       "too many symbolic links"
     case Ext2SymlinkInPath{i}:
       "the path goes through symbolic link " ++ Nat.show(i) ++ " (not followed)"
+    case Ext2CannotWrite{w}:
+      "this writer does not write the filesystem: " ++ w
+    case Ext2NoSpace{}:
+      "no free block"
+    case Ext2NoInodes{}:
+      "no free inode"
+    case Ext2Exists{n}:
+      "already exists: " ++ n
+    case Ext2NotEmpty{i}:
+      "directory " ++ Nat.show(i) ++ " is not empty"
+    case Ext2IsDir{i}:
+      "inode " ++ Nat.show(i) ++ " is a directory"
+    case Ext2BadName{w}:
+      "bad name: " ++ w
+    case Ext2TooManyLinks{i}:
+      "inode " ++ Nat.show(i) ++ " has too many links"
+    case Ext2HtreeDir{i}:
+      "directory " ++ Nat.show(i) ++ " is hash-indexed (written by bend-osdev-ext4, not here)"
+    case Ext2ExtentFull{i}:
+      "inode " ++ Nat.show(i) ++ ": the extent tree has no room this writer can make"
+    case Ext2Unwritten{i, b}:
+      "inode " ++ Nat.show(i) ++ ": block " ++ Nat.show(b) ++ " is in an unwritten extent (not written here)"
+    case Ext2FileTooBig{i}:
+      "inode " ++ Nat.show(i) ++ ": the file would be too big"
+    case Ext2Xattr{i}:
+      "inode " ++ Nat.show(i) ++ " has an extended attribute block (not freed here)"
+    case Ext2RenameLoop{}:
+      "a directory cannot be moved below itself"
+    case Ext2BadMkfs{w}:
+      "cannot make the filesystem: " ++ w
+    case Ext2CheckFailed{w}:
+      "the result failed its check (the device is left as it was): " ++ w
 
 # the constructor's name, for tests and logs
 def Ext2Error.kind(e: Ext2Error) -> String:
@@ -186,3 +235,35 @@ def Ext2Error.kind(e: Ext2Error) -> String:
       "Ext2SymlinkLoop"
     case Ext2SymlinkInPath{x0}:
       "Ext2SymlinkInPath"
+    case Ext2CannotWrite{x0}:
+      "Ext2CannotWrite"
+    case Ext2NoSpace{}:
+      "Ext2NoSpace"
+    case Ext2NoInodes{}:
+      "Ext2NoInodes"
+    case Ext2Exists{x0}:
+      "Ext2Exists"
+    case Ext2NotEmpty{x0}:
+      "Ext2NotEmpty"
+    case Ext2IsDir{x0}:
+      "Ext2IsDir"
+    case Ext2BadName{x0}:
+      "Ext2BadName"
+    case Ext2TooManyLinks{x0}:
+      "Ext2TooManyLinks"
+    case Ext2HtreeDir{x0}:
+      "Ext2HtreeDir"
+    case Ext2ExtentFull{x0}:
+      "Ext2ExtentFull"
+    case Ext2Unwritten{x0, x1}:
+      "Ext2Unwritten"
+    case Ext2FileTooBig{x0}:
+      "Ext2FileTooBig"
+    case Ext2Xattr{x0}:
+      "Ext2Xattr"
+    case Ext2RenameLoop{}:
+      "Ext2RenameLoop"
+    case Ext2BadMkfs{x0}:
+      "Ext2BadMkfs"
+    case Ext2CheckFailed{x0}:
+      "Ext2CheckFailed"

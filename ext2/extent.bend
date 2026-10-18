@@ -65,6 +65,16 @@ def Ext2Extent.parse(+o: B.Octets, +off: Nat) -> Ext2Extent:
 type Ext2ExtentIndex is Data:
   Ext2ExtentIndex{block: Nat, leaf: Nat}
 
+def Ext2ExtentIndex.leaf(i: Ext2ExtentIndex) -> Nat:
+  match i:
+    case Ext2ExtentIndex{b, leaf}:
+      leaf
+
+def Ext2ExtentIndex.block(i: Ext2ExtentIndex) -> Nat:
+  match i:
+    case Ext2ExtentIndex{b, leaf}:
+      b
+
 def Ext2ExtentIndex.parse(+o: B.Octets, +off: Nat) -> Ext2ExtentIndex:
   Ext2ExtentIndex{F.Ext2Field.nat(o, off), F.Ext2Field.join(F.Ext2Field.u16(o, Nat.add(off, 8n)), F.Ext2Field.u32(o, Nat.add(off, 4n)))}
 

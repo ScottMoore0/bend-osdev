@@ -226,6 +226,31 @@ def Ext2Super.checksum(s: Ext2Super) -> U32:
     case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
       ck
 
+def Ext2Super.reserved_gdt_blocks(s: Ext2Super) -> U32:
+  match s:
+    case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
+      rgdt
+
+def Ext2Super.min_extra_isize(s: Ext2Super) -> U32:
+  match s:
+    case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
+      mex
+
+def Ext2Super.r_blocks_count(s: Ext2Super) -> W.W64:
+  match s:
+    case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
+      rb
+
+def Ext2Super.errors(s: Ext2Super) -> U32:
+  match s:
+    case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
+      er
+
+def Ext2Super.log_groups_per_flex(s: Ext2Super) -> U32:
+  match s:
+    case Ext2Super{ic, bc, rb, fb, fi, fdb, lbs, lcs, bpg, ipg, mt, wt, mg, st, er, mr, os, rev, fino, isz, fc, fic, frc, uu, vn, rgdt, dsz, fmbg, mex, lgf, ckt, cks, bb0, bb1, ck}:
+      lgf
+
 # Derived values
 
 def Ext2Super.has_compat(+s: Ext2Super, bit: U32) -> Bool:
@@ -425,17 +450,24 @@ def Ext2.require(ok: Bool, e: E.Ext2Error) -> Result<&2, &2, E.Ext2Error, Unit>:
     case False{}:
       Fail{e}
 
-# whether x is one of 1, 2, 4, ..., 2^(n-1), from p on
-def Ext2.is_pow2.scan(n: Nat, +x: Nat, +p: Nat) -> Bool:
-  match n:
-    case 0n:
+# whether x is a power of two, halving it at most n times (one: x is 1;
+# even: x is even). No power is ever built, so the test stays cheap for a
+# symbolic x too (a proof normalises it).
+def Ext2.is_pow2.go(n: Nat, one: Bool, even: Bool, +x: Nat) -> Bool:
+  match n one even:
+    case 0n _ _:
       False{}
-    case 1n+k:
-      Bool.or(Nat.is_eq(x, p), Ext2.is_pow2.scan(k, x, Nat.mul(p, 2n)))
+    case 1n+k True{} _:
+      True{}
+    case 1n+k False{} True{}:
+      +h = Nat.div(x, 2n)
+      Ext2.is_pow2.go(k, Nat.is_eq(h, 1n), Nat.is_eq(Nat.mod(h, 2n), 0n), h)
+    case 1n+k False{} False{}:
+      False{}
 
 # whether x is a power of two up to 2^40 (an inode or descriptor size)
 def Ext2.is_pow2(+x: Nat) -> Bool:
-  Ext2.is_pow2.scan(41n, x, 1n)
+  Ext2.is_pow2.go(41n, Nat.is_eq(x, 1n), Nat.is_eq(Nat.mod(x, 2n), 0n), x)
 
 # the incompat features this reader refuses (the journal's recover bit is
 # judged separately)
