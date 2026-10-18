@@ -14,7 +14,8 @@ GPL source was read.
 ## Status
 
 - **Laws reviewed.** The maintainer has reviewed and accepted every
-  package's laws, except fileio's, which are new and still a draft. They
+  package's laws, except fileio's and crypto's, which are new and still
+  drafts. They
   are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
   all except four laws in cipher-modes that its kernel cannot yet model
   (see that README).
@@ -68,6 +69,7 @@ GPL source was read.
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, ECB, CBC and CTR over any instance; the existing ciphers, MACs, AEADs and CRCs as instances |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 
