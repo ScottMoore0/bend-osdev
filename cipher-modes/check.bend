@@ -44,7 +44,65 @@ def res(r: Result<&2, &2, M.CmError, B.Octets>) -> String:
     case Done{v}:
       B.Octets.hex(v)
 
+# Longer messages, as a regression test for long inputs: 32 KB of
+# pseudo-random bytes (a linear congruential generator) through CBC, and 32 KB
+# and 5 bytes through XTS (ciphertext stealing), each encrypted and decrypted
+# back; the last 16 bytes of each ciphertext were checked against Python's
+# cryptography
+def bulk.go(n: Nat, +s: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      +s2 = U32.add(U32.mul(s, 1103515245), 12345)
+      bulk.go(p, s2, Con{U32.and(U32.shrn(s2, 16n), 255), acc})
+
+def bulk.key() -> B.Octets:
+  B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60])
+
+def bulk.key2() -> B.Octets:
+  B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+
+def bulk.iv() -> B.Octets:
+  B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+
+def bulk.same(r: Result<&2, &2, M.CmError, B.Octets>, +m: B.Octets) -> String:
+  match r:
+    case Done{o}:
+      Bool.show(B.Octets.is_eq(o, m))
+    case Fail{e}:
+      "fail " ++ err(e)
+
+def bulk.cbc(r: Result<&2, &2, M.CmError, B.Octets>, +m: B.Octets) -> String:
+  match r:
+    case Done{+c}:
+      B.Octets.hex(B.Octets.drop(Nat.sub(B.Octets.len(c), 16n), c)) ++ " back " ++ bulk.same(D.CmAes.cbc_decrypt(bulk.key(), bulk.iv(), c), m)
+    case Fail{e}:
+      "fail " ++ err(e)
+
+def bulk.xts(r: Result<&2, &2, M.CmError, B.Octets>, +m: B.Octets) -> String:
+  match r:
+    case Done{+c}:
+      B.Octets.hex(B.Octets.drop(Nat.sub(B.Octets.len(c), 16n), c)) ++ " back " ++ bulk.same(D.CmAes.xts_decrypt(bulk.key2(), bulk.iv(), c), m)
+    case Fail{e}:
+      "fail " ++ err(e)
+
+def bulk.nonce() -> B.Octets:
+  B.Octets.of_list([0, 0, 0, 3, 2, 1, 0, 160, 161, 162, 163, 164])
+
+def bulk.aad() -> B.Octets:
+  B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7])
+
+def bulk.ccm(r: Result<&2, &2, M.CmError, B.Octets>, +m: B.Octets) -> String:
+  match r:
+    case Done{+c}:
+      B.Octets.hex(B.Octets.drop(Nat.sub(B.Octets.len(c), 16n), c)) ++ " back " ++ bulk.same(D.CmAes.ccm_decrypt(bulk.key(), 8n, bulk.nonce(), bulk.aad(), c), m)
+    case Fail{e}:
+      "fail " ++ err(e)
+
 def main() -> IO(Unit):
+  +m1 = B.Octets.of_list(bulk.go(32768n, 7, Nil{}))
+  +m2 = B.Octets.of_list(bulk.go(32773n, 7, Nil{}))
   do IO<Unit>:
     IO.print("aes128_fips197_c1_inverse " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.decrypt(k, M.CmBlock{1774510296, 1786446896, 3637360512, 1890895194})), X.CmAes.key128(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])))))
     IO.print("aes256_fips197_c3 " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.encrypt(k, M.CmBlock{1122867, 1146447479, 2291772091, 3437096703})), X.CmAes.key256(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])))))
@@ -73,6 +131,9 @@ def main() -> IO(Unit):
     IO.print("cmac_rfc4493_ex3 " ++ res(D.CmAes.cmac(B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60]), B.Octets.of_list([107, 193, 190, 226, 46, 64, 159, 150, 233, 61, 126, 17, 115, 147, 23, 42, 174, 45, 138, 87, 30, 3, 172, 156, 158, 183, 111, 172, 69, 175, 142, 81, 48, 200, 28, 70, 163, 92, 228, 17]))))
     IO.print("cmac_rfc4493_ex4 " ++ res(D.CmAes.cmac(B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60]), B.Octets.of_list([107, 193, 190, 226, 46, 64, 159, 150, 233, 61, 126, 17, 115, 147, 23, 42, 174, 45, 138, 87, 30, 3, 172, 156, 158, 183, 111, 172, 69, 175, 142, 81, 48, 200, 28, 70, 163, 92, 228, 17, 229, 251, 193, 25, 26, 10, 82, 239, 246, 159, 36, 69, 223, 79, 155, 23, 173, 43, 65, 123, 230, 108, 55, 16]))))
     IO.print("cmac_rfc4493_k2 " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(CM.Cmac.subkey2(~X.CmAesKey, ~X.CmAes.encrypt, k)), X.CmAes.key128(B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60])))))
+    IO.print("cbc_32k " ++ bulk.cbc(D.CmAes.cbc_encrypt(bulk.key(), bulk.iv(), m1), m1))
+    IO.print("xts_32k " ++ bulk.xts(D.CmAes.xts_encrypt(bulk.key2(), bulk.iv(), m2), m2))
+    IO.print("ccm_32k " ++ bulk.ccm(D.CmAes.ccm_encrypt(bulk.key(), 8n, bulk.nonce(), bulk.aad(), m1), m1))
 
 #|aes128_fips197_c1_inverse 00112233445566778899aabbccddeeff
 #|aes256_fips197_c3 8ea2b7ca516745bfeafc49904b496089
@@ -101,3 +162,6 @@ def main() -> IO(Unit):
 #|cmac_rfc4493_ex3 dfa66747de9ae63030ca32611497c827
 #|cmac_rfc4493_ex4 51f0bebf7e3b9d92fc49741779363cfe
 #|cmac_rfc4493_k2 f7ddac306ae266ccf90bc11ee46d513b
+#|cbc_32k 6323f58ec800d67e79ea8fc7560749f8 back True
+#|xts_32k 02724cf84afc7b9d17176831e955c072 back True
+#|ccm_32k 09a4f10698c9c215851fe3f7ea349be9 back True

@@ -203,6 +203,13 @@ decryption to undo encryption take the hypothesis `~inv: @k -> @b ->
   then `b`, for every cipher, key and state;
 * `block_octets_round_trip`: a block written as Octets reads back as itself.
 
+The modes run tail-recursive loops (see Sizes); the proofs reason about the
+structural forms kept beside them (`cm.split`, `cm.join_onto`, `cbc.enc`,
+`xts.enc`, `ccm.ctrb`, ... and `Cbc.encrypt.ref`, `Xts.encrypt.ref`,
+`Ccm.encrypt.ref`, ...), and `PROOF.bend` proves every public def equal to
+its structural form for every input (the `tr.*` lemmas), so each law is
+proved of the code that runs.
+
 The byte-layer laws are proved through bytes' interface laws
 (`octets_of_to`, `octets_to_of`, `octets_len_list`, `octets_append_list`,
 `take_drop`) and its list layer; nothing looks inside `Octets`.
@@ -235,6 +242,32 @@ block and after several, and 512-byte sectors; CCM encryption, decryption,
 and a tampered tag refused, over every tag and nonce length; CMAC in one call
 and in two pieces. `check.bend` runs the specification vectors above.
 
+## Sizes
+
+Every loop over a message's bytes or blocks is a tail call (Bend 2.0.37's
+runtime overflows its stack at some tens of thousands of nested calls), so a
+message has no length limit beyond memory. Measured on Bend 2.0.37 (native
+build, WSL2) with AES-128 (AES-256 for XTS's two keys), over pseudo-random
+messages, every ciphertext checked against Python's `cryptography`:
+
+| Run | Time | Peak RAM |
+|---|---|---|
+| CBC encryption, 1 MB | 12.8 s | 2.5 GB |
+| CBC encryption and decryption back, 512 KB | 18.2 s | 2.1 GB |
+| XTS encryption, 1 MB | 13.1 s | 2.5 GB |
+| XTS encryption and decryption back, 512 KB | 15.2 s | 2.1 GB |
+| CMAC, 1 MB | 8.7 s | 1.7 GB |
+| CCM encryption, 1 MB (12-byte nonce) | 17.3 s | 2.6 GB |
+| CCM encryption and decryption back, 512 KB | 11.4 s | 1.9 GB |
+
+Most of the memory is the message as `Octets` (about 940 bytes per byte
+today) and as the lists and blocks the modes work on; a round trip of 1 MB
+needs more than 3 GB until `Octets` is compact. Before this, CBC, XTS and
+CCM overflowed the stack at 32 KB (CMAC was already a loop), and PKCS #7
+padding walked the message as a list (it now works on `Octets`).
+`check.bend` runs CBC and CCM over 32 KB and XTS over 32 KB and 5 bytes,
+both ways, as a regression test.
+
 ## Notes on use
 
 * CBC decryption with padding tells the caller whether the padding was good:
@@ -257,9 +290,11 @@ Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK; `--verdict` SOME PROOFS FAIL:
 the four laws that take the cipher hypothesis `~inv` (and their four lemmas)
 are outside the BendTT kernel's scope ("no model for ~inv": the translation
 cannot model a template whose type is a proposition; bend-mathlib's laws with
-`~assoc` and `~comm` hit the same), and every other law and lemma passes
-`--verdict` when they are left out; `check.bend` passes; `ref/run.sh` 252
-cases match.
+`~assoc` and `~comm` hit the same; the run now reports it as "a mismatch
+between the TypeScript implementation, and the formalized BendTT kernel"),
+and every other law and lemma, the `tr.*` lemmas tying the tail-recursive
+forms to the structural ones included, passes `--verdict` when they are left
+out; `check.bend` passes; `ref/run.sh` 252 cases match.
 
 ## Side channels
 

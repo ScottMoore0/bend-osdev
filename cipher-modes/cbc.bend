@@ -28,11 +28,36 @@ def cbc.dec(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.C
     case Con{+c, t}:
       Con{M.CmBlock.xor(iv, dec(k, c)), cbc.dec(~K, ~dec, k, t, c)}
 
+# The same, tail-recursive (the ciphertext so far kept reversed in acc), so a
+# message can be of any length: PROOF.bend proves each equal to its structural
+# form above for every input
+
+def cbc.enc.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, iv: M.CmBlock, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{p, t}:
+      +c = enc(k, M.CmBlock.xor(iv, p))
+      cbc.enc.go(~K, ~enc, k, t, c, Con{c, acc})
+
+def cbc.enc.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, iv: M.CmBlock) -> List<&2, M.CmBlock>:
+  cbc.enc.go(~K, ~enc, k, bs, iv, Nil{})
+
+def cbc.dec.go(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, iv: M.CmBlock, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{+c, t}:
+      cbc.dec.go(~K, ~dec, k, t, c, Con{M.CmBlock.xor(iv, dec(k, c)), acc})
+
+def cbc.dec.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, iv: M.CmBlock) -> List<&2, M.CmBlock>:
+  cbc.dec.go(~K, ~dec, k, bs, iv, Nil{})
+
 def Cbc.encrypt_blocks(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, iv: M.CmBlock, bs: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
-  cbc.enc(~K, ~enc, k, bs, iv)
+  cbc.enc.fast(~K, ~enc, k, bs, iv)
 
 def Cbc.decrypt_blocks(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, iv: M.CmBlock, bs: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
-  cbc.dec(~K, ~dec, k, bs, iv)
+  cbc.dec.fast(~K, ~dec, k, bs, iv)
 
 # The byte layer
 
@@ -74,11 +99,54 @@ def cbc.d1(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2,
       cbc.d2(~K, ~dec, k, v, M.cm.split(xs), B.len(xs))
 
 # m (a whole number of blocks) under the 16-byte iv
-def Cbc.encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+# The byte layer, tail-recursive: what Cbc.encrypt and Cbc.decrypt run
+# (cbc.e1 .. cbc.d2 are the structural forms; PROOF.bend: cbcp.e1_eq, d1_eq)
+
+def cbc.e2.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, v: M.CmBlock, s: M.CmSplit, +n: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
+  match s:
+    case M.CmSplit{bs, tail}:
+      match tail:
+        case Nil{}:
+          Done{B.Octets.of_list(M.cm.join_onto.fast(cbc.enc.fast(~K, ~enc, k, bs, v), Nil{}))}
+        case Con{h, t}:
+          Fail{M.CmNotBlockMultiple{n}}
+
+def cbc.e1.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{v}:
+      cbc.e2.fast(~K, ~enc, k, v, M.cm.split.fast(xs), B.len.fast(xs))
+
+def cbc.d2.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, v: M.CmBlock, s: M.CmSplit, +n: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
+  match s:
+    case M.CmSplit{bs, tail}:
+      match tail:
+        case Nil{}:
+          Done{B.Octets.of_list(M.cm.join_onto.fast(cbc.dec.fast(~K, ~dec, k, bs, v), Nil{}))}
+        case Con{h, t}:
+          Fail{M.CmNotBlockMultiple{n}}
+
+def cbc.d1.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{v}:
+      cbc.d2.fast(~K, ~dec, k, v, M.cm.split.fast(xs), B.len.fast(xs))
+
+# Cbc.encrypt and Cbc.decrypt through the structural forms (the laws' proofs
+# reason about these; PROOF.bend proves them equal to the public defs)
+def Cbc.encrypt.ref(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   cbc.e1(~K, ~enc, k, cbc.iv(iv), B.Octets.to_list(m))
 
-def Cbc.decrypt(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+def Cbc.decrypt.ref(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   cbc.d1(~K, ~dec, k, cbc.iv(iv), B.Octets.to_list(c))
+
+def Cbc.encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  cbc.e1.fast(~K, ~enc, k, cbc.iv(iv), B.Octets.to_list(m))
+
+def Cbc.decrypt(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  cbc.d1.fast(~K, ~dec, k, cbc.iv(iv), B.Octets.to_list(c))
 
 # m of any length, PKCS #7 padded to whole blocks, then encrypted
 def Cbc.encrypt_padded(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, iv: B.Octets, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:

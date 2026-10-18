@@ -17,14 +17,17 @@ def pkcs7.fill(n: Nat, +v: U32) -> List<&2, U32>:
 def pkcs7.size_ok(+bs: Nat) -> Bool:
   Bool.and(Nat.is_lt(0n, bs), Nat.is_lt(bs, 256n))
 
-def pkcs7.pad.list(+bs: Nat, +xs: List<&2, U32>) -> List<&2, U32>:
-  +p = Nat.sub(bs, Nat.mod(B.len(xs), bs))
-  B.append(xs, pkcs7.fill(p, U32.from_nat(p)))
+# m and its padding (on Octets, so that a long message is not walked as a
+# list: Bend 2.0.37's runtime overflows its stack on deep structural
+# recursion)
+def pkcs7.pad.oct(+bs: Nat, +m: B.Octets) -> B.Octets:
+  +p = Nat.sub(bs, Nat.mod(B.Octets.len(m), bs))
+  B.Octets.append(m, B.Octets.of_list(pkcs7.fill(p, U32.from_nat(p))))
 
 def Pkcs7.pad.go(ok: Bool, +bs: Nat, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   match ok:
     case True{}:
-      Done{B.Octets.of_list(pkcs7.pad.list(bs, B.Octets.to_list(m)))}
+      Done{pkcs7.pad.oct(bs, m)}
     case False{}:
       Fail{M.CmBadBlockSize{bs}}
 
@@ -44,37 +47,37 @@ def pkcs7.diff(xs: List<&2, U32>, +v: U32, acc: U32) -> U32:
     case Con{h, t}:
       pkcs7.diff(t, v, U32.or(acc, U32.xor(M.cm.byte(h), v)))
 
-def pkcs7.last(xs: List<&2, U32>, d: U32) -> U32:
-  match xs:
-    case Nil{}:
+# the last byte, or d if there is none
+def pkcs7.last(m: Maybe<&2, U32>, d: U32) -> U32:
+  match m:
+    case Some{b}:
+      b
+    case None{}:
       d
-    case Con{h, t}:
-      pkcs7.last(t, M.cm.byte(h))
 
-def pkcs7.strip(ok: Bool, +n: Nat, +p: Nat, xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+def pkcs7.strip(ok: Bool, +n: Nat, +p: Nat, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   match ok:
     case True{}:
-      Done{B.Octets.of_list(B.take(Nat.sub(n, p), xs))}
+      Done{B.Octets.take(Nat.sub(n, p), m)}
     case False{}:
       Fail{M.CmBadPadding{}}
 
 # the value p of the last byte must be 1 to bs, and the last p bytes all p
-def pkcs7.unpad.list(+bs: Nat, +xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
-  +n = B.len(xs)
-  +v = pkcs7.last(xs, 0)
+# (on Octets of n bytes, so that only those p bytes become a list)
+def pkcs7.unpad.oct(+bs: Nat, +m: B.Octets, +n: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
+  +v = pkcs7.last(B.Octets.at(m, Nat.sub(n, 1n)), 0)
   +p = U32.to_nat(v)
-  +good = Bool.and(Nat.is_lt(0n, p), Bool.and(Nat.is_le(p, bs), U32.is_eq(pkcs7.diff(B.drop(Nat.sub(n, p), xs), v, 0), 0)))
-  pkcs7.strip(good, n, p, xs)
+  +good = Bool.and(Nat.is_lt(0n, p), Bool.and(Nat.is_le(p, bs), U32.is_eq(pkcs7.diff(B.Octets.to_list(B.Octets.drop(Nat.sub(n, p), m)), v, 0), 0)))
+  pkcs7.strip(good, n, p, m)
 
-def Pkcs7.unpad.go(ok: Bool, +bs: Nat, m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+def Pkcs7.unpad.go(ok: Bool, +bs: Nat, +m: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   match ok:
     case True{}:
-      +xs = B.Octets.to_list(m)
-      +n = B.len(xs)
+      +n = B.Octets.len(m)
       do Result<&2, &2, M.CmError, B.Octets>:
         M.cm.check(Nat.is_lt(0n, n), M.CmTooShort{n})
         M.cm.check(Nat.is_eq(Nat.mod(n, bs), 0n), M.CmNotBlockMultiple{n})
-        pkcs7.unpad.list(bs, xs)
+        pkcs7.unpad.oct(bs, m, n)
     case False{}:
       Fail{M.CmBadBlockSize{bs}}
 

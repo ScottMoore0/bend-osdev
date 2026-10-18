@@ -141,12 +141,6 @@ def ccm.e2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: Lis
     case Done{u}:
       Done{B.Octets.of_list(ccm.ebody(~K, ~enc, k, m, nv, av, pv))}
 
-# p with associated data aad under the nonce: the ciphertext, then the m-byte tag
-def Ccm.encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, nonce: B.Octets, aad: B.Octets, p: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
-  +nv = B.Octets.to_list(nonce)
-  +pv = B.Octets.to_list(p)
-  ccm.e2(~K, ~enc, k, m, nv, B.Octets.to_list(aad), pv, ccm.checks(m, B.len(nv), B.len(pv)))
-
 def ccm.open(ok: Bool, p: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
   match ok:
     case True{}:
@@ -176,9 +170,101 @@ def ccm.d2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ok: Bool, +k: K, +m: Nat
     case True{}:
       ccm.d3(~K, ~enc, k, m, nv, av, cv, ccm.checks(m, B.len(nv), Nat.sub(B.len(cv), m)))
 
+# The same, tail-recursive. Bend 2.0.37's runtime overflows its stack at some
+# tens of thousands of nested non-tail calls, so the structural forms above,
+# which the proofs reason about, cannot run on long messages; Ccm.encrypt and
+# Ccm.decrypt run these, and PROOF.bend proves each equal to its structural
+# form for every input (ccmp is the structural layer's proof).
+
+def ccm.pad.fast(+xs: List<&2, U32>) -> List<&2, U32>:
+  B.append.fast(xs, B.zeros(Nat.mod(Nat.sub(16n, Nat.mod(B.len.fast(xs), 16n)), 16n)))
+
+def ccm.aad.pick.fast(empty: Bool, +a: List<&2, U32>) -> List<&2, U32>:
+  match empty:
+    case True{}:
+      Nil{}
+    case False{}:
+      +v = U32.from_nat(B.len.fast(a))
+      ccm.pad.fast(B.append(ccm.alen.pick(U32.is_lt(v, 65280), v), a))
+
+def ccm.mac.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +l: Nat, +nonce: List<&2, U32>, +a: List<&2, U32>, +p: List<&2, U32>) -> M.CmBlock:
+  +adata = B.len.fast(a)
+  +flags = U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(adata, 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n)))
+  +input = B.append(Con{flags, B.append(nonce, ccm.be(l, U32.from_nat(B.len.fast(p))))}, B.append.fast(ccm.aad.pick.fast(Nat.is_eq(adata, 0n), a), ccm.pad.fast(p)))
+  ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(input)), M.CmBlock.zero())
+
+def ccm.tag.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +l: Nat, +nonce: List<&2, U32>, +a: List<&2, U32>, +p: List<&2, U32>) -> List<&2, U32>:
+  B.take(m, M.cm.bytes_of(ccm.mac.fast(~K, ~enc, k, m, l, nonce, a, p)))
+
+# the blocks so far kept reversed in acc
+def ccm.ctrb.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +a0: M.CmBlock, +i: U32, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{b, rest}:
+      ccm.ctrb.go(~K, ~enc, k, rest, a0, U32.add(i, 1), Con{M.CmBlock.xor(b, enc(k, ccm.ai(a0, i))), acc})
+
+def ccm.ctrb.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +a0: M.CmBlock, +i: U32) -> List<&2, M.CmBlock>:
+  ccm.ctrb.go(~K, ~enc, k, bs, a0, i, Nil{})
+
+def ccm.xcrypt.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +a0: M.CmBlock, s: M.CmSplit) -> List<&2, U32>:
+  match s:
+    case M.CmSplit{+bs, tail}:
+      M.cm.join_onto.fast(ccm.ctrb.fast(~K, ~enc, k, bs, a0, 1), M.cm.xor_bytes(tail, M.cm.bytes_of(enc(k, ccm.ai(a0, U32.add(1, U32.from_nat(M.cm.blocks.len(bs))))))))
+
+def ccm.ebody.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +pv: List<&2, U32>) -> List<&2, U32>:
+  +l = Nat.sub(15n, B.len(nv))
+  +a0 = ccm.a0(l, nv)
+  B.append.fast(ccm.xcrypt.fast(~K, ~enc, k, a0, M.cm.split.fast(pv)), M.cm.xor_bytes(ccm.tag.fast(~K, ~enc, k, m, l, nv, av, pv), M.cm.bytes_of(enc(k, a0))))
+
+def ccm.e2.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +pv: List<&2, U32>, r: Result<&2, &2, M.CmError, Unit>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{u}:
+      Done{B.Octets.of_list(ccm.ebody.fast(~K, ~enc, k, m, nv, av, pv))}
+
+def ccm.dbody.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  +body = Nat.sub(B.len.fast(cv), m)
+  +l = Nat.sub(15n, B.len(nv))
+  +a0 = ccm.a0(l, nv)
+  +pv = ccm.xcrypt.fast(~K, ~enc, k, a0, M.cm.split.fast(B.take.fast(body, cv)))
+  ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(body, cv), M.cm.bytes_of(enc(k, a0))), ccm.tag.fast(~K, ~enc, k, m, l, nv, av, pv)), pv)
+
+def ccm.d3.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>, r: Result<&2, &2, M.CmError, Unit>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{u}:
+      ccm.dbody.fast(~K, ~enc, k, m, nv, av, cv)
+
+def ccm.d2.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ok: Bool, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match ok:
+    case False{}:
+      Fail{M.CmTooShort{B.len.fast(cv)}}
+    case True{}:
+      ccm.d3.fast(~K, ~enc, k, m, nv, av, cv, ccm.checks(m, B.len(nv), Nat.sub(B.len.fast(cv), m)))
+
+# Ccm.encrypt and Ccm.decrypt through the structural forms (the laws' proofs
+# reason about these; PROOF.bend proves them equal to the public defs)
+def Ccm.encrypt.ref(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, nonce: B.Octets, aad: B.Octets, p: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  +nv = B.Octets.to_list(nonce)
+  +pv = B.Octets.to_list(p)
+  ccm.e2(~K, ~enc, k, m, nv, B.Octets.to_list(aad), pv, ccm.checks(m, B.len(nv), B.len(pv)))
+
+def Ccm.decrypt.ref(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, nonce: B.Octets, aad: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  +cv = B.Octets.to_list(c)
+  ccm.d2(~K, ~enc, Nat.is_le(m, B.len(cv)), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), cv)
+
+# p with associated data aad under the nonce: the ciphertext, then the m-byte tag
+def Ccm.encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, nonce: B.Octets, aad: B.Octets, p: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  +nv = B.Octets.to_list(nonce)
+  +pv = B.Octets.to_list(p)
+  ccm.e2.fast(~K, ~enc, k, m, nv, B.Octets.to_list(aad), pv, ccm.checks(m, B.len(nv), B.len.fast(pv)))
+
 # the plaintext of c (the ciphertext, then the m-byte tag), or CmTagMismatch
 # when the tag does not match; no plaintext is released from a message that
 # fails
 def Ccm.decrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, nonce: B.Octets, aad: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
   +cv = B.Octets.to_list(c)
-  ccm.d2(~K, ~enc, Nat.is_le(m, B.len(cv)), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), cv)
+  ccm.d2.fast(~K, ~enc, Nat.is_le(m, B.len.fast(cv)), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), cv)

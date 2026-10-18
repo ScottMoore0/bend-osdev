@@ -178,6 +178,69 @@ def cm.xor_bytes(xs: List<&2, U32>, ys: List<&2, U32>) -> List<&2, U32>:
 
 # the OR of the byte-wise XORs: 0 exactly when the lists agree, computed
 # without stopping at the first difference
+# The same, tail-recursive. Bend 2.0.37's runtime overflows its stack at some
+# tens of thousands of nested non-tail calls, so the structural forms above,
+# which the proofs reason about, cannot run on long messages; the modes run
+# these instead, and PROOF.bend proves each equal to its structural form for
+# every input.
+
+# the blocks of bs in reverse order, in front of acc
+def cm.blocks.rev_onto(bs: List<&2, CmBlock>, acc: List<&2, CmBlock>) -> List<&2, CmBlock>:
+  match bs:
+    case Nil{}:
+      acc
+    case Con{b, t}:
+      cm.blocks.rev_onto(t, Con{b, acc})
+
+def cm.blocks.len.go(bs: List<&2, CmBlock>, n: Nat) -> Nat:
+  match bs:
+    case Nil{}:
+      n
+    case Con{b, t}:
+      cm.blocks.len.go(t, 1n+n)
+
+# the number of blocks (List.length)
+def cm.blocks.len(bs: List<&2, CmBlock>) -> Nat:
+  cm.blocks.len.go(bs, 0n)
+
+# xs, then ys (List.append)
+def cm.blocks.append(xs: List<&2, CmBlock>, ys: List<&2, CmBlock>) -> List<&2, CmBlock>:
+  cm.blocks.rev_onto(cm.blocks.rev_onto(xs, Nil{}), ys)
+
+# the blocks split so far are kept reversed in acc (cm.split)
+def cm.split.go(+xs: List<&2, U32>, acc: List<&2, CmBlock>) -> CmSplit:
+  match xs:
+    case Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, Con{a9, Con{a10, Con{a11, Con{a12, Con{a13, Con{a14, Con{a15, t}}}}}}}}}}}}}}}}:
+      cm.split.go(t, Con{cm.block16(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15), acc})
+    case _:
+      CmSplit{cm.blocks.rev_onto(acc, Nil{}), xs}
+
+def cm.split.fast(+xs: List<&2, U32>) -> CmSplit:
+  cm.split.go(xs, Nil{})
+
+# the bytes of the blocks rs (last first) in front of acc
+def cm.join.go(rs: List<&2, CmBlock>, acc: List<&2, U32>) -> List<&2, U32>:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{b, t}:
+      cm.join.go(t, cm.bytes_onto(b, acc))
+
+# cm.join_onto
+def cm.join_onto.fast(bs: List<&2, CmBlock>, rest: List<&2, U32>) -> List<&2, U32>:
+  cm.join.go(cm.blocks.rev_onto(bs, Nil{}), rest)
+
+def cm.xor_bytes.go(xs: List<&2, U32>, ys: List<&2, U32>, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs ys:
+    case Con{a, s} Con{b, t}:
+      cm.xor_bytes.go(s, t, Con{cm.byte(U32.xor(a, b)), acc})
+    case _ _:
+      B.rev(acc)
+
+# cm.xor_bytes
+def cm.xor_bytes.fast(xs: List<&2, U32>, ys: List<&2, U32>) -> List<&2, U32>:
+  cm.xor_bytes.go(xs, ys, Nil{})
+
 def cm.diff(xs: List<&2, U32>, ys: List<&2, U32>, acc: U32) -> U32:
   match xs ys:
     case Con{a, s} Con{b, t}:

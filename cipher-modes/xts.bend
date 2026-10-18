@@ -55,11 +55,35 @@ def xts.dec(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.C
     case Con{c, rest}:
       Con{xts.bdec(~K, ~dec, k, c, t), xts.dec(~K, ~dec, k, rest, Xts.mul_alpha(t))}
 
+# The same, tail-recursive (the blocks so far kept reversed in acc), so a
+# data unit can be of any length: PROOF.bend proves each equal to its
+# structural form above for every input
+
+def xts.enc.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{p, rest}:
+      xts.enc.go(~K, ~enc, k, rest, Xts.mul_alpha(t), Con{xts.benc(~K, ~enc, k, p, t), acc})
+
+def xts.enc.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> List<&2, M.CmBlock>:
+  xts.enc.go(~K, ~enc, k, bs, t, Nil{})
+
+def xts.dec.go(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{c, rest}:
+      xts.dec.go(~K, ~dec, k, rest, Xts.mul_alpha(t), Con{xts.bdec(~K, ~dec, k, c, t), acc})
+
+def xts.dec.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> List<&2, M.CmBlock>:
+  xts.dec.go(~K, ~dec, k, bs, t, Nil{})
+
 def Xts.encrypt_blocks(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k1: K, t: M.CmBlock, bs: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
-  xts.enc(~K, ~enc, k1, bs, t)
+  xts.enc.fast(~K, ~enc, k1, bs, t)
 
 def Xts.decrypt_blocks(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k1: K, t: M.CmBlock, bs: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
-  xts.dec(~K, ~dec, k1, bs, t)
+  xts.dec.fast(~K, ~dec, k1, bs, t)
 
 # T_0: the encrypted sequence number
 def Xts.tweak(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k2: K, i: M.CmBlock) -> M.CmBlock:
@@ -184,10 +208,71 @@ def xts.tweak(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k2: K, i: B.Octets) 
   +xs = B.Octets.to_list(i)
   xts.tweak.go(~K, ~enc, k2, M.cm.need_block(xs, M.CmBadTweakLength{B.len(xs)}))
 
+# The byte layer, tail-recursive: what Xts.encrypt and Xts.decrypt run
+# (xts.init .. xts.d1 are the structural forms; PROOF.bend: xtsp.e1_eq,
+# d1_eq)
+
+def xts.init.go(rest: List<&2, M.CmBlock>, p: M.CmBlock, acc: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match rest:
+    case Nil{}:
+      M.cm.blocks.rev_onto(acc, Nil{})
+    case Con{q, r}:
+      xts.init.go(r, q, Con{p, acc})
+
+def xts.init.fast(rest: List<&2, M.CmBlock>, p: M.CmBlock) -> List<&2, M.CmBlock>:
+  xts.init.go(rest, p, Nil{})
+
+def xts.eout.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, +init: List<&2, M.CmBlock>, +last: M.CmBlock, +tail: List<&2, U32>) -> List<&2, U32>:
+  +tl = xts.alpha_n(M.cm.blocks.len(init), t)
+  M.cm.join_onto.fast(M.cm.blocks.append(xts.enc.fast(~K, ~enc, k, init, t), Con{xts.steal_c(~K, ~enc, k, last, tail, tl), Nil{}}), xts.steal_t(~K, ~enc, k, last, tail, tl))
+
+def xts.dout.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, +init: List<&2, M.CmBlock>, +last: M.CmBlock, +tail: List<&2, U32>) -> List<&2, U32>:
+  M.cm.join_onto.fast(xts.dec.fast(~K, ~dec, k, init, t), xts.dsteal(~K, ~dec, k, last, tail, xts.alpha_n(M.cm.blocks.len(init), t)))
+
+def xts.e2.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, s: M.CmSplit, +n: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
+  match s:
+    case M.CmSplit{bs, tail}:
+      match bs:
+        case Nil{}:
+          Fail{M.CmTooShort{n}}
+        case Con{+p, +rest}:
+          Done{B.Octets.of_list(xts.eout.fast(~K, ~enc, k, t, xts.init.fast(rest, p), xts.last(rest, p), tail))}
+
+def xts.d2.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, s: M.CmSplit, +n: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
+  match s:
+    case M.CmSplit{bs, tail}:
+      match bs:
+        case Nil{}:
+          Fail{M.CmTooShort{n}}
+        case Con{+c, +rest}:
+          Done{B.Octets.of_list(xts.dout.fast(~K, ~dec, k, t, xts.init.fast(rest, c), xts.last(rest, c), tail))}
+
+def xts.e1.fast(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{t}:
+      xts.e2.fast(~K, ~enc, k, t, M.cm.split.fast(xs), B.len.fast(xs))
+
+def xts.d1.fast(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> Result<&2, &2, M.CmError, B.Octets>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{t}:
+      xts.d2.fast(~K, ~dec, k, t, M.cm.split.fast(xs), B.len.fast(xs))
+
+# Xts.encrypt and Xts.decrypt through the structural forms (the laws' proofs
+# reason about these; PROOF.bend proves them equal to the public defs)
+def Xts.encrypt.ref(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, i: B.Octets, p: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  xts.e1(~K, ~enc, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(p))
+
+def Xts.decrypt.ref(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, i: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
+  xts.d1(~K, ~dec, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(c))
+
 # the data unit p (at least 16 bytes) with sequence number i (16 bytes)
 def Xts.encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, i: B.Octets, p: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
-  xts.e1(~K, ~enc, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(p))
+  xts.e1.fast(~K, ~enc, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(p))
 
 # decryption needs enc too: the tweak is always encrypted
 def Xts.decrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, i: B.Octets, c: B.Octets) -> Result<&2, &2, M.CmError, B.Octets>:
-  xts.d1(~K, ~dec, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(c))
+  xts.d1.fast(~K, ~dec, k1, xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(c))

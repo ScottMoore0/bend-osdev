@@ -872,6 +872,409 @@ def cbcp.iv(+iv: B.Octets, h: {B.Octets.len(iv) == 16n : Nat}) -> {C.cbc.iv(iv) 
   %Equal.sym(Nat, B.len(B.Octets.to_list(iv)), 16n, oc.len(iv, 16n, h)) : {M.cm.need_block.pick(Nat.is_eq(_, 16n), B.Octets.to_list(iv), M.CmBadIvLength{B.len(B.Octets.to_list(iv))}) == Done{M.cm.block_of(B.Octets.to_list(iv))} : Result<&2, &2, M.CmError, M.CmBlock>}
   {==}
 
+
+# The tail-recursive forms the modes run are the structural ones, for every
+# input: each loop with an accumulator is its structural form reversed onto
+# the accumulator, and reversing twice gives the order back. Then the byte
+# layers built from them are the structural byte layers, and so are the
+# public defs (Cbc.encrypt == Cbc.encrypt.ref, ...).
+
+def tr.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+q:
+      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(q, 1n+n), 1n+Nat.add(q, n), tr.add_succ(q, n))
+
+def tr.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+q:
+      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(q, 0n), q, tr.add_zero(q))
+
+def tr.rr(xs: List<&2, M.CmBlock>, acc: List<&2, M.CmBlock>, b: List<&2, M.CmBlock>) -> {M.cm.blocks.rev_onto(M.cm.blocks.rev_onto(xs, acc), b) == M.cm.blocks.rev_onto(acc, List.append(&2, M.CmBlock, xs, b)) : List<&2, M.CmBlock>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      tr.rr(t, Con{h, acc}, b)
+
+def tr.append_eq(+xs: List<&2, M.CmBlock>, +ys: List<&2, M.CmBlock>) -> {List.append(&2, M.CmBlock, xs, ys) == M.cm.blocks.append(xs, ys) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, M.cm.blocks.append(xs, ys), List.append(&2, M.CmBlock, xs, ys), tr.rr(xs, Nil{}, ys))
+
+def tr.len_go(+bs: List<&2, M.CmBlock>, +n: Nat) -> {M.cm.blocks.len.go(bs, n) == Nat.add(List.length(&2, M.CmBlock, bs), n) : Nat}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.trans(Nat, M.cm.blocks.len.go(t, 1n+n), Nat.add(List.length(&2, M.CmBlock, t), 1n+n), 1n+Nat.add(List.length(&2, M.CmBlock, t), n), tr.len_go(t, 1n+n), tr.add_succ(List.length(&2, M.CmBlock, t), n))
+
+def tr.len_eq(+bs: List<&2, M.CmBlock>) -> {List.length(&2, M.CmBlock, bs) == M.cm.blocks.len(bs) : Nat}:
+  Equal.sym(Nat, M.cm.blocks.len(bs), List.length(&2, M.CmBlock, bs), Equal.trans(Nat, M.cm.blocks.len.go(bs, 0n), Nat.add(List.length(&2, M.CmBlock, bs), 0n), List.length(&2, M.CmBlock, bs), tr.len_go(bs, 0n), tr.add_zero(List.length(&2, M.CmBlock, bs))))
+
+# Splitting: the blocks so far, reversed in acc, go in front of the
+# structural split's blocks
+
+def tr.split_fin(acc: List<&2, M.CmBlock>, s: M.CmSplit) -> M.CmSplit:
+  match s:
+    case M.CmSplit{bs, t}:
+      M.CmSplit{M.cm.blocks.rev_onto(acc, bs), t}
+
+def tr.split_fin_cons(+b: M.CmBlock, +acc: List<&2, M.CmBlock>, +s: M.CmSplit) -> {tr.split_fin(Con{b, acc}, s) == tr.split_fin(acc, M.cm.split.cons(b, s)) : M.CmSplit}:
+  match s:
+    case M.CmSplit{bs, t}:
+      {==}
+
+def tr.split_fin_nil(+s: M.CmSplit) -> {tr.split_fin(Nil{}, s) == s : M.CmSplit}:
+  match s:
+    case M.CmSplit{bs, t}:
+      {==}
+
+def tr.split_go(+xs: List<&2, U32>, +acc: List<&2, M.CmBlock>) -> {M.cm.split.go(xs, acc) == tr.split_fin(acc, M.cm.split(xs)) : M.CmSplit}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+y0, +r0}:
+      match r0:
+        case Nil{}:
+          {==}
+        case Con{+y1, +r1}:
+          match r1:
+            case Nil{}:
+              {==}
+            case Con{+y2, +r2}:
+              match r2:
+                case Nil{}:
+                  {==}
+                case Con{+y3, +r3}:
+                  match r3:
+                    case Nil{}:
+                      {==}
+                    case Con{+y4, +r4}:
+                      match r4:
+                        case Nil{}:
+                          {==}
+                        case Con{+y5, +r5}:
+                          match r5:
+                            case Nil{}:
+                              {==}
+                            case Con{+y6, +r6}:
+                              match r6:
+                                case Nil{}:
+                                  {==}
+                                case Con{+y7, +r7}:
+                                  match r7:
+                                    case Nil{}:
+                                      {==}
+                                    case Con{+y8, +r8}:
+                                      match r8:
+                                        case Nil{}:
+                                          {==}
+                                        case Con{+y9, +r9}:
+                                          match r9:
+                                            case Nil{}:
+                                              {==}
+                                            case Con{+y10, +r10}:
+                                              match r10:
+                                                case Nil{}:
+                                                  {==}
+                                                case Con{+y11, +r11}:
+                                                  match r11:
+                                                    case Nil{}:
+                                                      {==}
+                                                    case Con{+y12, +r12}:
+                                                      match r12:
+                                                        case Nil{}:
+                                                          {==}
+                                                        case Con{+y13, +r13}:
+                                                          match r13:
+                                                            case Nil{}:
+                                                              {==}
+                                                            case Con{+y14, +r14}:
+                                                              match r14:
+                                                                case Nil{}:
+                                                                  {==}
+                                                                case Con{+y15, +t}:
+                                                                  Equal.trans(M.CmSplit, M.cm.split.go(t, Con{M.cm.block16(y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13, y14, y15), acc}), tr.split_fin(Con{M.cm.block16(y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13, y14, y15), acc}, M.cm.split(t)), tr.split_fin(acc, M.cm.split.cons(M.cm.block16(y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13, y14, y15), M.cm.split(t))), tr.split_go(t, Con{M.cm.block16(y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13, y14, y15), acc}), tr.split_fin_cons(M.cm.block16(y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13, y14, y15), acc, M.cm.split(t)))
+
+def tr.split_eq(+xs: List<&2, U32>) -> {M.cm.split(xs) == M.cm.split.fast(xs) : M.CmSplit}:
+  Equal.sym(M.CmSplit, M.cm.split.fast(xs), M.cm.split(xs), Equal.trans(M.CmSplit, M.cm.split.go(xs, Nil{}), tr.split_fin(Nil{}, M.cm.split(xs)), M.cm.split(xs), tr.split_go(xs, Nil{}), tr.split_fin_nil(M.cm.split(xs))))
+
+# Joining
+
+def tr.join_go(xs: List<&2, M.CmBlock>, rs: List<&2, M.CmBlock>, +rest: List<&2, U32>) -> {M.cm.join.go(M.cm.blocks.rev_onto(xs, rs), rest) == M.cm.join.go(rs, M.cm.join_onto(xs, rest)) : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      tr.join_go(t, Con{x, rs}, rest)
+
+def tr.join_eq(+bs: List<&2, M.CmBlock>, +rest: List<&2, U32>) -> {M.cm.join_onto(bs, rest) == M.cm.join_onto.fast(bs, rest) : List<&2, U32>}:
+  Equal.sym(List<&2, U32>, M.cm.join_onto.fast(bs, rest), M.cm.join_onto(bs, rest), tr.join_go(bs, Nil{}, rest))
+
+# The modes on blocks
+
+def tr.cbc_enc_go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock, +acc: List<&2, M.CmBlock>) -> {C.cbc.enc.go(~K, ~enc, k, bs, iv, acc) == M.cm.blocks.rev_onto(acc, C.cbc.enc(~K, ~enc, k, bs, iv)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+p, +t}:
+      tr.cbc_enc_go(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p)), Con{enc(k, M.CmBlock.xor(iv, p)), acc})
+
+def tr.cbc_enc_eq(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {C.cbc.enc(~K, ~enc, k, bs, iv) == C.cbc.enc.fast(~K, ~enc, k, bs, iv) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, C.cbc.enc.fast(~K, ~enc, k, bs, iv), C.cbc.enc(~K, ~enc, k, bs, iv), tr.cbc_enc_go(~K, ~enc, k, bs, iv, Nil{}))
+
+def tr.cbc_dec_go(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock, +acc: List<&2, M.CmBlock>) -> {C.cbc.dec.go(~K, ~dec, k, bs, iv, acc) == M.cm.blocks.rev_onto(acc, C.cbc.dec(~K, ~dec, k, bs, iv)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+c, +t}:
+      tr.cbc_dec_go(~K, ~dec, k, t, c, Con{M.CmBlock.xor(iv, dec(k, c)), acc})
+
+def tr.cbc_dec_eq(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {C.cbc.dec(~K, ~dec, k, bs, iv) == C.cbc.dec.fast(~K, ~dec, k, bs, iv) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, C.cbc.dec.fast(~K, ~dec, k, bs, iv), C.cbc.dec(~K, ~dec, k, bs, iv), tr.cbc_dec_go(~K, ~dec, k, bs, iv, Nil{}))
+
+def tr.xts_enc_go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock, +acc: List<&2, M.CmBlock>) -> {T.xts.enc.go(~K, ~enc, k, bs, t, acc) == M.cm.blocks.rev_onto(acc, T.xts.enc(~K, ~enc, k, bs, t)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+p, +rest}:
+      tr.xts_enc_go(~K, ~enc, k, rest, T.Xts.mul_alpha(t), Con{T.xts.benc(~K, ~enc, k, p, t), acc})
+
+def tr.xts_enc_eq(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> {T.xts.enc(~K, ~enc, k, bs, t) == T.xts.enc.fast(~K, ~enc, k, bs, t) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, T.xts.enc.fast(~K, ~enc, k, bs, t), T.xts.enc(~K, ~enc, k, bs, t), tr.xts_enc_go(~K, ~enc, k, bs, t, Nil{}))
+
+def tr.xts_dec_go(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock, +acc: List<&2, M.CmBlock>) -> {T.xts.dec.go(~K, ~dec, k, bs, t, acc) == M.cm.blocks.rev_onto(acc, T.xts.dec(~K, ~dec, k, bs, t)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+c, +rest}:
+      tr.xts_dec_go(~K, ~dec, k, rest, T.Xts.mul_alpha(t), Con{T.xts.bdec(~K, ~dec, k, c, t), acc})
+
+def tr.xts_dec_eq(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> {T.xts.dec(~K, ~dec, k, bs, t) == T.xts.dec.fast(~K, ~dec, k, bs, t) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, T.xts.dec.fast(~K, ~dec, k, bs, t), T.xts.dec(~K, ~dec, k, bs, t), tr.xts_dec_go(~K, ~dec, k, bs, t, Nil{}))
+
+def tr.init_go(rest: List<&2, M.CmBlock>, +p: M.CmBlock, +acc: List<&2, M.CmBlock>) -> {T.xts.init.go(rest, p, acc) == M.cm.blocks.rev_onto(acc, T.xts.init(rest, p)) : List<&2, M.CmBlock>}:
+  match rest:
+    case Nil{}:
+      {==}
+    case Con{+q, +r}:
+      tr.init_go(r, q, Con{p, acc})
+
+def tr.init_eq(+rest: List<&2, M.CmBlock>, +p: M.CmBlock) -> {T.xts.init(rest, p) == T.xts.init.fast(rest, p) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, T.xts.init.fast(rest, p), T.xts.init(rest, p), tr.init_go(rest, p, Nil{}))
+
+# The byte layers
+
+def tr.cbc_e2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +v: M.CmBlock, s: M.CmSplit, +n: Nat) -> {C.cbc.e2(~K, ~enc, k, v, s, n) == C.cbc.e2.fast(~K, ~enc, k, v, s, n) : Result<&2, &2, M.CmError, B.Octets>}:
+  match s:
+    case M.CmSplit{+bs, tail}:
+      match tail:
+        case Nil{}:
+          %tr.cbc_enc_eq(~K, ~enc, k, bs, v) : {Done{B.Octets.of_list(M.cm.join_onto(C.cbc.enc(~K, ~enc, k, bs, v), Nil{}))} == Done{B.Octets.of_list(M.cm.join_onto.fast(_, Nil{}))} : Result<&2, &2, M.CmError, B.Octets>}
+          %tr.join_eq(C.cbc.enc(~K, ~enc, k, bs, v), Nil{}) : {Done{B.Octets.of_list(M.cm.join_onto(C.cbc.enc(~K, ~enc, k, bs, v), Nil{}))} == Done{B.Octets.of_list(_)} : Result<&2, &2, M.CmError, B.Octets>}
+          {==}
+        case Con{h, t}:
+          {==}
+
+def tr.cbc_e1(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> {C.cbc.e1(~K, ~enc, k, r, xs) == C.cbc.e1.fast(~K, ~enc, k, r, xs) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{+v}:
+      %tr.split_eq(xs) : {C.cbc.e2(~K, ~enc, k, v, M.cm.split(xs), B.len(xs)) == C.cbc.e2.fast(~K, ~enc, k, v, _, B.len.fast(xs)) : Result<&2, &2, M.CmError, B.Octets>}
+      %BL.len_fast(xs) : {C.cbc.e2(~K, ~enc, k, v, M.cm.split(xs), B.len(xs)) == C.cbc.e2.fast(~K, ~enc, k, v, M.cm.split(xs), _) : Result<&2, &2, M.CmError, B.Octets>}
+      tr.cbc_e2(~K, ~enc, k, v, M.cm.split(xs), B.len(xs))
+
+def tr.cbc_d2(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +v: M.CmBlock, s: M.CmSplit, +n: Nat) -> {C.cbc.d2(~K, ~dec, k, v, s, n) == C.cbc.d2.fast(~K, ~dec, k, v, s, n) : Result<&2, &2, M.CmError, B.Octets>}:
+  match s:
+    case M.CmSplit{+bs, tail}:
+      match tail:
+        case Nil{}:
+          %tr.cbc_dec_eq(~K, ~dec, k, bs, v) : {Done{B.Octets.of_list(M.cm.join_onto(C.cbc.dec(~K, ~dec, k, bs, v), Nil{}))} == Done{B.Octets.of_list(M.cm.join_onto.fast(_, Nil{}))} : Result<&2, &2, M.CmError, B.Octets>}
+          %tr.join_eq(C.cbc.dec(~K, ~dec, k, bs, v), Nil{}) : {Done{B.Octets.of_list(M.cm.join_onto(C.cbc.dec(~K, ~dec, k, bs, v), Nil{}))} == Done{B.Octets.of_list(_)} : Result<&2, &2, M.CmError, B.Octets>}
+          {==}
+        case Con{h, t}:
+          {==}
+
+def tr.cbc_d1(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> {C.cbc.d1(~K, ~dec, k, r, xs) == C.cbc.d1.fast(~K, ~dec, k, r, xs) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{+v}:
+      %tr.split_eq(xs) : {C.cbc.d2(~K, ~dec, k, v, M.cm.split(xs), B.len(xs)) == C.cbc.d2.fast(~K, ~dec, k, v, _, B.len.fast(xs)) : Result<&2, &2, M.CmError, B.Octets>}
+      %BL.len_fast(xs) : {C.cbc.d2(~K, ~dec, k, v, M.cm.split(xs), B.len(xs)) == C.cbc.d2.fast(~K, ~dec, k, v, M.cm.split(xs), _) : Result<&2, &2, M.CmError, B.Octets>}
+      tr.cbc_d2(~K, ~dec, k, v, M.cm.split(xs), B.len(xs))
+
+def tr.cbc_encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +iv: B.Octets, +m: B.Octets) -> {C.Cbc.encrypt.ref(~K, ~enc, k, iv, m) == C.Cbc.encrypt(~K, ~enc, k, iv, m) : Result<&2, &2, M.CmError, B.Octets>}:
+  tr.cbc_e1(~K, ~enc, k, C.cbc.iv(iv), B.Octets.to_list(m))
+
+def tr.cbc_decrypt(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +iv: B.Octets, +c: B.Octets) -> {C.Cbc.decrypt.ref(~K, ~dec, k, iv, c) == C.Cbc.decrypt(~K, ~dec, k, iv, c) : Result<&2, &2, M.CmError, B.Octets>}:
+  tr.cbc_d1(~K, ~dec, k, C.cbc.iv(iv), B.Octets.to_list(c))
+
+def tr.xts_eout(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, +init: List<&2, M.CmBlock>, +last: M.CmBlock, +tail: List<&2, U32>) -> {T.xts.eout(~K, ~enc, k, t, init, last, tail) == T.xts.eout.fast(~K, ~enc, k, t, init, last, tail) : List<&2, U32>}:
+  %tr.len_eq(init) : {T.xts.eout(~K, ~enc, k, t, init, last, tail) == M.cm.join_onto.fast(M.cm.blocks.append(T.xts.enc.fast(~K, ~enc, k, init, t), Con{T.xts.steal_c(~K, ~enc, k, last, tail, T.xts.alpha_n(_, t)), Nil{}}), T.xts.steal_t(~K, ~enc, k, last, tail, T.xts.alpha_n(_, t))) : List<&2, U32>}
+  %tr.xts_enc_eq(~K, ~enc, k, init, t) : {T.xts.eout(~K, ~enc, k, t, init, last, tail) == M.cm.join_onto.fast(M.cm.blocks.append(_, Con{T.xts.steal_c(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t)), Nil{}}), T.xts.steal_t(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t))) : List<&2, U32>}
+  %tr.append_eq(T.xts.enc(~K, ~enc, k, init, t), Con{T.xts.steal_c(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t)), Nil{}}) : {T.xts.eout(~K, ~enc, k, t, init, last, tail) == M.cm.join_onto.fast(_, T.xts.steal_t(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t))) : List<&2, U32>}
+  %tr.join_eq(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k, init, t), Con{T.xts.steal_c(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t)), Nil{}}), T.xts.steal_t(~K, ~enc, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t))) : {T.xts.eout(~K, ~enc, k, t, init, last, tail) == _ : List<&2, U32>}
+  {==}
+
+def tr.xts_dout(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, +init: List<&2, M.CmBlock>, +last: M.CmBlock, +tail: List<&2, U32>) -> {T.xts.dout(~K, ~dec, k, t, init, last, tail) == T.xts.dout.fast(~K, ~dec, k, t, init, last, tail) : List<&2, U32>}:
+  %tr.len_eq(init) : {T.xts.dout(~K, ~dec, k, t, init, last, tail) == M.cm.join_onto.fast(T.xts.dec.fast(~K, ~dec, k, init, t), T.xts.dsteal(~K, ~dec, k, last, tail, T.xts.alpha_n(_, t))) : List<&2, U32>}
+  %tr.xts_dec_eq(~K, ~dec, k, init, t) : {T.xts.dout(~K, ~dec, k, t, init, last, tail) == M.cm.join_onto.fast(_, T.xts.dsteal(~K, ~dec, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t))) : List<&2, U32>}
+  %tr.join_eq(T.xts.dec(~K, ~dec, k, init, t), T.xts.dsteal(~K, ~dec, k, last, tail, T.xts.alpha_n(List.length(&2, M.CmBlock, init), t))) : {T.xts.dout(~K, ~dec, k, t, init, last, tail) == _ : List<&2, U32>}
+  {==}
+
+def tr.xts_e2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, s: M.CmSplit, +n: Nat) -> {T.xts.e2(~K, ~enc, k, t, s, n) == T.xts.e2.fast(~K, ~enc, k, t, s, n) : Result<&2, &2, M.CmError, B.Octets>}:
+  match s:
+    case M.CmSplit{bs, +tail}:
+      match bs:
+        case Nil{}:
+          {==}
+        case Con{+p, +rest}:
+          %tr.init_eq(rest, p) : {Done{B.Octets.of_list(T.xts.eout(~K, ~enc, k, t, T.xts.init(rest, p), T.xts.last(rest, p), tail))} == Done{B.Octets.of_list(T.xts.eout.fast(~K, ~enc, k, t, _, T.xts.last(rest, p), tail))} : Result<&2, &2, M.CmError, B.Octets>}
+          %tr.xts_eout(~K, ~enc, k, t, T.xts.init(rest, p), T.xts.last(rest, p), tail) : {Done{B.Octets.of_list(T.xts.eout(~K, ~enc, k, t, T.xts.init(rest, p), T.xts.last(rest, p), tail))} == Done{B.Octets.of_list(_)} : Result<&2, &2, M.CmError, B.Octets>}
+          {==}
+
+def tr.xts_d2(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, s: M.CmSplit, +n: Nat) -> {T.xts.d2(~K, ~dec, k, t, s, n) == T.xts.d2.fast(~K, ~dec, k, t, s, n) : Result<&2, &2, M.CmError, B.Octets>}:
+  match s:
+    case M.CmSplit{bs, +tail}:
+      match bs:
+        case Nil{}:
+          {==}
+        case Con{+c, +rest}:
+          %tr.init_eq(rest, c) : {Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k, t, T.xts.init(rest, c), T.xts.last(rest, c), tail))} == Done{B.Octets.of_list(T.xts.dout.fast(~K, ~dec, k, t, _, T.xts.last(rest, c), tail))} : Result<&2, &2, M.CmError, B.Octets>}
+          %tr.xts_dout(~K, ~dec, k, t, T.xts.init(rest, c), T.xts.last(rest, c), tail) : {Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k, t, T.xts.init(rest, c), T.xts.last(rest, c), tail))} == Done{B.Octets.of_list(_)} : Result<&2, &2, M.CmError, B.Octets>}
+          {==}
+
+def tr.xts_e1(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> {T.xts.e1(~K, ~enc, k, r, xs) == T.xts.e1.fast(~K, ~enc, k, r, xs) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{+t}:
+      %tr.split_eq(xs) : {T.xts.e2(~K, ~enc, k, t, M.cm.split(xs), B.len(xs)) == T.xts.e2.fast(~K, ~enc, k, t, _, B.len.fast(xs)) : Result<&2, &2, M.CmError, B.Octets>}
+      %BL.len_fast(xs) : {T.xts.e2(~K, ~enc, k, t, M.cm.split(xs), B.len(xs)) == T.xts.e2.fast(~K, ~enc, k, t, M.cm.split(xs), _) : Result<&2, &2, M.CmError, B.Octets>}
+      tr.xts_e2(~K, ~enc, k, t, M.cm.split(xs), B.len(xs))
+
+def tr.xts_d1(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, r: Result<&2, &2, M.CmError, M.CmBlock>, +xs: List<&2, U32>) -> {T.xts.d1(~K, ~dec, k, r, xs) == T.xts.d1.fast(~K, ~dec, k, r, xs) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{+t}:
+      %tr.split_eq(xs) : {T.xts.d2(~K, ~dec, k, t, M.cm.split(xs), B.len(xs)) == T.xts.d2.fast(~K, ~dec, k, t, _, B.len.fast(xs)) : Result<&2, &2, M.CmError, B.Octets>}
+      %BL.len_fast(xs) : {T.xts.d2(~K, ~dec, k, t, M.cm.split(xs), B.len(xs)) == T.xts.d2.fast(~K, ~dec, k, t, M.cm.split(xs), _) : Result<&2, &2, M.CmError, B.Octets>}
+      tr.xts_d2(~K, ~dec, k, t, M.cm.split(xs), B.len(xs))
+
+def tr.xts_encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, +i: B.Octets, +p: B.Octets) -> {T.Xts.encrypt.ref(~K, ~enc, k1, k2, i, p) == T.Xts.encrypt(~K, ~enc, k1, k2, i, p) : Result<&2, &2, M.CmError, B.Octets>}:
+  tr.xts_e1(~K, ~enc, k1, T.xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(p))
+
+def tr.xts_decrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k1: K, +k2: K, +i: B.Octets, +c: B.Octets) -> {T.Xts.decrypt.ref(~K, ~enc, ~dec, k1, k2, i, c) == T.Xts.decrypt(~K, ~enc, ~dec, k1, k2, i, c) : Result<&2, &2, M.CmError, B.Octets>}:
+  tr.xts_d1(~K, ~dec, k1, T.xts.tweak(~K, ~enc, k2, i), B.Octets.to_list(c))
+
+# a bind whose continuations agree on every value agrees
+def tr.bind_cong(r: Result<&2, &2, M.CmError, B.Octets>, f: B.Octets -> Result<&2, &2, M.CmError, B.Octets>, g: B.Octets -> Result<&2, &2, M.CmError, B.Octets>, h: @c: B.Octets -> {f(c) == g(c) : Result<&2, &2, M.CmError, B.Octets>}) -> {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, r, f) == Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, r, g) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{c}:
+      h(c)
+
+
+# CCM: the tail-recursive forms are the structural ones, piece by piece
+
+def tr.pad(+xs: List<&2, U32>) -> {CC.ccm.pad(xs) == CC.ccm.pad.fast(xs) : List<&2, U32>}:
+  %BL.len_fast(xs) : {CC.ccm.pad(xs) == B.append.fast(xs, B.zeros(Nat.mod(Nat.sub(16n, Nat.mod(_, 16n)), 16n))) : List<&2, U32>}
+  %BL.append_fast(xs, B.zeros(Nat.mod(Nat.sub(16n, Nat.mod(B.len(xs), 16n)), 16n))) : {CC.ccm.pad(xs) == _ : List<&2, U32>}
+  {==}
+
+def tr.aad(empty: Bool, +a: List<&2, U32>) -> {CC.ccm.aad.pick(empty, a) == CC.ccm.aad.pick.fast(empty, a) : List<&2, U32>}:
+  match empty:
+    case True{}:
+      {==}
+    case False{}:
+      %BL.len_fast(a) : {CC.ccm.aad.pick(False{}, a) == CC.ccm.pad.fast(B.append(CC.ccm.alen.pick(U32.is_lt(U32.from_nat(_), 65280), U32.from_nat(_)), a)) : List<&2, U32>}
+      %tr.pad(B.append(CC.ccm.alen.pick(U32.is_lt(U32.from_nat(B.len(a)), 65280), U32.from_nat(B.len(a))), a)) : {CC.ccm.aad.pick(False{}, a) == _ : List<&2, U32>}
+      {==}
+
+def tr.mac(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +l: Nat, +nonce: List<&2, U32>, +a: List<&2, U32>, +p: List<&2, U32>) -> {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.mac.fast(~K, ~enc, k, m, l, nonce, a, p) : M.CmBlock}:
+  %BL.len_fast(a) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(_, 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(B.len.fast(p))))}, B.append.fast(CC.ccm.aad.pick.fast(Nat.is_eq(_, 0n), a), CC.ccm.pad.fast(p))))), M.CmBlock.zero()) : M.CmBlock}
+  %BL.len_fast(p) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(B.len(a), 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(_)))}, B.append.fast(CC.ccm.aad.pick.fast(Nat.is_eq(B.len(a), 0n), a), CC.ccm.pad.fast(p))))), M.CmBlock.zero()) : M.CmBlock}
+  %tr.pad(p) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(B.len(a), 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(B.len(p))))}, B.append.fast(CC.ccm.aad.pick.fast(Nat.is_eq(B.len(a), 0n), a), _)))), M.CmBlock.zero()) : M.CmBlock}
+  %tr.aad(Nat.is_eq(B.len(a), 0n), a) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(B.len(a), 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(B.len(p))))}, B.append.fast(_, CC.ccm.pad(p))))), M.CmBlock.zero()) : M.CmBlock}
+  %BL.append_fast(CC.ccm.aad.pick(Nat.is_eq(B.len(a), 0n), a), CC.ccm.pad(p)) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(M.cm.split.fast(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(B.len(a), 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(B.len(p))))}, _))), M.CmBlock.zero()) : M.CmBlock}
+  %tr.split_eq(B.append(Con{U32.from_nat(Nat.add(Nat.add(Nat.mul(64n, Nat.min(B.len(a), 1n)), Nat.mul(8n, Nat.div(Nat.sub(m, 2n), 2n))), Nat.sub(l, 1n))), B.append(nonce, CC.ccm.be(l, U32.from_nat(B.len(p))))}, B.append(CC.ccm.aad.pick(Nat.is_eq(B.len(a), 0n), a), CC.ccm.pad(p)))) : {CC.ccm.mac(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.cbcmac(~K, ~enc, k, M.cm.split.blocks(_), M.CmBlock.zero()) : M.CmBlock}
+  {==}
+
+def tr.tag(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +l: Nat, +nonce: List<&2, U32>, +a: List<&2, U32>, +p: List<&2, U32>) -> {CC.ccm.tag(~K, ~enc, k, m, l, nonce, a, p) == CC.ccm.tag.fast(~K, ~enc, k, m, l, nonce, a, p) : List<&2, U32>}:
+  %tr.mac(~K, ~enc, k, m, l, nonce, a, p) : {CC.ccm.tag(~K, ~enc, k, m, l, nonce, a, p) == B.take(m, M.cm.bytes_of(_)) : List<&2, U32>}
+  {==}
+
+def tr.ctrb_go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +a0: M.CmBlock, +i: U32, +acc: List<&2, M.CmBlock>) -> {CC.ccm.ctrb.go(~K, ~enc, k, bs, a0, i, acc) == M.cm.blocks.rev_onto(acc, CC.ccm.ctrb(~K, ~enc, k, bs, a0, i)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+b, +rest}:
+      tr.ctrb_go(~K, ~enc, k, rest, a0, U32.add(i, 1), Con{M.CmBlock.xor(b, enc(k, CC.ccm.ai(a0, i))), acc})
+
+def tr.ctrb_eq(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +bs: List<&2, M.CmBlock>, +a0: M.CmBlock, +i: U32) -> {CC.ccm.ctrb(~K, ~enc, k, bs, a0, i) == CC.ccm.ctrb.fast(~K, ~enc, k, bs, a0, i) : List<&2, M.CmBlock>}:
+  Equal.sym(List<&2, M.CmBlock>, CC.ccm.ctrb.fast(~K, ~enc, k, bs, a0, i), CC.ccm.ctrb(~K, ~enc, k, bs, a0, i), tr.ctrb_go(~K, ~enc, k, bs, a0, i, Nil{}))
+
+def tr.xcrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +a0: M.CmBlock, s: M.CmSplit) -> {CC.ccm.xcrypt(~K, ~enc, k, a0, s) == CC.ccm.xcrypt.fast(~K, ~enc, k, a0, s) : List<&2, U32>}:
+  match s:
+    case M.CmSplit{+bs, +tail}:
+      %tr.len_eq(bs) : {CC.ccm.xcrypt(~K, ~enc, k, a0, M.CmSplit{bs, tail}) == M.cm.join_onto.fast(CC.ccm.ctrb.fast(~K, ~enc, k, bs, a0, 1), M.cm.xor_bytes(tail, M.cm.bytes_of(enc(k, CC.ccm.ai(a0, U32.add(1, U32.from_nat(_))))))) : List<&2, U32>}
+      %tr.ctrb_eq(~K, ~enc, k, bs, a0, 1) : {CC.ccm.xcrypt(~K, ~enc, k, a0, M.CmSplit{bs, tail}) == M.cm.join_onto.fast(_, M.cm.xor_bytes(tail, M.cm.bytes_of(enc(k, CC.ccm.ai(a0, U32.add(1, U32.from_nat(List.length(&2, M.CmBlock, bs)))))))) : List<&2, U32>}
+      %tr.join_eq(CC.ccm.ctrb(~K, ~enc, k, bs, a0, 1), M.cm.xor_bytes(tail, M.cm.bytes_of(enc(k, CC.ccm.ai(a0, U32.add(1, U32.from_nat(List.length(&2, M.CmBlock, bs)))))))) : {CC.ccm.xcrypt(~K, ~enc, k, a0, M.CmSplit{bs, tail}) == _ : List<&2, U32>}
+      {==}
+
+def tr.ebody(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +pv: List<&2, U32>) -> {CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv) == CC.ccm.ebody.fast(~K, ~enc, k, m, nv, av, pv) : List<&2, U32>}:
+  %tr.split_eq(pv) : {CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv) == B.append.fast(CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), _), M.cm.xor_bytes(CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, pv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv))))) : List<&2, U32>}
+  %tr.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(pv)) : {CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv) == B.append.fast(_, M.cm.xor_bytes(CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, pv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv))))) : List<&2, U32>}
+  %tr.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, pv) : {CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv) == B.append.fast(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(pv)), M.cm.xor_bytes(_, M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv))))) : List<&2, U32>}
+  %BL.append_fast(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(pv)), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, pv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv))))) : {CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv) == _ : List<&2, U32>}
+  {==}
+
+def tr.e2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +pv: List<&2, U32>, r: Result<&2, &2, M.CmError, Unit>) -> {CC.ccm.e2(~K, ~enc, k, m, nv, av, pv, r) == CC.ccm.e2.fast(~K, ~enc, k, m, nv, av, pv, r) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{u}:
+      %tr.ebody(~K, ~enc, k, m, nv, av, pv) : {Done{B.Octets.of_list(CC.ccm.ebody(~K, ~enc, k, m, nv, av, pv))} == Done{B.Octets.of_list(_)} : Result<&2, &2, M.CmError, B.Octets>}
+      {==}
+
+def tr.ccm_encrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonce: B.Octets, +aad: B.Octets, +p: B.Octets) -> {CC.Ccm.encrypt.ref(~K, ~enc, k, m, nonce, aad, p) == CC.Ccm.encrypt(~K, ~enc, k, m, nonce, aad, p) : Result<&2, &2, M.CmError, B.Octets>}:
+  %BL.len_fast(B.Octets.to_list(p)) : {CC.Ccm.encrypt.ref(~K, ~enc, k, m, nonce, aad, p) == CC.ccm.e2.fast(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), _)) : Result<&2, &2, M.CmError, B.Octets>}
+  tr.e2(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), B.len(B.Octets.to_list(p))))
+
+def tr.dbody(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>) -> {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.dbody.fast(~K, ~enc, k, m, nv, av, cv) : Result<&2, &2, M.CmError, B.Octets>}:
+  %BL.len_fast(cv) : {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(Nat.sub(_, m), cv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv)))), CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split.fast(B.take.fast(Nat.sub(_, m), cv))))), CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split.fast(B.take.fast(Nat.sub(_, m), cv)))) : Result<&2, &2, M.CmError, B.Octets>}
+  %BL.take_fast(Nat.sub(B.len(cv), m), cv) : {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(Nat.sub(B.len(cv), m), cv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv)))), CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split.fast(_)))), CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split.fast(_))) : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.split_eq(B.take(Nat.sub(B.len(cv), m), cv)) : {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(Nat.sub(B.len(cv), m), cv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv)))), CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), _))), CC.ccm.xcrypt.fast(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), _)) : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(B.take(Nat.sub(B.len(cv), m), cv))) : {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(Nat.sub(B.len(cv), m), cv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv)))), CC.ccm.tag.fast(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, _)), _) : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(nv)), nv, av, CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(B.take(Nat.sub(B.len(cv), m), cv)))) : {CC.ccm.dbody(~K, ~enc, k, m, nv, av, cv) == CC.ccm.open(M.cm.ct_eq(M.cm.xor_bytes(B.drop(Nat.sub(B.len(cv), m), cv), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv)))), _), CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(nv)), nv), M.cm.split(B.take(Nat.sub(B.len(cv), m), cv)))) : Result<&2, &2, M.CmError, B.Octets>}
+  {==}
+
+def tr.d3(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>, r: Result<&2, &2, M.CmError, Unit>) -> {CC.ccm.d3(~K, ~enc, k, m, nv, av, cv, r) == CC.ccm.d3.fast(~K, ~enc, k, m, nv, av, cv, r) : Result<&2, &2, M.CmError, B.Octets>}:
+  match r:
+    case Fail{e}:
+      {==}
+    case Done{u}:
+      tr.dbody(~K, ~enc, k, m, nv, av, cv)
+
+def tr.d2(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ok: Bool, +k: K, +m: Nat, +nv: List<&2, U32>, +av: List<&2, U32>, +cv: List<&2, U32>) -> {CC.ccm.d2(~K, ~enc, ok, k, m, nv, av, cv) == CC.ccm.d2.fast(~K, ~enc, ok, k, m, nv, av, cv) : Result<&2, &2, M.CmError, B.Octets>}:
+  match ok:
+    case False{}:
+      %BL.len_fast(cv) : {CC.ccm.d2(~K, ~enc, False{}, k, m, nv, av, cv) == Fail{M.CmTooShort{_}} : Result<&2, &2, M.CmError, B.Octets>}
+      {==}
+    case True{}:
+      %BL.len_fast(cv) : {CC.ccm.d2(~K, ~enc, True{}, k, m, nv, av, cv) == CC.ccm.d3.fast(~K, ~enc, k, m, nv, av, cv, CC.ccm.checks(m, B.len(nv), Nat.sub(_, m))) : Result<&2, &2, M.CmError, B.Octets>}
+      tr.d3(~K, ~enc, k, m, nv, av, cv, CC.ccm.checks(m, B.len(nv), Nat.sub(B.len(cv), m)))
+
+def tr.ccm_decrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonce: B.Octets, +aad: B.Octets, +c: B.Octets) -> {CC.Ccm.decrypt.ref(~K, ~enc, k, m, nonce, aad, c) == CC.Ccm.decrypt(~K, ~enc, k, m, nonce, aad, c) : Result<&2, &2, M.CmError, B.Octets>}:
+  %BL.len_fast(B.Octets.to_list(c)) : {CC.Ccm.decrypt.ref(~K, ~enc, k, m, nonce, aad, c) == CC.ccm.d2.fast(~K, ~enc, Nat.is_le(m, _), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(c)) : Result<&2, &2, M.CmError, B.Octets>}
+  tr.d2(~K, ~enc, Nat.is_le(m, B.len(B.Octets.to_list(c))), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(c))
+
 # CBC on blocks
 
 def cbcp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, bs, iv), iv) == bs : List<&2, M.CmBlock>}:
@@ -885,10 +1288,18 @@ def cbcp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock ->
       {==}
 
 def Laws.cbc_blocks_round_trip(K, enc, dec, inv, k, iv, bs):
-  cbcp.go(~K, ~enc, ~dec, ~inv, k, bs, iv)
+  +v = iv
+  +b = bs
+  # the tail-recursive forms are the structural ones
+  %tr.cbc_enc_eq(~K, ~enc, k, b, v) : {C.cbc.dec.fast(~K, ~dec, k, _, iv) == bs : List<&2, M.CmBlock>}
+  %tr.cbc_dec_eq(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, b, v), v) : {_ == bs : List<&2, M.CmBlock>}
+  cbcp.go(~K, ~enc, ~dec, ~inv, k, b, v)
 
 def Laws.cbc_round_trip(K, enc, dec, inv, k, iv, m, hi, hm):
   +et = sp.mod_tail(B.Octets.to_list(m))(oc.mod(m, hm))
+  # the public defs are the structural ones
+  %tr.cbc_encrypt(~K, ~enc, k, iv, m) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, _, c => C.Cbc.decrypt(~K, ~dec, k, iv, c)) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.bind_cong(C.Cbc.encrypt.ref(~K, ~enc, k, iv, m), c => C.Cbc.decrypt.ref(~K, ~dec, k, iv, c), c => C.Cbc.decrypt(~K, ~dec, k, iv, c), c => tr.cbc_decrypt(~K, ~dec, k, iv, c)) : {_ == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # the IV is a block
   %Equal.sym(Result<&2, &2, M.CmError, M.CmBlock>, C.cbc.iv(iv), Done{M.cm.block_of(B.Octets.to_list(iv))}, cbcp.iv(iv, hi)) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, C.cbc.e1(~K, ~enc, k, _, B.Octets.to_list(m)), c => C.cbc.d1(~K, ~dec, k, _, B.Octets.to_list(c))) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # the message is masked
@@ -974,7 +1385,12 @@ def xtsp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock ->
       {==}
 
 def Laws.xts_blocks_round_trip(K, enc, dec, inv, k1, t, bs):
-  xtsp.go(~K, ~enc, ~dec, ~inv, k1, bs, t)
+  +v = t
+  +b = bs
+  # the tail-recursive forms are the structural ones
+  %tr.xts_enc_eq(~K, ~enc, k1, b, v) : {T.xts.dec.fast(~K, ~dec, k1, _, t) == bs : List<&2, M.CmBlock>}
+  %tr.xts_dec_eq(~K, ~dec, k1, T.xts.enc(~K, ~enc, k1, b, v), v) : {_ == bs : List<&2, M.CmBlock>}
+  xtsp.go(~K, ~enc, ~dec, ~inv, k1, b, v)
 
 # CMAC: the state after a ++ b is the state after a, then b
 
@@ -1131,6 +1547,9 @@ def xtsp.d2(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, e
 def Laws.xts_round_trip(K, enc, dec, inv, k1, k2, i, p, hi, hp):
   +hne = sp.nonempty(B.Octets.to_list(p))(oc.le16(p, hp))
   +mo = Equal.trans(List<&2, U32>, B.mask(M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))), M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), B.mask(T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))), M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), sp.mask_join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), Equal.cong(List<&2, U32>, List<&2, U32>, x => M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), x), B.mask(T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), xtsp.mask_steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))
+  # the public defs are the structural ones
+  %tr.xts_encrypt(~K, ~enc, k1, k2, i, p) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, _, c => T.Xts.decrypt(~K, ~enc, ~dec, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.bind_cong(T.Xts.encrypt.ref(~K, ~enc, k1, k2, i, p), c => T.Xts.decrypt.ref(~K, ~enc, ~dec, k1, k2, i, c), c => T.Xts.decrypt(~K, ~enc, ~dec, k1, k2, i, c), c => tr.xts_decrypt(~K, ~enc, ~dec, k1, k2, i, c)) : {_ == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # the tweak
   %Equal.sym(Result<&2, &2, M.CmError, M.CmBlock>, T.xts.tweak(~K, ~enc, k2, i), Done{enc(k2, M.cm.block_of(B.Octets.to_list(i)))}, xtsp.tweak(~K, ~enc, k2, i, hi)) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, T.xts.e1(~K, ~enc, k1, _, B.Octets.to_list(p)), c => T.xts.d1(~K, ~dec, k1, _, B.Octets.to_list(c))) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # the data unit is masked
@@ -1429,7 +1848,7 @@ def ccmp.len_eb(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nv
   {==}
 
 # decryption accepts what encryption produced, whatever the parameter checks answer
-def ccmp.main(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonce: B.Octets, +aad: B.Octets, +p: B.Octets, r: Result<&2, &2, M.CmError, Unit>) -> {CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), B.len(B.Octets.to_list(p))) == r : Result<&2, &2, M.CmError, Unit>} -> {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, CC.ccm.e2(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), r), c => CC.Ccm.decrypt(~K, ~enc, k, m, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, CC.ccm.e2(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), r)) : Result<&2, &2, M.CmError, B.Octets>}:
+def ccmp.main(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonce: B.Octets, +aad: B.Octets, +p: B.Octets, r: Result<&2, &2, M.CmError, Unit>) -> {CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), B.len(B.Octets.to_list(p))) == r : Result<&2, &2, M.CmError, Unit>} -> {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, CC.ccm.e2(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), r), c => CC.Ccm.decrypt.ref(~K, ~enc, k, m, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, CC.ccm.e2(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p), r)) : Result<&2, &2, M.CmError, B.Octets>}:
   match r:
     case Fail{e}:
       h => {==}
@@ -1473,6 +1892,9 @@ def ccmp.main(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonc
         {==}
 
 def Laws.ccm_round_trip(K, enc, k, m, nonce, aad, p):
+  # the public defs are the structural ones
+  %tr.ccm_encrypt(~K, ~enc, k, m, nonce, aad, p) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, _, c => CC.Ccm.decrypt(~K, ~enc, k, m, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, _) : Result<&2, &2, M.CmError, B.Octets>}
+  %tr.bind_cong(CC.Ccm.encrypt.ref(~K, ~enc, k, m, nonce, aad, p), c => CC.Ccm.decrypt.ref(~K, ~enc, k, m, nonce, aad, c), c => CC.Ccm.decrypt(~K, ~enc, k, m, nonce, aad, c), c => tr.ccm_decrypt(~K, ~enc, k, m, nonce, aad, c)) : {_ == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, CC.Ccm.encrypt.ref(~K, ~enc, k, m, nonce, aad, p)) : Result<&2, &2, M.CmError, B.Octets>}
   ccmp.main(~K, ~enc, k, m, nonce, aad, p, CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), B.len(B.Octets.to_list(p))))({==})
 
 # A block through Octets and back
