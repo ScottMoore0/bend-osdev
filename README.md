@@ -57,6 +57,7 @@ GPL source was read.
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
 | [algo](algo/) | Bit search, bitmaps, binary search |
+| [ksort](ksort/) | Sorting: a stable merge sort on lists and an in-place heapsort on an `Array`, the comparison a template |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
 | [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
