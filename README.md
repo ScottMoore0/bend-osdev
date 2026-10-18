@@ -37,6 +37,7 @@ GPL source was read.
 | [iodev](iodev/) | Block devices in `IO`: the interface and its helpers, adapters for blockdev's devices, a disk image file read on demand, a write overlay, and a disk image read and written in place, of any size, on file effects passed in |
 | [fileio](fileio/) | Library effects on Base's `File` (C and JavaScript sides): a read-write open that keeps the file, positioned writes, 64-bit reads and sizes, `fsync` |
 | [crc](crc/) | CRCs in the Rocksoft parameter model (CRC-32C, CRC-32, CRC-16, CRC-T10DIF, three CRC-64s), bitwise and table-driven |
+| [gf](gf/) | Finite fields: GF(2^8) with any polynomial (ring laws proved for every polynomial), log/exp tables, GF(2^128) in GCM, CMAC/LRW and XTS bit orders, GF(2^m) for BCH |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
 | [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |
 | [partition](partition/) | MBR and GPT partition tables, with GPT's CRCs |
