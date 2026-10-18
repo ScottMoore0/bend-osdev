@@ -43,6 +43,7 @@ GPL source was read.
 | [partition](partition/) | MBR and GPT partition tables, with GPT's CRCs |
 | [uuid](uuid/) | UUIDs (RFC 9562), text and both byte orders |
 | [netheaders](netheaders/) | Ethernet, ARP, IPv4, IPv6, ICMP, UDP and TCP headers, and the Internet checksum |
+| [nlattr](nlattr/) | Netlink attributes (RFC 3549): building, parsing and nested attributes with both flags, and validation against policies, strict or liberal; checked against the running kernel |
 | [tcpip](tcpip/) | A TCP/IP stack as a pure state machine: ARP, IPv4 with reassembly, ICMP echo, UDP, TCP (RFC 9293, 6298, 5681), tested against Linux |
 | [caps](caps/) | Linux capability sets and how execve, capset and prctl change them |
 | [perms](perms/) | Unix permission checks, umask, POSIX ACLs, sticky directories |
