@@ -10,9 +10,10 @@ The model is written from the same document as the package (the kernel's
 Documentation/networking/net_dim.rst, as the README restates it) and shares
 an author with it: there is no external oracle. As it runs it also checks
 the laws on every step: the index stays within the table and moves by at
-most one, a step that reports no change keeps the index, and a run of
-identical samples is at rest after settle_bound samples (every further one
-leaves the state as it is).
+most one, a step that reports no change keeps the index, and (for tables
+of two or more profiles and max_steps of at least 2) a run of identical
+samples is at rest after settle_bound samples, every further one leaving
+the state as it is.
 """
 import os, random, sys
 
@@ -20,7 +21,7 @@ M64 = (1 << 64) - 1
 
 
 def rate(v, t):
-    return (v * 1000000) // t
+    return (v * 1000) // t
 
 
 def rates(s):
@@ -45,23 +46,32 @@ def compare(chain, pct, new, old):
 
 
 class Dim:
-    def __init__(self, profiles, start, pct, tired, chain):
-        self.n, self.pct, self.tired, self.chain = len(profiles), pct, tired, chain
+    """going (right, steps right, steps left), parked on top, or parked
+    tired (the direction that tired it, samples spent)"""
+
+    def __init__(self, profiles, start, pct, tired, maxs, chain):
+        self.n, self.pct, self.tired, self.maxs, self.chain = len(profiles), pct, tired, maxs, chain
         self.ix = start if start < self.n else 0
-        self.mode = ("going", True, False)
+        self.mode = ("going", True, 0, 0)
         self.prev = None
 
     def key(self):
         return (self.ix, self.mode, None if self.prev is None else tuple(sorted(self.prev.items())))
 
-    def move(self, right, r):
+    def walk(self, right, rs, ls):
         can = (self.ix + 1 < self.n) if right else (self.ix > 0)
-        if can:
-            self.ix = self.ix + 1 if right else self.ix - 1
-            self.mode = ("going", right, False)
+        if not can:
+            self.mode = ("tired", right, 0)          # on the edge
+            return False
+        if right:
+            self.ix, rs = self.ix + 1, rs + 1
         else:
-            self.mode = ("parked", 0)
-        return can
+            self.ix, ls = self.ix - 1, ls + 1
+        if self.maxs <= (rs if right else ls):
+            self.mode = ("tired", right, 0)          # too tired
+        else:
+            self.mode = ("going", right, rs, ls)     # stepped
+        return True
 
     def step(self, s):
         if s[4] == 0:
@@ -75,36 +85,25 @@ class Dim:
         m = self.mode
         if m[0] == "going":
             if c == "same":
-                self.mode = ("settled",) if m[2] else ("parked", 0)
+                self.mode = ("top",)
                 return False
-            return self.move(m[1] if c == "better" else not m[1], r)
-        if c != "same":
-            return self.move(self.ix == 0, r)
-        if m[0] == "settled":
-            return False
-        t = m[1]
-        if self.n > 1 and self.ix == 0:
-            inward = True
-        elif self.n > 1 and self.ix + 1 == self.n:
-            inward = False
-        else:
-            return False
-        if self.tired == 0:
-            return False
-        if self.tired <= 1 + t:
-            self.ix = self.ix + 1 if inward else self.ix - 1
-            self.mode = ("going", inward, True)
-            return True
-        self.mode = ("parked", 1 + t)
+            return self.walk(m[1] if c == "better" else not m[1], m[2], m[3])
+        if m[0] == "top":
+            if c == "same":
+                return False
+            return self.walk(self.ix == 0, 0, 0)
+        if self.tired <= m[2]:
+            return self.walk(not m[1], 0, 0)
+        self.mode = ("tired", m[1], m[2] + 1)
         return False
 
 
 def show_mode(m):
     if m[0] == "going":
-        return ("probe-" if m[2] else "") + ("right" if m[1] else "left")
-    if m[0] == "parked":
-        return "parked%d" % m[1]
-    return "settled"
+        return "right" if m[1] else "left"
+    if m[0] == "top":
+        return "top"
+    return "tired%d" % m[2]
 
 
 def run(params, samples):
@@ -123,11 +122,12 @@ def run(params, samples):
 
 
 def check_settles(params, samples, s):
-    # after settle_bound identical samples the state is at rest
+    # after settle_bound identical samples the state is at rest (for two or
+    # more profiles and max_steps of at least 2)
     d = Dim(*params)
     for x in samples:
         d.step(x)
-    for _ in range(4 + params[3]):
+    for _ in range(4 + 2 * params[3]):
         d.step(s)
     k = d.key()
     for _ in range(10):
@@ -145,18 +145,14 @@ import ../dim.bend as D
 
 def mode(m: D.DimMode) -> String:
   match m:
-    case D.DimGoing{True{}, False{}}:
+    case D.DimGoing{True{}, rs, ls}:
       "right"
-    case D.DimGoing{False{}, False{}}:
+    case D.DimGoing{False{}, rs, ls}:
       "left"
-    case D.DimGoing{True{}, True{}}:
-      "probe-right"
-    case D.DimGoing{False{}, True{}}:
-      "probe-left"
-    case D.DimParked{t}:
-      "parked" ++ Nat.show(t)
-    case D.DimSettled{}:
-      "settled"
+    case D.DimParkedTop{}:
+      "top"
+    case D.DimParkedTired{d, k}:
+      "tired" ++ Nat.show(k)
 
 def flag(c: Bool) -> String:
   match c:
@@ -193,8 +189,9 @@ def main():
         start = rng.randrange(size + 2)
         pct = rng.choice([0, 5, 10, 10, 25, 50])
         tired = rng.choice([0, 1, 2, 3, 5])
+        maxs = rng.choice([0, 1, 2, 3, 4, 10])
         chain = rng.choice(list(CHAINS))
-        params = (profiles, start, pct, tired, CHAINS[chain])
+        params = (profiles, start, pct, tired, maxs, CHAINS[chain])
         samples = []
         b, p, e, c = rng.randrange(1, 10**9), rng.randrange(1, 10**6), rng.randrange(1, 10**4), rng.randrange(1, 10**5)
         for _ in range(rng.randrange(10, 60)):
@@ -209,11 +206,12 @@ def main():
             samples.append((p, b, e, c, el))
         # and a tail of identical samples, longer than the settle bound
         tail = (p, b, e, c, rng.choice([1000, 777]))
-        check_settles(params, samples, tail)
-        samples += [tail] * (6 + tired)
+        if size >= 2 and maxs >= 2:
+            check_settles(params, samples, tail)
+        samples += [tail] * (6 + 2 * tired)
         total += len(samples)
         ps = "[%s]" % ", ".join("D.DimProfile{%d, %d}" % q for q in profiles)
-        prm = "{D.DimParams{%s, %dn, %d, %dn, %s} : D.DimParams}" % (ps, start, pct, tired, chain)
+        prm = "{D.DimParams{%s, %dn, %d, %dn, %dn, %s} : D.DimParams}" % (ps, start, pct, tired, maxs, chain)
         ss = "[%s]" % ", ".join("D.DimSample{%d, %d, %d, %d, %d}" % s for s in samples)
         lines.append('    IO.print("case %d " ++ go(%s, %s))' % (n, prm, ss))
         expect.append("case %d %s" % (n, run(params, samples)))

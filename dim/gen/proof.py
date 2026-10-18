@@ -2,8 +2,9 @@
 """Generates dim/PROOF.bend. Its lemmas follow every branch of a step three
 times (the index stays in the table; it moves by at most one, and only when
 the step says so; the previous rates are the sample's), and the convergence
-proof follows identical samples through the parking and tired states; the
-statements repeat long terms, which the shorthands below build.
+proof follows identical samples through the documented parking states
+(going, parked on top, parked tired); the statements repeat long terms,
+which the shorthands below build.
 
 Run from anywhere: python3 gen/proof.py rewrites ../PROOF.bend; with
 --check it only reports whether the file is up to date (exit 1 if not).
@@ -24,16 +25,13 @@ RAT = "D.DimRates"
 MB = "Maybe<&2, D.DimRates>"
 def MK(ix, m, r, ch): return "D.Dim.mk(%s, %s, %s, %s)" % (ix, m, r, ch)
 def CAN(n, right, ix): return "D.Dim.can(%s, %s, %s)" % (n, right, ix)
-def MOVEGO(can, right, ix, r): return "D.Dim.move.go(%s, %s, %s, %s)" % (can, right, ix, r)
-def PROBE(d, ix, r): return "D.Dim.probe(%s, %s, %s)" % (d, ix, r)
-def INWARD(n, ix): return "D.Dim.inward(%s, %s)" % (n, ix)
-def TIREGO(off, tired, d, t, ix, r): return "D.Dim.tire.go(%s, %s, %s, %s, %s, %s)" % (off, tired, d, t, ix, r)
-def TIRE(e, lim, t, ix, r): return "D.Dim.tire(%s, %s, %s, %s, %s)" % (e, lim, t, ix, r)
-def PARK(pr, ix, r): return "D.Dim.decide.park(%s, %s, %s)" % (pr, ix, r)
-def GOING(c, right, pr, n, ix, r): return "D.Dim.decide.going(%s, %s, %s, %s, %s, %s)" % (c, right, pr, n, ix, r)
-def PARKED(c, t, n, lim, ix, r): return "D.Dim.decide.parked(%s, %s, %s, %s, %s, %s)" % (c, t, n, lim, ix, r)
-def SETTLED(c, n, ix, r): return "D.Dim.decide.settled(%s, %s, %s, %s)" % (c, n, ix, r)
-def DECIDE(m, c, n, lim, ix, r): return "D.Dim.decide(%s, %s, %s, %s, %s, %s)" % (m, c, n, lim, ix, r)
+def LAND(t, right, ix, rs, ls, r): return "D.Dim.land(%s, %s, %s, %s, %s, %s)" % (t, right, ix, rs, ls, r)
+def WALKGO(can, right, rs, ls, mx, ix, r): return "D.Dim.walk.go(%s, %s, %s, %s, %s, %s, %s)" % (can, right, rs, ls, mx, ix, r)
+def WALK(n, mx, right, rs, ls, ix, r): return "D.Dim.walk(%s, %s, %s, %s, %s, %s, %s)" % (n, mx, right, rs, ls, ix, r)
+def GOING(c, right, rs, ls, n, mx, ix, r): return "D.Dim.decide.going(%s, %s, %s, %s, %s, %s, %s, %s)" % (c, right, rs, ls, n, mx, ix, r)
+def TOP(c, n, mx, ix, r): return "D.Dim.decide.top(%s, %s, %s, %s, %s)" % (c, n, mx, ix, r)
+def TIRED(o, right, k, n, mx, ix, r): return "D.Dim.decide.tired(%s, %s, %s, %s, %s, %s, %s)" % (o, right, k, n, mx, ix, r)
+def DECIDE(m, c, n, lim, mx, ix, r): return "D.Dim.decide(%s, %s, %s, %s, %s, %s, %s)" % (m, c, n, lim, mx, ix, r)
 def PREV(pv, p, ix, m, r): return "D.Dim.step.prev(%s, %s, %s, %s, %s)" % (pv, p, ix, m, r)
 def ON(sk, p, st, s): return "D.Dim.step.on(%s, %s, %s, %s)" % (sk, p, st, s)
 def ST(x): return "D.DimStep.state(%s)" % x
@@ -54,21 +52,25 @@ def B(res): return tt("dp.ns(ix, %s)" % res)
 def C(res): return "{%s == Some{r} : %s}" % (PRV(ST(res)), MB)
 
 # the default record and sample, matched
-SIG = "+ps: List<&2, D.DimProfile>, +sx: Nat, +pct: U32, +lim: Nat, +cs: List<&2, D.DimCriterion>, +pk: U32, +by: U32, +ev: U32, +co: U32, +el: U32"
-ARGS = "ps, sx, pct, lim, cs, pk, by, ev, co, el"
-P = "D.DimParams{ps, sx, pct, lim, cs}"
+SIG = "+ps: List<&2, D.DimProfile>, +sx: Nat, +pct: U32, +lim: Nat, +mx: Nat, +cs: List<&2, D.DimCriterion>, +pk: U32, +by: U32, +ev: U32, +co: U32, +el: U32"
+ARGS = "ps, sx, pct, lim, mx, cs, pk, by, ev, co, el"
+P = "D.DimParams{ps, sx, pct, lim, mx, cs}"
 S = "D.DimSample{pk, by, ev, co, el}"
 R = "D.Dim.rates(%s)" % S
 N = LEN("ps")
 NZ = "+nz: " + ff("U32.is_zero(el)")
+HM = "+hm: " + tt(LE("2n", "mx"))
+HL = "+hl: " + tt(LTN("1n", N))
 def STEP(y): return ST("D.Dim.step(%s, %s, %s)" % (P, y, S))
 def REP(k): return "List.replicate(D.DimSample, %s, %s)" % (k, S)
 def RUN(y, k): return "D.Dim.run(%s, %s, %s)" % (P, y, REP(k))
 def RUNGO(k, y): return "D.Dim.run.go(%s, %s, %s)" % (REP(k), P, y)
 def FIX(x): return eqd(STEP(x), x)
-def PK(t, ix="ix"): return "D.Dim{%s, D.DimParked{%s}, Some{%s}}" % (ix, t, R)
-def SE(ix="ix"): return "D.Dim{%s, D.DimSettled{}, Some{%s}}" % (ix, R)
-def GOY(d, pr, ix="ix"): return "D.Dim{%s, D.DimGoing{%s, %s}, Some{%s}}" % (ix, d, pr, R)
+def PT(p, k, ix="ix"): return "D.Dim{%s, D.DimParkedTired{%s, %s}, Some{%s}}" % (ix, p, k, R)
+def TOPY(ix="ix"): return "D.Dim{%s, D.DimParkedTop{}, Some{%s}}" % (ix, R)
+def GOY(d, rs, ls, ix="ix"): return "D.Dim{%s, D.DimGoing{%s, %s, %s}, Some{%s}}" % (ix, d, rs, ls, R)
+X = "Nat.add(lim, 1n+lim)"
+XE = "Nat.add(e, 1n+lim)"
 
 text = f'''import Base
 import ../word64/word64.bend as W
@@ -301,96 +303,101 @@ def cmp.same(cs: List<&2, D.DimCriterion>, +pct: U32, +a: {RAT}) -> {{{CMPW("cs"
       %Equal.sym(Bool, D.Dim.same_rate(D.Dim.metric(m, a), D.Dim.metric(m, a)), True{{}}, rate.refl(D.Dim.metric(m, a))) : {{D.Dim.verdict(Con{{D.DimCmp{{D.Dim.compare.rate.go(_, pct, D.Dim.metric(m, a), D.Dim.metric(m, a)), hb}}, D.Dim.compare.all(rest, pct, a, a)}}) == D.DimSame{{}} : D.DimVerdict}}
       cmp.same(rest, pct, a)
 
-# The inward direction right is a step within the table
+'''
 
-def iw.right(multi: Bool, left: Bool, right: Bool, +n: Nat, +ix: Nat, +em: {eqb(LTN("1n", "n"), "multi")}, +el: {eqb(EQN("ix", "0n"), "left")}, +e: {{D.Dim.inward.go(multi, left, right) == Some{{True{{}}}} : Maybe<&2, Bool>}}) -> {tt(LTN("1n+ix", "n"))}:
-  match multi left right:
-    case False{{}} left right:
-      Empty.absurd({tt(LTN("1n+ix", "n"))}, ab.none_some(True{{}}, e))
-    case True{{}} True{{}} right:
-      %Equal.sym(Nat, ix, 0n, nat.eq_zero(ix, el)) : {tt(LTN("1n+_", "n"))}
-      em
-    case True{{}} False{{}} True{{}}:
-      Empty.absurd({tt(LTN("1n+ix", "n"))}, ab.ft_some(e))
-    case True{{}} False{{}} False{{}}:
-      Empty.absurd({tt(LTN("1n+ix", "n"))}, ab.none_some(True{{}}, e))
+body = f'''# More Nat
+
+def nat.add_zero(a: Nat) -> {{Nat.add(a, 0n) == a : Nat}}:
+  match a:
+    case 0n:
+      {{==}}
+    case 1n+p:
+      %nat.add_zero(p) : {{1n+Nat.add(p, 0n) == 1n+_ : Nat}}
+      {{==}}
+
+def nat.le_add_r(a: Nat, +b: Nat) -> {tt(LE("b", "Nat.add(a, b)"))}:
+  match a:
+    case 0n:
+      nat.le_refl(b)
+    case 1n+ +p:
+      nat.le_succ(b, Nat.add(p, b), nat.le_add_r(p, b))
+
+def nat.lt0_false(n: Nat, +e: {ff(LTN("0n", "n"))}) -> {{n == 0n : Nat}}:
+  match n:
+    case 0n:
+      {{==}}
+    case 1n+p:
+      Empty.absurd({{1n+p == 0n : Nat}}, ab.tf(e))
+
+def nat.pos_of(ix: Nat, +n: Nat, +hl: {tt(LTN("1n", "n"))}, +e: {ff(LTN("1n+ix", "n"))}) -> {tt(LTN("0n", "ix"))}:
+  match ix:
+    case 0n:
+      Empty.absurd({tt(LTN("0n", "0n"))}, ab.tf(Equal.trans(Bool, True{{}}, Nat.is_lt(1n, n), False{{}}, Equal.sym(Bool, Nat.is_lt(1n, n), True{{}}, hl), e)))
+    case 1n+p:
+      {{==}}
+
+def nat.two_le(m: Nat, +h: {tt(LE("2n", "m"))}) -> {ff(LE("m", "1n"))}:
+  match m:
+    case 0n:
+      Empty.absurd({ff(LE("0n", "1n"))}, ab.ft(h))
+    case 1n+q:
+      match q:
+        case 0n:
+          Empty.absurd({ff(LE("1n", "1n"))}, ab.ft(h))
+        case 1n+u:
+          {{==}}
 
 # Family A: the index stays within a table of n profiles
 
-def A.mv(can: Bool, right: Bool, +n: Nat, +ix: Nat, -r: {RAT}, +ecan: {eqb(CAN("n", "right", "ix"), "can")}, {HA}) -> {A(MOVEGO("can", "right", "ix", "r"))}:
+def A.land(t: Bool, -right: Bool, -n: Nat, +ix: Nat, -rs: Nat, -ls: Nat, -r: {RAT}, +h: {tt(LTN("ix", "n"))}) -> {A(LAND("t", "right", "ix", "rs", "ls", "r"))}:
+  match t:
+    case True{{}}:
+      h
+    case False{{}}:
+      h
+
+def A.wg(can: Bool, right: Bool, +rs: Nat, +ls: Nat, +mx: Nat, +n: Nat, +ix: Nat, -r: {RAT}, +ecan: {eqb(CAN("n", "right", "ix"), "can")}, {HA}) -> {A(WALKGO("can", "right", "rs", "ls", "mx", "ix", "r"))}:
   match can right:
     case True{{}} True{{}}:
-      ecan
+      A.land(Nat.is_le(mx, 1n+rs), True{{}}, n, 1n+ix, 1n+rs, ls, r, ecan)
     case True{{}} False{{}}:
-      nat.lt_sub1(ix, n, h)
+      A.land(Nat.is_le(mx, 1n+ls), False{{}}, n, Nat.sub(ix, 1n), rs, 1n+ls, r, nat.lt_sub1(ix, n, h))
     case False{{}} right:
       h
 
-def A.pr(d: Bool, +n: Nat, +ix: Nat, -r: {RAT}, +ee: {{{INWARD("n", "ix")} == Some{{d}} : Maybe<&2, Bool>}}, {HA}) -> {A(PROBE("d", "ix", "r"))}:
-  match d:
+def A.going(c: D.DimVerdict, +right: Bool, +rs: Nat, +ls: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(GOING("c", "right", "rs", "ls", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
+      h
+    case D.DimBetter{{}}:
+      A.wg({CAN("n", "right", "ix")}, right, rs, ls, mx, n, ix, r, {{==}}, h)
+    case D.DimWorse{{}}:
+      A.wg({CAN("n", NR, "ix")}, {NR}, rs, ls, mx, n, ix, r, {{==}}, h)
+
+def A.top(c: D.DimVerdict, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(TOP("c", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
+      h
+    case D.DimBetter{{}}:
+      A.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, n, ix, r, {{==}}, h)
+    case D.DimWorse{{}}:
+      A.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, n, ix, r, {{==}}, h)
+
+def A.tired(o: Bool, +right: Bool, -k: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(TIRED("o", "right", "k", "n", "mx", "ix", "r"))}:
+  match o:
     case True{{}}:
-      iw.right(Nat.is_lt(1n, n), Nat.is_eq(ix, 0n), Nat.is_eq(1n+ix, n), n, ix, {{==}}, {{==}}, ee)
-    case False{{}}:
-      nat.lt_sub1(ix, n, h)
-
-def A.tg(off: Bool, tired: Bool, d: Bool, +n: Nat, +t: Nat, +ix: Nat, -r: {RAT}, +ee: {{{INWARD("n", "ix")} == Some{{d}} : Maybe<&2, Bool>}}, {HA}) -> {A(TIREGO("off", "tired", "d", "t", "ix", "r"))}:
-  match off tired:
-    case True{{}} tired:
-      h
-    case False{{}} True{{}}:
-      A.pr(d, n, ix, r, ee, h)
-    case False{{}} False{{}}:
-      h
-
-def A.tire(edge: Maybe<&2, Bool>, +n: Nat, +lim: Nat, +t: Nat, +ix: Nat, -r: {RAT}, +ee: {{{INWARD("n", "ix")} == edge : Maybe<&2, Bool>}}, {HA}) -> {A(TIRE("edge", "lim", "t", "ix", "r"))}:
-  match edge:
-    case None{{}}:
-      h
-    case Some{{+d}}:
-      A.tg(Nat.is_eq(lim, 0n), Nat.is_le(lim, 1n+t), d, n, t, ix, r, ee, h)
-
-def A.park(pr: Bool, -n: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(PARK("pr", "ix", "r"))}:
-  match pr:
-    case True{{}}:
-      h
+      A.wg({CAN("n", NR, "ix")}, {NR}, 0n, 0n, mx, n, ix, r, {{==}}, h)
     case False{{}}:
       h
 
-def A.going(c: D.DimVerdict, +right: Bool, pr: Bool, +n: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(GOING("c", "right", "pr", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      A.park(pr, n, ix, r, h)
-    case D.DimBetter{{}}:
-      A.mv({CAN("n", "right", "ix")}, right, n, ix, r, {{==}}, h)
-    case D.DimWorse{{}}:
-      A.mv({CAN("n", NR, "ix")}, {NR}, n, ix, r, {{==}}, h)
-
-def A.parked(c: D.DimVerdict, +t: Nat, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(PARKED("c", "t", "n", "lim", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      A.tire({INWARD("n", "ix")}, n, lim, t, ix, r, {{==}}, h)
-    case D.DimBetter{{}}:
-      A.mv({CAN("n", EQ0, "ix")}, {EQ0}, n, ix, r, {{==}}, h)
-    case D.DimWorse{{}}:
-      A.mv({CAN("n", EQ0, "ix")}, {EQ0}, n, ix, r, {{==}}, h)
-
-def A.settled(c: D.DimVerdict, +n: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(SETTLED("c", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      h
-    case D.DimBetter{{}}:
-      A.mv({CAN("n", EQ0, "ix")}, {EQ0}, n, ix, r, {{==}}, h)
-    case D.DimWorse{{}}:
-      A.mv({CAN("n", EQ0, "ix")}, {EQ0}, n, ix, r, {{==}}, h)
-
-def A.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(DECIDE("m", "c", "n", "lim", "ix", "r"))}:
+def A.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +mx: Nat, +ix: Nat, -r: {RAT}, {HA}) -> {A(DECIDE("m", "c", "n", "lim", "mx", "ix", "r"))}:
   match m:
-    case D.DimGoing{{+right, +pr}}:
-      A.going(c, right, pr, n, ix, r, h)
-    case D.DimParked{{+t}}:
-      A.parked(c, t, n, lim, ix, r, h)
-    case D.DimSettled{{}}:
-      A.settled(c, n, ix, r, h)
+    case D.DimGoing{{+right, +rs, +ls}}:
+      A.going(c, right, rs, ls, n, mx, ix, r, h)
+    case D.DimParkedTop{{}}:
+      A.top(c, n, mx, ix, r, h)
+    case D.DimParkedTired{{+right, +k}}:
+      A.tired(Nat.is_le(lim, k), right, k, n, mx, ix, r, h)
 
 def A.prev(pv: {MB}, p: D.DimParams, +ix: Nat, +m: D.DimMode, +r: {RAT}, +h: {tt(LTN("ix", LEN("D.DimParams.profiles(p)")))}) -> {tt(LTN(IX(ST(PREV("pv", "p", "ix", "m", "r"))), LEN("D.DimParams.profiles(p)")))}:
   match pv:
@@ -398,8 +405,8 @@ def A.prev(pv: {MB}, p: D.DimParams, +ix: Nat, +m: D.DimMode, +r: {RAT}, +h: {tt
       h
     case Some{{+q}}:
       match p:
-        case D.DimParams{{+ps, +sx, +pct, +lim, +cs}}:
-          A.decide(m, {CMPW("cs", "pct", "r", "q")}, {LEN("ps")}, lim, ix, r, h)
+        case D.DimParams{{+ps, +sx, +pct, +lim, +mx, +cs}}:
+          A.decide(m, {CMPW("cs", "pct", "r", "q")}, {LEN("ps")}, lim, mx, ix, r, h)
 
 def A.on(skip: Bool, +p: D.DimParams, st: D.Dim, +s: D.DimSample, +h: {tt("D.Dim.valid(p, st)")}) -> {tt("D.Dim.valid(p, " + ST(ON("skip", "p", "st", "s")) + ")")}:
   match skip:
@@ -427,80 +434,62 @@ def ns.up(+ix: Nat, -m: D.DimMode, -r: {RAT}) -> {B(MK("1n+ix", "m", "r", "True{
 def ns.down(+ix: Nat, -m: D.DimMode, -r: {RAT}) -> {B(MK("Nat.sub(ix, 1n)", "m", "r", "True{}"))}:
   bo.and_intro({AND(LE("Nat.sub(ix, 1n)", "1n+ix"), LE("ix", "1n+Nat.sub(ix, 1n)"))}, {OR("True{}", EQN("Nat.sub(ix, 1n)", "ix"))}, bo.and_intro({LE("Nat.sub(ix, 1n)", "1n+ix")}, {LE("ix", "1n+Nat.sub(ix, 1n)")}, nat.sub1_le(ix), nat.le_sub1(ix)), {{==}})
 
-def B.mv(can: Bool, right: Bool, +ix: Nat, -r: {RAT}) -> {B(MOVEGO("can", "right", "ix", "r"))}:
+def B.land_up(t: Bool, +right: Bool, +ix: Nat, +rs: Nat, +ls: Nat, -r: {RAT}) -> {B(LAND("t", "right", "1n+ix", "rs", "ls", "r"))}:
+  match t:
+    case True{{}}:
+      ns.up(ix, D.DimParkedTired{{right, 0n}}, r)
+    case False{{}}:
+      ns.up(ix, D.DimGoing{{right, rs, ls}}, r)
+
+def B.land_down(t: Bool, +right: Bool, +ix: Nat, +rs: Nat, +ls: Nat, -r: {RAT}) -> {B(LAND("t", "right", "Nat.sub(ix, 1n)", "rs", "ls", "r"))}:
+  match t:
+    case True{{}}:
+      ns.down(ix, D.DimParkedTired{{right, 0n}}, r)
+    case False{{}}:
+      ns.down(ix, D.DimGoing{{right, rs, ls}}, r)
+
+def B.wg(can: Bool, right: Bool, +rs: Nat, +ls: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {B(WALKGO("can", "right", "rs", "ls", "mx", "ix", "r"))}:
   match can right:
     case True{{}} True{{}}:
-      ns.up(ix, D.DimGoing{{True{{}}, False{{}}}}, r)
+      B.land_up(Nat.is_le(mx, 1n+rs), True{{}}, ix, 1n+rs, ls, r)
     case True{{}} False{{}}:
-      ns.down(ix, D.DimGoing{{False{{}}, False{{}}}}, r)
-    case False{{}} right:
-      ns.same(ix, D.DimParked{{0n}}, r)
+      B.land_down(Nat.is_le(mx, 1n+ls), False{{}}, ix, rs, 1n+ls, r)
+    case False{{}} +right:
+      ns.same(ix, D.DimParkedTired{{right, 0n}}, r)
 
-def B.pr(d: Bool, +ix: Nat, -r: {RAT}) -> {B(PROBE("d", "ix", "r"))}:
-  match d:
+def B.going(c: D.DimVerdict, +right: Bool, +rs: Nat, +ls: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {B(GOING("c", "right", "rs", "ls", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
+      ns.same(ix, D.DimParkedTop{{}}, r)
+    case D.DimBetter{{}}:
+      B.wg({CAN("n", "right", "ix")}, right, rs, ls, mx, ix, r)
+    case D.DimWorse{{}}:
+      B.wg({CAN("n", NR, "ix")}, {NR}, rs, ls, mx, ix, r)
+
+def B.top(c: D.DimVerdict, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {B(TOP("c", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
+      ns.same(ix, D.DimParkedTop{{}}, r)
+    case D.DimBetter{{}}:
+      B.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, ix, r)
+    case D.DimWorse{{}}:
+      B.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, ix, r)
+
+def B.tired(o: Bool, +right: Bool, +k: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {B(TIRED("o", "right", "k", "n", "mx", "ix", "r"))}:
+  match o:
     case True{{}}:
-      ns.up(ix, D.DimGoing{{True{{}}, True{{}}}}, r)
+      B.wg({CAN("n", NR, "ix")}, {NR}, 0n, 0n, mx, ix, r)
     case False{{}}:
-      ns.down(ix, D.DimGoing{{False{{}}, True{{}}}}, r)
+      ns.same(ix, D.DimParkedTired{{right, 1n+k}}, r)
 
-def B.tg(off: Bool, tired: Bool, d: Bool, +t: Nat, +ix: Nat, -r: {RAT}) -> {B(TIREGO("off", "tired", "d", "t", "ix", "r"))}:
-  match off tired:
-    case True{{}} tired:
-      ns.same(ix, D.DimParked{{t}}, r)
-    case False{{}} True{{}}:
-      B.pr(d, ix, r)
-    case False{{}} False{{}}:
-      ns.same(ix, D.DimParked{{1n+t}}, r)
-
-def B.tire(edge: Maybe<&2, Bool>, +lim: Nat, +t: Nat, +ix: Nat, -r: {RAT}) -> {B(TIRE("edge", "lim", "t", "ix", "r"))}:
-  match edge:
-    case None{{}}:
-      ns.same(ix, D.DimParked{{t}}, r)
-    case Some{{+d}}:
-      B.tg(Nat.is_eq(lim, 0n), Nat.is_le(lim, 1n+t), d, t, ix, r)
-
-def B.park(pr: Bool, +ix: Nat, -r: {RAT}) -> {B(PARK("pr", "ix", "r"))}:
-  match pr:
-    case True{{}}:
-      ns.same(ix, D.DimSettled{{}}, r)
-    case False{{}}:
-      ns.same(ix, D.DimParked{{0n}}, r)
-
-def B.going(c: D.DimVerdict, +right: Bool, pr: Bool, +n: Nat, +ix: Nat, -r: {RAT}) -> {B(GOING("c", "right", "pr", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      B.park(pr, ix, r)
-    case D.DimBetter{{}}:
-      B.mv({CAN("n", "right", "ix")}, right, ix, r)
-    case D.DimWorse{{}}:
-      B.mv({CAN("n", NR, "ix")}, {NR}, ix, r)
-
-def B.parked(c: D.DimVerdict, +t: Nat, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}) -> {B(PARKED("c", "t", "n", "lim", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      B.tire({INWARD("n", "ix")}, lim, t, ix, r)
-    case D.DimBetter{{}}:
-      B.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-    case D.DimWorse{{}}:
-      B.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-
-def B.settled(c: D.DimVerdict, +n: Nat, +ix: Nat, -r: {RAT}) -> {B(SETTLED("c", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      ns.same(ix, D.DimSettled{{}}, r)
-    case D.DimBetter{{}}:
-      B.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-    case D.DimWorse{{}}:
-      B.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-
-def B.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}) -> {B(DECIDE("m", "c", "n", "lim", "ix", "r"))}:
+def B.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {B(DECIDE("m", "c", "n", "lim", "mx", "ix", "r"))}:
   match m:
-    case D.DimGoing{{+right, +pr}}:
-      B.going(c, right, pr, n, ix, r)
-    case D.DimParked{{+t}}:
-      B.parked(c, t, n, lim, ix, r)
-    case D.DimSettled{{}}:
-      B.settled(c, n, ix, r)
+    case D.DimGoing{{+right, +rs, +ls}}:
+      B.going(c, right, rs, ls, n, mx, ix, r)
+    case D.DimParkedTop{{}}:
+      B.top(c, n, mx, ix, r)
+    case D.DimParkedTired{{+right, +k}}:
+      B.tired(Nat.is_le(lim, k), right, k, n, mx, ix, r)
 
 def B.prev(pv: {MB}, p: D.DimParams, +ix: Nat, +m: D.DimMode, +r: {RAT}) -> {B(PREV("pv", "p", "ix", "m", "r"))}:
   match pv:
@@ -508,8 +497,8 @@ def B.prev(pv: {MB}, p: D.DimParams, +ix: Nat, +m: D.DimMode, +r: {RAT}) -> {B(P
       ns.same(ix, m, r)
     case Some{{+q}}:
       match p:
-        case D.DimParams{{+ps, +sx, +pct, +lim, +cs}}:
-          B.decide(m, {CMPW("cs", "pct", "r", "q")}, {LEN("ps")}, lim, ix, r)
+        case D.DimParams{{+ps, +sx, +pct, +lim, +mx, +cs}}:
+          B.decide(m, {CMPW("cs", "pct", "r", "q")}, {LEN("ps")}, lim, mx, ix, r)
 
 def B.on(skip: Bool, +p: D.DimParams, +st: D.Dim, +s: D.DimSample) -> {tt("dp.ns(" + IX("st") + ", " + ON("skip", "p", "st", "s") + ")")}:
   match skip:
@@ -522,97 +511,69 @@ def B.on(skip: Bool, +p: D.DimParams, +st: D.Dim, +s: D.DimSample) -> {tt("dp.ns
 
 # Family C: a step's state holds the sample's rates
 
-def C.mv(can: Bool, right: Bool, -ix: Nat, -r: {RAT}) -> {C(MOVEGO("can", "right", "ix", "r"))}:
+def C.land(t: Bool, -right: Bool, -ix: Nat, -rs: Nat, -ls: Nat, -r: {RAT}) -> {C(LAND("t", "right", "ix", "rs", "ls", "r"))}:
+  match t:
+    case True{{}}:
+      {{==}}
+    case False{{}}:
+      {{==}}
+
+def C.wg(can: Bool, right: Bool, +rs: Nat, +ls: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {C(WALKGO("can", "right", "rs", "ls", "mx", "ix", "r"))}:
   match can right:
     case True{{}} True{{}}:
-      {{==}}
+      C.land(Nat.is_le(mx, 1n+rs), True{{}}, 1n+ix, 1n+rs, ls, r)
     case True{{}} False{{}}:
-      {{==}}
+      C.land(Nat.is_le(mx, 1n+ls), False{{}}, Nat.sub(ix, 1n), rs, 1n+ls, r)
     case False{{}} right:
       {{==}}
 
-def C.pr(d: Bool, -ix: Nat, -r: {RAT}) -> {C(PROBE("d", "ix", "r"))}:
-  match d:
-    case True{{}}:
+def C.going(c: D.DimVerdict, +right: Bool, +rs: Nat, +ls: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {C(GOING("c", "right", "rs", "ls", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
       {{==}}
+    case D.DimBetter{{}}:
+      C.wg({CAN("n", "right", "ix")}, right, rs, ls, mx, ix, r)
+    case D.DimWorse{{}}:
+      C.wg({CAN("n", NR, "ix")}, {NR}, rs, ls, mx, ix, r)
+
+def C.top(c: D.DimVerdict, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {C(TOP("c", "n", "mx", "ix", "r"))}:
+  match c:
+    case D.DimSame{{}}:
+      {{==}}
+    case D.DimBetter{{}}:
+      C.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, ix, r)
+    case D.DimWorse{{}}:
+      C.wg({CAN("n", EQ0, "ix")}, {EQ0}, 0n, 0n, mx, ix, r)
+
+def C.tired(o: Bool, +right: Bool, -k: Nat, +n: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {C(TIRED("o", "right", "k", "n", "mx", "ix", "r"))}:
+  match o:
+    case True{{}}:
+      C.wg({CAN("n", NR, "ix")}, {NR}, 0n, 0n, mx, ix, r)
     case False{{}}:
       {{==}}
 
-def C.tg(off: Bool, tired: Bool, d: Bool, -t: Nat, -ix: Nat, -r: {RAT}) -> {C(TIREGO("off", "tired", "d", "t", "ix", "r"))}:
-  match off tired:
-    case True{{}} tired:
-      {{==}}
-    case False{{}} True{{}}:
-      C.pr(d, ix, r)
-    case False{{}} False{{}}:
-      {{==}}
-
-def C.tire(edge: Maybe<&2, Bool>, +lim: Nat, +t: Nat, -ix: Nat, -r: {RAT}) -> {C(TIRE("edge", "lim", "t", "ix", "r"))}:
-  match edge:
-    case None{{}}:
-      {{==}}
-    case Some{{+d}}:
-      C.tg(Nat.is_eq(lim, 0n), Nat.is_le(lim, 1n+t), d, t, ix, r)
-
-def C.park(pr: Bool, -ix: Nat, -r: {RAT}) -> {C(PARK("pr", "ix", "r"))}:
-  match pr:
-    case True{{}}:
-      {{==}}
-    case False{{}}:
-      {{==}}
-
-def C.going(c: D.DimVerdict, +right: Bool, pr: Bool, +n: Nat, +ix: Nat, -r: {RAT}) -> {C(GOING("c", "right", "pr", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      C.park(pr, ix, r)
-    case D.DimBetter{{}}:
-      C.mv({CAN("n", "right", "ix")}, right, ix, r)
-    case D.DimWorse{{}}:
-      C.mv({CAN("n", NR, "ix")}, {NR}, ix, r)
-
-def C.parked(c: D.DimVerdict, +t: Nat, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}) -> {C(PARKED("c", "t", "n", "lim", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      C.tire({INWARD("n", "ix")}, lim, t, ix, r)
-    case D.DimBetter{{}}:
-      C.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-    case D.DimWorse{{}}:
-      C.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-
-def C.settled(c: D.DimVerdict, +n: Nat, +ix: Nat, -r: {RAT}) -> {C(SETTLED("c", "n", "ix", "r"))}:
-  match c:
-    case D.DimSame{{}}:
-      {{==}}
-    case D.DimBetter{{}}:
-      C.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-    case D.DimWorse{{}}:
-      C.mv({CAN("n", EQ0, "ix")}, {EQ0}, ix, r)
-
-def C.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +ix: Nat, -r: {RAT}) -> {C(DECIDE("m", "c", "n", "lim", "ix", "r"))}:
+def C.decide(m: D.DimMode, c: D.DimVerdict, +n: Nat, +lim: Nat, +mx: Nat, +ix: Nat, -r: {RAT}) -> {C(DECIDE("m", "c", "n", "lim", "mx", "ix", "r"))}:
   match m:
-    case D.DimGoing{{+right, +pr}}:
-      C.going(c, right, pr, n, ix, r)
-    case D.DimParked{{+t}}:
-      C.parked(c, t, n, lim, ix, r)
-    case D.DimSettled{{}}:
-      C.settled(c, n, ix, r)
+    case D.DimGoing{{+right, +rs, +ls}}:
+      C.going(c, right, rs, ls, n, mx, ix, r)
+    case D.DimParkedTop{{}}:
+      C.top(c, n, mx, ix, r)
+    case D.DimParkedTired{{+right, +k}}:
+      C.tired(Nat.is_le(lim, k), right, k, n, mx, ix, r)
 
 # Identical samples: one step with a sample of some time, from a state
 # holding that sample's rates, decides on DimSame
 
-def cv.step(+ix: Nat, +m: D.DimMode, {SIG}, {NZ}) -> {eqd(STEP("D.Dim{ix, m, Some{" + R + "}}"), ST(DECIDE("m", "D.DimSame{}", N, "lim", "ix", R)))}:
-  %Equal.sym(Bool, U32.is_zero(el), False{{}}, nz) : {eqd(ST(ON("_", P, "D.Dim{ix, m, Some{" + R + "}}", S)), ST(DECIDE("m", "D.DimSame{}", N, "lim", "ix", R)))}
-  %Equal.sym(D.DimVerdict, {CMPW("cs", "pct", R, R)}, D.DimSame{{}}, cmp.same(cs, pct, {R})) : {eqd(ST(DECIDE("m", "_", N, "lim", "ix", R)), ST(DECIDE("m", "D.DimSame{}", N, "lim", "ix", R)))}
+def cv.step(+ix: Nat, +m: D.DimMode, {SIG}, {NZ}) -> {eqd(STEP("D.Dim{ix, m, Some{" + R + "}}"), ST(DECIDE("m", "D.DimSame{}", N, "lim", "mx", "ix", R)))}:
+  %Equal.sym(Bool, U32.is_zero(el), False{{}}, nz) : {eqd(ST(ON("_", P, "D.Dim{ix, m, Some{" + R + "}}", S)), ST(DECIDE("m", "D.DimSame{}", N, "lim", "mx", "ix", R)))}
+  %Equal.sym(D.DimVerdict, {CMPW("cs", "pct", R, R)}, D.DimSame{{}}, cmp.same(cs, pct, {R})) : {eqd(ST(DECIDE("m", "_", N, "lim", "mx", "ix", R)), ST(DECIDE("m", "D.DimSame{}", N, "lim", "mx", "ix", R)))}
   {{==}}
 
-def cv.settled(+ix: Nat, {SIG}, {NZ}) -> {FIX(SE())}:
-  cv.step(ix, D.DimSettled{{}}, {ARGS}, nz)
+def cv.top(+ix: Nat, {SIG}, {NZ}) -> {FIX(TOPY())}:
+  cv.step(ix, D.DimParkedTop{{}}, {ARGS}, nz)
 
-def cv.probe(+ix: Nat, +d: Bool, {SIG}, {NZ}) -> {eqd(STEP(GOY("d", "True{}")), SE())}:
-  cv.step(ix, D.DimGoing{{d, True{{}}}}, {ARGS}, nz)
-
-def cv.going(+ix: Nat, +d: Bool, {SIG}, {NZ}) -> {eqd(STEP(GOY("d", "False{}")), PK("0n"))}:
-  cv.step(ix, D.DimGoing{{d, False{{}}}}, {ARGS}, nz)
+def cv.going(+ix: Nat, +d: Bool, +rs: Nat, +ls: Nat, {SIG}, {NZ}) -> {eqd(STEP(GOY("d", "rs", "ls")), TOPY())}:
+  cv.step(ix, D.DimGoing{{d, rs, ls}}, {ARGS}, nz)
 
 # a step of no time changes nothing
 
@@ -636,125 +597,140 @@ def cv.at(+y: D.Dim, +x: D.Dim, +k: Nat, {SIG}, +e: {eqd(RUN("y", "k"), "x")}, +
   %Equal.sym(D.Dim, {RUN("y", "k")}, x, e) : {eqd(STEP("_"), "_")}
   f
 
-# Parked on an edge with the same interval: count, then probe
-
-def cv.parked_step(+ix: Nat, +t: Nat, {SIG}, {NZ}) -> {eqd(STEP(PK("t")), ST(TIRE(INWARD(N, "ix"), "lim", "t", "ix", R)))}:
-  cv.step(ix, D.DimParked{{t}}, {ARGS}, nz)
-
-def cv.probe_run(d: Bool, +ix: Nat, +t: Nat, +j: Nat, {SIG}, {NZ}, +e: {eqd(STEP(PK("t")), ST(PROBE("d", "ix", R)))}) -> {FIX(RUN(PK("t"), "2n+j"))}:
-  match d:
-    case True{{}}:
-      cv.at({PK("t")}, {SE("1n+ix")}, 2n+j, {ARGS}, cv.probe_eq(True{{}}, ix, t, j, {ARGS}, nz, e), cv.settled(1n+ix, {ARGS}, nz))
-    case False{{}}:
-      cv.at({PK("t")}, {SE("Nat.sub(ix, 1n)")}, 2n+j, {ARGS}, cv.probe_eq(False{{}}, ix, t, j, {ARGS}, nz, e), cv.settled(Nat.sub(ix, 1n), {ARGS}, nz))
-'''
-
-# simpler: one lemma per direction
-def probe_eq_dir(dname, d, ix2):
-    pr = GOY(d, "True{}", ix2)
-    return f'''
-def cv.probe_eq.{dname}(+ix: Nat, +t: Nat, +j: Nat, {SIG}, {NZ}, +e: {eqd(STEP(PK("t")), pr)}) -> {eqd(RUN(PK("t"), "2n+j"), SE(ix2))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {pr}, e) : {eqd(RUNGO("1n+j", "_"), SE(ix2))}
-  %Equal.sym(D.Dim, {STEP(pr)}, {SE(ix2)}, cv.probe({ix2}, {d}, {ARGS}, nz)) : {eqd(RUNGO("j", "_"), SE(ix2))}
-  cv.rest(j, {P}, {SE(ix2)}, {S}, cv.settled({ix2}, {ARGS}, nz))
-'''
-
-text = text.replace("cv.probe_eq(True{}, ix, t, j, %s, nz, e)" % ARGS, "cv.probe_eq.right(ix, t, j, %s, nz, e)" % ARGS)
-text = text.replace("cv.probe_eq(False{}, ix, t, j, %s, nz, e)" % ARGS, "cv.probe_eq.left(ix, t, j, %s, nz, e)" % ARGS)
-anchor = "def cv.probe_run("
-text = text.replace(anchor, (probe_eq_dir("right", "True{}", "1n+ix") + probe_eq_dir("left", "False{}", "Nat.sub(ix, 1n)")).lstrip("\n") + "\n" + anchor)
-
-TEQ = lambda e: "{%s == %s : Maybe<&2, Bool>}" % (INWARD(N, "ix"), e)
-text += f'''
-# The step of a parked state, by the edge and the tired count
-
-def cv.pk_none(+ix: Nat, +t: Nat, {SIG}, {NZ}, +ee: {TEQ("None{}")}) -> {FIX(PK("t"))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {ST(TIRE(INWARD(N, "ix"), "lim", "t", "ix", R))}, cv.parked_step(ix, t, {ARGS}, nz)) : {eqd("_", PK("t"))}
-  %Equal.sym(Maybe<&2, Bool>, {INWARD(N, "ix")}, None{{}}, ee) : {eqd(ST(TIRE("_", "lim", "t", "ix", R)), PK("t"))}
-  {{==}}
-
-def cv.pk_go(+ix: Nat, +t: Nat, +d: Bool, {SIG}, {NZ}, +ee: {TEQ("Some{d}")}) -> {eqd(STEP(PK("t")), ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {ST(TIRE(INWARD(N, "ix"), "lim", "t", "ix", R))}, cv.parked_step(ix, t, {ARGS}, nz)) : {eqd("_", ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)))}
-  %Equal.sym(Maybe<&2, Bool>, {INWARD(N, "ix")}, Some{{d}}, ee) : {eqd(ST(TIRE("_", "lim", "t", "ix", R)), ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)))}
-  {{==}}
-
-def cv.pk_off(+ix: Nat, +t: Nat, +d: Bool, {SIG}, {NZ}, +ee: {TEQ("Some{d}")}, +eo: {tt(EQN("lim", "0n"))}) -> {FIX(PK("t"))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R))}, cv.pk_go(ix, t, d, {ARGS}, nz, ee)) : {eqd("_", PK("t"))}
-  %Equal.sym(Bool, Nat.is_eq(lim, 0n), True{{}}, eo) : {eqd(ST(TIREGO("_", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)), PK("t"))}
-  {{==}}
-
-def cv.pk_probe(+ix: Nat, +t: Nat, +d: Bool, {SIG}, {NZ}, +ee: {TEQ("Some{d}")}, +eo: {ff(EQN("lim", "0n"))}, +et: {tt(LE("lim", "1n+t"))}) -> {eqd(STEP(PK("t")), ST(PROBE("d", "ix", R)))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R))}, cv.pk_go(ix, t, d, {ARGS}, nz, ee)) : {eqd("_", ST(PROBE("d", "ix", R)))}
-  %Equal.sym(Bool, Nat.is_eq(lim, 0n), False{{}}, eo) : {eqd(ST(TIREGO("_", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)), ST(PROBE("d", "ix", R)))}
-  %Equal.sym(Bool, Nat.is_le(lim, 1n+t), True{{}}, et) : {eqd(ST(TIREGO("False{}", "_", "d", "t", "ix", R)), ST(PROBE("d", "ix", R)))}
-  {{==}}
-
-def cv.pk_count(+ix: Nat, +t: Nat, +d: Bool, {SIG}, {NZ}, +ee: {TEQ("Some{d}")}, +eo: {ff(EQN("lim", "0n"))}, +et: {ff(LE("lim", "1n+t"))}) -> {eqd(STEP(PK("t")), PK("1n+t"))}:
-  %Equal.sym(D.Dim, {STEP(PK("t"))}, {ST(TIREGO("Nat.is_eq(lim, 0n)", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R))}, cv.pk_go(ix, t, d, {ARGS}, nz, ee)) : {eqd("_", PK("1n+t"))}
-  %Equal.sym(Bool, Nat.is_eq(lim, 0n), False{{}}, eo) : {eqd(ST(TIREGO("_", "Nat.is_le(lim, 1n+t)", "d", "t", "ix", R)), PK("1n+t"))}
-  %Equal.sym(Bool, Nat.is_le(lim, 1n+t), False{{}}, et) : {eqd(ST(TIREGO("False{}", "_", "d", "t", "ix", R)), PK("1n+t"))}
-  {{==}}
-
 def cv.fixed_run(+y: D.Dim, +k: Nat, {SIG}, +f: {FIX("y")}) -> {FIX(RUN("y", "k"))}:
   cv.at(y, y, k, {ARGS}, cv.rest(k, {P}, y, {S}, f), f)
 
-# the cases of a parked state, by the edge, whether probing is off, and
-# whether the count is up; next: the rest of the count, when it is not
+# Parked tired with the same interval: count, or verify
 
-def cv.pc(edge: Maybe<&2, Bool>, off: Bool, tired: Bool, +ix: Nat, +t: Nat, +j: Nat, {SIG}, {NZ}, +ee: {TEQ("edge")}, +eo: {eqb(EQN("lim", "0n"), "off")}, +et: {eqb(LE("lim", "1n+t"), "tired")}, next: {ff("tired")} -> {FIX(RUN(PK("1n+t"), "1n+j"))}) -> {FIX(RUN(PK("t"), "2n+j"))}:
-  match edge:
-    case None{{}}:
-      cv.fixed_run({PK("t")}, 2n+j, {ARGS}, cv.pk_none(ix, t, {ARGS}, nz, ee))
-    case Some{{+d}}:
-      match off:
-        case True{{}}:
-          cv.fixed_run({PK("t")}, 2n+j, {ARGS}, cv.pk_off(ix, t, d, {ARGS}, nz, ee, eo))
-        case False{{}}:
-          match tired:
-            case True{{}}:
-              cv.probe_run(d, ix, t, j, {ARGS}, nz, cv.pk_probe(ix, t, d, {ARGS}, nz, ee, eo, et))
-            case False{{}}:
-              %Equal.sym(D.Dim, {STEP(PK("t"))}, {PK("1n+t")}, cv.pk_count(ix, t, d, {ARGS}, nz, ee, eo, et)) : {FIX(RUNGO("1n+j", "_"))}
-              next({{==}})
-
-def cv.h_next(+lim: Nat, +jp: Nat, +t: Nat, +h: {tt(LE("lim", "1n+Nat.add(jp, 1n+t)"))}) -> {tt(LE("lim", "Nat.add(jp, 2n+t)"))}:
-  %Equal.sym(Nat, Nat.add(jp, 2n+t), 1n+Nat.add(jp, 1n+t), nat.add_succ(jp, 1n+t)) : {tt(LE("lim", "_"))}
-  h
-
-# parked: after 2 + j identical samples at rest, when lim <= j + 1 + t
-
-def cv.parked(j: Nat, +t: Nat, +ix: Nat, {SIG}, {NZ}, +h: {tt(LE("lim", "Nat.add(j, 1n+t)"))}) -> {FIX(RUN(PK("t"), "2n+j"))}:
-  match j:
-    case 0n:
-      cv.pc({INWARD(N, "ix")}, Nat.is_eq(lim, 0n), Nat.is_le(lim, 1n+t), ix, t, 0n, {ARGS}, nz, {{==}}, {{==}}, {{==}}, u => Empty.absurd({FIX(RUN(PK("1n+t"), "1n"))}, ab.tf(Equal.trans(Bool, True{{}}, Nat.is_le(lim, 1n+t), False{{}}, Equal.sym(Bool, Nat.is_le(lim, 1n+t), True{{}}, h), u))))
-    case 1n+ +jp:
-      cv.pc({INWARD(N, "ix")}, Nat.is_eq(lim, 0n), Nat.is_le(lim, 1n+t), ix, t, 1n+jp, {ARGS}, nz, {{==}}, {{==}}, {{==}}, u => cv.parked(jp, 1n+t, ix, {ARGS}, nz, cv.h_next(lim, jp, t, h)))
-
-# from a state holding the sample's rates, 3 + lim samples bring it to rest
-
-def cv.going_eq(+ix: Nat, +d: Bool, {SIG}, {NZ}) -> {eqd(RUN(GOY("d", "False{}"), "3n+lim"), RUN(PK("0n"), "2n+lim"))}:
-  %Equal.sym(D.Dim, {STEP(GOY("d", "False{}"))}, {PK("0n")}, cv.going(ix, d, {ARGS}, nz)) : {eqd(RUNGO("2n+lim", "_"), RUN(PK("0n"), "2n+lim"))}
+def cv.tired_count(+ix: Nat, +p: Bool, +k: Nat, {SIG}, {NZ}, +eo: {ff(LE("lim", "k"))}) -> {eqd(STEP(PT("p", "k")), PT("p", "1n+k"))}:
+  %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {ST(DECIDE("D.DimParkedTired{p, k}", "D.DimSame{}", N, "lim", "mx", "ix", R))}, cv.step(ix, D.DimParkedTired{{p, k}}, {ARGS}, nz)) : {eqd("_", PT("p", "1n+k"))}
+  %Equal.sym(Bool, Nat.is_le(lim, k), False{{}}, eo) : {eqd(ST(TIRED("_", "p", "k", N, "mx", "ix", R)), PT("p", "1n+k"))}
   {{==}}
 
-def cv.probe_eq2(+ix: Nat, +d: Bool, {SIG}, {NZ}) -> {eqd(RUN(GOY("d", "True{}"), "3n+lim"), SE())}:
-  %Equal.sym(D.Dim, {STEP(GOY("d", "True{}"))}, {SE()}, cv.probe(ix, d, {ARGS}, nz)) : {eqd(RUNGO("2n+lim", "_"), SE())}
-  cv.rest(2n+lim, {P}, {SE()}, {S}, cv.settled(ix, {ARGS}, nz))
+def cv.tired_out(+ix: Nat, +p: Bool, +k: Nat, {SIG}, {NZ}, +eo: {tt(LE("lim", "k"))}) -> {eqd(STEP(PT("p", "k")), ST(WALK(N, "mx", "Bool.not(p)", "0n", "0n", "ix", R)))}:
+  %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {ST(DECIDE("D.DimParkedTired{p, k}", "D.DimSame{}", N, "lim", "mx", "ix", R))}, cv.step(ix, D.DimParkedTired{{p, k}}, {ARGS}, nz)) : {eqd("_", ST(WALK(N, "mx", "Bool.not(p)", "0n", "0n", "ix", R)))}
+  %Equal.sym(Bool, Nat.is_le(lim, k), True{{}}, eo) : {eqd(ST(TIRED("_", "p", "k", N, "mx", "ix", R)), ST(WALK(N, "mx", "Bool.not(p)", "0n", "0n", "ix", R)))}
+  {{==}}
 
-def cv.primed(y: D.Dim, {SIG}, {NZ}, +hp: {{{PRV("y")} == Some{{{R}}} : {MB}}}) -> {FIX(RUN("y", "3n+lim"))}:
+# the verifying step, when it can be taken: one step, not too tired
+
+def cv.walk_left(+ix: Nat, {SIG}, {HM}, +ec: {tt(LTN("0n", "ix"))}) -> {eqd(ST(WALK(N, "mx", "False{}", "0n", "0n", "ix", R)), GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)"))}:
+  %Equal.sym(Bool, Nat.is_lt(0n, ix), True{{}}, ec) : {eqd(ST(WALKGO("_", "False{}", "0n", "0n", "mx", "ix", R)), GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)"))}
+  %Equal.sym(Bool, Nat.is_le(mx, 1n), False{{}}, nat.two_le(mx, hm)) : {eqd(ST(LAND("_", "False{}", "Nat.sub(ix, 1n)", "0n", "1n", R)), GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)"))}
+  {{==}}
+
+def cv.walk_right(+ix: Nat, {SIG}, {HM}, +ec: {tt(LTN("1n+ix", N))}) -> {eqd(ST(WALK(N, "mx", "True{}", "0n", "0n", "ix", R)), GOY("True{}", "1n", "0n", "1n+ix"))}:
+  %Equal.sym(Bool, Nat.is_lt(1n+ix, {N}), True{{}}, ec) : {eqd(ST(WALKGO("_", "True{}", "0n", "0n", "mx", "ix", R)), GOY("True{}", "1n", "0n", "1n+ix"))}
+  %Equal.sym(Bool, Nat.is_le(mx, 1n), False{{}}, nat.two_le(mx, hm)) : {eqd(ST(LAND("_", "True{}", "1n+ix", "1n", "0n", R)), GOY("True{}", "1n", "0n", "1n+ix"))}
+  {{==}}
+
+def cv.exit_t(+ix: Nat, +k: Nat, +e2: Nat, {SIG}, {NZ}, {HM}, +eo: {tt(LE("lim", "k"))}, +ec: {tt(LTN("0n", "ix"))}) -> {eqd(RUN(PT("True{}", "k"), "2n+e2"), TOPY("Nat.sub(ix, 1n)"))}:
+  %Equal.sym(D.Dim, {STEP(PT("True{}", "k"))}, {GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)")}, Equal.trans(D.Dim, {STEP(PT("True{}", "k"))}, {ST(WALK(N, "mx", "False{}", "0n", "0n", "ix", R))}, {GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)")}, cv.tired_out(ix, True{{}}, k, {ARGS}, nz, eo), cv.walk_left(ix, {ARGS}, hm, ec))) : {eqd(RUNGO("1n+e2", "_"), TOPY("Nat.sub(ix, 1n)"))}
+  %Equal.sym(D.Dim, {STEP(GOY("False{}", "0n", "1n", "Nat.sub(ix, 1n)"))}, {TOPY("Nat.sub(ix, 1n)")}, cv.going(Nat.sub(ix, 1n), False{{}}, 0n, 1n, {ARGS}, nz)) : {eqd(RUNGO("e2", "_"), TOPY("Nat.sub(ix, 1n)"))}
+  cv.rest(e2, {P}, {TOPY("Nat.sub(ix, 1n)")}, {S}, cv.top(Nat.sub(ix, 1n), {ARGS}, nz))
+
+def cv.exit_f(+ix: Nat, +k: Nat, +e2: Nat, {SIG}, {NZ}, {HM}, +eo: {tt(LE("lim", "k"))}, +ec: {tt(LTN("1n+ix", N))}) -> {eqd(RUN(PT("False{}", "k"), "2n+e2"), TOPY("1n+ix"))}:
+  %Equal.sym(D.Dim, {STEP(PT("False{}", "k"))}, {GOY("True{}", "1n", "0n", "1n+ix")}, Equal.trans(D.Dim, {STEP(PT("False{}", "k"))}, {ST(WALK(N, "mx", "True{}", "0n", "0n", "ix", R))}, {GOY("True{}", "1n", "0n", "1n+ix")}, cv.tired_out(ix, False{{}}, k, {ARGS}, nz, eo), cv.walk_right(ix, {ARGS}, hm, ec))) : {eqd(RUNGO("1n+e2", "_"), TOPY("1n+ix"))}
+  %Equal.sym(D.Dim, {STEP(GOY("True{}", "1n", "0n", "1n+ix"))}, {TOPY("1n+ix")}, cv.going(1n+ix, True{{}}, 1n, 0n, {ARGS}, nz)) : {eqd(RUNGO("e2", "_"), TOPY("1n+ix"))}
+  cv.rest(e2, {P}, {TOPY("1n+ix")}, {S}, cv.top(1n+ix, {ARGS}, nz))
+
+def cv.exit(p: Bool, +k: Nat, +ix: Nat, +e2: Nat, {SIG}, {NZ}, {HM}, +eo: {tt(LE("lim", "k"))}, +ecan: {tt(CAN(N, "Bool.not(p)", "ix"))}) -> {FIX(RUN(PT("p", "k"), "2n+e2"))}:
+  match p:
+    case True{{}}:
+      cv.at({PT("True{}", "k")}, {TOPY("Nat.sub(ix, 1n)")}, 2n+e2, {ARGS}, cv.exit_t(ix, k, e2, {ARGS}, nz, hm, eo, ecan), cv.top(Nat.sub(ix, 1n), {ARGS}, nz))
+    case False{{}}:
+      cv.at({PT("False{}", "k")}, {TOPY("1n+ix")}, 2n+e2, {ARGS}, cv.exit_f(ix, k, e2, {ARGS}, nz, hm, eo, ecan), cv.top(1n+ix, {ARGS}, nz))
+
+# the step the other way can be taken, when this way cannot (two profiles
+# or more)
+
+def cv.flip(p: Bool, +ix: Nat, +n: Nat, +hl: {tt(LTN("1n", "n"))}, +ec: {ff(CAN("n", "Bool.not(p)", "ix"))}) -> {tt(CAN("n", "Bool.not(Bool.not(p))", "ix"))}:
+  match p:
+    case True{{}}:
+      %Equal.sym(Nat, ix, 0n, nat.lt0_false(ix, ec)) : {tt(LTN("1n+_", "n"))}
+      hl
+    case False{{}}:
+      nat.pos_of(ix, n, hl, ec)
+
+def cv.h_next(+lim: Nat, +jp: Nat, +t: Nat, +h: {tt(LE("lim", "1n+Nat.add(jp, t)"))}) -> {tt(LE("lim", "Nat.add(jp, 1n+t)"))}:
+  %Equal.sym(Nat, Nat.add(jp, 1n+t), 1n+Nat.add(jp, t), nat.add_succ(jp, t)) : {tt(LE("lim", "_"))}
+  h
+
+def cv.h2(+e: Nat, +lim: Nat) -> {tt(LE("lim", "Nat.add(Nat.add(e, lim), 0n)"))}:
+  %Equal.sym(Nat, Nat.add(Nat.add(e, lim), 0n), Nat.add(e, lim), nat.add_zero(Nat.add(e, lim))) : {tt(LE("lim", "_"))}
+  nat.le_add_r(e, lim)
+
+# second phase: parked tired where the verifying step can be taken; at
+# rest after 2 + e samples, when lim <= e + k
+
+def cv.p2c(o: Bool, +k: Nat, +p: Bool, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, +eo: {eqb(LE("lim", "k"), "o")}, +ecan: {tt(CAN(N, "Bool.not(p)", "ix"))}, next: {ff("o")} -> {FIX(RUN(PT("p", "1n+k"), "1n+e"))}) -> {FIX(RUN(PT("p", "k"), "2n+e"))}:
+  match o:
+    case True{{}}:
+      cv.exit(p, k, ix, e, {ARGS}, nz, hm, eo, ecan)
+    case False{{}}:
+      %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {PT("p", "1n+k")}, cv.tired_count(ix, p, k, {ARGS}, nz, eo)) : {FIX(RUNGO("1n+e", "_"))}
+      next({{==}})
+
+def cv.p2(e: Nat, +k: Nat, +p: Bool, +ix: Nat, {SIG}, {NZ}, {HM}, +ecan: {tt(CAN(N, "Bool.not(p)", "ix"))}, +h: {tt(LE("lim", "Nat.add(e, k)"))}) -> {FIX(RUN(PT("p", "k"), "2n+e"))}:
+  match e:
+    case 0n:
+      cv.p2c(Nat.is_le(lim, k), k, p, ix, 0n, {ARGS}, nz, hm, {{==}}, ecan, u => Empty.absurd({FIX(RUN(PT("p", "1n+k"), "1n"))}, ab.tf(Equal.trans(Bool, True{{}}, Nat.is_le(lim, k), False{{}}, Equal.sym(Bool, Nat.is_le(lim, k), True{{}}, h), u))))
+    case 1n+ +ep:
+      cv.p2c(Nat.is_le(lim, k), k, p, ix, 1n+ep, {ARGS}, nz, hm, {{==}}, ecan, u => cv.p2(ep, 1n+k, p, ix, {ARGS}, nz, hm, ecan, cv.h_next(lim, ep, k, h)))
+
+# first phase: parked tired anywhere; if the verifying step cannot be
+# taken, it parks tired the other way and the second phase follows
+
+def cv.p1y_step(+ix: Nat, +p: Bool, +k: Nat, {SIG}, {NZ}, +eo: {tt(LE("lim", "k"))}, +ecn: {ff(CAN(N, "Bool.not(p)", "ix"))}) -> {eqd(STEP(PT("p", "k")), PT("Bool.not(p)", "0n"))}:
+  %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {ST(WALK(N, "mx", "Bool.not(p)", "0n", "0n", "ix", R))}, cv.tired_out(ix, p, k, {ARGS}, nz, eo)) : {eqd("_", PT("Bool.not(p)", "0n"))}
+  %Equal.sym(Bool, {CAN(N, "Bool.not(p)", "ix")}, False{{}}, ecn) : {eqd(ST(WALKGO("_", "Bool.not(p)", "0n", "0n", "mx", "ix", R)), PT("Bool.not(p)", "0n"))}
+  {{==}}
+
+def cv.p1y(+p: Bool, +k: Nat, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, {HL}, +eo: {tt(LE("lim", "k"))}, +ecn: {ff(CAN(N, "Bool.not(p)", "ix"))}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
+  %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {PT("Bool.not(p)", "0n")}, cv.p1y_step(ix, p, k, {ARGS}, nz, eo, ecn)) : {FIX(RUNGO("1n+" + XE, "_"))}
+  %Equal.sym(Nat, {XE}, 1n+Nat.add(e, lim), nat.add_succ(e, lim)) : {FIX(RUN(PT("Bool.not(p)", "0n"), "1n+_"))}
+  cv.p2(Nat.add(e, lim), 0n, Bool.not(p), ix, {ARGS}, nz, hm, cv.flip(p, ix, {N}, hl, ecn), cv.h2(e, lim))
+
+def cv.p1x(cn: Bool, +k: Nat, +p: Bool, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, {HL}, +eo: {tt(LE("lim", "k"))}, +ecn: {eqb(CAN(N, "Bool.not(p)", "ix"), "cn")}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
+  match cn:
+    case True{{}}:
+      cv.exit(p, k, ix, {XE}, {ARGS}, nz, hm, eo, ecn)
+    case False{{}}:
+      cv.p1y(p, k, ix, e, {ARGS}, nz, hm, hl, eo, ecn)
+
+def cv.p1c(o: Bool, +k: Nat, +p: Bool, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, {HL}, +eo: {eqb(LE("lim", "k"), "o")}, next: {ff("o")} -> {FIX(RUN(PT("p", "1n+k"), "1n+" + XE))}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
+  match o:
+    case True{{}}:
+      cv.p1x({CAN(N, "Bool.not(p)", "ix")}, k, p, ix, e, {ARGS}, nz, hm, hl, eo, {{==}})
+    case False{{}}:
+      %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {PT("p", "1n+k")}, cv.tired_count(ix, p, k, {ARGS}, nz, eo)) : {FIX(RUNGO("1n+" + XE, "_"))}
+      next({{==}})
+
+def cv.p1(e: Nat, +k: Nat, +p: Bool, +ix: Nat, {SIG}, {NZ}, {HM}, {HL}, +h: {tt(LE("lim", "Nat.add(e, k)"))}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
+  match e:
+    case 0n:
+      cv.p1c(Nat.is_le(lim, k), k, p, ix, 0n, {ARGS}, nz, hm, hl, {{==}}, u => Empty.absurd({FIX(RUN(PT("p", "1n+k"), "1n+Nat.add(0n, 1n+lim)"))}, ab.tf(Equal.trans(Bool, True{{}}, Nat.is_le(lim, k), False{{}}, Equal.sym(Bool, Nat.is_le(lim, k), True{{}}, h), u))))
+    case 1n+ +ep:
+      cv.p1c(Nat.is_le(lim, k), k, p, ix, 1n+ep, {ARGS}, nz, hm, hl, {{==}}, u => cv.p1(ep, 1n+k, p, ix, {ARGS}, nz, hm, hl, cv.h_next(lim, ep, k, h)))
+
+# from a state holding the sample's rates, 2 + lim + (1 + lim) samples
+# bring it to rest
+
+def cv.going_eq(+ix: Nat, +d: Bool, +rs: Nat, +ls: Nat, {SIG}, {NZ}) -> {eqd(RUN(GOY("d", "rs", "ls"), "2n+" + X), TOPY())}:
+  %Equal.sym(D.Dim, {STEP(GOY("d", "rs", "ls"))}, {TOPY()}, cv.going(ix, d, rs, ls, {ARGS}, nz)) : {eqd(RUNGO("1n+" + X, "_"), TOPY())}
+  cv.rest(1n+{X}, {P}, {TOPY()}, {S}, cv.top(ix, {ARGS}, nz))
+
+def cv.primed(y: D.Dim, {SIG}, {NZ}, {HM}, {HL}, +hp: {{{PRV("y")} == Some{{{R}}} : {MB}}}) -> {FIX(RUN("y", "2n+" + X))}:
   match y:
-    case D.Dim{{+ix, D.DimGoing{{+d, True{{}}}}, +pv}}:
-      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimGoing{d, True{}}, _}", "3n+lim"))}
-      cv.at({GOY("d", "True{}")}, {SE()}, 3n+lim, {ARGS}, cv.probe_eq2(ix, d, {ARGS}, nz), cv.settled(ix, {ARGS}, nz))
-    case D.Dim{{+ix, D.DimGoing{{+d, False{{}}}}, +pv}}:
-      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimGoing{d, False{}}, _}", "3n+lim"))}
-      %Equal.sym(D.Dim, {RUN(GOY("d", "False{}"), "3n+lim")}, {RUN(PK("0n"), "2n+lim")}, cv.going_eq(ix, d, {ARGS}, nz)) : {eqd(STEP("_"), "_")}
-      cv.parked(lim, 0n, ix, {ARGS}, nz, nat.le_add(lim, 1n))
-    case D.Dim{{+ix, D.DimParked{{+t}}, +pv}}:
-      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimParked{t}, _}", "3n+lim"))}
-      cv.parked(1n+lim, t, ix, {ARGS}, nz, nat.le_succ(lim, Nat.add(lim, 1n+t), nat.le_add(lim, 1n+t)))
-    case D.Dim{{+ix, D.DimSettled{{}}, +pv}}:
-      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimSettled{}, _}", "3n+lim"))}
-      cv.fixed_run({SE()}, 3n+lim, {ARGS}, cv.settled(ix, {ARGS}, nz))
+    case D.Dim{{+ix, D.DimGoing{{+d, +rs, +ls}}, +pv}}:
+      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimGoing{d, rs, ls}, _}", "2n+" + X))}
+      cv.at({GOY("d", "rs", "ls")}, {TOPY()}, 2n+{X}, {ARGS}, cv.going_eq(ix, d, rs, ls, {ARGS}, nz), cv.top(ix, {ARGS}, nz))
+    case D.Dim{{+ix, D.DimParkedTop{{}}, +pv}}:
+      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimParkedTop{}, _}", "2n+" + X))}
+      cv.fixed_run({TOPY()}, 2n+{X}, {ARGS}, cv.top(ix, {ARGS}, nz))
+    case D.Dim{{+ix, D.DimParkedTired{{+p, +k}}, +pv}}:
+      %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimParkedTired{p, k}, _}", "2n+" + X))}
+      cv.p1(lim, k, p, ix, {ARGS}, nz, hm, hl, nat.le_add(lim, k))
 
 # one step with a sample of some time leaves the state holding its rates
 
@@ -765,21 +741,35 @@ def cv.primes.prev(pv: {MB}, +ix: Nat, +m: D.DimMode, {SIG}, {NZ}) -> {{{PRV(STE
       {{==}}
     case Some{{+q}}:
       %Equal.sym(Bool, U32.is_zero(el), False{{}}, nz) : {{{PRV(ST(ON("_", P, "D.Dim{ix, m, Some{q}}", S)))} == Some{{{R}}} : {MB}}}
-      C.decide(m, {CMPW("cs", "pct", R, "q")}, {N}, lim, ix, {R})
+      C.decide(m, {CMPW("cs", "pct", R, "q")}, {N}, lim, mx, ix, {R})
 
 def cv.primes(st: D.Dim, {SIG}, {NZ}) -> {{{PRV(STEP("st"))} == Some{{{R}}} : {MB}}}:
   match st:
     case D.Dim{{+ix, +m, +pv}}:
       cv.primes.prev(pv, ix, m, {ARGS}, nz)
 
-def cv.settle(z: Bool, +st: D.Dim, {SIG}, +ez: {eqb("U32.is_zero(el)", "z")}) -> {FIX(RUN("st", "4n+lim"))}:
+def cv.settle(z: Bool, +st: D.Dim, {SIG}, {HM}, {HL}, +ez: {eqb("U32.is_zero(el)", "z")}) -> {FIX(RUN("st", "3n+" + X))}:
   match z:
     case True{{}}:
-      cv.skip({RUN("st", "4n+lim")}, {ARGS}, ez)
+      cv.skip({RUN("st", "3n+" + X)}, {ARGS}, ez)
     case False{{}}:
-      cv.primed({STEP("st")}, {ARGS}, ez, cv.primes(st, {ARGS}, ez))
+      cv.primed({STEP("st")}, {ARGS}, ez, hm, hl, cv.primes(st, {ARGS}, ez))
 
 # Runs keep the index in the table
+
+def bo.lt_zero(i: Nat, +h: {tt(LTN("i", "0n"))}) -> {{False{{}} == True{{}} : Bool}}:
+  match i:
+    case 0n:
+      h
+    case 1n+k:
+      h
+
+def new.valid(inside: Bool, +sx: Nat, +ps: List<&2, D.DimProfile>, +e: {eqb(LTN("sx", LEN("ps")), "inside")}, +h: {tt(LTN("0n", LEN("ps")))}) -> {tt(LTN("D.Dim.new.at(inside, sx)", LEN("ps")))}:
+  match inside:
+    case True{{}}:
+      e
+    case False{{}}:
+      h
 
 def run.valid(ss: List<&2, D.DimSample>, +p: D.DimParams, +st: D.Dim, +v: {tt("D.Dim.valid(p, st)")}) -> {tt("D.Dim.valid(p, D.Dim.run.go(ss, p, st))")}:
   match ss:
@@ -801,7 +791,7 @@ def get.some(xs: List<&2, D.DimProfile>, i: Nat, +h: {tt(LTN("i", "List.length(&
 
 def Laws.dim_new_valid(p, h):
   match p:
-    case D.DimParams{{+ps, +sx, pct, lim, cs}}:
+    case D.DimParams{{+ps, +sx, pct, lim, mx, cs}}:
       new.valid(Nat.is_lt(sx, {N}), sx, ps, {{==}}, h)
 
 def Laws.dim_step_valid(p, st, s, v):
@@ -821,13 +811,13 @@ def Laws.dim_unchanged(p, st, s, u):
 
 def Laws.dim_same_rates(p, s):
   match p:
-    case D.DimParams{{ps, sx, +pct, lim, +cs}}:
+    case D.DimParams{{ps, sx, +pct, lim, mx, +cs}}:
       cmp.same(cs, pct, D.Dim.rates(s))
 
-def Laws.dim_settles(p, st, s):
+def Laws.dim_settles(p, st, s, hl, hm):
   match p s:
-    case D.DimParams{{+ps, +sx, +pct, +lim, +cs}} D.DimSample{{+pk, +by, +ev, +co, +el}}:
-      cv.settle(U32.is_zero(el), st, {ARGS}, {{==}})
+    case D.DimParams{{+ps, +sx, +pct, +lim, +mx, +cs}} D.DimSample{{+pk, +by, +ev, +co, +el}}:
+      cv.settle(U32.is_zero(el), st, {ARGS}, hm, hl, {{==}})
 
 def Laws.dim_rest(p, x, s, n, f):
   cv.rest(n, p, x, s, f)
@@ -841,32 +831,17 @@ def Laws.dim_vec_climb_index():
 def Laws.dim_vec_climb_mode():
   {{==}}
 
-def Laws.dim_vec_probe_index():
+def Laws.dim_vec_edge_index():
   {{==}}
 
-def Laws.dim_vec_probe_mode():
+def Laws.dim_vec_edge_mode():
+  {{==}}
+
+def Laws.dim_vec_interval():
   {{==}}
 '''
 
-# helpers used above, placed before their first use
-helpers = f'''
-def bo.lt_zero(i: Nat, +h: {tt(LTN("i", "0n"))}) -> {{False{{}} == True{{}} : Bool}}:
-  match i:
-    case 0n:
-      h
-    case 1n+k:
-      h
-
-def new.valid(inside: Bool, +sx: Nat, +ps: List<&2, D.DimProfile>, +e: {eqb(LTN("sx", LEN("ps")), "inside")}, +h: {tt(LTN("0n", LEN("ps")))}) -> {tt(LTN("D.Dim.new.at(inside, sx)", LEN("ps")))}:
-  match inside:
-    case True{{}}:
-      e
-    case False{{}}:
-      h
-
-'''
-text = text.replace("# Runs keep the index in the table\n", helpers.lstrip("\n") + "# Runs keep the index in the table\n", 1)
-text = text.replace("def run.valid(", "def run.valid(", 1)
+text = text + body
 
 if "--check" in sys.argv[1:]:
     with open(out, newline="") as f:

@@ -6,17 +6,22 @@
 #   keeps a state's index in it; so the state always names a profile;
 # * a step changes the index by at most one, and a step that reports no
 #   change leaves the index as it was;
-# * identical samples converge: an interval compares the same as itself,
-#   and after Dim.settle_bound(p) identical samples (the tired count plus
-#   four) the state is at rest, a fixed point of a step with that sample,
-#   so every further identical sample leaves it, and its profile, as it is.
-#   The rest is reached through the parking and tired behaviour: going,
-#   the same interval parks; parked on an edge, the tired count runs out
-#   and one probe steps inward; the probe making no difference settles.
-#   No state oscillates under identical samples.
+# * identical samples converge, wherever the documented parking
+#   behaviour guarantees it: in a table of at least two profiles, with
+#   max_steps at least 2, an interval compares the same as itself, and
+#   after Dim.settle_bound(p) identical samples (twice the tired count,
+#   plus four) the state is at rest, a fixed point of a step with that
+#   sample, so every further identical sample leaves it, and its profile,
+#   as it is. Going, the same interval parks on top, where it stays;
+#   parked tired, it waits out the parking, verifies by a step the other
+#   way (or, on an edge, parks tired once more and steps inward), and then
+#   parks on top. In a table of one profile a tired parking repeats (the
+#   index stays), and with max_steps below 2 every verifying step is too
+#   tired: those are the documented behaviour's own cycles.
 #
-# Vectors: a run that climbs while the throughput improves and parks when
-# it stops improving, and one parked on an edge that probes and settles.
+# Vectors: a run that climbs while the throughput improves and parks on
+# top when it stops improving; one that steps onto the edge, parks tired
+# and verifies; an interval from wrapping counters.
 import Base
 import ../word64/word64.bend as W
 import ./dim.bend as D
@@ -74,6 +79,8 @@ law dim_settles:
   for +p: D.DimParams
   for +st: D.Dim
   for +s: D.DimSample
+  for +hl: {Nat.is_lt(1n, List.length(&2, D.DimProfile, D.DimParams.profiles(p))) == True{} : Bool}
+  for +hm: {Nat.is_le(2n, D.DimParams.max_steps(p)) == True{} : Bool}
   {D.DimStep.state(D.Dim.step(p, D.Dim.run(p, st, List.replicate(D.DimSample, D.Dim.settle_bound(p), s)), s)) == D.Dim.run(p, st, List.replicate(D.DimSample, D.Dim.settle_bound(p), s)) : D.Dim}
 
 law dim_rest:
@@ -85,23 +92,29 @@ law dim_rest:
   {D.Dim.run(p, x, List.replicate(D.DimSample, n, s)) == x : D.Dim}
 
 # Witnesses and vectors (intervals of 1 ms with b bytes, b / 1000 packets
-# and 100 events)
+# and 100 events; each vector computes one run, which keeps it within
+# --verdict's fuel)
 
 law dim_wit:
-  {(Nat.is_lt(0n, List.length(&2, D.DimProfile, D.DimParams.profiles(D.DimParams.default()))), D.Dim.valid(D.DimParams.default(), D.Dim.new(D.DimParams.default())), D.DimStep.changed(D.Dim.step(D.DimParams.default(), D.Dim.new(D.DimParams.default()), D.DimSample{1000, 1000000, 100, 0, 1000}))) == (True{}, True{}, False{}) : Bool & Bool & Bool}
+  {(Nat.is_lt(0n, List.length(&2, D.DimProfile, D.DimParams.profiles(D.DimParams.default()))), Nat.is_lt(1n, List.length(&2, D.DimProfile, D.DimParams.profiles(D.DimParams.default()))), Nat.is_le(2n, D.DimParams.max_steps(D.DimParams.default())), D.Dim.valid(D.DimParams.default(), D.Dim.new(D.DimParams.default())), D.DimStep.changed(D.Dim.step(D.DimParams.default(), D.Dim.new(D.DimParams.default()), D.DimSample{1000, 1000000, 100, 0, 1000}))) == (True{}, True{}, True{}, True{}, False{}) : Bool & Bool & Bool & Bool & Bool}
 
 # the byte rate rises 20% twice: two steps right; then within 10%: parked
-# (each vector computes one run, which keeps it within --verdict's fuel)
+# on top
 law dim_vec_climb_index:
   {D.Dim.index(D.Dim.run(D.DimParams.default(), D.Dim.new(D.DimParams.default()), [D.DimSample{1000, 1000000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}, D.DimSample{1440, 1440000, 100, 0, 1000}, D.DimSample{1400, 1400000, 100, 0, 1000}])) == 2n : Nat}
 
 law dim_vec_climb_mode:
-  {D.Dim.mode(D.Dim.run(D.DimParams.default(), D.Dim.new(D.DimParams.default()), [D.DimSample{1000, 1000000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}, D.DimSample{1440, 1440000, 100, 0, 1000}, D.DimSample{1400, 1400000, 100, 0, 1000}])) == D.DimParked{0n} : D.DimMode}
+  {D.Dim.mode(D.Dim.run(D.DimParams.default(), D.Dim.new(D.DimParams.default()), [D.DimSample{1000, 1000000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}, D.DimSample{1440, 1440000, 100, 0, 1000}, D.DimSample{1400, 1400000, 100, 0, 1000}])) == D.DimParkedTop{} : D.DimMode}
 
-# tired after 1 sample parked on the left edge: a probe to index 1, then
-# settled there
-law dim_vec_probe_index:
-  {D.Dim.index(D.Dim.run(D.DimParams{D.DimParams.profiles_default(), 0n, 10, 1n, D.DimParams.chain_default()}, D.Dim.new(D.DimParams{D.DimParams.profiles_default(), 0n, 10, 1n, D.DimParams.chain_default()}), List.replicate(D.DimSample, 4n, D.DimSample{1000, 1000000, 100, 0, 1000}))) == 1n : Nat}
+# two profiles, starting on the right one: a better interval cannot step
+# right (on the edge), so it parks tired; with tired 0 the next sample
+# verifies by a step left
+law dim_vec_edge_index:
+  {D.Dim.index(D.Dim.run(D.DimParams{[D.DimProfile{1, 1}, D.DimProfile{2, 2}], 1n, 10, 0n, 10n, D.DimParams.chain_default()}, D.Dim.new(D.DimParams{[D.DimProfile{1, 1}, D.DimProfile{2, 2}], 1n, 10, 0n, 10n, D.DimParams.chain_default()}), [D.DimSample{1000, 1000000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}])) == 0n : Nat}
 
-law dim_vec_probe_mode:
-  {D.Dim.mode(D.Dim.run(D.DimParams{D.DimParams.profiles_default(), 0n, 10, 1n, D.DimParams.chain_default()}, D.Dim.new(D.DimParams{D.DimParams.profiles_default(), 0n, 10, 1n, D.DimParams.chain_default()}), List.replicate(D.DimSample, 4n, D.DimSample{1000, 1000000, 100, 0, 1000}))) == D.DimSettled{} : D.DimMode}
+law dim_vec_edge_mode:
+  {D.Dim.mode(D.Dim.run(D.DimParams{[D.DimProfile{1, 1}, D.DimProfile{2, 2}], 1n, 10, 0n, 10n, D.DimParams.chain_default()}, D.Dim.new(D.DimParams{[D.DimProfile{1, 1}, D.DimProfile{2, 2}], 1n, 10, 0n, 10n, D.DimParams.chain_default()}), [D.DimSample{1000, 1000000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}, D.DimSample{1200, 1200000, 100, 0, 1000}])) == D.DimGoing{False{}, 0n, 1n} : D.DimMode}
+
+# an interval from counters that wrapped
+law dim_vec_interval:
+  {D.Dim.interval(D.DimCounters{W.W64.from_u32(1000), 4294967290, 7, 3, 0}, D.DimCounters{W.W64.from_u32(2500), 10, 1007, 5, 9}) == D.DimSample{16, 1000, 2, 9, 1500} : D.DimSample}
