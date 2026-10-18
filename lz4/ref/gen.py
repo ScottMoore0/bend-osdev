@@ -30,7 +30,11 @@ case) and ref/expected.txt (the answers expected):
 It also writes ref/ccasesNN.bend, which print the package's compressed blocks
 and frames, and ref/ccases.json, the inputs; `gen.py verify OUT` checks the
 package's output OUT: every block and frame must decode back to its input
-with this file's decoder and, when installed, with `lz4 -d`.
+with this file's decoder and, when installed, with `lz4 -d`. That covers the
+LZ4HC matcher (hc.bend) too, at every level 3 to 12: its blocks, blocks after
+a dictionary, and frames must decode back, and on text at levels 9 to 12 its
+blocks must be no larger than the fast matcher's (the totals are printed,
+with the lz4 tool's -1, -9 and -12 frames on the same texts beside them).
 """
 import json, os, random, shutil, subprocess, sys, tempfile
 
@@ -446,15 +450,29 @@ def same.pick(b: Bool) -> String:
 def same(+o: B.Octets) -> String:
   same.pick(B.Octets.is_eq(C.block_compress(o), C.block_compress_unchecked(o)))
 
+# the same for another matcher
+def same_with(+m: C.Lz4Matcher, +o: B.Octets) -> String:
+  same.pick(B.Octets.is_eq(C.block_compress_with(m, o), C.block_compress_unchecked_with(m, o)))
+
 """
 
 def bb(b):
     return "True{}" if b else "False{}"
 
+def matcher(level):
+    return "C.Lz4Matcher.hc(%d)" % level if level else "C.Lz4MatchFast{}"
+
 def fopts(o):
-    return "C.Lz4FrameOptions{C.%s{}, %d, %s, %s, %s, %s}" % (
+    return "C.Lz4FrameOptions{C.%s{}, %d, %s, %s, %s, %s, %s}" % (
         {4: "Lz4Max64KB", 5: "Lz4Max256KB", 6: "Lz4Max1MB", 7: "Lz4Max4MB"}[o["code"]], o["bsize"],
-        bb(o["indep"]), bb(o["bsum"]), bb(o["csum"]), bb(o["csize"]))
+        bb(o["indep"]), bb(o["bsum"]), bb(o["csum"]), bb(o["csize"]), matcher(o.get("level")))
+
+# prose: this repository's binding documents, which change rarely
+def prose(here, rng, n):
+    root = os.path.dirname(os.path.dirname(here))
+    t = b"".join(open(os.path.join(root, f), "rb").read() for f in ["CONVENTIONS.md", "AGENTS.md", "REVIEW.md"])
+    a = rng.randrange(len(t) - n)
+    return t[a:a + n]
 
 def text(rng, n):
     words = ["the", "lz4", "frame", "block", "match", "offset", "literal", "token", "bend", "kernel",
@@ -498,6 +516,24 @@ def gen_compress(rng, here):
         add("frame", "B.Octets.hex(C.frame_compress(%s, DATA))" % fopts(o), dict(data=data.hex(), what=what, opts=o), data)
     t = text(rng, 3000)
     add("frame", "B.Octets.hex(C.compress(DATA))", dict(data=t.hex(), what="default"), t)
+    # LZ4HC: blocks at every level, on every kind of input and on text and
+    # prose (with the fast matcher's block beside them, to compare sizes)
+    for level in range(3, 13):
+        for what, data in [kinds(rng, rng.choice([0, 13, 100, rng.randrange(0, 8000)])),
+                           ("text", text(rng, rng.randrange(2000, 8000))), ("prose", prose(here, rng, rng.randrange(2000, 8000)))]:
+            add("hcblock", 'B.Octets.hex(C.block_compress_with(%s, DATA)) ++ " " ++ same_with(%s, DATA) ++ " " ++ B.Octets.hex(C.block_compress(DATA))' % (matcher(level), matcher(level)),
+                dict(data=data.hex(), what=what, level=level), data)
+    for _ in range(6):
+        d = sample(rng, rng.randrange(1, 2000))
+        data = (d[rng.randrange(len(d)):] + text(rng, rng.randrange(0, 2000)))[:rng.randrange(0, 3000)]
+        add("dict", "B.Octets.hex(C.block_compress_dict_with(%s, %s, DATA))" % (matcher(rng.randrange(3, 13)), bl(d)), dict(data=data.hex(), dict=d.hex()), data)
+    for _ in range(8):
+        what, data = kinds(rng, rng.randrange(0, 8000))
+        o = dict(code=rng.choice([4, 5, 7]), bsize=rng.choice([0, 1000, 4096]), indep=rng.random() < 0.5,
+                 bsum=rng.random() < 0.5, csum=rng.random() < 0.7, csize=rng.random() < 0.5, level=rng.randrange(3, 13))
+        add("frame", "B.Octets.hex(C.frame_compress(%s, DATA))" % fopts(o), dict(data=data.hex(), what=what, opts=o), data)
+    t = prose(here, rng, 6000)
+    add("frame", "B.Octets.hex(C.compress_hc(12, DATA))", dict(data=t.hex(), what="prose", opts=dict(level=12)), t)
     for _ in range(8):
         what, data = kinds(rng, rng.randrange(0, 6000))
         cuts = sorted(rng.randrange(len(data) + 1) for _ in range(rng.randrange(0, 4)))
@@ -516,10 +552,28 @@ def verify(here, outfile):
         print("expected %d lines, got %d" % (len(cases), len(got)))
         return 1
     bad, tooled, smaller, ours, theirs = 0, 0, 0, 0, 0
+    hc = {}   # (level group, kind) -> [input bytes, HC bytes, fast bytes]
+    tools = {}  # lz4 -1, -9, -12 frames on the same texts
     for k, (c, g) in enumerate(zip(cases, got)):
         data = bytes.fromhex(c["data"])
         comp = bytes.fromhex(g[1]) if len(g) > 1 else b""
-        if c["kind"] == "block":
+        if c["kind"] == "hcblock":
+            fast = bytes.fromhex(g[3]) if len(g) > 3 else b""
+            ok = decompress_block(comp, b"", len(data)) == data and g[2] == "same"
+            if TOOL:
+                ok = ok and tool_decode(wrap_block(comp, len(data))) == data
+                tooled += 1
+            if c["what"] in ("text", "prose"):
+                if c["level"] >= 9:
+                    ok = ok and len(comp) <= len(fast)
+                key = ("3-8" if c["level"] < 9 else "9-12", c["what"])
+                t = hc.setdefault(key, [0, 0, 0])
+                t[0] += len(data); t[1] += len(comp); t[2] += len(fast)
+                if TOOL and c["level"] >= 9:
+                    for a in ["-1", "-9", "-12"]:
+                        tt = tools.setdefault((c["what"], a), [0, 0])
+                        tt[0] += len(data); tt[1] += len(tool([a], data))
+        elif c["kind"] == "block":
             ok = decompress_block(comp, b"", len(data)) == data and g[2] == "same"
             if TOOL:
                 ok = ok and tool_decode(wrap_block(comp, len(data))) == data
@@ -541,14 +595,20 @@ def verify(here, outfile):
             if TOOL:
                 ok = ok and tool_decode(comp) == data
                 tooled += 1
-                ours += len(comp)
-                theirs += len(tool(["-1"], data))
+                if not c.get("opts", {}).get("level"):
+                    ours += len(comp)
+                    theirs += len(tool(["-1"], data))
         if not ok:
             bad += 1
             print("case %d (%s) does not decode back" % (k, c["kind"]))
     if bad:
         return 1
     ratio = " frames %d bytes against lz4 -1's %d;" % (ours, theirs) if TOOL else ""
+    for (lv, what), (n, h, f) in sorted(hc.items()):
+        line = "LZ4HC levels %s, %s: %d bytes to %d (ratio %.3f), fast %d (%.3f)" % (lv, what, n, h, n / max(h, 1), f, n / max(f, 1))
+        if lv == "9-12" and TOOL:
+            line += "; lz4 frames " + ", ".join("%s %.3f" % (a, tools[(what, a)][0] / tools[(what, a)][1]) for a in ["-1", "-9", "-12"])
+        print(line)
     print("%d compressed (%d through lz4 -d;%s %d repetitive inputs below a quarter of their size)" % (len(cases), tooled, ratio, smaller))
     return 0
 

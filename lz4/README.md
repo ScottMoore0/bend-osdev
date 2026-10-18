@@ -1,13 +1,22 @@
 # bend-osdev-lz4
 
 LZ4 compression and decompression: the block format and the frame format.
-The decoder is safe against malformed input. The compressor's blocks decode
-back to its input, which is proved for every input.
+The decoder is safe against malformed input. The compressor has two
+matchers, chosen by a parameter: a fast greedy one, and LZ4HC's hash-chain
+search at levels 3 to 12. Both write ordinary LZ4 blocks, and their blocks
+decode back to their input, which is proved for every input.
 
 Written from the LZ4 project's specifications (BSD-licensed documentation):
 
 * the LZ4 Block Format Description (`lz4_Block_format.md`);
-* the LZ4 Frame Format Description (`lz4_Frame_format.md`).
+* the LZ4 Frame Format Description (`lz4_Frame_format.md`);
+* for LZ4HC, the LZ4 project's published description of its strategy: the
+  output is the ordinary block format, the matches are found through hash
+  chains searched more deeply the higher the level, and the levels run from
+  3 to 12, 9 being the recommended one and those above 12 the same as 12 (the
+  `lz4` tool's help, `lz4 -H`, and its manual, lz4(1)). No LZ4 source was
+  read, for LZ4HC or anything else; the depths each level sets are this
+  package's own.
 
 Checksums are XXH32 (seed 0), from `bend-kit-hash@0.2.0.0`. The reference
 test (`ref/gen.py`) has its own XXH32, written from the xxHash specification
@@ -20,7 +29,9 @@ test (`ref/gen.py`) has its own XXH32, written from the xxHash specification
 | `lz4.bend` | the entry file and main concern: decompressing an LZ4 stream (one frame or more, LZ4 and skippable), with options or the defaults |
 | `frame.bend` | the frame format, decoding: one LZ4 frame, its header, its blocks and checksums; the decoding options |
 | `block.bend` | the block format, decoding: the block decoder, the literal-only block encoder, and the error type every file answers |
-| `compress.bend` | compression: the block compressor (greedy matcher, checked), the frame writer, one-shot and streaming |
+| `compress.bend` | compression: the greedy matcher, the choice of matcher (`Lz4Matcher`), the checked block compressor, the frame writer, one-shot and streaming |
+| `hc.bend` | the LZ4HC matcher: hash chains, its parameters and levels |
+| `seq.bend` | the sequence writer both matchers share (tokens, length bytes, offsets); internal |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `check.bend` | examples, with their output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
@@ -57,9 +68,38 @@ answers `Result<&2, &2, Lz4Error, A>`.
 | `block_compress(o)` | a block for `o`: the matcher's, checked by decoding it (falling back to `block_literals(o)` should the check fail) |
 | `block_compress_dict(dict, o)` | the same, for a block that may refer back into `dict` (at most its last 65535 bytes) |
 | `block_compress_unchecked(o)` | the matcher's block, without the check |
+| `block_compress_with(m, o)`, `block_compress_dict_with(m, dict, o)`, `block_compress_unchecked_with(m, o)` | the same three with the matcher `m` |
+| `compress_hc(level, o)` | a frame holding `o`, with the default options but LZ4HC at this level |
+| `Lz4Matcher`: `Lz4MatchFast{}`, `Lz4MatchHC{params}`; `Lz4Matcher.default()` (fast), `Lz4Matcher.hc(level)` | which matcher writes the blocks |
+| `Lz4FrameOptions.with_matcher(opts, m)` | the same options with another matcher |
 
-The compressor is a greedy LZ77 matcher with a single-entry hash table (4096
-slots, keyed by the next four bytes): it extends each match as far as the
+### LZ4HC (`hc.bend`)
+
+| Def | Meaning |
+|---|---|
+| `Lz4HcParams{depth, nice, lazy}` | how many chain entries a search looks at (`U32`), at most; a match this long (`U32`) ends the search; whether to look one position ahead before taking a match (lazy matching) |
+| `Lz4HcParams.level(l)`, `Lz4HcParams.default()` | the parameters of level `l` (below 3 is 3, above 12 is 12); the default is level 9 |
+| `lz4hc_level_min()`, `lz4hc_level_default()`, `lz4hc_level_max()` | 3, 9 and 12 |
+
+| Level | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| depth | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 4096 |
+| nice | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 65535 | 65535 | 65535 |
+| lazy | no | no | no | no | no | no | no | yes | yes | yes |
+
+The LZ4HC matcher keeps two tables: a head table (2^15 slots, keyed by a
+hash of the next four bytes) holding the latest position with each hash, and
+a chain table of 65536 slots, the LZ4 window, holding for each position the
+one before it with the same hash. At each position it walks the chain,
+newest first, through at most `depth` candidates within 65535 bytes, and
+takes the longest match; every position, inside matches too, goes into the
+tables. With `lazy`, before taking a match it searches the next position,
+and makes this byte a literal if a longer match starts there. It keeps the
+same end-of-block rules as the greedy matcher, and takes a dictionary the
+same way.
+
+The fast matcher (the default) is a greedy LZ77 matcher with a single-entry
+hash table (4096 slots, keyed by the next four bytes): it extends each match as far as the
 end-of-block rules allow (a match starts 12 bytes or more before the end and
 ends 5 bytes or more before it; matches may overlap themselves) and stores a
 block uncompressed when compressing would not make it smaller. On the
@@ -67,8 +107,12 @@ differential test's inputs its frames are within about 15% of `lz4 -1`'s
 size.
 
 The types `Lz4Options`, `Lz4FrameInfo`, `Lz4Frame`, `Lz4Error`,
-`Lz4FrameOptions`, `Lz4BlockMax` and `Lz4Written` are open records: their
-constructors are part of the interface. `Lz4Writer` is opaque.
+`Lz4FrameOptions`, `Lz4BlockMax`, `Lz4Written`, `Lz4Matcher` and
+`Lz4HcParams` are open records: their constructors are part of the
+interface. `Lz4Writer` is opaque. `Lz4FrameOptions` gained its last field,
+`matcher`, with LZ4HC: code that builds the record by its constructor adds
+`Lz4MatchFast{}` (or uses `Lz4FrameOptions.default()` and
+`Lz4FrameOptions.with_matcher`).
 
 ### Failures
 
@@ -105,10 +149,20 @@ constructors are part of the interface. `Lz4Writer` is opaque.
 * **Options:** `Lz4Options` (decoding) and `Lz4FrameOptions` (writing) hold
   the real choices, with named defaults. The block functions take their limit
   directly, since a block does not record its size.
-* **A better matcher** (hash chains, a high-compression parser) can replace
-  the greedy one behind `block_compress`: the check keeps the round-trip law
-  true whatever the matcher writes, so a new matcher needs no new proof, only
-  the differential test.
+* **The matcher** is a parameter (`Lz4Matcher`, and `Lz4FrameOptions`'s
+  `matcher` for frames): the greedy one, or LZ4HC with any `Lz4HcParams`
+  (the levels are named defaults; `depth`, `nice` and `lazy` can be set
+  directly). Another matcher (an optimal parser, say) goes in its own file
+  beside `hc.bend`, answering a byte list for `(dict, xs)` and writing its
+  sequences with `seq.bend`, with a constructor in `Lz4Matcher` and a case in
+  `cmp.block_with` (`compress.bend`). Its round-trip law comes free:
+  `block_compress_with` checks every block by decoding it, whatever the
+  matcher wrote, so the proof is the two lines `lz4hc_round_trip`'s is; its
+  quality needs the differential test.
+* **LZ4HC's tables** are fixed by the format rather than by taste: the chain
+  table is the 64 KB window, and the head table's 15 bits follow the
+  published description; both are inside `hc.bend`, so a different hash or
+  table size changes that file alone.
 * **Speed:** `block_compress` decodes every block it writes, to check it;
   `block_compress_unchecked` skips that, without the law. The decoder is
   written to be proved about: it keeps its output as a reversed list, and a
@@ -130,7 +184,8 @@ constructors are part of the interface. `Lz4Writer` is opaque.
 
 ## Laws
 
-`LAWS.bend` has 50 laws.
+`LAWS.bend` has 57 laws. Seven are new with LZ4HC, and two (the frame round
+trips with explicit options) gained the `matcher` field in their options.
 
 **For every input** (properties, proved by induction):
 
@@ -146,7 +201,14 @@ constructors are part of the interface. `Lz4Writer` is opaque.
 * `offset_zero_rejected`: after any literals, a match with offset 0 is
   `Lz4BadOffset`, whatever follows;
 * `offset_before_start_rejected`: a block that starts with a match is
-  `Lz4BadOffset` at every offset, whatever follows.
+  `Lz4BadOffset` at every offset, whatever follows;
+* `lz4hc_round_trip` and `lz4hc_dict_round_trip`:
+  `block_decompress(block_compress_with(Lz4MatchHC{p}, o), len(o)) == Done{o}`
+  for every `o` and every `Lz4HcParams` `p` (so at every level, and for any
+  depth, nice length and laziness), and the same after any dictionary;
+* `block_compress_with_fast`: `block_compress_with(Lz4MatchFast{}, o)`
+  is `block_compress(o)`, for every `o`, so the accepted laws about
+  `block_compress` hold for the fast matcher chosen through the option.
 
 The compressor's round trip holds for every input because `block_compress`
 checks its block by decoding it and comparing, and falls back to the
@@ -157,6 +219,15 @@ the right bytes) is out of reach for now: it would need the matcher's array
 table and its 32-bit offset arithmetic followed through the decoder bit by
 bit. The differential test covers the matcher, and checks that the fallback
 never happens on its inputs.
+
+The round-trip law (`block_compress_round_trip`) is stated for
+`block_compress`, whose matcher is fixed, not for any matcher, so LZ4HC has
+its own: `lz4hc_round_trip`. It holds for the same reason: `block_compress_with`
+checks whatever block the matcher wrote, so its proof is the same lemmas
+(`check_ok`, `check_ok_dict`) applied to the HC matcher's block. As for the
+greedy matcher, the proof does not show that the hash-chain search is right
+on its own; the differential test does that, and checks that the fallback
+never happens.
 
 **Vectors** (proved by computation):
 
@@ -172,13 +243,21 @@ never happens on its inputs.
   `"hello hello hello hello hello"` are exactly the lz4 tool's frames (lz4
   1.9.4, default options); a run of 300 bytes; frame round trips with linked
   16-byte blocks and every checksum and the content size, with the streaming
-  writer fed in three pieces, and with the defaults.
+  writer fed in three pieces, and with the defaults;
+* LZ4HC: `lz4hc_levels` and `lz4hc_default_level`, the documented
+  levels (3, 9, 12) and the parameters each sets, out-of-range levels
+  clamped; `lz4hc_frame_round_trip`, a level-12 frame decodes back;
+  `lz4hc_smaller`, a text where the level-12 block is smaller than the greedy
+  one (the greedy matcher takes a 5-byte match where lazy matching finds a
+  10-byte one a byte later).
 
 The frame format has vectors only: a property over frames would need XXH32
 for every input, and bend-kit-hash's XXH32 is array code that bend-osdev does
 not reason about. (A round trip vector on a 104-byte text proved by
 `--check-only` but not by `--verdict`, which failed on it without a message;
-the vector kept is shorter.)
+the vector kept is shorter. The same happened to an LZ4HC frame vector on
+the 40-byte text of `lz4hc_smaller`, with either matcher; the frame vector
+uses `frame_round_trip_text`'s text instead.)
 
 The proofs follow the decoder byte by byte. Octets enter them only through
 bytes' interface laws (`octets_append_list`, `octets_to_of`, `octets_of_to`,
@@ -209,13 +288,35 @@ in both directions.
   * corruptions: 140 blocks and 100 frames (the tool's among them) with bytes
     changed, deleted, inserted or cut off; the package must answer exactly
     what the Python decoder answers, the same bytes or the same failure;
-* **compression, 68 cases**, on random, text, repetitive and mixed inputs up
+* **compression, 113 cases**, on random, text, repetitive and mixed inputs up
   to 8 KB: 31 blocks, 8 blocks after a dictionary, 20 frames over the writer's
-  options, the defaults, and 8 streamed frames. Each must decode back to its
-  input with `gen.py`'s decoder and with `lz4 -d` (blocks wrapped in a frame;
-  dictionary blocks through `lz4 -d -D`); `block_compress` must equal
-  `block_compress_unchecked` (no fallback); repetitive inputs must shrink to
-  under a quarter.
+  options, the defaults, and 8 streamed frames, with the fast matcher; and
+  with LZ4HC, 30 blocks (three at each level 3 to 12: one of any kind, one of
+  word text and one of prose, slices of this repository's CONVENTIONS.md,
+  AGENTS.md and REVIEW.md, 2 to 8 KB), 6 blocks after a dictionary, 8 frames
+  over the writer's options at random levels, and `compress_hc(12, …)` of
+  6 KB of prose. Each must decode back to its input with `gen.py`'s decoder
+  and with `lz4 -d` (blocks wrapped in a frame; dictionary blocks through
+  `lz4 -d -D`); `block_compress` must equal `block_compress_unchecked`, and
+  `block_compress_with` `block_compress_unchecked_with` (no fallback);
+  repetitive inputs must shrink to under a quarter; and at levels 9 to 12
+  every text and prose block must be no larger than the fast matcher's block
+  for the same input.
+
+  The sizes measured (seed 2026; ratio = input / output; the lz4 tool's
+  frames on the same inputs, which carry about 15 bytes of frame each, for
+  comparison):
+
+  | Inputs | Input bytes | LZ4HC | fast matcher | `lz4 -1` | `lz4 -9` | `lz4 -12` |
+  |---|---|---|---|---|---|---|
+  | levels 9 to 12, prose (4 blocks) | 18,171 | 12,770 (1.423) | 13,679 (1.328) | 1.351 | 1.425 | 1.426 |
+  | levels 9 to 12, word text (4 blocks) | 18,961 | 6,554 (2.893) | 9,339 (2.030) | 2.040 | 2.862 | 2.907 |
+  | levels 3 to 8, prose (6 blocks) | 39,845 | 25,670 (1.552) | 27,946 (1.426) | | | |
+  | levels 3 to 8, word text (6 blocks) | 27,491 | 10,613 (2.590) | 13,584 (2.024) | | | |
+
+  So at the high levels LZ4HC compresses text and prose about 7% (prose) to
+  30% (word text) smaller than the fast matcher, and within about 0.5% of
+  the lz4 tool's own `-9` and `-12`.
 
 Seeds 1 to 5 also pass. Without the lz4 tool, `run.sh` runs the checks that
 need no tool and exits 77 (a skip).
@@ -227,7 +328,7 @@ and limits were run by hand against the lz4 tool, not in CI.
 ## Speed and limits
 
 * Nothing recurses over the data's length except as a tail call: the
-  decoder, the matcher, the frame reader and writer, the stream reader and
+  decoder, both matchers, the frame reader and writer, the stream reader and
   the length bytes of a literal run (`lit.ext`, tail-recursive, proved equal
   to the structural `lit.ext.ref` the proofs follow) all run in constant
   stack, and use bytes' tail-recursive list forms (`len.fast`,
@@ -246,6 +347,15 @@ and limits were run by hand against the lz4 tool, not in CI.
   | `block_compress`, one 1 MB block (`block_decompress` gives it back) | 2.0 s | 179 MB | 17 s, 2.0 GB |
   | `block_decompress` of `lz4 -1 -B7`'s 1 MB block | 1.5 s | 126 MB | 11 s, 1.8 GB |
   | random bytes (stored blocks): `compress`, `decompress`, `block_compress` | 2.5, 0.76, 1.9 s | 132, 128, 250 MB | 11, 13, 20 s; 2.8, 2.6, 2.9 GB |
+  | `compress_hc` at levels 3, 9 and 12, text (lz4 -d gives each back) | 2.7, 2.8, 3.8 s | 112 MB | |
+
+  On that 1 MB of text (this release's sources), in 64 KB independent blocks
+  (the writer's default), the frames are: fast matcher 309,845 bytes
+  (`lz4 -1 -B4`: 298,775), LZ4HC level 3 256,042 (`lz4 -3 -B4`: 226,142),
+  level 9 230,661 (`lz4 -9 -B4`: 221,169), level 12 223,946 (`lz4 -12 -B4`:
+  219,314): LZ4HC is within 2 to 4% of the tool at levels 9 and 12, and
+  further behind at low levels, where the tool's search differs more from
+  this package's depths.
 
   These include reading the input from a file and writing the output (the
   text is this repository's sources). At 256 KB, `compress` takes 0.58 s
@@ -269,7 +379,8 @@ and limits were run by hand against the lz4 tool, not in CI.
   `check.bend` holds one large case, a 70 KB block (past the decoder's 64 KB
   window, with matches reaching back up to 64 KB) compressed and decompressed
   (0.33 s and 19 MB natively with the rest of the file; about 2 s and
-  400 MB on the JavaScript lane).
+  400 MB on the JavaScript lane), and the same block with LZ4HC at level 9
+  (with it, the whole file takes 0.97 s and 21 MB natively).
 * Block and frame sizes in the writer are `U32` counts, not `Nat`: the Lean
   kernel (`--verdict`) fails on Nat computations tens of thousands of
   successors long.
@@ -277,8 +388,9 @@ and limits were run by hand against the lz4 tool, not in CI.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 427 decoding cases match and 68
-compressed blocks and frames decode back (with `lz4` 1.9.4 installed; seeds
-2026 and 1 to 5). 1 MB round trips, block and frame, compressed and stored,
-pass against `lz4` 1.9.4 (by hand); inputs are limited by `Octets` memory,
-not by the stack.
+`check.bend` passes, `ref/run.sh` 427 decoding cases match and 113
+compressed blocks and frames (45 of them LZ4HC's) decode back (with `lz4`
+1.9.4 installed; seeds 2026 and 1 to 5). 1 MB round trips, block and frame,
+compressed and stored, and LZ4HC frames at levels 3, 9 and 12, pass against
+`lz4` 1.9.4 (by hand); inputs are limited by `Octets` memory, not by the
+stack.
