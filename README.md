@@ -80,6 +80,7 @@ GPL source was read.
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 | [xorblocks](xorblocks/) | XOR of byte blocks (xor_blocks): two blocks under a length policy, many into one, laws of XOR proved |
+| [raid6](raid6/) | RAID-6 P and Q syndromes and the recovery of any one or two lost blocks (Anvin's paper), recovery proved for every stripe |
 
 Each package's README lists its files, public interface, extension points,
 laws, tests, limits and status.
