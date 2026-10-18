@@ -5,12 +5,16 @@ import ./adjust.bend as A
 import ./LAWS.bend as Laws
 
 # Every set operation works bit by bit, so each fact about sets is proved by
-# induction on the width n: at each bit, every combination of the bits
-# involved either satisfies the fact (and the rest is the induction
-# hypothesis) or contradicts a hypothesis. The laws then follow by
-# unfolding the operations and choosing which lemma each case needs.
-# Hypotheses are taken as arguments after the match ("convoy" style), so
-# that matching on a value refines them too.
+# induction on the width n of a word (the bits.* lemmas): at each bit, every
+# combination of the bits involved either satisfies the fact (and the rest is
+# the induction hypothesis) or contradicts a hypothesis. A set is a native
+# U32 (capabilities 0 to 31) and a Word(9n) (32 to 40): each set.* lemma
+# opens its sets into the U32's Word(32n) and the Word(9n), and applies the
+# bits.* lemma at widths 32 and 9 (set.bridge shows that the native subset
+# test on the low word, a & ~b == 0, is the bitwise one). The laws then
+# follow by unfolding the operations and choosing which set lemma each case
+# needs. Hypotheses are taken as arguments after the match ("convoy" style),
+# so that matching on a value refines them too.
 
 # Contradictions
 
@@ -94,6 +98,68 @@ def valid.ai(+s: C.CapState) -> {C.CapState.valid(s) == True{} : Bool} -> {C.Cap
     case C.CapState{+p, +i, +e, +b, +a}:
       h => bool.and_r(C.CapSet.subset(a, p), C.CapSet.subset(a, i))(bool.and_r(C.CapSet.subset(e, p), Bool.and(C.CapSet.subset(a, p), C.CapSet.subset(a, i)))(h))
 
+def bool.and2(+x: Bool, +y: Bool) -> {x == True{} : Bool} -> {y == True{} : Bool} -> {Bool.and(x, y) == True{} : Bool}:
+  match x:
+    case True{}:
+      hx => hy => hy
+    case False{}:
+      hx => hy => bits.absurd(Bool.and(False{}, y), hx)
+
+# A set and its two parts. A set is a native U32 (capabilities 0 to 31) and
+# a Word(9n) (32 to 40); opening the U32 gives its Word(32n). The subset test
+# on the low word is native (a & ~b == 0), and is the bitwise test there:
+
+def set.fin_ff(+t: Cmp) -> {Cmp.is_eq(Word.cmp.fin(False{}, False{}, t)) == Cmp.is_eq(t) : Bool}:
+  match t:
+    case LT{}:
+      {==}
+    case EQ{}:
+      {==}
+    case GT{}:
+      {==}
+
+def set.fin_tf(+t: Cmp) -> {Cmp.is_eq(Word.cmp.fin(True{}, False{}, t)) == False{} : Bool}:
+  match t:
+    case LT{}:
+      {==}
+    case EQ{}:
+      {==}
+    case GT{}:
+      {==}
+
+def set.bridge(+n: Nat, +x: Word(n), +y: Word(n)) -> {Cmp.is_eq(Word.cmp(n, Word.and(n, x, Word.not(n, y)), Word.zero(n))) == C.CapBits.subset(n, x, y) : Bool}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match x y:
+        case WCon{True{}, +xt} WCon{True{}, +yt}:
+          Equal.trans(Bool, Cmp.is_eq(Word.cmp.fin(False{}, False{}, Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p)))), Cmp.is_eq(Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p))), C.CapBits.subset(p, xt, yt), set.fin_ff(Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p))), set.bridge(p, xt, yt))
+        case WCon{True{}, +xt} WCon{False{}, +yt}:
+          set.fin_tf(Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p)))
+        case WCon{False{}, +xt} WCon{+yb, +yt}:
+          Equal.trans(Bool, Cmp.is_eq(Word.cmp.fin(False{}, False{}, Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p)))), Cmp.is_eq(Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p))), C.CapBits.subset(p, xt, yt), set.fin_ff(Word.cmp(p, Word.and(p, xt, Word.not(p, yt)), Word.zero(p))), set.bridge(p, xt, yt))
+
+# a set within another, from its parts within theirs, and back
+def set.sub_intro(+al: Word(32n), +bl: Word(32n), +ah: Word(9n), +bh: Word(9n)) -> {C.CapBits.subset(32n, al, bl) == True{} : Bool} -> {C.CapBits.subset(9n, ah, bh) == True{} : Bool} -> {C.CapSet.subset(C.CapSetW{U32{al}, ah}, C.CapSetW{U32{bl}, bh}) == True{} : Bool}:
+  hl => hh =>
+    %Equal.sym(Bool, Cmp.is_eq(Word.cmp(32n, Word.and(32n, al, Word.not(32n, bl)), Word.zero(32n))), C.CapBits.subset(32n, al, bl), set.bridge(32n, al, bl)) : {Bool.and(_, C.CapBits.subset(9n, ah, bh)) == True{} : Bool}
+    bool.and2(C.CapBits.subset(32n, al, bl), C.CapBits.subset(9n, ah, bh))(hl)(hh)
+
+def set.sub_lo(+al: Word(32n), +bl: Word(32n), +ah: Word(9n), +bh: Word(9n)) -> {C.CapSet.subset(C.CapSetW{U32{al}, ah}, C.CapSetW{U32{bl}, bh}) == True{} : Bool} -> {C.CapBits.subset(32n, al, bl) == True{} : Bool}:
+  h =>
+    %set.bridge(32n, al, bl) : {_ == True{} : Bool}
+    bool.and_l(Cmp.is_eq(Word.cmp(32n, Word.and(32n, al, Word.not(32n, bl)), Word.zero(32n))), C.CapBits.subset(9n, ah, bh))(h)
+
+def set.sub_hi(+al: Word(32n), +bl: Word(32n), +ah: Word(9n), +bh: Word(9n)) -> {C.CapSet.subset(C.CapSetW{U32{al}, ah}, C.CapSetW{U32{bl}, bh}) == True{} : Bool} -> {C.CapBits.subset(9n, ah, bh) == True{} : Bool}:
+  h => bool.and_r(Cmp.is_eq(Word.cmp(32n, Word.and(32n, al, Word.not(32n, bl)), Word.zero(32n))), C.CapBits.subset(9n, ah, bh))(h)
+
+# two sets are equal when their parts are
+def set.eq_intro(+l1: Word(32n), +l2: Word(32n), +h1: Word(9n), +h2: Word(9n), +e1: {l1 == l2 : Word(32n)}, +e2: {h1 == h2 : Word(9n)}) -> {C.CapSetW{U32{l1}, h1} == C.CapSetW{U32{l2}, h2} : C.CapSet()}:
+  %e1 : {C.CapSetW{U32{l1}, h1} == C.CapSetW{U32{_}, h2} : C.CapSet()}
+  %e2 : {C.CapSetW{U32{l1}, h1} == C.CapSetW{U32{l1}, _} : C.CapSet()}
+  {==}
+
 # BEGIN GENERATED by gen/proof.py: lemmas
 # Per-bit lemmas (generated: every combination of the bits at each position)
 
@@ -134,20 +200,20 @@ def bits.sub_or_r(+n: Nat, +x: Word(n), +c: Word(n)) -> {C.CapBits.subset(n, c, 
         case WCon{False{}, +xt} WCon{False{}, +ct}:
           bits.sub_or_r(n1, xt, ct)
 
-def bits.sub_and_l(+n: Nat, +x: Word(n), +y: Word(n)) -> {C.CapBits.subset(n, Word.and(n, x, y), x) == True{} : Bool}:
+def bits.sub_minus(+n: Nat, +x: Word(n), +y: Word(n)) -> {C.CapBits.subset(n, Word.and(n, x, Word.not(n, y)), x) == True{} : Bool}:
   match n:
     case 0n:
       {==}
     case 1n+n1:
       match x y:
         case WCon{True{}, +xt} WCon{True{}, +yt}:
-          bits.sub_and_l(n1, xt, yt)
+          bits.sub_minus(n1, xt, yt)
         case WCon{True{}, +xt} WCon{False{}, +yt}:
-          bits.sub_and_l(n1, xt, yt)
+          bits.sub_minus(n1, xt, yt)
         case WCon{False{}, +xt} WCon{True{}, +yt}:
-          bits.sub_and_l(n1, xt, yt)
+          bits.sub_minus(n1, xt, yt)
         case WCon{False{}, +xt} WCon{False{}, +yt}:
-          bits.sub_and_l(n1, xt, yt)
+          bits.sub_minus(n1, xt, yt)
 
 def bits.bound_a(+n: Nat, +i: Word(n), +fi: Word(n), +fp: Word(n), +b: Word(n), +a: Word(n)) -> {C.CapBits.subset(n, Word.or(n, Word.or(n, Word.and(n, i, fi), Word.and(n, fp, b)), a), Word.or(n, b, Word.or(n, i, a))) == True{} : Bool}:
   match n:
@@ -470,28 +536,28 @@ def bits.lub(+n: Nat, +a: Word(n), +s: Word(n), +p: Word(n)) -> {C.CapBits.subse
         case WCon{False{}, +at} WCon{False{}, +st} WCon{False{}, +pt}:
           h0 => h1 => bits.lub(n1, at, st, pt)(h0)(h1)
 
-def bits.and_within(+n: Nat, +a: Word(n), +y: Word(n), +p: Word(n)) -> {C.CapBits.subset(n, a, p) == True{} : Bool} -> {C.CapBits.subset(n, Word.and(n, a, y), p) == True{} : Bool}:
+def bits.minus_within(+n: Nat, +a: Word(n), +y: Word(n), +p: Word(n)) -> {C.CapBits.subset(n, a, p) == True{} : Bool} -> {C.CapBits.subset(n, Word.and(n, a, Word.not(n, y)), p) == True{} : Bool}:
   match n:
     case 0n:
       h0 => {==}
     case 1n+n1:
       match a y p:
         case WCon{True{}, +at} WCon{True{}, +yt} WCon{True{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
         case WCon{True{}, +at} WCon{True{}, +yt} WCon{False{}, +pt}:
-          h0 => bits.absurd(C.CapBits.subset(1n+n1, Word.and(1n+n1, WCon{True{}, at}, WCon{True{}, yt}), WCon{False{}, pt}), h0)
+          h0 => bits.absurd(C.CapBits.subset(1n+n1, Word.and(1n+n1, WCon{True{}, at}, Word.not(1n+n1, WCon{True{}, yt})), WCon{False{}, pt}), h0)
         case WCon{True{}, +at} WCon{False{}, +yt} WCon{True{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
         case WCon{True{}, +at} WCon{False{}, +yt} WCon{False{}, +pt}:
-          h0 => bits.absurd(C.CapBits.subset(1n+n1, Word.and(1n+n1, WCon{True{}, at}, WCon{False{}, yt}), WCon{False{}, pt}), h0)
+          h0 => bits.absurd(C.CapBits.subset(1n+n1, Word.and(1n+n1, WCon{True{}, at}, Word.not(1n+n1, WCon{False{}, yt})), WCon{False{}, pt}), h0)
         case WCon{False{}, +at} WCon{True{}, +yt} WCon{True{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
         case WCon{False{}, +at} WCon{True{}, +yt} WCon{False{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
         case WCon{False{}, +at} WCon{False{}, +yt} WCon{True{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
         case WCon{False{}, +at} WCon{False{}, +yt} WCon{False{}, +pt}:
-          h0 => bits.and_within(n1, at, yt, pt)(h0)
+          h0 => bits.minus_within(n1, at, yt, pt)(h0)
 
 def bits.root_a(+n: Nat, +i: Word(n), +b: Word(n), +a: Word(n)) -> {C.CapBits.subset(n, a, i) == True{} : Bool} -> {Word.or(n, Word.or(n, Word.and(n, i, C.CapBits.all(n)), Word.and(n, C.CapBits.all(n), b)), a) == Word.or(n, i, b) : Word(n)}:
   match n:
@@ -560,28 +626,93 @@ def bits.nonroot(+n: Nat, +i: Word(n), +b: Word(n), +a: Word(n)) -> {Word.or(n, 
         case WCon{False{}, +it} WCon{False{}, +bt} WCon{False{}, +at}:
           Equal.cong(Word(n1), Word(1n+n1), w => WCon{False{}, w}, Word.or(n1, Word.or(n1, Word.and(n1, it, Word.zero(n1)), Word.and(n1, Word.zero(n1), bt)), at), at, bits.nonroot(n1, it, bt, at))
 
+# The same facts on capability sets: each splits its sets into their two
+# parts and applies the per-bit lemma at widths 32 and 9.
+
+def set.sub_refl(+x: C.CapSet()) -> {C.CapSet.subset(x, x) == True{} : Bool}:
+  match x:
+    case C.CapSetW{U32{+xl}, +xh}:
+      set.sub_intro(xl, xl, xh, xh)(bits.sub_refl(32n, xl))(bits.sub_refl(9n, xh))
+
+def set.sub_zero(+x: C.CapSet()) -> {C.CapSet.subset(C.CapSet.empty(), x) == True{} : Bool}:
+  match x:
+    case C.CapSetW{U32{+xl}, +xh}:
+      set.sub_intro(Word.zero(32n), xl, Word.zero(9n), xh)(bits.sub_zero(32n, xl))(bits.sub_zero(9n, xh))
+
+def set.sub_or_r(+x: C.CapSet(), +c: C.CapSet()) -> {C.CapSet.subset(c, C.CapSet.union(x, c)) == True{} : Bool}:
+  match x c:
+    case C.CapSetW{U32{+xl}, +xh} C.CapSetW{U32{+cl}, +ch}:
+      set.sub_intro(cl, Word.or(32n, xl, cl), ch, Word.or(9n, xh, ch))(bits.sub_or_r(32n, xl, cl))(bits.sub_or_r(9n, xh, ch))
+
+def set.sub_minus(+x: C.CapSet(), +y: C.CapSet()) -> {C.CapSet.subset(C.CapSet.minus(x, y), x) == True{} : Bool}:
+  match x y:
+    case C.CapSetW{U32{+xl}, +xh} C.CapSetW{U32{+yl}, +yh}:
+      set.sub_intro(Word.and(32n, xl, Word.not(32n, yl)), xl, Word.and(9n, xh, Word.not(9n, yh)), xh)(bits.sub_minus(32n, xl, yl))(bits.sub_minus(9n, xh, yh))
+
+def set.bound_a(+i: C.CapSet(), +fi: C.CapSet(), +fp: C.CapSet(), +b: C.CapSet(), +a: C.CapSet()) -> {C.CapSet.subset(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), a), C.CapSet.union(b, C.CapSet.union(i, a))) == True{} : Bool}:
+  match i fi fp b a:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+fil}, +fih} C.CapSetW{U32{+fpl}, +fph} C.CapSetW{U32{+bl}, +bh} C.CapSetW{U32{+al}, +ah}:
+      set.sub_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, fil), Word.and(32n, fpl, bl)), al), Word.or(32n, bl, Word.or(32n, il, al)), Word.or(9n, Word.or(9n, Word.and(9n, ih, fih), Word.and(9n, fph, bh)), ah), Word.or(9n, bh, Word.or(9n, ih, ah)))(bits.bound_a(32n, il, fil, fpl, bl, al))(bits.bound_a(9n, ih, fih, fph, bh, ah))
+
+def set.bound_z(+i: C.CapSet(), +fi: C.CapSet(), +fp: C.CapSet(), +b: C.CapSet(), +a: C.CapSet()) -> {C.CapSet.subset(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), C.CapSet.empty()), C.CapSet.union(b, C.CapSet.union(i, a))) == True{} : Bool}:
+  match i fi fp b a:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+fil}, +fih} C.CapSetW{U32{+fpl}, +fph} C.CapSetW{U32{+bl}, +bh} C.CapSetW{U32{+al}, +ah}:
+      set.sub_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, fil), Word.and(32n, fpl, bl)), Word.zero(32n)), Word.or(32n, bl, Word.or(32n, il, al)), Word.or(9n, Word.or(9n, Word.and(9n, ih, fih), Word.and(9n, fph, bh)), Word.zero(9n)), Word.or(9n, bh, Word.or(9n, ih, ah)))(bits.bound_z(32n, il, fil, fpl, bl, al))(bits.bound_z(9n, ih, fih, fph, bh, ah))
+
+def set.bound_va(+i: C.CapSet(), +fi: C.CapSet(), +fp: C.CapSet(), +b: C.CapSet(), +a: C.CapSet()) -> {C.CapSet.subset(a, i) == True{} : Bool} -> {C.CapSet.subset(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), a), C.CapSet.union(b, i)) == True{} : Bool}:
+  match i fi fp b a:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+fil}, +fih} C.CapSetW{U32{+fpl}, +fph} C.CapSetW{U32{+bl}, +bh} C.CapSetW{U32{+al}, +ah}:
+      +h0 => set.sub_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, fil), Word.and(32n, fpl, bl)), al), Word.or(32n, bl, il), Word.or(9n, Word.or(9n, Word.and(9n, ih, fih), Word.and(9n, fph, bh)), ah), Word.or(9n, bh, ih))(bits.bound_va(32n, il, fil, fpl, bl, al)(set.sub_lo(al, il, ah, ih)(h0)))(bits.bound_va(9n, ih, fih, fph, bh, ah)(set.sub_hi(al, il, ah, ih)(h0)))
+
+def set.bound_vz(+i: C.CapSet(), +fi: C.CapSet(), +fp: C.CapSet(), +b: C.CapSet()) -> {C.CapSet.subset(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), C.CapSet.empty()), C.CapSet.union(b, i)) == True{} : Bool}:
+  match i fi fp b:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+fil}, +fih} C.CapSetW{U32{+fpl}, +fph} C.CapSetW{U32{+bl}, +bh}:
+      set.sub_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, fil), Word.and(32n, fpl, bl)), Word.zero(32n)), Word.or(32n, bl, il), Word.or(9n, Word.or(9n, Word.and(9n, ih, fih), Word.and(9n, fph, bh)), Word.zero(9n)), Word.or(9n, bh, ih))(bits.bound_vz(32n, il, fil, fpl, bl))(bits.bound_vz(9n, ih, fih, fph, bh))
+
+def set.amb_p(+a: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(a, p), i), p) == True{} : Bool}:
+  match a p i:
+    case C.CapSetW{U32{+al}, +ah} C.CapSetW{U32{+pl}, +ph} C.CapSetW{U32{+il}, +ih}:
+      set.sub_intro(Word.and(32n, Word.and(32n, al, pl), il), pl, Word.and(9n, Word.and(9n, ah, ph), ih), ph)(bits.amb_p(32n, al, pl, il))(bits.amb_p(9n, ah, ph, ih))
+
+def set.amb_i(+a: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(a, p), i), i) == True{} : Bool}:
+  match a p i:
+    case C.CapSetW{U32{+al}, +ah} C.CapSetW{U32{+pl}, +ph} C.CapSetW{U32{+il}, +ih}:
+      set.sub_intro(Word.and(32n, Word.and(32n, al, pl), il), il, Word.and(9n, Word.and(9n, ah, ph), ih), ih)(bits.amb_i(32n, al, pl, il))(bits.amb_i(9n, ah, ph, ih))
+
+def set.lub(+a: C.CapSet(), +s: C.CapSet(), +p: C.CapSet()) -> {C.CapSet.subset(a, p) == True{} : Bool} -> {C.CapSet.subset(s, p) == True{} : Bool} -> {C.CapSet.subset(C.CapSet.union(a, s), p) == True{} : Bool}:
+  match a s p:
+    case C.CapSetW{U32{+al}, +ah} C.CapSetW{U32{+sl}, +sh} C.CapSetW{U32{+pl}, +ph}:
+      +h0 => +h1 => set.sub_intro(Word.or(32n, al, sl), pl, Word.or(9n, ah, sh), ph)(bits.lub(32n, al, sl, pl)(set.sub_lo(al, pl, ah, ph)(h0))(set.sub_lo(sl, pl, sh, ph)(h1)))(bits.lub(9n, ah, sh, ph)(set.sub_hi(al, pl, ah, ph)(h0))(set.sub_hi(sl, pl, sh, ph)(h1)))
+
+def set.minus_within(+a: C.CapSet(), +y: C.CapSet(), +p: C.CapSet()) -> {C.CapSet.subset(a, p) == True{} : Bool} -> {C.CapSet.subset(C.CapSet.minus(a, y), p) == True{} : Bool}:
+  match a y p:
+    case C.CapSetW{U32{+al}, +ah} C.CapSetW{U32{+yl}, +yh} C.CapSetW{U32{+pl}, +ph}:
+      +h0 => set.sub_intro(Word.and(32n, al, Word.not(32n, yl)), pl, Word.and(9n, ah, Word.not(9n, yh)), ph)(bits.minus_within(32n, al, yl, pl)(set.sub_lo(al, pl, ah, ph)(h0)))(bits.minus_within(9n, ah, yh, ph)(set.sub_hi(al, pl, ah, ph)(h0)))
+
+def set.root_a(+i: C.CapSet(), +b: C.CapSet(), +a: C.CapSet()) -> {C.CapSet.subset(a, i) == True{} : Bool} -> {C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, C.CapSet.full()), C.CapSet.inter(C.CapSet.full(), b)), a) == C.CapSet.union(i, b) : C.CapSet()}:
+  match i b a:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+bl}, +bh} C.CapSetW{U32{+al}, +ah}:
+      +h0 => set.eq_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, C.CapBits.all(32n)), Word.and(32n, C.CapBits.all(32n), bl)), al), Word.or(32n, il, bl), Word.or(9n, Word.or(9n, Word.and(9n, ih, C.CapBits.all(9n)), Word.and(9n, C.CapBits.all(9n), bh)), ah), Word.or(9n, ih, bh), bits.root_a(32n, il, bl, al)(set.sub_lo(al, il, ah, ih)(h0)), bits.root_a(9n, ih, bh, ah)(set.sub_hi(al, il, ah, ih)(h0)))
+
+def set.root_z(+i: C.CapSet(), +b: C.CapSet()) -> {C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, C.CapSet.full()), C.CapSet.inter(C.CapSet.full(), b)), C.CapSet.empty()) == C.CapSet.union(i, b) : C.CapSet()}:
+  match i b:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+bl}, +bh}:
+      set.eq_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, C.CapBits.all(32n)), Word.and(32n, C.CapBits.all(32n), bl)), Word.zero(32n)), Word.or(32n, il, bl), Word.or(9n, Word.or(9n, Word.and(9n, ih, C.CapBits.all(9n)), Word.and(9n, C.CapBits.all(9n), bh)), Word.zero(9n)), Word.or(9n, ih, bh), bits.root_z(32n, il, bl), bits.root_z(9n, ih, bh))
+
+def set.nonroot(+i: C.CapSet(), +b: C.CapSet(), +a: C.CapSet()) -> {C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, C.CapSet.empty()), C.CapSet.inter(C.CapSet.empty(), b)), a) == a : C.CapSet()}:
+  match i b a:
+    case C.CapSetW{U32{+il}, +ih} C.CapSetW{U32{+bl}, +bh} C.CapSetW{U32{+al}, +ah}:
+      set.eq_intro(Word.or(32n, Word.or(32n, Word.and(32n, il, Word.zero(32n)), Word.and(32n, Word.zero(32n), bl)), al), al, Word.or(9n, Word.or(9n, Word.and(9n, ih, Word.zero(9n)), Word.and(9n, Word.zero(9n), bh)), ah), ah, bits.nonroot(32n, il, bl, al), bits.nonroot(9n, ih, bh, ah))
+
 # END GENERATED: lemmas
 
-# a set that has capability k contains the set {k}
-def bits.has_single(+n: Nat, +s: Word(n), +k: Nat) -> {C.CapBits.has(n, s, k) == True{} : Bool} -> {C.CapBits.subset(n, C.CapBits.single(n, k), s) == True{} : Bool}:
-  match n:
-    case 0n:
-      h => {==}
-    case 1n+p:
-      match s k:
-        case WCon{True{}, +st} 0n:
-          h => bits.sub_zero(p, st)
-        case WCon{False{}, +st} 0n:
-          h => bits.absurd(C.CapBits.subset(1n+p, C.CapBits.single(1n+p, 0n), WCon{False{}, st}), h)
-        case WCon{sh, +st} 1n+j:
-          h => bits.has_single(p, st, j)(h)
-
+# a set that has capability k contains the set {k} (has is that subset test)
 def caps.has_of(+v: Bool, +s: C.CapSet(), +x: U32) -> {C.CapSet.has.go(v, s, x) == True{} : Bool} -> {C.CapSet.subset(C.CapSet.of.go(v, x), s) == True{} : Bool}:
   match v:
     case False{}:
       h => bits.absurd(C.CapSet.subset(C.CapSet.of.go(False{}, x), s), h)
     case True{}:
-      h => bits.has_single(41n, s, U32.to_nat(x))(h)
+      h => h
 
 # BEGIN GENERATED by gen/proof.py: laws
 # execve: the transformation, for every flags record and state
@@ -589,25 +720,25 @@ def caps.has_of(+v: Bool, +s: C.CapSet(), +x: U32) -> {C.CapSet.has.go(v, s, x) 
 def ex.eff(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapSet.subset(C.CapState.effective(E.CapExec.sets(fl, s)), C.CapState.permitted(E.CapExec.sets(fl, s))) == True{} : Bool}:
   match fl s:
     case E.CapExecFlags{True{}, True{}, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_refl(41n, Word.or(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), Word.zero(41n)))
+      set.sub_refl(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), C.CapSet.empty()))
     case E.CapExecFlags{True{}, False{}, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_or_r(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), Word.zero(41n))
+      set.sub_or_r(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), C.CapSet.empty())
     case E.CapExecFlags{False{}, True{}, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_refl(41n, Word.or(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), a))
+      set.sub_refl(C.CapSet.union(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), a))
     case E.CapExecFlags{False{}, False{}, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_or_r(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), a)
+      set.sub_or_r(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), a)
 
 def ex.ap(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapSet.subset(C.CapState.ambient(E.CapExec.sets(fl, s)), C.CapState.permitted(E.CapExec.sets(fl, s))) == True{} : Bool}:
   match fl s:
     case E.CapExecFlags{True{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_or_r(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), Word.zero(41n))
+      set.sub_or_r(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), C.CapSet.empty())
     case E.CapExecFlags{False{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.sub_or_r(41n, Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b)), a)
+      set.sub_or_r(C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b)), a)
 
 def ex.ai(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapSet.subset(C.CapState.ambient(s), C.CapState.inheritable(s)) == True{} : Bool} -> {C.CapSet.subset(C.CapState.ambient(E.CapExec.sets(fl, s)), C.CapState.inheritable(E.CapExec.sets(fl, s))) == True{} : Bool}:
   match fl s:
     case E.CapExecFlags{True{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.sub_zero(41n, i)
+      h => set.sub_zero(i)
     case E.CapExecFlags{False{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
       h => h
 
@@ -624,41 +755,41 @@ def ex.inh(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapState.inheritable(E.Cap
 def ex.bound(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapSet.subset(C.CapState.permitted(E.CapExec.sets(fl, s)), C.CapSet.union(C.CapState.bounding(s), C.CapSet.union(C.CapState.inheritable(s), C.CapState.ambient(s)))) == True{} : Bool}:
   match fl s:
     case E.CapExecFlags{True{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.bound_z(41n, i, fi, fp, b, a)
+      set.bound_z(i, fi, fp, b, a)
     case E.CapExecFlags{False{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      bits.bound_a(41n, i, fi, fp, b, a)
+      set.bound_a(i, fi, fp, b, a)
 
 def ex.bound_v(+fl: E.CapExecFlags, +s: C.CapState) -> {C.CapSet.subset(C.CapState.ambient(s), C.CapState.inheritable(s)) == True{} : Bool} -> {C.CapSet.subset(C.CapState.permitted(E.CapExec.sets(fl, s)), C.CapSet.union(C.CapState.bounding(s), C.CapState.inheritable(s))) == True{} : Bool}:
   match fl s:
     case E.CapExecFlags{True{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.bound_vz(41n, i, fi, fp, b)
+      h => set.bound_vz(i, fi, fp, b)
     case E.CapExecFlags{False{}, feff, +fp, +fi} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.bound_va(41n, i, fi, fp, b, a)(h)
+      h => set.bound_va(i, fi, fp, b, a)(h)
 
 def ex.root_p(+priv: Bool, +s: C.CapState) -> {C.CapSet.subset(C.CapState.ambient(s), C.CapState.inheritable(s)) == True{} : Bool} -> {C.CapState.permitted(E.CapExec.sets(E.CapExecFlags{priv, True{}, C.CapSet.full(), C.CapSet.full()}, s)) == C.CapSet.union(C.CapState.inheritable(s), C.CapState.bounding(s)) : C.CapSet()}:
   match priv s:
     case True{} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.root_z(41n, i, b)
+      h => set.root_z(i, b)
     case False{} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.root_a(41n, i, b, a)(h)
+      h => set.root_a(i, b, a)(h)
 
 def ex.root_e(+priv: Bool, +s: C.CapState) -> {C.CapSet.subset(C.CapState.ambient(s), C.CapState.inheritable(s)) == True{} : Bool} -> {C.CapState.effective(E.CapExec.sets(E.CapExecFlags{priv, True{}, C.CapSet.full(), C.CapSet.full()}, s)) == C.CapSet.union(C.CapState.inheritable(s), C.CapState.bounding(s)) : C.CapSet()}:
   match priv s:
     case True{} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.root_z(41n, i, b)
+      h => set.root_z(i, b)
     case False{} C.CapState{+p, +i, +e, +b, +a}:
-      h => bits.root_a(41n, i, b, a)(h)
+      h => set.root_a(i, b, a)(h)
 
 def ex.nonroot_p(+nr: Bool, +r0: Bool, +e0: Bool, +s: C.CapState) -> {r0 == False{} : Bool} -> {e0 == False{} : Bool} -> {C.CapState.permitted(E.CapExec.sets(E.CapExec.flags.go(nr, r0, e0, False{}, None{}), s)) == C.CapState.ambient(s) : C.CapSet()}:
   match nr r0 e0 s:
     case True{} r0 e0 C.CapState{+p, +i, +e, +b, +a}:
-      hr => he => bits.nonroot(41n, i, b, a)
+      hr => he => set.nonroot(i, b, a)
     case False{} True{} e0 C.CapState{+p, +i, +e, +b, +a}:
       hr => he => bits.absurd_tf(C.CapSet(), C.CapState.permitted(E.CapExec.sets(E.CapExec.flags.go(False{}, True{}, e0, False{}, None{}), C.CapState{p, i, e, b, a})), a, hr)
     case False{} False{} True{} C.CapState{+p, +i, +e, +b, +a}:
       hr => he => bits.absurd_tf(C.CapSet(), C.CapState.permitted(E.CapExec.sets(E.CapExec.flags.go(False{}, False{}, True{}, False{}, None{}), C.CapState{p, i, e, b, a})), a, he)
     case False{} False{} False{} C.CapState{+p, +i, +e, +b, +a}:
-      hr => he => bits.nonroot(41n, i, b, a)
+      hr => he => set.nonroot(i, b, a)
 
 def ex.nonroot_e(+nr: Bool, +r0: Bool, +e0: Bool, +s: C.CapState) -> {r0 == False{} : Bool} -> {e0 == False{} : Bool} -> {C.CapState.effective(E.CapExec.sets(E.CapExec.flags.go(nr, r0, e0, False{}, None{}), s)) == C.CapState.ambient(s) : C.CapSet()}:
   match nr r0 e0 s:
@@ -691,26 +822,26 @@ def cs.p.r4(+sp: Bool, +iok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet()
     case False{} True{}:
       h => cs.p.done(c, e, p, i)(h)
     case False{} False{}:
-      h => bits.sub_refl(41n, C.CapState.permitted(C.CapCred.sets(c)))
+      h => set.sub_refl(C.CapState.permitted(C.CapCred.sets(c)))
 
 def cs.p.r3(+ok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(p, C.CapState.permitted(C.CapCred.sets(c))) == True{} : Bool} -> {C.CapSet.subset(C.CapState.permitted(C.CapCred.sets(C.Caps.or(A.CapAdjust.capset.r3(ok, c, e, p, i), c))), C.CapState.permitted(C.CapCred.sets(c))) == True{} : Bool}:
   match ok:
     case False{}:
-      h => bits.sub_refl(41n, C.CapState.permitted(C.CapCred.sets(c)))
+      h => set.sub_refl(C.CapState.permitted(C.CapCred.sets(c)))
     case True{}:
       h => cs.p.r4(C.CapSet.has(C.CapState.effective(C.CapCred.sets(c)), C.Cap.setpcap()), C.CapSet.subset(i, C.CapSet.union(C.CapState.inheritable(C.CapCred.sets(c)), C.CapState.permitted(C.CapCred.sets(c)))), c, e, p, i)(h)
 
 def cs.p.r2(+ok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(p, C.CapState.permitted(C.CapCred.sets(c))) == True{} : Bool} -> {C.CapSet.subset(C.CapState.permitted(C.CapCred.sets(C.Caps.or(A.CapAdjust.capset.r2(ok, c, e, p, i), c))), C.CapState.permitted(C.CapCred.sets(c))) == True{} : Bool}:
   match ok:
     case False{}:
-      h => bits.sub_refl(41n, C.CapState.permitted(C.CapCred.sets(c)))
+      h => set.sub_refl(C.CapState.permitted(C.CapCred.sets(c)))
     case True{}:
       h => cs.p.r3(C.CapSet.subset(i, C.CapSet.union(C.CapState.inheritable(C.CapCred.sets(c)), C.CapState.bounding(C.CapCred.sets(c)))), c, e, p, i)(h)
 
 def cs.p.r1(+ok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(p, C.CapState.permitted(C.CapCred.sets(c))) == ok : Bool} -> {C.CapSet.subset(C.CapState.permitted(C.CapCred.sets(C.Caps.or(A.CapAdjust.capset.r1(ok, c, e, p, i), c))), C.CapState.permitted(C.CapCred.sets(c))) == True{} : Bool}:
   match ok:
     case False{}:
-      h => bits.sub_refl(41n, C.CapState.permitted(C.CapCred.sets(c)))
+      h => set.sub_refl(C.CapState.permitted(C.CapCred.sets(c)))
     case True{}:
       h => cs.p.r2(C.CapSet.subset(e, p), c, e, p, i)(h)
 
@@ -752,7 +883,7 @@ def cs.b.r1(+ok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapS
 def cs.v.done(+c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(e, p) == True{} : Bool} -> {C.CapState.valid(C.CapCred.sets(C.Caps.or(A.CapAdjust.capset.done(c, e, p, i), c))) == True{} : Bool}:
   match c:
     case C.CapCred{r, eu, sv, nr, na, C.CapState{+op, +oi, +oe, +ob, +oa}}:
-      h => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(oa, p), i), p), C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(oa, p), i), i))(h)(bits.amb_p(41n, oa, p, i))(bits.amb_i(41n, oa, p, i))
+      h => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(oa, p), i), p), C.CapSet.subset(C.CapSet.inter(C.CapSet.inter(oa, p), i), i))(h)(set.amb_p(oa, p, i))(set.amb_i(oa, p, i))
 
 def cs.v.r4(+sp: Bool, +iok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapSet()) -> {C.CapSet.subset(e, p) == True{} : Bool} -> {C.CapState.valid(C.CapCred.sets(c)) == True{} : Bool} -> {C.CapState.valid(C.CapCred.sets(C.Caps.or(A.CapAdjust.capset.r4(sp, iok, c, e, p, i), c))) == True{} : Bool}:
   match sp iok:
@@ -788,11 +919,11 @@ def cs.v.r1(+ok: Bool, +c: C.CapCred, +e: C.CapSet(), +p: C.CapSet(), +i: C.CapS
 def bd.sub(+v: Bool, +sp: Bool, +c: C.CapCred, +x: U32) -> {C.CapSet.subset(C.CapState.bounding(C.CapCred.sets(C.Caps.or(A.CapAdjust.bset_drop.go(v, sp, c, x), c))), C.CapState.bounding(C.CapCred.sets(c))) == True{} : Bool}:
   match v sp c:
     case False{} sp c:
-      bits.sub_refl(41n, C.CapState.bounding(C.CapCred.sets(c)))
+      set.sub_refl(C.CapState.bounding(C.CapCred.sets(c)))
     case True{} False{} c:
-      bits.sub_refl(41n, C.CapState.bounding(C.CapCred.sets(c)))
+      set.sub_refl(C.CapState.bounding(C.CapCred.sets(c)))
     case True{} True{} C.CapCred{r, eu, sv, nr, na, C.CapState{+p, +i, +e, +b, +a}}:
-      bits.sub_and_l(41n, b, Word.not(41n, C.CapSet.of(x)))
+      set.sub_minus(b, C.CapSet.of(x))
 
 def bd.rest(+v: Bool, +sp: Bool, +c: C.CapCred, +x: U32) -> {C.CapState.with_bounding(C.CapCred.sets(C.Caps.or(A.CapAdjust.bset_drop.go(v, sp, c, x), c)), C.CapSet.empty()) == C.CapState.with_bounding(C.CapCred.sets(c), C.CapSet.empty()) : C.CapState}:
   match v sp c:
@@ -812,14 +943,14 @@ def ar.valid(+v: Bool, +lk: Bool, +al: Bool, +c: C.CapCred, +x: U32) -> {A.CapAd
     case True{} False{} False{} c:
       h => hv => hv
     case True{} False{} True{} C.CapCred{r, eu, sv, nr, na, C.CapState{+p, +i, +e, +b, +a}}:
-      +h => +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(Word.or(41n, a, C.CapSet.of(x)), p), C.CapSet.subset(Word.or(41n, a, C.CapSet.of(x)), i))(valid.ep(C.CapState{p, i, e, b, a})(hv))(bits.lub(41n, a, C.CapSet.of(x), p)(valid.ap(C.CapState{p, i, e, b, a})(hv))(caps.has_of(C.Cap.valid(x), p, x)(bool.and_l(C.CapSet.has(p, x), C.CapSet.has(i, x))(h))))(bits.lub(41n, a, C.CapSet.of(x), i)(valid.ai(C.CapState{p, i, e, b, a})(hv))(caps.has_of(C.Cap.valid(x), i, x)(bool.and_r(C.CapSet.has(p, x), C.CapSet.has(i, x))(h))))
+      +h => +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(C.CapSet.union(a, C.CapSet.of(x)), p), C.CapSet.subset(C.CapSet.union(a, C.CapSet.of(x)), i))(valid.ep(C.CapState{p, i, e, b, a})(hv))(set.lub(a, C.CapSet.of(x), p)(valid.ap(C.CapState{p, i, e, b, a})(hv))(caps.has_of(C.Cap.valid(x), p, x)(bool.and_l(C.CapSet.has(p, x), C.CapSet.has(i, x))(h))))(set.lub(a, C.CapSet.of(x), i)(valid.ai(C.CapState{p, i, e, b, a})(hv))(caps.has_of(C.Cap.valid(x), i, x)(bool.and_r(C.CapSet.has(p, x), C.CapSet.has(i, x))(h))))
 
 def al.valid(+v: Bool, +c: C.CapCred, +x: U32) -> {C.CapState.valid(C.CapCred.sets(c)) == True{} : Bool} -> {C.CapState.valid(C.CapCred.sets(C.Caps.or(A.CapAdjust.ambient_lower.go(v, c, x), c))) == True{} : Bool}:
   match v c:
     case False{} c:
       hv => hv
     case True{} C.CapCred{r, eu, sv, nr, na, C.CapState{+p, +i, +e, +b, +a}}:
-      +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(Word.and(41n, a, Word.not(41n, C.CapSet.of(x))), p), C.CapSet.subset(Word.and(41n, a, Word.not(41n, C.CapSet.of(x))), i))(valid.ep(C.CapState{p, i, e, b, a})(hv))(bits.and_within(41n, a, Word.not(41n, C.CapSet.of(x)), p)(valid.ap(C.CapState{p, i, e, b, a})(hv)))(bits.and_within(41n, a, Word.not(41n, C.CapSet.of(x)), i)(valid.ai(C.CapState{p, i, e, b, a})(hv)))
+      +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(C.CapSet.minus(a, C.CapSet.of(x)), p), C.CapSet.subset(C.CapSet.minus(a, C.CapSet.of(x)), i))(valid.ep(C.CapState{p, i, e, b, a})(hv))(set.minus_within(a, C.CapSet.of(x), p)(valid.ap(C.CapState{p, i, e, b, a})(hv)))(set.minus_within(a, C.CapSet.of(x), i)(valid.ai(C.CapState{p, i, e, b, a})(hv)))
 
 def ar.rest(+v: Bool, +lk: Bool, +al: Bool, +c: C.CapCred, +x: U32) -> {C.CapState.with_ambient(C.CapCred.sets(C.Caps.or(A.CapAdjust.ambient_raise.go(v, lk, al, c, x), c)), C.CapSet.empty()) == C.CapState.with_ambient(C.CapCred.sets(c), C.CapSet.empty()) : C.CapState}:
   match v lk al c:

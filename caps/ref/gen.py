@@ -15,7 +15,7 @@ from those pages):
 The cases include states that break the invariants, so the model is
 compared on every input the Bend code accepts, not only on reachable ones.
 """
-import os, random, shutil, subprocess, sys
+import glob, os, random, shutil, subprocess, sys
 
 NCAP = 41
 FULL = (1 << NCAP) - 1
@@ -271,13 +271,21 @@ def main():
             assert decoded[k] == "cap_" + NAMES[k], "the name table disagrees with capsh: %d %s" % (k, decoded[k])
         lines.append('    IO.print("name %d " ++ name(C.Cap.name(%d)))' % (k, k))
         expect.append("name %d %s" % (k, want))
-    with open(os.path.join(here, "cases.bend"), "w") as f:
-        f.write(PRELUDE)
-        # the cases in parts of 40, so that no do block is too deep
-        parts = [lines[j:j + 40] for j in range(0, len(lines), 40)]
-        for j, part in enumerate(parts):
-            f.write("\ndef part%d() -> IO(Unit):\n  do IO<Unit>:\n" % j + "\n".join(part) + "\n")
-        f.write("\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % j for j in range(len(parts))) + "\n")
+    # The cases in files of FILE cases (cases-00.bend, ...), each in parts of
+    # 40 so that no do block is too deep. The native build specialises each
+    # operation at every call site: one file of all the cases took clang
+    # about 3 GB.
+    for old in glob.glob(os.path.join(here, "cases-*.bend")):
+        os.remove(old)
+    FILE = int(os.environ.get("CAPS_FILE", "120"))
+    for fi, j0 in enumerate(range(0, len(lines), FILE)):
+        chunk = lines[j0:j0 + FILE]
+        with open(os.path.join(here, "cases-%02d.bend" % fi), "w") as f:
+            f.write(PRELUDE)
+            parts = [chunk[j:j + 40] for j in range(0, len(chunk), 40)]
+            for j, part in enumerate(parts):
+                f.write("\ndef part%d() -> IO(Unit):\n  do IO<Unit>:\n" % j + "\n".join(part) + "\n")
+            f.write("\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % j for j in range(len(parts))) + "\n")
     with open(os.path.join(here, "expected.txt"), "w") as f:
         f.write("\n".join(expect) + "\n")
     print(len(expect), "cases" + ("" if decoded is not None else " (capsh missing: names from the model only)"))

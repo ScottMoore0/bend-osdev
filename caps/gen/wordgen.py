@@ -88,3 +88,51 @@ def lemma(name, vs, hyps, goal):
                 body = "Equal.cong(Word(n1), Word(1n+n1), w => WCon{%s, w}, %s, %s, %s)" % (B(ga), show(goal[1], 'n1', ts), show(goal[2], 'n1', ts), rec)
         out.append("          " + hl + body)
     return "\n".join(out) + "\n"
+
+# Lemmas on capability sets. A set is a native U32 (capabilities 0 to 31) and
+# a Word(9n) (32 to 40); each set lemma splits its sets into the two parts,
+# with the U32 opened to its Word(32n), and applies the per-bit lemma of the
+# same name at each part's width. set.sub_intro, set.sub_lo, set.sub_hi and
+# set.eq_intro (hand-written, in PROOF.bend) move between a set and its parts.
+SET = "C.CapSet"
+SETW = "C.CapSetW"
+LO, HI = "32n", "9n"
+
+def show_set(e):
+    if isinstance(e, str):
+        return e
+    op = e[0]
+    if op == 'zero':
+        return SET + ".empty()"
+    if op == 'all':
+        return SET + ".full()"
+    if op == 'and' and not isinstance(e[2], str) and e[2][0] == 'not':
+        return "%s.minus(%s, %s)" % (SET, show_set(e[1]), show_set(e[2][1]))
+    if op in ('and', 'or'):
+        return "%s.%s(%s, %s)" % (SET, "inter" if op == 'and' else "union", show_set(e[1]), show_set(e[2]))
+    raise ValueError("no set form for %r" % (e,))
+
+def set_goal_type(goal):
+    kind, a, b = goal
+    if kind == 'sub':
+        return "{%s.subset(%s, %s) == True{} : Bool}" % (SET, show_set(a), show_set(b))
+    return "{%s == %s : %s()}" % (show_set(a), show_set(b), SET)
+
+def set_lemma(name, vs, hyps, goal, bits_name, set_name):
+    sig = "def %s(%s)" % (set_name, ", ".join("%s: %s()" % (v, SET) for v in vs))
+    parts = ["{%s.subset(%s, %s) == True{} : Bool}" % (SET, show_set(a), show_set(b)) for a, b in hyps]
+    out = [sig + " -> " + " -> ".join(parts + [set_goal_type(goal)]) + ":"]
+    out.append("  match " + " ".join(vs) + ":")
+    out.append("    case " + " ".join("%s{U32{+%sl}, +%sh}" % (SETW, v, v) for v in vs) + ":")
+    hl = "".join("+h%d => " % i for i in range(len(hyps)))
+    lo = {v: v + "l" for v in vs}
+    hi = {v: v + "h" for v in vs}
+    # an expression's low and high parts, as the four arguments of the set.* helpers
+    four = lambda a, b: "%s, %s, %s, %s" % (show(a, LO, lo), show(b, LO, lo), show(a, HI, hi), show(b, HI, hi))
+    def part(n, sub, which):
+        hs = "".join("(set.sub_%s(%s)(h%d))" % (which, four(a, b), i) for i, (a, b) in enumerate(hyps))
+        return "%s(%s, %s)%s" % (bits_name, n, ", ".join(sub[v] for v in vs), hs)
+    helper = "set.sub_intro(%s)(%s)(%s)" if goal[0] == 'sub' else "set.eq_intro(%s, %s, %s)"
+    body = helper % (four(goal[1], goal[2]), part(LO, lo, "lo"), part(HI, hi, "hi"))
+    out.append("      " + hl + body)
+    return "\n".join(out) + "\n"

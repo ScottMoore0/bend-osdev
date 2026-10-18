@@ -3,10 +3,11 @@
 # exec.bend: the transformation during execve(2). adjust.bend: capset(2) and
 # the prctl(2) bounding-set and ambient operations.
 #
-# A capability set is a Word(41n): bit k is capability k, from CAP_CHOWN (0)
-# to CAP_CHECKPOINT_RESTORE (40). The set operations work bit by bit and are
-# written for every width n (CapBits), so that the laws can be proved by
-# induction on n; CapSet is the width-41 instance.
+# A capability set holds bit k for capability k, from CAP_CHOWN (0) to
+# CAP_CHECKPOINT_RESTORE (40): bits 0 to 31 in a native U32, bits 32 to 40 in
+# a Word(9n) (CapSetW, internal). The set operations work bit by bit; the
+# width-n forms (CapBits) are what the laws are proved by induction on, for
+# both parts.
 #
 # A thread has five sets (CapState): permitted, inheritable, effective,
 # bounding and ambient. A file has a permitted and an inheritable set and an
@@ -250,37 +251,69 @@ def CapBits.to_list(n: Nat, s: Word(n), +k: U32) -> List<&2, U32>:
 
 # Capability sets
 
+# A set is two words: capabilities 0 to 31 are the bits of a native U32 (bit
+# k is capability k), and capabilities 32 to 40 a Word(9n) (bit j is
+# capability 32 + j). Ten machine words, where a Word(41n) cost forty-one
+# (and a CapState of five of them was more than Bend's C backend compiles:
+# bendlang/bend#1069). The high part is exactly nine bits, so every value of
+# the type is a set of capabilities 0 to 40, with one representation each.
+# Internal: use the CapSet defs.
+type CapSetW is Data:
+  CapSetW{lo: U32, hi: Word(9n)}
+
 def CapSet() -> Data:
-  Word(41n)
+  CapSetW
 
 def CapSet.empty() -> CapSet():
-  Word.zero(41n)
+  CapSetW{0, Word.zero(9n)}
 
 def CapSet.full() -> CapSet():
-  CapBits.all(41n)
+  CapSetW{4294967295, CapBits.all(9n)}
 
 def CapSet.union(a: CapSet(), b: CapSet()) -> CapSet():
-  Word.or(41n, a, b)
+  match a b:
+    case CapSetW{al, ah} CapSetW{bl, bh}:
+      CapSetW{U32.or(al, bl), Word.or(9n, ah, bh)}
 
 def CapSet.inter(a: CapSet(), b: CapSet()) -> CapSet():
-  Word.and(41n, a, b)
+  match a b:
+    case CapSetW{al, ah} CapSetW{bl, bh}:
+      CapSetW{U32.and(al, bl), Word.and(9n, ah, bh)}
 
 # the capabilities of a not in b
 def CapSet.minus(a: CapSet(), b: CapSet()) -> CapSet():
-  Word.and(41n, a, Word.not(41n, b))
+  match a b:
+    case CapSetW{al, ah} CapSetW{bl, bh}:
+      CapSetW{U32.and(al, U32.not(bl)), Word.and(9n, ah, Word.not(9n, bh))}
 
+# a within b: no bit of a outside b (on the low word, a & ~b == 0)
 def CapSet.subset(a: CapSet(), b: CapSet()) -> Bool:
-  CapBits.subset(41n, a, b)
+  match a b:
+    case CapSetW{al, ah} CapSetW{bl, bh}:
+      Bool.and(U32.is_eq(U32.and(al, U32.not(bl)), 0), CapBits.subset(9n, ah, bh))
 
 def CapSet.is_eq(a: CapSet(), b: CapSet()) -> Bool:
-  Cmp.is_eq(Word.cmp(41n, a, b))
+  match a b:
+    case CapSetW{al, ah} CapSetW{bl, bh}:
+      Bool.and(U32.is_eq(al, bl), Cmp.is_eq(Word.cmp(9n, ah, bh)))
+
+def CapSetW.single.go(low: Bool, +k: U32) -> CapSet():
+  match low:
+    case True{}:
+      CapSetW{U32.shln(1, U32.to_nat(k)), Word.zero(9n)}
+    case False{}:
+      CapSetW{0, CapBits.single(9n, U32.to_nat(U32.sub(k, 32)))}
+
+# the set holding capability k alone (k is 0 to 40)
+def CapSetW.single(+k: U32) -> CapSet():
+  CapSetW.single.go(U32.is_lt(k, 32), k)
 
 def CapSet.of.go(v: Bool, k: U32) -> CapSet():
   match v:
     case False{}:
-      Word.zero(41n)
+      CapSet.empty()
     case True{}:
-      CapBits.single(41n, U32.to_nat(k))
+      CapSetW.single(k)
 
 # the set holding capability k alone (empty if k is not a capability)
 def CapSet.of(+k: U32) -> CapSet():
@@ -291,7 +324,7 @@ def CapSet.has.go(v: Bool, s: CapSet(), k: U32) -> Bool:
     case False{}:
       False{}
     case True{}:
-      CapBits.has(41n, s, U32.to_nat(k))
+      CapSet.subset(CapSetW.single(k), s)
 
 # whether capability k is in s
 def CapSet.has(s: CapSet(), +k: U32) -> Bool:
@@ -310,23 +343,59 @@ def CapSet.from_list(xs: List<&2, U32>) -> CapSet():
     case Con{h, t}:
       CapSet.add(CapSet.from_list(t), h)
 
-def CapSet.to_list(s: CapSet()) -> List<&2, U32>:
-  CapBits.to_list(41n, s, 0)
+def CapSetW.push(b: Bool, k: U32, rest: List<&2, U32>) -> List<&2, U32>:
+  match b:
+    case True{}:
+      Con{k, rest}
+    case False{}:
+      rest
 
-def CapSet.u32.word(a: U32) -> Word(32n):
-  match a:
-    case U32{w}:
-      w
+# the capabilities among the low n bits of w, numbered from k, then rest
+def CapSetW.lo_list(n: Nat, +w: U32, +k: U32, rest: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      rest
+    case 1n+p:
+      CapSetW.push(U32.is_eq(U32.and(w, 1), 1), k, CapSetW.lo_list(p, U32.shr(w), U32.add(k, 1), rest))
+
+def CapSet.to_list(s: CapSet()) -> List<&2, U32>:
+  match s:
+    case CapSetW{l, h}:
+      CapSetW.lo_list(32n, l, 0, CapBits.to_list(9n, h, 32))
+
+def CapSetW.bit(b: Bool) -> U32:
+  match b:
+    case True{}:
+      1
+    case False{}:
+      0
+
+# the value of the n bits of w, and the n low bits of a, as native words
+def CapSetW.word_u32(n: Nat, w: Word(n)) -> U32:
+  match n:
+    case 0n:
+      0
+    case 1n+p:
+      match w:
+        case WCon{b, t}:
+          U32.or(CapSetW.bit(b), U32.shl(CapSetW.word_u32(p, t)))
+
+def CapSetW.u32_word(n: Nat, +a: U32) -> Word(n):
+  match n:
+    case 0n:
+      WNil{}
+    case 1n+p:
+      WCon{U32.is_eq(U32.and(a, 1), 1), CapSetW.u32_word(p, U32.shr(a))}
 
 # the 64-bit mask of a set, as capget(2) and /proc/<pid>/status show it
 def CapSet.to_w64(s: CapSet()) -> W.W64:
-  +x = {s : Word(Nat.add(32n, 9n))}
-  W.W64.from_parts(U32{W.W64.bits.cat(9n, 23n, W.W64.bits.hi(32n, 9n, x), Word.zero(23n))}, U32{W.W64.bits.lo(32n, 9n, x)})
+  match s:
+    case CapSetW{l, h}:
+      W.W64.from_parts(CapSetW.word_u32(9n, h), l)
 
 # the set of the low 41 bits of a 64-bit mask
 def CapSet.from_w64(+v: W.W64) -> CapSet():
-  +h = CapSet.u32.word(W.W64.hi(v))
-  W.W64.bits.cat(32n, 9n, CapSet.u32.word(W.W64.lo(v)), W.W64.bits.lo(9n, 23n, h))
+  CapSetW{W.W64.lo(v), CapSetW.u32_word(9n, W.W64.hi(v))}
 
 # 16 hex digits, as the CapEff line of /proc/<pid>/status
 def CapSet.show(s: CapSet()) -> String:

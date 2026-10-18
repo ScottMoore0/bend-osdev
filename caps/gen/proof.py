@@ -9,7 +9,9 @@
 Two regions: "lemmas", the per-bit induction lemmas over Word(n) (see
 wordgen.py: each lemma matches every combination of the bits involved at one
 position, and each case either contradicts a hypothesis or is the induction
-hypothesis), and "laws", the lemmas that apply them to execve, capset and
+hypothesis) and the same facts on capability sets (each splits its sets into
+the low U32's 32 bits and the 9-bit high part, and applies the per-bit lemma
+at both widths), and "laws", the lemmas that apply them to execve, capset and
 prctl, and the proofs of the laws. Everything outside the regions is written
 by hand.
 """
@@ -21,29 +23,34 @@ def AND(x, y): return ('and', x, y)
 def OR(x, y): return ('or', x, y)
 NOT = lambda x: ('not', x)
 Z = ('zero',); ALL = ('all',)
-L = []
-L.append(G.lemma("bits.sub_refl", ["x"], [], ('sub', "x", "x")))
-L.append(G.lemma("bits.sub_zero", ["x"], [], ('sub', Z, "x")))
-L.append(G.lemma("bits.sub_or_r", ["x", "c"], [], ('sub', "c", OR("x", "c"))))
-L.append(G.lemma("bits.sub_and_l", ["x", "y"], [], ('sub', AND("x", "y"), "x")))
+SPECS = []
+def spec(name, vs, hyps, goal): SPECS.append((name, vs, hyps, goal))
+MINUS = lambda x, y: AND(x, NOT(y))
+spec("sub_refl", ["x"], [], ('sub', "x", "x"))
+spec("sub_zero", ["x"], [], ('sub', Z, "x"))
+spec("sub_or_r", ["x", "c"], [], ('sub', "c", OR("x", "c")))
+spec("sub_minus", ["x", "y"], [], ('sub', MINUS("x", "y"), "x"))
 P = lambda a: OR(OR(AND("i", "fi"), AND("fp", "b")), a)
-L.append(G.lemma("bits.bound_a", ["i", "fi", "fp", "b", "a"], [], ('sub', P("a"), OR("b", OR("i", "a")))))
-L.append(G.lemma("bits.bound_z", ["i", "fi", "fp", "b", "a"], [], ('sub', P(Z), OR("b", OR("i", "a")))))
-L.append(G.lemma("bits.bound_va", ["i", "fi", "fp", "b", "a"], [("a", "i")], ('sub', P("a"), OR("b", "i"))))
-L.append(G.lemma("bits.bound_vz", ["i", "fi", "fp", "b"], [], ('sub', P(Z), OR("b", "i"))))
-L.append(G.lemma("bits.amb_p", ["a", "p", "i"], [], ('sub', AND(AND("a", "p"), "i"), "p")))
-L.append(G.lemma("bits.amb_i", ["a", "p", "i"], [], ('sub', AND(AND("a", "p"), "i"), "i")))
-L.append(G.lemma("bits.lub", ["a", "s", "p"], [("a", "p"), ("s", "p")], ('sub', OR("a", "s"), "p")))
-L.append(G.lemma("bits.and_within", ["a", "y", "p"], [("a", "p")], ('sub', AND("a", "y"), "p")))
+spec("bound_a", ["i", "fi", "fp", "b", "a"], [], ('sub', P("a"), OR("b", OR("i", "a"))))
+spec("bound_z", ["i", "fi", "fp", "b", "a"], [], ('sub', P(Z), OR("b", OR("i", "a"))))
+spec("bound_va", ["i", "fi", "fp", "b", "a"], [("a", "i")], ('sub', P("a"), OR("b", "i")))
+spec("bound_vz", ["i", "fi", "fp", "b"], [], ('sub', P(Z), OR("b", "i")))
+spec("amb_p", ["a", "p", "i"], [], ('sub', AND(AND("a", "p"), "i"), "p"))
+spec("amb_i", ["a", "p", "i"], [], ('sub', AND(AND("a", "p"), "i"), "i"))
+spec("lub", ["a", "s", "p"], [("a", "p"), ("s", "p")], ('sub', OR("a", "s"), "p"))
+spec("minus_within", ["a", "y", "p"], [("a", "p")], ('sub', MINUS("a", "y"), "p"))
 R = lambda a: OR(OR(AND("i", ALL), AND(ALL, "b")), a)
-L.append(G.lemma("bits.root_a", ["i", "b", "a"], [("a", "i")], ('eq', R("a"), OR("i", "b"))))
-L.append(G.lemma("bits.root_z", ["i", "b"], [], ('eq', R(Z), OR("i", "b"))))
-L.append(G.lemma("bits.nonroot", ["i", "b", "a"], [], ('eq', OR(OR(AND("i", Z), AND(Z, "b")), "a"), "a")))
+spec("root_a", ["i", "b", "a"], [("a", "i")], ('eq', R("a"), OR("i", "b")))
+spec("root_z", ["i", "b"], [], ('eq', R(Z), OR("i", "b")))
+spec("nonroot", ["i", "b", "a"], [], ('eq', OR(OR(AND("i", Z), AND(Z, "b")), "a"), "a"))
+L = [G.lemma("bits." + n, vs, hs, g) for n, vs, hs, g in SPECS]
+L.append("# The same facts on capability sets: each splits its sets into their two\n# parts and applies the per-bit lemma at widths 32 and 9.\n")
+L += [G.set_lemma(n, vs, hs, g, "bits." + n, "set." + n) for n, vs, hs, g in SPECS]
 LEMMAS = "\n".join(L)
 
-X = "Word.or(41n, Word.and(41n, i, fi), Word.and(41n, fp, b))"
-def P2(a): return "Word.or(41n, %s, %s)" % (X, a)
-Z = "Word.zero(41n)"
+X = "C.CapSet.union(C.CapSet.inter(i, fi), C.CapSet.inter(fp, b))"
+def P2(a): return "C.CapSet.union(%s, %s)" % (X, a)
+Z = "C.CapSet.empty()"
 ST = "C.CapState{+p, +i, +e, +b, +a}"
 def FL(priv, feff): return "E.CapExecFlags{%s, %s, +fp, +fi}" % (priv, feff)
 T, F = "True{}", "False{}"
@@ -56,17 +63,17 @@ w("def ex.eff(fl: E.CapExecFlags, s: C.CapState) -> %s:" % sub("C.CapState.effec
 w("  match fl s:")
 for priv in (T, F):
     a2 = Z if priv == T else "a"
-    w("    case %s %s:" % (FL(priv, T), ST)); w("      bits.sub_refl(41n, %s)" % P2(a2))
-    w("    case %s %s:" % (FL(priv, F), ST)); w("      bits.sub_or_r(41n, %s, %s)" % (X, a2))
+    w("    case %s %s:" % (FL(priv, T), ST)); w("      set.sub_refl(%s)" % P2(a2))
+    w("    case %s %s:" % (FL(priv, F), ST)); w("      set.sub_or_r(%s, %s)" % (X, a2))
 w("")
 w("def ex.ap(fl: E.CapExecFlags, s: C.CapState) -> %s:" % sub("C.CapState.ambient(%s)" % EXS, "C.CapState.permitted(%s)" % EXS))
 w("  match fl s:")
-w("    case %s %s:" % (FL(T, "feff"), ST)); w("      bits.sub_or_r(41n, %s, %s)" % (X, Z))
-w("    case %s %s:" % (FL(F, "feff"), ST)); w("      bits.sub_or_r(41n, %s, a)" % X)
+w("    case %s %s:" % (FL(T, "feff"), ST)); w("      set.sub_or_r(%s, %s)" % (X, Z))
+w("    case %s %s:" % (FL(F, "feff"), ST)); w("      set.sub_or_r(%s, a)" % X)
 w("")
 w("def ex.ai(fl: E.CapExecFlags, s: C.CapState) -> %s -> %s:" % (sub("C.CapState.ambient(s)", "C.CapState.inheritable(s)"), sub("C.CapState.ambient(%s)" % EXS, "C.CapState.inheritable(%s)" % EXS)))
 w("  match fl s:")
-w("    case %s %s:" % (FL(T, "feff"), ST)); w("      h => bits.sub_zero(41n, i)")
+w("    case %s %s:" % (FL(T, "feff"), ST)); w("      h => set.sub_zero(i)")
 w("    case %s %s:" % (FL(F, "feff"), ST)); w("      h => h")
 w("")
 for nm, acc in (("bnd", "bounding"), ("inh", "inheritable")):
@@ -76,25 +83,25 @@ for nm, acc in (("bnd", "bounding"), ("inh", "inheritable")):
     w("")
 w("def ex.bound(fl: E.CapExecFlags, s: C.CapState) -> %s:" % sub("C.CapState.permitted(%s)" % EXS, "C.CapSet.union(C.CapState.bounding(s), C.CapSet.union(C.CapState.inheritable(s), C.CapState.ambient(s)))"))
 w("  match fl s:")
-w("    case %s %s:" % (FL(T, "feff"), ST)); w("      bits.bound_z(41n, i, fi, fp, b, a)")
-w("    case %s %s:" % (FL(F, "feff"), ST)); w("      bits.bound_a(41n, i, fi, fp, b, a)")
+w("    case %s %s:" % (FL(T, "feff"), ST)); w("      set.bound_z(i, fi, fp, b, a)")
+w("    case %s %s:" % (FL(F, "feff"), ST)); w("      set.bound_a(i, fi, fp, b, a)")
 w("")
 w("def ex.bound_v(fl: E.CapExecFlags, s: C.CapState) -> %s -> %s:" % (sub("C.CapState.ambient(s)", "C.CapState.inheritable(s)"), sub("C.CapState.permitted(%s)" % EXS, "C.CapSet.union(C.CapState.bounding(s), C.CapState.inheritable(s))")))
 w("  match fl s:")
-w("    case %s %s:" % (FL(T, "feff"), ST)); w("      h => bits.bound_vz(41n, i, fi, fp, b)")
-w("    case %s %s:" % (FL(F, "feff"), ST)); w("      h => bits.bound_va(41n, i, fi, fp, b, a)(h)")
+w("    case %s %s:" % (FL(T, "feff"), ST)); w("      h => set.bound_vz(i, fi, fp, b)")
+w("    case %s %s:" % (FL(F, "feff"), ST)); w("      h => set.bound_va(i, fi, fp, b, a)(h)")
 w("")
 RF = "E.CapExecFlags{priv, True{}, C.CapSet.full(), C.CapSet.full()}"
 for nm, acc in (("root_p", "permitted"), ("root_e", "effective")):
     w("def ex.%s(priv: Bool, s: C.CapState) -> %s -> {C.CapState.%s(E.CapExec.sets(%s, s)) == C.CapSet.union(C.CapState.inheritable(s), C.CapState.bounding(s)) : C.CapSet()}:" % (nm, sub("C.CapState.ambient(s)", "C.CapState.inheritable(s)"), acc, RF))
     w("  match priv s:")
-    w("    case True{} %s:" % ST); w("      h => bits.root_z(41n, i, b)")
-    w("    case False{} %s:" % ST); w("      h => bits.root_a(41n, i, b, a)(h)")
+    w("    case True{} %s:" % ST); w("      h => set.root_z(i, b)")
+    w("    case False{} %s:" % ST); w("      h => set.root_a(i, b, a)(h)")
     w("")
 for nm, acc in (("nonroot_p", "permitted"), ("nonroot_e", "effective")):
     G = "C.CapState.%s(E.CapExec.sets(E.CapExec.flags.go(nr, r0, e0, False{}, None{}), s))" % acc
     w("def ex.%s(nr: Bool, r0: Bool, e0: Bool, s: C.CapState) -> {r0 == False{} : Bool} -> {e0 == False{} : Bool} -> {%s == C.CapState.ambient(s) : C.CapSet()}:" % (nm, G))
-    good = "bits.nonroot(41n, i, b, a)" if acc == "permitted" else "{==}"
+    good = "set.nonroot(i, b, a)" if acc == "permitted" else "{==}"
     w("  match nr r0 e0 s:")
     w("    case True{} r0 e0 %s:" % ST); w("      hr => he => " + good)
     gx = lambda r, e: "C.CapState.%s(E.CapExec.sets(E.CapExec.flags.go(False{}, %s, %s, False{}, None{}), C.CapState{p, i, e, b, a}))" % (acc, r, e)
@@ -125,7 +132,7 @@ PRM = "c: C.CapCred, e: C.CapSet(), p: C.CapSet(), i: C.CapSet()"
 w("# capset: each rule in turn")
 w("def cs.p.done(%s) -> %s -> %s:" % (PRM, HP, GP("A.CapAdjust.capset.done(c, e, p, i)")))
 w("  match c:"); w("    case %s:" % CD); w("      h => h"); w("")
-REFLP = "bits.sub_refl(41n, %s)" % PC
+REFLP = "set.sub_refl(%s)" % PC
 w("def cs.p.r4(sp: Bool, iok: Bool, %s) -> %s -> %s:" % (PRM, HP, GP("A.CapAdjust.capset.r4(sp, iok, c, e, p, i)")))
 w("  match sp iok:")
 w("    case True{} iok:"); w("      h => cs.p.done(c, e, p, i)(h)")
@@ -149,7 +156,7 @@ for nm, nxt, args in (("r3", "cs.b.r4", R4ARGS), ("r2", "cs.b.r3", R3ARGS), ("r1
 AMB = "C.CapSet.inter(C.CapSet.inter(oa, p), i)"
 w("def cs.v.done(%s) -> %s -> %s:" % (PRM, HEP, GV("A.CapAdjust.capset.done(c, e, p, i)")))
 w("  match c:"); w("    case %s:" % CD)
-w("      h => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(h)(bits.amb_p(41n, oa, p, i))(bits.amb_i(41n, oa, p, i))" % (AMB, AMB)); w("")
+w("      h => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(h)(set.amb_p(oa, p, i))(set.amb_i(oa, p, i))" % (AMB, AMB)); w("")
 w("def cs.v.r4(sp: Bool, iok: Bool, %s) -> %s -> %s -> %s:" % (PRM, HEP, HV, GV("A.CapAdjust.capset.r4(sp, iok, c, e, p, i)")))
 w("  match sp iok:")
 w("    case True{} iok:"); w("      h => hv => cs.v.done(c, e, p, i)(h)")
@@ -166,16 +173,16 @@ OFX = "C.CapSet.of(x)"
 w("# prctl")
 w("def bd.sub(v: Bool, sp: Bool, c: C.CapCred, x: U32) -> %s:" % sub("C.CapState.bounding(C.CapCred.sets(C.Caps.or(A.CapAdjust.bset_drop.go(v, sp, c, x), c)))", "C.CapState.bounding(C.CapCred.sets(c))"))
 w("  match v sp c:")
-w("    case False{} sp c:"); w("      bits.sub_refl(41n, C.CapState.bounding(C.CapCred.sets(c)))")
-w("    case True{} False{} c:"); w("      bits.sub_refl(41n, C.CapState.bounding(C.CapCred.sets(c)))")
-w("    case True{} True{} %s:" % CF); w("      bits.sub_and_l(41n, b, Word.not(41n, %s))" % OFX); w("")
+w("    case False{} sp c:"); w("      set.sub_refl(C.CapState.bounding(C.CapCred.sets(c)))")
+w("    case True{} False{} c:"); w("      set.sub_refl(C.CapState.bounding(C.CapCred.sets(c)))")
+w("    case True{} True{} %s:" % CF); w("      set.sub_minus(b, %s)" % OFX); w("")
 w("def bd.rest(v: Bool, sp: Bool, c: C.CapCred, x: U32) -> {C.CapState.with_bounding(C.CapCred.sets(C.Caps.or(A.CapAdjust.bset_drop.go(v, sp, c, x), c)), C.CapSet.empty()) == C.CapState.with_bounding(C.CapCred.sets(c), C.CapSet.empty()) : C.CapState}:")
 w("  match v sp c:")
 w("    case False{} sp c:"); w("      {==}")
 w("    case True{} False{} c:"); w("      {==}")
 w("    case True{} True{} %s:" % CF); w("      {==}"); w("")
 S = "C.CapState{p, i, e, b, a}"
-OR_ = "Word.or(41n, a, %s)" % OFX
+OR_ = "C.CapSet.union(a, %s)" % OFX
 w("def ar.valid(v: Bool, lk: Bool, al: Bool, c: C.CapCred, x: U32) -> {A.CapAdjust.ambient.allowed(c, x) == al : Bool} -> %s -> %s:" % (HV, GV("A.CapAdjust.ambient_raise.go(v, lk, al, c, x)")))
 w("  match v lk al c:")
 w("    case False{} lk al c:"); w("      h => hv => hv")
@@ -186,14 +193,14 @@ hpx = "bool.and_l(C.CapSet.has(p, x), C.CapSet.has(i, x))(h)"
 hix = "bool.and_r(C.CapSet.has(p, x), C.CapSet.has(i, x))(h)"
 hpo = "caps.has_of(C.Cap.valid(x), p, x)(%s)" % hpx
 hio = "caps.has_of(C.Cap.valid(x), i, x)(%s)" % hix
-w("      +h => +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(valid.ep(%s)(hv))(bits.lub(41n, a, %s, p)(valid.ap(%s)(hv))(%s))(bits.lub(41n, a, %s, i)(valid.ai(%s)(hv))(%s))" % (OR_, OR_, S, OFX, S, hpo, OFX, S, hio))
+w("      +h => +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(valid.ep(%s)(hv))(set.lub(a, %s, p)(valid.ap(%s)(hv))(%s))(set.lub(a, %s, i)(valid.ai(%s)(hv))(%s))" % (OR_, OR_, S, OFX, S, hpo, OFX, S, hio))
 w("")
-MIN = "Word.and(41n, a, Word.not(41n, %s))" % OFX
+MIN = "C.CapSet.minus(a, %s)" % OFX
 w("def al.valid(v: Bool, c: C.CapCred, x: U32) -> %s -> %s:" % (HV, GV("A.CapAdjust.ambient_lower.go(v, c, x)")))
 w("  match v c:")
 w("    case False{} c:"); w("      hv => hv")
 w("    case True{} %s:" % CF)
-w("      +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(valid.ep(%s)(hv))(bits.and_within(41n, a, Word.not(41n, %s), p)(valid.ap(%s)(hv)))(bits.and_within(41n, a, Word.not(41n, %s), i)(valid.ai(%s)(hv)))" % (MIN, MIN, S, OFX, S, OFX, S))
+w("      +hv => bool.and3(C.CapSet.subset(e, p), C.CapSet.subset(%s, p), C.CapSet.subset(%s, i))(valid.ep(%s)(hv))(set.minus_within(a, %s, p)(valid.ap(%s)(hv)))(set.minus_within(a, %s, i)(valid.ai(%s)(hv)))" % (MIN, MIN, S, OFX, S, OFX, S))
 w("")
 def RESTA(r): return "{C.CapState.with_ambient(C.CapCred.sets(C.Caps.or(%s, c)), C.CapSet.empty()) == C.CapState.with_ambient(C.CapCred.sets(c), C.CapSet.empty()) : C.CapState}" % r
 w("def ar.rest(v: Bool, lk: Bool, al: Bool, c: C.CapCred, x: U32) -> %s:" % RESTA("A.CapAdjust.ambient_raise.go(v, lk, al, c, x)"))
