@@ -14,7 +14,16 @@ from implementations outside this repository):
     has several chunks (dictionary resets, uncompressed chunks);
   * the same files corrupted in random places (a byte changed) and
     truncated, whose expected result comes from the xz tool (`xz -dc`):
-    either an error, or the same output.
+    either an error, or the same output;
+  * .lzma files (XzAlone): from Python's lzma (FORMAT_ALONE, presets 0 to 9,
+    lc/lp/pb and dictionary sizes) and from `xz --format=lzma`, which write
+    the size as unknown, with the end marker; the same with the size written
+    into the header (known size, end marker after it); and files of known
+    size without an end marker, from the small literal-only LZMA encoder
+    below (checked by Python's lzma and the xz tool, which decode them);
+    then the same corrupted (a byte changed past the dictionary size field,
+    cut short, bytes appended), expected as `xz -dc --format=lzma` judges
+    them, and fed to XzAlone.feed in pieces.
 
 The expected output of an intact file is its original data, checked against
 the xz tool (and Python's lzma.decompress, for the files it made); x86 BCJ
@@ -46,6 +55,70 @@ def octets(blob):
 
 def show(data):
     return "ok %d %s" % (len(data), hashlib.sha256(data).hexdigest()) if data is not None else "error"
+
+def lzma_verdict(blob):
+    p = subprocess.run(["xz", "-d", "-c", "-q", "-q", "--format=lzma"], input=blob, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    return p.stdout if p.returncode == 0 else None
+
+def alone(data, **kw):
+    return lzma.compress(data, format=lzma.FORMAT_ALONE, filters=[dict(id=lzma.FILTER_LZMA1, **kw)])
+
+def with_size(blob, n):
+    return blob[:5] + n.to_bytes(8, "little") + blob[13:]
+
+# A literal-only LZMA encoder (from the LZMA specification's description of
+# the range coder and the literal coder), for .lzma files of known size with
+# no end marker, which neither Python's lzma nor the xz tool writes. Every
+# byte is a literal (IsMatch 0, then its 8 bits from the literal
+# probabilities of its context); the state stays 0.
+class RangeEncoder:
+    def __init__(self):
+        self.low, self.range, self.cache, self.size, self.out = 0, 0xFFFFFFFF, 0, 1, bytearray()
+    def shift_low(self):
+        if self.low < 0xFF000000 or self.low >= 1 << 32:
+            carry, temp = self.low >> 32, self.cache
+            while True:
+                self.out.append((temp + carry) & 0xFF)
+                temp = 0xFF
+                self.size -= 1
+                if self.size == 0:
+                    break
+            self.cache = (self.low >> 24) & 0xFF
+        self.size += 1
+        self.low = (self.low & 0x00FFFFFF) << 8
+    def bit(self, probs, i, b):
+        bound = (self.range >> 11) * probs[i]
+        if b == 0:
+            self.range = bound
+            probs[i] += (2048 - probs[i]) >> 5
+        else:
+            self.low += bound
+            self.range -= bound
+            probs[i] -= probs[i] >> 5
+        while self.range < 1 << 24:
+            self.range <<= 8
+            self.shift_low()
+    def flush(self):
+        for _ in range(5):
+            self.shift_low()
+
+def literal_lzma(data, lc=3, lp=0, pb=2, dict_size=4096):
+    rc = RangeEncoder()
+    is_match = [1024] * 192
+    lits = [1024] * (0x300 << (lc + lp))
+    prev = 0
+    for pos, byte in enumerate(data):
+        rc.bit(is_match, pos & ((1 << pb) - 1), 0)
+        base = 0x300 * (((pos & ((1 << lp) - 1)) << lc) + (prev >> (8 - lc)))
+        sym = 1
+        for k in range(7, -1, -1):
+            b = (byte >> k) & 1
+            rc.bit(lits, base + sym, b)
+            sym = sym * 2 + b
+        prev = byte
+    rc.flush()
+    props = (pb * 5 + lp) * 9 + lc
+    return bytes([props]) + dict_size.to_bytes(4, "little") + len(data).to_bytes(8, "little") + bytes(rc.out)
 
 CHECKS = [("none", lzma.CHECK_NONE), ("crc32", lzma.CHECK_CRC32), ("crc64", lzma.CHECK_CRC64), ("sha256", lzma.CHECK_SHA256)]
 
@@ -137,6 +210,54 @@ def main():
         except lzma.LZMAError:
             want = None
         raws.append(("raw-flip%d" % k, bytes(blob), want))
+    # .lzma files
+    lzs = []
+    for p in range(10):
+        lzs.append(("lzma-py-p%d" % p, alone(text, preset=p), text))
+    for name in ("empty", "one", "random", "repeat", "lowent"):
+        lzs.append(("lzma-py-%s" % name, alone(data[name], preset=6), data[name]))
+    for lc, lp, pb in ((0, 0, 0), (4, 0, 4), (0, 4, 2), (1, 3, 0), (2, 2, 1)):
+        lzs.append(("lzma-py-lc%dlp%dpb%d" % (lc, lp, pb), alone(data["long"], preset=6, lc=lc, lp=lp, pb=pb), data["long"]))
+    for ds in (4096, 65536, 1 << 20):
+        lzs.append(("lzma-py-dict%d" % ds, alone(data["long"], preset=6, dict_size=ds), data["long"]))
+    for args in (["-0"], ["-1"], ["-6"], ["-9"], ["-6e"], ["--lzma1=preset=6,lc=0,lp=2,pb=0"], ["--lzma1=preset=1,dict=4KiB"]):
+        for name in ("empty", "one", "long"):
+            lzs.append(("lzma-xz%s-%s" % ("".join(args), name), subprocess.run(["xz", "-z", "-c", "-q", "--format=lzma"] + args, input=data[name], stdout=subprocess.PIPE, check=True).stdout, data[name]))
+    for name, blob, want in list(lzs[:12]):
+        lzs.append((name + "-known", with_size(blob, len(want)), want))
+    for name in ("empty", "one", "text", "random", "repeat"):
+        lzs.append(("lzma-literal-%s" % name, literal_lzma(data[name][:3000]), data[name][:3000]))
+    lzs.append(("lzma-literal-lc0lp4pb4", literal_lzma(text[:2000], lc=0, lp=4, pb=4), text[:2000]))
+    lzs.append(("lzma-literal-tiny-dict", literal_lzma(text[:500], dict_size=1), text[:500]))
+    good = list(lzs)
+    lzs.append(("lzma-wrong-size", with_size(good[0][1], len(good[0][2]) + 1), None))
+    lzs.append(("lzma-literal-short-size", with_size(good[-1][1], 499), None))
+    lzs.append(("lzma-trailing", good[0][1] + b"x", None))
+    lzs.append(("lzma-bad-props", bytes([225]) + good[0][1][1:], None))
+    lzs.append(("lzma-lclp5", bytes([(2 * 5 + 1) * 9 + 4]) + good[0][1][1:], None))
+    lzs.append(("lzma-header-only", good[0][1][:13], None))
+    lzs.append(("lzma-header-cut", good[0][1][:9], None))
+    for name, blob, want in lzs:
+        if want is not None:
+            assert lzma.decompress(blob, format=lzma.FORMAT_ALONE) == want, name
+        assert lzma_verdict(blob) == want, name
+    for k in range(50):
+        name, blob, want = rng.choice(good)
+        bad = bytearray(blob)
+        # not in the dictionary size (bytes 1 to 4): xz allocates the
+        # dictionary it names, and fails on a huge one this decoder (which
+        # sizes its dictionary by the output) need not refuse
+        i = rng.choice([0] + list(range(5, len(bad))))
+        bad[i] ^= rng.randrange(1, 256)
+        lzs.append(("%s-flip%d@%d" % (name, k, i), bytes(bad), lzma_verdict(bytes(bad))))
+    for k in range(20):
+        name, blob, want = rng.choice(good)
+        n = rng.randrange(len(blob))
+        lzs.append(("%s-cut%d@%d" % (name, k, n), blob[:n], lzma_verdict(blob[:n])))
+    for k in range(6):
+        name, blob, want = rng.choice(good)
+        extra = bytes(rng.randrange(256) for _ in range(rng.randrange(1, 9)))
+        lzs.append(("%s-append%d" % (name, k), blob + extra, lzma_verdict(blob + extra)))
     # streaming: intact files fed to XzDecoder (and raw streams to XzLzma2)
     # in pieces of random sizes
     streams = []
@@ -148,6 +269,10 @@ def main():
     for name, blob, want in raws[:3]:
         cuts = sorted(rng.sample(range(1, len(blob)), 25))
         streams.append(("stream-%s" % name, "raw", [blob[i:j] for i, j in zip([0] + cuts, cuts + [len(blob)])], want))
+    for k in range(14):
+        name, blob, want = rng.choice(good if k < 10 else lzs[len(good):])
+        cuts = sorted(rng.sample(range(1, len(blob)), min(len(blob) - 1, rng.randrange(1, 40)))) if len(blob) > 1 else []
+        streams.append(("stream-%s" % name, "lzma", [blob[i:j] for i, j in zip([0] + cuts, cuts + [len(blob)])], want))
     lines, expect = [], []
     def case(name, call, want):
         k = len(lines)
@@ -157,10 +282,14 @@ def main():
         case(name, "X.xz_decode(X.XzParams{1048576}, %s)" % octets(blob), want)
     for name, blob, want in raws:
         case(name, "L2.XzLzma2.decode(1048576, 1048576, %s)" % octets(blob), want)
+    for name, blob, want in lzs:
+        case(name, "A.XzAlone.decode(A.XzAloneParams{1048576}, %s)" % octets(blob), want)
     for name, kind, pieces, want in streams:
         ps = "[" + ", ".join(octets(p) for p in pieces) + "]"
         if kind == "xz":
             case(name, "xzref_feed_xz(%s, Done{X.XzFed{X.XzDecoder.start(X.XzParams{1048576}), B.Octets.empty()}}, B.Octets.empty())" % ps, want)
+        elif kind == "lzma":
+            case(name, "xzref_feed_al(%s, Done{A.XzAloneFed{A.XzAlone.start(A.XzAloneParams{1048576}), B.Octets.empty()}}, B.Octets.empty())" % ps, want)
         else:
             case(name, "xzref_feed_l2(%s, Done{L2.XzLzma2Fed{L2.XzLzma2.start(1048576, 1048576), B.Octets.empty(), False{}}}, B.Octets.empty())" % ps, want)
     header = """import Base
@@ -168,6 +297,7 @@ import ../../bytes/bytes.bend as B
 import ../error.bend as E
 import ../lzma2.bend as L2
 import ../xz.bend as X
+import ../alone.bend as A
 import bend-collections@1.0.0.0/src/crypto/sha/sha256.bend as Sha
 
 def xzref_show(r: Result<&2, &2, E.XzError, B.Octets>) -> String:
@@ -228,6 +358,21 @@ def xzref_feed_l2(ps: List<&2, B.Octets>, r: Result<&2, &1, E.XzError, L2.XzLzma
           Fail{e}
         case Done{L2.XzLzma2Fed{d, out, ended}}:
           xzref_feed_l2(t, L2.XzLzma2.feed(d, p), B.Octets.append(acc, out))
+
+def xzref_feed_al(ps: List<&2, B.Octets>, r: Result<&2, &1, E.XzError, A.XzAloneFed>, acc: B.Octets) -> Result<&2, &2, E.XzError, B.Octets>:
+  match ps:
+    case Nil{}:
+      match r:
+        case Fail{e}:
+          Fail{e}
+        case Done{A.XzAloneFed{d, out}}:
+          xzref_join(A.XzAlone.finish(d), B.Octets.append(acc, out))
+    case Con{p, t}:
+      match r:
+        case Fail{e}:
+          Fail{e}
+        case Done{A.XzAloneFed{d, out}}:
+          xzref_feed_al(t, A.XzAlone.feed(d, p), B.Octets.append(acc, out))
 
 def main() -> IO(Unit):
   do IO<Unit>:
