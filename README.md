@@ -59,6 +59,10 @@ GPL source was read.
 | [lzo](lzo/) | LZO1X compression and decompression, and the lzop container (clean-room, from documentation only) |
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
+| [errseq](errseq/) | Error sequence counters (`errseq_t`): a writer records errors, each observer learns of one it has not seen exactly once |
+| [ratelimit](ratelimit/) | Rate limiting as a pure state machine: at most `burst` events per `interval` (sliding or fixed window), with the suppressed count |
+| [timerqueue](timerqueue/) | Timers keyed by expiry as a pure state machine: add, delete, next expiry, expire all due; any priority queue or ordered map as the store |
+| [dim](dim/) | Dynamic interrupt moderation (net_dim) as a pure state machine: profile steps from interval samples, converging on identical samples |
 | [algo](algo/) | Bit search, bitmaps, binary search |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
