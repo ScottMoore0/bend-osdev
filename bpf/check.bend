@@ -93,7 +93,53 @@ def ret_only(a: S.SeccompAction) -> List<&2, I.BpfOp>:
 def deny(nr: U32, e: U32) -> List<&2, I.BpfOp>:
   [I.BpfLdAbs{I.BpfW{}, 0}, I.BpfJmp{I.BpfJeq{}, I.BpfK{nr}, 0, 1}, I.BpfRet{I.BpfRetK{S.SeccompAction.to_u32(S.SeccompErrno{e})}}, I.BpfRet{I.BpfRetK{S.SeccompAction.to_u32(S.SeccompAllow{})}}]
 
+# A full-size program, as a regression test for long inputs: 4096
+# instructions (BPF_MAXINSNS), stored as Octets, read back, prepared and run
+# on 64 KB of pseudo-random bytes (a linear congruential generator). Block j
+# of eight: ld [4j mod 65532]; add #j; st M[j mod 16]; ldx M[j mod 16];
+# ldx #(7j mod 65000); ldb [x + 3]; jeq #j, 0, 0; ja 0 (ret a in the last).
+def big.last(last: Bool) -> I.BpfRaw:
+  match last:
+    case True{}:
+      I.bpf_stmt(22, 0)
+    case False{}:
+      I.bpf_stmt(5, 0)
+
+def big.block(+j: U32, last: Bool, acc: List<&2, I.BpfRaw>) -> List<&2, I.BpfRaw>:
+  +m = U32.mod(j, 16)
+  Con{I.bpf_stmt(32, U32.mod(U32.mul(4, j), 65532)), Con{I.bpf_stmt(4, j), Con{I.bpf_stmt(2, m), Con{I.bpf_stmt(97, m), Con{I.bpf_stmt(1, U32.mod(U32.mul(j, 7), 65000)), Con{I.bpf_stmt(80, 3), Con{I.bpf_jump(21, j, 0, 0), Con{big.last(last), acc}}}}}}}}
+
+def big.prog(n: Nat, +j: U32, acc: List<&2, I.BpfRaw>) -> List<&2, I.BpfRaw>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      big.prog(p, U32.sub(j, 1), big.block(j, U32.is_eq(j, 511), acc))
+
+def big.packet(n: Nat, +s: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      +s2 = U32.add(U32.mul(s, 1103515245), 12345)
+      big.packet(p, s2, Con{U32.and(U32.shrn(s2, 16n), 255), acc})
+
+def big.run(r: Result<&2, &2, I.BpfError, List<&2, I.BpfOp>>, pk: B.Octets) -> String:
+  match r:
+    case Done{ops}:
+      show_run(R.bpf_run(R.bpf_packet(pk), ops))
+    case Fail{e}:
+      "error: " ++ I.BpfError.show(e)
+
+def big.read(r: Result<&2, &2, I.BpfError, List<&2, I.BpfRaw>>, pk: B.Octets) -> String:
+  match r:
+    case Done{raws}:
+      big.run(V.bpf_prepare(V.bpf_maxinsns(), raws), pk)
+    case Fail{e}:
+      "error: " ++ I.BpfError.show(e)
+
 def main() -> IO(Unit):
+  +big = I.bpf_to_octets(I.BpfBig{}, big.prog(512n, 511, Nil{}))
   do IO<Unit>:
     IO.print("rarp " ++ show_run(run_raw(pkt_rarp(), rarp())) ++ " " ++ show_run(run_raw(pkt_arp(), rarp())))
     IO.print("hosts " ++ pkt_run(pkt_ip([128, 3, 112, 15], [128, 3, 112, 35]), hosts()) ++ " " ++ pkt_run(pkt_ip([128, 3, 112, 35], [128, 3, 112, 15]), hosts()) ++ " " ++ pkt_run(pkt_ip([128, 3, 112, 15], [10, 0, 0, 1]), hosts()) ++ " " ++ pkt_run(pkt_arp(), hosts()))
@@ -110,6 +156,7 @@ def main() -> IO(Unit):
     IO.print("seccomp validate " ++ show_ok(S.seccomp_validate(V.bpf_maxinsns(), example())) ++ ", " ++ show_ok(S.seccomp_validate(V.bpf_maxinsns(), finger())) ++ ", " ++ show_ok(S.seccomp_validate(V.bpf_maxinsns(), [I.BpfLdAbs{I.BpfW{}, 6}, I.BpfRet{I.BpfRetA{}}])))
     IO.print("stack " ++ show_act(S.seccomp_eval([deny(39, 1), deny(39, 2), deny(110, 3)], S.seccomp_order(), sc_call(39, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([deny(39, 1), ret_only(S.SeccompTrap{5}), deny(110, 3)], S.seccomp_order(), sc_call(39, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([deny(39, 1), deny(110, 3)], S.seccomp_order(), sc_call(110, S.seccomp_arch_x86_64()))) ++ " " ++ show_act(S.seccomp_eval([], S.seccomp_order(), sc_call(110, S.seccomp_arch_x86_64()))))
     IO.print("action " ++ S.SeccompAction.show(S.SeccompAction.of_u32(196613)) ++ " " ++ S.SeccompAction.show(S.SeccompAction.of_u32(65536)) ++ " " ++ S.SeccompAction.show(S.SeccompAction.of_u32(0)) ++ " " ++ U32.show(S.SeccompAction.to_u32(S.SeccompErrno{65549})))
+    IO.print("big " ++ Nat.show(B.Octets.len(big)) ++ " bytes, answer " ++ big.read(I.bpf_of_octets(I.BpfBig{}, big), B.Octets.of_list(big.packet(65536n, 7, Nil{}))))
 
 #|rarp 42 0
 #|hosts 4294967295 4294967295 0 0
@@ -126,3 +173,4 @@ def main() -> IO(Unit):
 #|seccomp validate ok, error: load not allowed in seccomp at 0, error: load not allowed in seccomp at 0
 #|stack ERRNO(1) TRAP(5) ERRNO(3) ALLOW
 #|action TRAP(5) KILL_PROCESS KILL_THREAD 327693
+#|big 32768 bytes, answer 180

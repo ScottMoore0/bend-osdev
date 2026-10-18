@@ -202,6 +202,26 @@ fixed cases for code after a jump and after a return) check that the kernel
 accepts exactly the filters `seccomp_validate` accepts, both ways. If
 installing a filter is not permitted, the rest runs and `run.sh` exits 77.
 
+## Sizes
+
+A packet is read only at the offsets a program loads from (through bytes'
+tail-recursive `Octets` operations), so its size has no limit beyond memory.
+Measured on Bend 2.0.37 (native build, WSL2): a 4096-instruction program
+(`BPF_MAXINSNS`: loads, ALU, scratch memory, jumps), written as 32 KB of
+`Octets` with `bpf_to_octets`, read back with `bpf_of_octets`, prepared
+(decoded and validated) and run on a 64 KB packet, the answer checked
+against `ref/gen.py`'s model: 0.7 s, 240 MB peak. `check.bend` runs it as a
+regression test.
+
+The program-wide loops (`bpf_encode`, `bpf_decode`, `bpf_to_octets`,
+`bpf_of_octets`, validation and its scratch-memory pass) recurse once per
+instruction without being tail calls; that is fine for the 4096
+instructions a filter may have (and a seccomp path is checked filter by
+filter). A stored program of 16,384 instructions still decodes and is
+refused as too long (`BpfErrTooLong`), but at 32,768 instructions (256 KB)
+Bend 2.0.37's runtime overflows its stack: a caller handed untrusted bytes
+should refuse more than `8 * bpf_maxinsns()` of them before decoding.
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
