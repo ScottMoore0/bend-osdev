@@ -563,23 +563,30 @@ Generating a `~n` tail costs a pass over the directory's short names for
 each name, to find the first tail free (Windows' hashed tails, which
 change the short names chosen, are not implemented).
 
-The reader's figures, measured earlier on bend's JavaScript lane (which
-uses several times the memory of a native build):
+The reader's figures, measured natively on the same workloads (throwaway
+size tests, not kept in the repository: 512-byte clusters, the files' data
+all zeros; each image built by `ref/gen.py`'s image builder and accepted by
+`fsck.fat -n`, where the JavaScript-lane figures used `mkfs.fat` and
+`mcopy` for the first two; each program loads the image's non-zero sectors
+from its file into a `MemDev`, which answers a sector never written with
+zeros, and that load, about 0.1 s and 50 MB, is in the figures), with the
+JavaScript lane's earlier figures beside them:
 
-| Image | Operation | Time, peak memory |
-|---|---|---|
-| FAT16, 32 MB, `mkfs.fat` + `mcopy`, 512-byte clusters | walk of a 20 MB file's chain (40,962 clusters) | 9.6 s, 395 MB |
-| | stream the 20 MB file (`Fat.open` / `Fat.next`, 40,962 pieces) | 28 s, 480 MB |
-| | `Fat.read` of a whole 1 MB file | 6 s, 1.8 GB |
-| | list a directory of 3,000 long names (12,001 entries) | 1.7 s, 310 MB |
-| FAT32, 40 MB, `mkfs.fat` + `mcopy`, 512-byte clusters | walk of a 30 MB file's chain (61,442 clusters) | 22 s, 456 MB |
-| | stream the 30 MB file | 56 s, 494 MB |
-| FAT16, 30 MB, `ref/gen.py`'s builder | list a directory of 42,000 entries | 9.4 s, 748 MB |
+| Image | Operation | Time, peak memory | JavaScript lane, before |
+|---|---|---|---|
+| FAT16, 31 MB | `FatChain.walk` of a 20 MB file's chain (40,962 clusters) | 1.25 s, 57 MB | 9.6 s, 395 MB |
+| | stream the 20 MB file (`Fat.open` / `Fat.next`, 40,962 pieces) | 2.8 s, 56 MB | 28 s, 480 MB |
+| | `Fat.read` of a whole 1 MB file | 0.50 s, 162 MB | 6 s, 1.8 GB |
+| | list a directory of 3,000 long names (12,001 entries) | 0.60 s, 62 MB | 1.7 s, 310 MB |
+| FAT32, 36 MB | walk of a 30 MB file's chain (61,442 clusters) | 2.0 s, 51 MB | 22 s, 456 MB |
+| | stream the 30 MB file | 4.9 s, 49 MB | 56 s, 494 MB |
+| FAT16, 31 MB | list a directory of 42,000 entries | 1.8 s, 182 MB | 9.4 s, 748 MB |
 
 Nothing in the package recurses over a file's size, a directory's entries
 or a chain's length. A range read (`Fat.read`, `FatW.read`) answers one
-`Octets` (about 150 bytes of memory a byte held): read large files a piece
-at a time. A listing holds every entry it returns. Every FAT entry the
+`Octets` (about 100 bytes of memory a byte held, natively: a 1 MB
+`Fat.read` peaks at about 0.1 GB above the mounted volume's): read large
+files a piece at a time. A listing holds every entry it returns. Every FAT entry the
 reader follows is a block read (there is no cache); the writer follows
 chains in its map.
 

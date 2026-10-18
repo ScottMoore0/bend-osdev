@@ -187,7 +187,7 @@ X.Ext2.read(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, dev, fs, B.Oc
 | `Ext2File.read_block(dev, fs, i, l)` | the bytes of logical block `l` (the last cut at the size; holes as zeros) |
 | `Ext2File.start(i)`, `Ext2File.next(dev, fs, r)`, `Ext2Reader{inode, next}`, `Ext2Chunk` (`Ext2Piece{data, rest}`, `Ext2Eof`) | streaming, a block at a time |
 | `Ext2File.read_range(dev, fs, i, off, len)` | bytes from `off`, never past the size; reads only the blocks the range covers |
-| `Ext2File.read_all(dev, fs, i)` | the whole file (an `Octets` holds about 150 bytes of memory per byte: stream anything over a few megabytes; see Speed and size) |
+| `Ext2File.read_all(dev, fs, i)` | the whole file (an `Octets` holds about 100 bytes of memory per byte natively: stream anything over a few megabytes; see Speed and size) |
 | `Ext2File.readlink(dev, fs, i)`, `Ext2File.is_fast_symlink(fs, i)` | link targets; `Ext2NotSymlink` |
 
 ### blockmap.bend and extent.bend
@@ -472,40 +472,43 @@ differential tests.
 
 ## Speed and size
 
-**Lanes.** The reading figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
+Measured natively (Bend 2.0.37, WSL2, `bend file.bend -o prog`).
+`check.bend` runs in about 1 s; the reading test's 43 case files are each
+built natively, which is most of the 17 minutes `scripts/check.sh ext2`
+takes. Field reads go through bytes' bit-sliced readers; checksums use
+crc's bitwise reference engine.
 
-Measured with Bend 2.0.37's JavaScript runtime (bun; no clang on the test
-machine): `check.bend` runs in about 1.5 s; the differential test takes
-about 100 s in all (0.7 to 12 s an image, 0.2 to 0.55 GB of memory each:
-Bend 2.0.37 does not give memory back between images, so each runs in a
-process of its own). Field reads go through bytes' bit-sliced readers;
-checksums use crc's bitwise reference engine.
+Large inputs, on images of 4 to 256 MB written by mke2fs and read a block
+at a time (throwaway size tests, not kept in the repository, run on the
+same workloads as the JavaScript-lane figures beside them). Each program
+loads the image's blocks from its file into a `MemDev`, except the files'
+data blocks (each holding one byte pattern) and a grown directory's empty
+blocks, which a test device answers from one shared block; the memory is
+the whole process's, the device's blocks included, and the time includes
+the load (0.02 to 0.3 s):
 
-Large inputs, on images of 24 to 64 MB written by mke2fs and read a block
-at a time through a sparse device (throwaway size tests, not kept in the
-repository; the memory is the whole process's, the test device's own
-blocks included):
-
-| Operation | Input | Time | Memory |
+| Operation | Input | Time, peak memory | JavaScript lane, before |
 |---|---|---|---|
-| streaming (`Ext2File.start`, `next`) | 8 MB file, 1 KiB blocks, block map into the doubly indirect block | 25 s | 0.4 GB |
-| streaming | 48 MB file, 4 KiB blocks, extents | 93 s | 0.4 GB |
-| streaming | 6000-block sparse file of 3000 one-block extents (a tree of depth 2: one index block, 37 leaves) | 28 s | 0.7 GB |
-| streaming | 70 MB sparse file, 4300 data blocks under 36 indirect, 2 doubly and 1 triply indirect blocks | 96 s | 0.7 GB |
-| `read_range`, `read_all` | 1 MB (block map, extents, 1 and 4 KiB blocks) | 4 to 10 s | 1.3 to 1.9 GB |
-| `read_range`, `read_all` | 100 KB | 1.1 s | 0.3 GB |
-| `Ext2File.map` | any block of the files above | about 1 s | 0.2 to 0.5 GB |
-| `Ext2.list` | 20,000 entries (1 KiB blocks, linear and htree; 4 KiB; 64 KiB) | 2.3 to 2.8 s | 1.0 to 1.3 GB |
-| `Ext2.list` | a directory of 10,000 blocks (30,000 entries, all but 8 removed) | 13 s | 0.44 GB |
-| `Ext2.list` | a directory of 30,000 blocks (90,000 entries, all but 8 removed) | 38 s | 0.48 GB |
-| `Ext2.lookup` | the last of 20,000 entries; a missing name in 10,000 and in 30,000 blocks | 2 s; 12 s and 29 s | 0.9 GB; 0.45 and 0.48 GB |
-| `Ext2.lookup`, `Ext2.read` | inodes in the last of 256 groups (ext2; ext4 with meta_bg) | 1 s | 0.35 GB |
+| streaming (`Ext2File.start`, `next`) | 8 MB file, 1 KiB blocks, block map into the doubly indirect block | 2.2 s, 18 MB | 25 s, 0.4 GB |
+| streaming | 48 MB file, 4 KiB blocks, extents | 5.2 s, 9 MB | 93 s, 0.4 GB |
+| streaming | 6000-block sparse file of 3000 one-block extents (a tree of depth 2: one index block, 37 leaves) | 14.5 s, 22 MB | 28 s, 0.7 GB |
+| streaming | 70 MB sparse file, 4300 data blocks under 36 indirect, 2 doubly and 1 triply indirect blocks | 8.5 s, 16 MB | 96 s, 0.7 GB |
+| `read_all` | 1 MB (block map and extents, 1 and 4 KiB blocks) | 0.33 to 0.49 s, 107 to 120 MB | 4 to 10 s, 1.3 to 1.9 GB |
+| `read_all` | 100 KB | 0.04 to 0.07 s, 18 to 32 MB | 1.1 s, 0.3 GB |
+| `Ext2File.map` | the last block of each file above | 0.01 to 0.03 s, 9 to 22 MB | about 1 s, 0.2 to 0.5 GB |
+| `Ext2.list` | 20,000 entries (1 KiB blocks, linear and htree; 4 KiB; 64 KiB) | 1.0 to 1.6 s, 0.56 to 0.62 GB | 2.3 to 2.8 s, 1.0 to 1.3 GB |
+| `Ext2.list` | a directory of 10,000 blocks, 8 entries left | 2.4 s, 29 MB | 13 s, 0.44 GB |
+| `Ext2.list` | a directory of 30,000 blocks, 8 entries left | 7.3 s, 45 MB | 38 s, 0.48 GB |
+| `Ext2.lookup` | the last of 20,000 entries; a missing name in 10,000 and in 30,000 blocks | 1.4 s; 2.4 s and 7.2 s | 2 s; 12 s and 29 s |
+| `Ext2.lookup`, `Ext2.read` | a file whose inode is in the last of 256 groups (ext2; ext4 with meta_bg) | 0.27 s, 141 MB; 0.10 s, 52 MB | 1 s, 0.35 GB |
+
+The 20,000-entry rows' memory is mostly the test device's directory blocks
+(1,400 to 5,800 of them, held as `Octets`); the lookup of the last of them
+peaks at 0.54 GB, the missing names at 29 and 46 MB (0.9, 0.45 and 0.48 GB
+before). The large directories are grown by debugfs's `expand_dir` (empty
+blocks after the first, which holds the 8 entries), where the JavaScript
+lane's had 30,000 and 90,000 entries removed; either way every block is
+read. The 1 MB rows are `read_all` (`read_range` over the whole file).
 
 No operation recurses once per block, entry or group. Reading a range and
 listing a directory are tail calls a block at a time (the blocks or entries
@@ -521,16 +524,15 @@ overflowed the JavaScript lane's stack somewhere between 10,000 and 40,000 block
 A block read through blockdev's `Dev.read_bytes` recurses once per device
 block it spans: at most 128 (a 64 KiB block on a 512-byte device).
 
-What limits one call now is memory: an `Octets` cost about 940 bytes a
-byte (when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured), and a range read peaks at about 1.5 KB a byte, so read files
-over a megabyte or so by streaming or in ranges; a listing holds every
-entry's name (20,000 short names take about 0.1 GB). Streaming reads the
-block map or extent tree again for every block (about 1.4 ms a block for a
-hole, 2 to 8 ms for a block of data), so a 70 MB sparse file takes about a
-minute and a half; the differential test reads that file's far blocks by
-range and by map instead.
+What limits one call is memory: an `Octets` holds about 100 bytes of
+memory a byte natively, so `read_all` of a 1 MB file peaks at about 0.1 GB (1.3 to
+1.9 GB before, on the JavaScript lane): read files of more than a few
+megabytes by streaming or in ranges. A listing holds every entry's name.
+Streaming reads the block map or extent tree again for every block (about
+0.1 ms a block for a hole, 0.3 to 0.4 ms for a block of data through the
+block map or a shallow extent tree, 2.4 ms through the depth-2 tree above,
+which reads its index block and a leaf of 84 extents for each); the differential test reads the 70 MB
+sparse file's far blocks by range and by map instead.
 
 ### Writing (native)
 
