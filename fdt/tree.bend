@@ -14,6 +14,7 @@ import ../bytes/bytes.bend as B
 import ./error.bend as E
 import ./layout.bend as L
 import ./structure.bend as S
+import ./strindex.bend as I
 
 type FdtProp is Data:
   FdtProp{name: B.Octets, value: B.Octets}
@@ -261,6 +262,74 @@ def dedup.flat(r: FdtFlatD) -> FdtFlat:
         case FdtStrTab{bytes, size}:
           FdtFlat{ts, B.Octets.of_list(bytes)}
 
+# The same writer with an index of the names in the block (strindex.bend:
+# FdtDict), so a name is found without searching the block: dedup.find above
+# is the reference, and PROOF.bend (dedup_fast) proves dkx.run equal to
+# dedup.run for every tree. A name with a NUL inside cannot be in the index
+# (its bytes would end early), so it is searched for as before.
+
+# the tokens so far (reversed), the strings block so far, reversed so that
+# a new name is added without copying it, its length, and the index
+type FdtFlatX is Data:
+  FdtFlatX{toks: List<&2, S.FdtToken>, rbytes: List<&2, U32>, size: Nat, dict: I.FdtDict}
+
+# the offset of name k (without its NUL): from the index, or for a name
+# with a NUL inside (ok False) by searching the block
+def dkx.find(ok: Bool, rbytes: List<&2, U32>, k: List<&2, U32>, dict: I.FdtDict) -> Maybe<&2, Nat>:
+  match ok:
+    case True{}:
+      I.nt.get(k, dict)
+    case False{}:
+      dedup.find(List.reverse(&2, U32, rbytes), B.append(k, [0]), 0n, None{})
+
+# the property's token, and a new name k0 (with its NUL) added at offset
+# size, to the block and to the index
+def dkx.add(m: Maybe<&2, Nat>, +k0: List<&2, U32>, rbytes: List<&2, U32>, +size: Nat, dict: I.FdtDict, v: B.Octets, toks: List<&2, S.FdtToken>) -> FdtFlatX:
+  match m:
+    case Some{o}:
+      FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(o), v}, toks}, rbytes, size, dict}
+    case None{}:
+      FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, k0, rbytes), Nat.add(size, B.len(k0)), I.dk.ins(k0, dict, size)}
+
+def dkx.prop.k(+k: List<&2, U32>, +rbytes: List<&2, U32>, size: Nat, +dict: I.FdtDict, v: B.Octets, toks: List<&2, S.FdtToken>) -> FdtFlatX:
+  dkx.add(dkx.find(L.fdt.nonul.fast(k), rbytes, k, dict), B.append(k, [0]), rbytes, size, dict, v, toks)
+
+def dkx.prop(acc: FdtFlatX, p: FdtProp) -> FdtFlatX:
+  match acc:
+    case FdtFlatX{toks, rbytes, size, dict}:
+      match p:
+        case FdtProp{k, v}:
+          dkx.prop.k(B.Octets.to_list(k), rbytes, size, dict, v, toks)
+
+def dkx.props(ps: List<&2, FdtProp>, acc: FdtFlatX) -> FdtFlatX:
+  match ps:
+    case Nil{}:
+      acc
+    case Con{p, t}:
+      dkx.props(t, dkx.prop(acc, p))
+
+def dkx.push(acc: FdtFlatX, t: S.FdtToken) -> FdtFlatX:
+  match acc:
+    case FdtFlatX{toks, rbytes, size, dict}:
+      FdtFlatX{Con{t, toks}, rbytes, size, dict}
+
+def dkx.forest(ns: List<&2, FdtNode>, acc: FdtFlatX) -> FdtFlatX:
+  match ns:
+    case Nil{}:
+      acc
+    case Con{n, t}:
+      match n:
+        case FdtNode{nm, ps, cs}:
+          dkx.forest(t, dkx.push(dkx.forest(cs, dkx.props(ps, dkx.push(acc, S.FdtTokBegin{nm}))), S.FdtTokEnd{}))
+
+def dkx.fin(d: FdtFlatX) -> FdtFlatD:
+  match d:
+    case FdtFlatX{toks, rbytes, size, dict}:
+      FdtFlatD{List.reverse(&2, S.FdtToken, toks), FdtStrTab{List.reverse(&2, U32, rbytes), size}}
+
+def dkx.run(root: FdtNode) -> FdtFlatD:
+  dkx.fin(dkx.forest([root], FdtFlatX{Nil{}, Nil{}, 0n, I.nt.empty()}))
+
 # Public writers
 
 # the tokens of a tree and its strings block, laid out as chosen
@@ -269,7 +338,7 @@ def FdtNode.to_tokens_with(how: FdtStrings, +root: FdtNode) -> FdtFlat:
     case FdtStringsSimple{}:
       FdtFlat{flat.toks.fast([root], 0n), B.Octets.of_list(flat.strs.fast([root]))}
     case FdtStringsDedup{}:
-      dedup.flat(dedup.run(root))
+      dedup.flat(dkx.run(root))
 
 def FdtNode.to_tokens(+root: FdtNode) -> FdtFlat:
   FdtNode.to_tokens_with(FdtStrings.default(), root)
@@ -415,9 +484,59 @@ def tb.finish(st: FdtTb) -> Result<&2, &2, E.FdtError, FdtNode>:
 def tb.run(ts: List<&2, S.FdtToken>, rules: FdtTreeRules, strs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtNode>:
   tb.finish(tb.go(ts, rules, strs, TbStart{}))
 
+# The same reader with an index of the strings block by offset
+# (strindex.bend: FdtIx), built once, so a property's name is found in at
+# most 32 steps rather than by walking the block from its start. tb.name_at
+# above is the reference, and PROOF.bend (run_fast) proves tb.run.fast
+# equal to tb.run for every token list and strings block.
+
+def tb.name_ix(ix: I.FdtIx, off: U32) -> Maybe<&2, L.FdtCut>:
+  L.fdt.cstr(I.ix.at(ix, off))
+
+def tb.prop.open.ix(s: List<&2, FdtFrame>, pf: Bool, ix: I.FdtIx, off: U32, v: B.Octets) -> FdtTb:
+  match s:
+    case Nil{}:
+      TbFail{E.FdtUnbalanced{}}
+    case Con{f, rest}:
+      tb.prop.named(f, tb.name_ix(ix, off), pf, v, rest)
+
+def tb.prop.ix(st: FdtTb, pf: Bool, ix: I.FdtIx, off: U32, v: B.Octets) -> FdtTb:
+  match st:
+    case TbOpen{s}:
+      tb.prop.open.ix(s, pf, ix, off, v)
+    case TbStart{}:
+      TbFail{E.FdtUnbalanced{}}
+    case TbDone{r}:
+      TbFail{E.FdtUnbalanced{}}
+    case TbFail{e}:
+      TbFail{e}
+
+def tb.step.ix(rules: FdtTreeRules, ix: I.FdtIx, st: FdtTb, t: S.FdtToken) -> FdtTb:
+  match rules:
+    case FdtTreeRules{nop_ok, props_first}:
+      match t:
+        case S.FdtTokBegin{nm}:
+          tb.begin(st, nm)
+        case S.FdtTokEnd{}:
+          tb.end(st)
+        case S.FdtTokProp{off, v}:
+          tb.prop.ix(st, props_first, ix, off, v)
+        case S.FdtTokNop{}:
+          tb.nop(nop_ok, st)
+
+def tb.go.ix(ts: List<&2, S.FdtToken>, +rules: FdtTreeRules, +ix: I.FdtIx, st: FdtTb) -> FdtTb:
+  match ts:
+    case Nil{}:
+      st
+    case Con{t, r}:
+      tb.go.ix(r, rules, ix, tb.step.ix(rules, ix, st, t))
+
+def tb.run.fast(ts: List<&2, S.FdtToken>, rules: FdtTreeRules, strs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtNode>:
+  tb.finish(tb.go.ix(ts, rules, I.ix.of(strs), TbStart{}))
+
 # the tree the tokens describe, with property names from the strings block
 def FdtNode.of_tokens(rules: FdtTreeRules, ts: List<&2, S.FdtToken>, strings: B.Octets) -> Result<&2, &2, E.FdtError, FdtNode>:
-  tb.run(ts, rules, B.Octets.to_list(strings))
+  tb.run.fast(ts, rules, B.Octets.to_list(strings))
 
 def FdtNode.of_flat(rules: FdtTreeRules, f: FdtFlat) -> Result<&2, &2, E.FdtError, FdtNode>:
   match f:

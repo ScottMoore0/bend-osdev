@@ -18,13 +18,17 @@ references, used when installed:
   * values: the typed property decoders against this file's decoders;
   * lookups: paths, aliases and phandles in random trees.
 
-`gen.py SEED` writes cases.bend, expected.txt and trees.txt; `gen.py --post
-OUTPUT` then hands every blob Fdt.build wrote to dtc (`-I dtb -O dts`, then
-back to a blob) and fdtdump, and checks that dtc reads back the same tree.
+`gen.py SEED` writes cases00.bend, cases01.bend, ..., expected.txt and
+trees.txt; `gen.py --post OUTPUT` then hands every blob Fdt.build wrote to
+dtc (`-I dtb -O dts`, then back to a blob) and fdtdump, and checks that dtc
+reads back the same tree.
 """
 import os, random, re, shutil, struct, subprocess, sys, tempfile
 
 MAGIC = 0xD00DFEED
+# the case files main writes (cases00.bend, cases01.bend, ...) hold at most
+# about this many bytes of cases each
+FILE_BYTES = 150000
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -622,13 +626,27 @@ def main(seed):
         for j, ph in enumerate(phs[:3] + [99]):
             case("phandle %d %d" % (k, j), "node(Pa.FdtNode.find_phandle(%s, %d))" % (bt, ph), show_node(find_ph(t, ph)))
 
-    with open(os.path.join(HERE, "cases.bend"), "w", newline="\n") as f:
-        f.write(PRELUDE)
-        # in groups of a few cases each, so that no def is too large to check
-        groups = [lines[i:i + 8] for i in range(0, len(lines), 8)]
-        for g, ls in enumerate(groups):
-            f.write("def part%d() -> IO(Unit):\n  do IO<Unit>:\n%s\n\n" % (g, "\n".join(ls)))
-        f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % g for g in range(len(groups))) + "\n")
+    # in groups of a few cases each, so that no def is too large to check,
+    # and in case files of at most about FILE_BYTES each, run one after the
+    # other, so that no native build of one needs more than about a GB
+    groups = [lines[i:i + 8] for i in range(0, len(lines), 8)]
+    files, size = [[]], 0
+    for g, ls in enumerate(groups):
+        n = sum(len(l) for l in ls)
+        if files[-1] and size + n > FILE_BYTES:
+            files.append([])
+            size = 0
+        files[-1].append(g)
+        size += n
+    for old in os.listdir(HERE):
+        if re.fullmatch(r"cases\d+\.bend", old):
+            os.remove(os.path.join(HERE, old))
+    for n, mine in enumerate(files):
+        with open(os.path.join(HERE, "cases%02d.bend" % n), "w", newline="\n") as f:
+            f.write(PRELUDE)
+            for g in mine:
+                f.write("def part%d() -> IO(Unit):\n  do IO<Unit>:\n%s\n\n" % (g, "\n".join(groups[g])))
+            f.write("def main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % g for g in mine) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
     with open(os.path.join(HERE, "trees.txt"), "w", newline="\n") as f:

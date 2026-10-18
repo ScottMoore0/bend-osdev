@@ -7,6 +7,7 @@ import ./header.bend as H
 import ./rsvmap.bend as R
 import ./structure.bend as S
 import ./tree.bend as T
+import ./strindex.bend as I
 import ./props.bend as P
 import ./path.bend as Pa
 import ./fdt.bend as F
@@ -468,6 +469,268 @@ def flat_ok_fast(+root: T.FdtNode) -> {T.flat_ok.ref(root) == T.FdtNode.flat_ok(
   %fits_fast(B.len(T.flat.strs([root]))) : {T.flat_ok.ref(root) == Bool.and(T.names_ok.ref(root), _) : Bool}
   {==}
 
+# The strings-block indexes (strindex.bend): each indexed lookup equals the
+# search it replaces, for every input.
+
+# U32.is_eq is equality: is_eq(a, b) is True exactly when a and b are the
+# same value (by induction over the bits, as Base's Word.cmp compares them)
+
+def fin_c(+c: Cmp, +x: Bool, +y: Bool, +e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {Cmp.is_eq(c) == True{} : Bool}:
+  match c:
+    case LT{}:
+      Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
+    case EQ{}:
+      {==}
+    case GT{}:
+      Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
+
+def fin_xy(+c: Cmp, +x: Bool, +y: Bool, +e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {x == y : Bool}:
+  match c:
+    case LT{}:
+      Empty.absurd({x == y : Bool}, ft_absurd(e))
+    case EQ{}:
+      match x y:
+        case False{} False{}:
+          {==}
+        case False{} True{}:
+          Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
+        case True{} False{}:
+          Empty.absurd({True{} == False{} : Bool}, ft_absurd(e))
+        case True{} True{}:
+          {==}
+    case GT{}:
+      Empty.absurd({x == y : Bool}, ft_absurd(e))
+
+def weq(+n: Nat, +a: Word(n), +b: Word(n), +e: {Cmp.is_eq(Word.cmp(n, a, b)) == True{} : Bool}) -> {a == b : Word(n)}:
+  match n:
+    case 0n:
+      match a b:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a b:
+        case WCon{x, at} WCon{y, bt}:
+          %weq(p, at, bt, fin_c(Word.cmp(p, at, bt), x, y, e)) : {WCon{x, at} == WCon{y, _} : Word(1n+p)}
+          %fin_xy(Word.cmp(p, at, bt), x, y, e) : {WCon{x, at} == WCon{_, at} : Word(1n+p)}
+          {==}
+
+def ieq(+a: U32, +b: U32, +e: {U32.is_eq(a, b) == True{} : Bool}) -> {a == b : U32}:
+  match a b:
+    case U32{x} U32{y}:
+      %weq(32n, x, y, e) : {U32{x} == U32{_} : U32}
+      {==}
+
+def wrefl(+n: Nat, +a: Word(n)) -> {EQ{} == Word.cmp(n, a, a) : Cmp}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match a:
+        case WCon{x, at}:
+          match x:
+            case False{}:
+              %wrefl(p, at) : {EQ{} == Word.cmp.fin(False{}, False{}, _) : Cmp}
+              {==}
+            case True{}:
+              %wrefl(p, at) : {EQ{} == Word.cmp.fin(True{}, True{}, _) : Cmp}
+              {==}
+
+def irefl(+a: U32) -> {True{} == U32.is_eq(a, a) : Bool}:
+  match a:
+    case U32{x}:
+      %wrefl(32n, x) : {True{} == Cmp.is_eq(_) : Bool}
+      {==}
+
+def ieq_sub(+a: U32, +b: U32, +e: {a == b : U32}) -> {True{} == U32.is_eq(a, b) : Bool}:
+  %e : {True{} == U32.is_eq(a, _) : Bool}
+  irefl(a)
+
+def isym_go(+a: U32, +b: U32, +c: Bool, +ec: {U32.is_eq(b, a) == c : Bool}, +e: {U32.is_eq(a, b) == False{} : Bool}) -> {c == False{} : Bool}:
+  match c:
+    case False{}:
+      {==}
+    case True{}:
+      Equal.trans(Bool, True{}, U32.is_eq(a, b), False{}, ieq_sub(a, b, Equal.sym(U32, b, a, ieq(b, a, ec))), e)
+
+def isym_f(+a: U32, +b: U32, +e: {U32.is_eq(a, b) == False{} : Bool}) -> {U32.is_eq(b, a) == False{} : Bool}:
+  isym_go(a, b, U32.is_eq(b, a), {==}, e)
+
+# By offset: the reference is the i-th suffix of the block
+
+def ixr.nth(xs: List<&2, List<&2, U32>>, i: Nat) -> List<&2, U32>:
+  match xs i:
+    case Nil{} _:
+      Nil{}
+    case Con{h, t} 0n:
+      h
+    case Con{h, t} 1n+p:
+      ixr.nth(t, p)
+
+# the offset, among all of them, of the m-th offset kept by ix.alt
+def ixr.pos(keep: Bool, m: Nat) -> Nat:
+  match keep:
+    case True{}:
+      Nat.double(m)
+    case False{}:
+      1n+Nat.double(m)
+
+def tails_go(+xs: List<&2, U32>, +acc: List<&2, List<&2, U32>>) -> {List.reverse.go(&2, List<&2, U32>, I.ix.tails(xs), acc) == I.ix.tails.go(xs, acc) : List<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      tails_go(t, Con{Con{h, t}, acc})
+
+def tails_fast(+xs: List<&2, U32>) -> {I.ix.tails(xs) == I.ix.tails.fast(xs) : List<&2, List<&2, U32>>}:
+  %tails_go(xs, Nil{}) : {I.ix.tails(xs) == List.reverse(&2, List<&2, U32>, _) : List<&2, List<&2, U32>>}
+  revrev(List<&2, U32>, I.ix.tails(xs))
+
+def alt_go(+xs: List<&2, List<&2, U32>>, +keep: Bool, +acc: List<&2, List<&2, U32>>) -> {List.reverse.go(&2, List<&2, U32>, I.ix.alt(xs, keep), acc) == I.ix.alt.go(xs, keep, acc) : List<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      match keep:
+        case True{}:
+          alt_go(t, False{}, Con{h, acc})
+        case False{}:
+          alt_go(t, True{}, acc)
+
+def alt_fast(+xs: List<&2, List<&2, U32>>, +keep: Bool) -> {I.ix.alt(xs, keep) == I.ix.alt.fast(xs, keep) : List<&2, List<&2, U32>>}:
+  %alt_go(xs, keep, Nil{}) : {I.ix.alt(xs, keep) == List.reverse(&2, List<&2, U32>, _) : List<&2, List<&2, U32>>}
+  revrev(List<&2, U32>, I.ix.alt(xs, keep))
+
+def nth_alt(+xs: List<&2, List<&2, U32>>, +m: Nat, +keep: Bool) -> {ixr.nth(xs, ixr.pos(keep, m)) == ixr.nth(I.ix.alt(xs, keep), m) : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      match m:
+        case 0n:
+          match keep:
+            case True{}:
+              {==}
+            case False{}:
+              nth_alt(t, 0n, True{})
+        case 1n+q:
+          match keep:
+            case True{}:
+              nth_alt(t, q, False{})
+            case False{}:
+              nth_alt(t, 1n+q, True{})
+
+def nth_one2(+h: List<&2, U32>, +n: Nat) -> {ixr.nth([h], n) == ixr.nth([h], Nat.double(n)) : List<&2, U32>}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+m:
+      {==}
+
+def one_nth(+k: Nat, +w: Word(k), +h: List<&2, U32>) -> {ixr.nth([h], Word.to_nat(k, w)) == I.ix.one(I.ix.zero(k, w), h) : List<&2, U32>}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+p:
+      match w:
+        case WCon{b, t}:
+          match b:
+            case False{}:
+              Equal.trans(List<&2, U32>, ixr.nth([h], Nat.double(Word.to_nat(p, t))), ixr.nth([h], Word.to_nat(p, t)), I.ix.one(I.ix.zero(p, t), h), Equal.sym(List<&2, U32>, ixr.nth([h], Word.to_nat(p, t)), ixr.nth([h], Nat.double(Word.to_nat(p, t))), nth_one2(h, Word.to_nat(p, t))), one_nth(p, t, h))
+            case True{}:
+              {==}
+
+def get_build(+k: Nat, +xs: List<&2, List<&2, U32>>, +w: Word(k)) -> {ixr.nth(xs, Word.to_nat(k, w)) == I.ix.get(I.ix.build(k, xs), k, w) : List<&2, U32>}:
+  match k:
+    case 0n:
+      match xs:
+        case Nil{}:
+          {==}
+        case Con{h, t}:
+          {==}
+    case 1n+p:
+      match xs:
+        case Nil{}:
+          {==}
+        case Con{h, t}:
+          match t:
+            case Nil{}:
+              one_nth(1n+p, w, h)
+            case Con{h2, t2}:
+              match w:
+                case WCon{b, r}:
+                  match b:
+                    case False{}:
+                      %alt_fast(Con{h, Con{h2, t2}}, True{}) : {ixr.nth(Con{h, Con{h2, t2}}, Nat.double(Word.to_nat(p, r))) == I.ix.get(I.ix.build(p, _), p, r) : List<&2, U32>}
+                      Equal.trans(List<&2, U32>, ixr.nth(Con{h, Con{h2, t2}}, Nat.double(Word.to_nat(p, r))), ixr.nth(I.ix.alt(Con{h, Con{h2, t2}}, True{}), Word.to_nat(p, r)), I.ix.get(I.ix.build(p, I.ix.alt(Con{h, Con{h2, t2}}, True{})), p, r), nth_alt(Con{h, Con{h2, t2}}, Word.to_nat(p, r), True{}), get_build(p, I.ix.alt(Con{h, Con{h2, t2}}, True{}), r))
+                    case True{}:
+                      %alt_fast(Con{h, Con{h2, t2}}, False{}) : {ixr.nth(Con{h, Con{h2, t2}}, 1n+Nat.double(Word.to_nat(p, r))) == I.ix.get(I.ix.build(p, _), p, r) : List<&2, U32>}
+                      Equal.trans(List<&2, U32>, ixr.nth(Con{h, Con{h2, t2}}, 1n+Nat.double(Word.to_nat(p, r))), ixr.nth(I.ix.alt(Con{h, Con{h2, t2}}, False{}), Word.to_nat(p, r)), I.ix.get(I.ix.build(p, I.ix.alt(Con{h, Con{h2, t2}}, False{})), p, r), nth_alt(Con{h, Con{h2, t2}}, Word.to_nat(p, r), False{}), get_build(p, I.ix.alt(Con{h, Con{h2, t2}}, False{}), r))
+
+def nth_tails(+xs: List<&2, U32>, +i: Nat) -> {B.drop(i, xs) == ixr.nth(I.ix.tails(xs), i) : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      match i:
+        case 0n:
+          {==}
+        case 1n+p:
+          {==}
+    case Con{h, t}:
+      match i:
+        case 0n:
+          {==}
+        case 1n+p:
+          nth_tails(t, p)
+
+# a lookup in the index is dropping that many bytes of the block
+def ix_at(+strs: List<&2, U32>, +off: U32) -> {B.drop(U32.to_nat(off), strs) == I.ix.at(I.ix.of(strs), off) : List<&2, U32>}:
+  match off:
+    case U32{w}:
+      %tails_fast(strs) : {B.drop(Word.to_nat(32n, w), strs) == I.ix.get(I.ix.build(32n, _), 32n, w) : List<&2, U32>}
+      Equal.trans(List<&2, U32>, B.drop(Word.to_nat(32n, w), strs), ixr.nth(I.ix.tails(strs), Word.to_nat(32n, w)), I.ix.get(I.ix.build(32n, I.ix.tails(strs)), 32n, w), nth_tails(strs, Word.to_nat(32n, w)), get_build(32n, I.ix.tails(strs), w))
+
+def name_ix(+strs: List<&2, U32>, +off: U32) -> {T.tb.name_at(strs, U32.to_nat(off)) == T.tb.name_ix(I.ix.of(strs), off) : Maybe<&2, L.FdtCut>}:
+  %ix_at(strs, off) : {T.tb.name_at(strs, U32.to_nat(off)) == L.fdt.cstr(_) : Maybe<&2, L.FdtCut>}
+  {==}
+
+def step_ix(+rules: T.FdtTreeRules, +strs: List<&2, U32>, +t: S.FdtToken, +st: T.FdtTb) -> {T.tb.step(rules, strs, st, t) == T.tb.step.ix(rules, I.ix.of(strs), st, t) : T.FdtTb}:
+  match rules:
+    case T.FdtTreeRules{nop, pf}:
+      match t:
+        case S.FdtTokBegin{nm}:
+          {==}
+        case S.FdtTokEnd{}:
+          {==}
+        case S.FdtTokProp{off, v}:
+          match st:
+            case T.TbOpen{s}:
+              match s:
+                case Nil{}:
+                  {==}
+                case Con{f, rest}:
+                  %name_ix(strs, off) : {T.tb.prop.named(f, T.tb.name_at(strs, U32.to_nat(off)), pf, v, rest) == T.tb.prop.named(f, _, pf, v, rest) : T.FdtTb}
+                  {==}
+            case T.TbStart{}:
+              {==}
+            case T.TbDone{r}:
+              {==}
+            case T.TbFail{e}:
+              {==}
+        case S.FdtTokNop{}:
+          {==}
+
+def go_ix(+ts: List<&2, S.FdtToken>, +rules: T.FdtTreeRules, +strs: List<&2, U32>, +st: T.FdtTb) -> {T.tb.go(ts, rules, strs, st) == T.tb.go.ix(ts, rules, I.ix.of(strs), st) : T.FdtTb}:
+  match ts:
+    case Nil{}:
+      {==}
+    case Con{t, r}:
+      %step_ix(rules, strs, t, st) : {T.tb.go(r, rules, strs, T.tb.step(rules, strs, st, t)) == T.tb.go.ix(r, rules, I.ix.of(strs), _) : T.FdtTb}
+      go_ix(r, rules, strs, T.tb.step(rules, strs, st, t))
+
+# the reader with the index is the reader that walks the block
+def run_fast(+ts: List<&2, S.FdtToken>, +rules: T.FdtTreeRules, +strs: List<&2, U32>) -> {T.tb.run(ts, rules, strs) == T.tb.run.fast(ts, rules, strs) : Result<&2, &2, E.FdtError, T.FdtNode>}:
+  %go_ix(ts, rules, strs, T.TbStart{}) : {T.tb.run(ts, rules, strs) == T.tb.finish(_) : Result<&2, &2, E.FdtError, T.FdtNode>}
+  {==}
+
 # The blob: the writer and the reader
 
 def layout_fast(+r: List<&2, U32>, +s: List<&2, U32>, +t: List<&2, U32>, +boot: U32) -> {F.build.layout(r, s, t, boot) == F.build.layout.fast(r, s, t, boot) : List<&2, U32>}:
@@ -506,10 +769,22 @@ def fstruct_eq(+is17: Bool, +os: Nat, +sst: Nat, +region: List<&2, U32>) -> {F.p
     case False{}:
       {==}
 
+def f7_eq(+rr: Result<&2, &2, E.FdtError, List<&2, R.FdtRsv>>, +tr: Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>, +rules: T.FdtTreeRules, +v: U32, +boot: U32, +strs: List<&2, U32>) -> {F.parse.p7(rr, tr, rules, v, boot, strs) == F.parse.f7(rr, tr, rules, v, boot, strs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  match rr:
+    case Done{rs}:
+      match tr:
+        case Done{ts}:
+          %run_fast(ts, rules, strs) : {F.parse.p9(T.tb.run(ts, rules, strs), v, boot, rs) == F.parse.p9(_, v, boot, rs) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      {==}
+
 def f6_eq(+rules: T.FdtTreeRules, +v: U32, +boot: U32, +region: List<&2, U32>, +orsv: Nat, +os: Nat, +sst: Nat, +ostr: Nat, +sstr: Nat) -> {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.f6(rules, v, boot, region, orsv, os, sst, ostr, sstr) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
-  %fstruct_eq(U32.is_lt(16, v), os, sst, region) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.p7(R.rsv.read(B.drop(orsv, region)), _, rules, v, boot, B.take.fast(sstr, B.drop(ostr, region))) : Result<&2, &2, E.FdtError, F.FdtBlob>}
-  %BL.take_fast(sstr, B.drop(ostr, region)) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.p7(R.rsv.read(B.drop(orsv, region)), F.parse.struct(U32.is_lt(16, v), os, sst, region), rules, v, boot, _) : Result<&2, &2, E.FdtError, F.FdtBlob>}
-  {==}
+  %fstruct_eq(U32.is_lt(16, v), os, sst, region) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.f7(R.rsv.read(B.drop(orsv, region)), _, rules, v, boot, B.take.fast(sstr, B.drop(ostr, region))) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  %BL.take_fast(sstr, B.drop(ostr, region)) : {F.parse.p6(rules, v, boot, region, orsv, os, sst, ostr, sstr) == F.parse.f7(R.rsv.read(B.drop(orsv, region)), F.parse.struct(U32.is_lt(16, v), os, sst, region), rules, v, boot, _) : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  f7_eq(R.rsv.read(B.drop(orsv, region)), F.parse.struct(U32.is_lt(16, v), os, sst, region), rules, v, boot, B.take(sstr, B.drop(ostr, region)))
 
 def f5_eq(+r: Result<&2, &2, E.FdtError, Unit>, +rules: T.FdtTreeRules, +h: H.FdtHeader, +xs: List<&2, U32>) -> {F.parse.p5(r, rules, h, xs) == F.parse.f5(r, rules, h, xs) : Result<&2, &2, E.FdtError, F.FdtBlob>}:
   match r:
@@ -1137,6 +1412,7 @@ def tree_rt(+rules: T.FdtTreeRules, +root: T.FdtNode, +ok: {T.flat_ok.ref(root) 
       {==}
 
 def Laws.tree_round_trip(rules, root, ok):
+  %run_fast(T.flat.toks.fast([root], 0n), rules, B.Octets.to_list(B.Octets.of_list(T.flat.strs.fast([root])))) : {_ == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
   %ftoks_fast([root], 0n) : {T.tb.run(_, rules, B.Octets.to_list(B.Octets.of_list(T.flat.strs.fast([root])))) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
   %strs_fast([root]) : {T.tb.run(T.flat.toks([root], 0n), rules, B.Octets.to_list(B.Octets.of_list(_))) == Done{root} : Result<&2, &2, E.FdtError, T.FdtNode>}
   tree_rt(rules, root, Equal.trans(Bool, T.flat_ok.ref(root), T.FdtNode.flat_ok(root), True{}, flat_ok_fast(root), ok))
@@ -1486,6 +1762,12 @@ def Laws.size_cells_default():
 def Laws.find_phandle():
   {==}
 
+# a parsing vector, computed through the reference reader: the closed
+# blob is read by parse.p1, so the kernel never evaluates the indexes
+def parse_vec(+opts: F.FdtOptions, +o: B.Octets, +r: Result<&2, &2, E.FdtError, F.FdtBlob>, +e: {F.parse.p1(opts, B.Octets.to_list(o)) == r : Result<&2, &2, E.FdtError, F.FdtBlob>}) -> {F.Fdt.parse(opts, o) == r : Result<&2, &2, E.FdtError, F.FdtBlob>}:
+  %parse_fast(opts, B.Octets.to_list(o)) : {_ == r : Result<&2, &2, E.FdtError, F.FdtBlob>}
+  e
+
 def Laws.empty_blob():
   {==}
 
@@ -1499,7 +1781,7 @@ def Laws.example_dtc():
   {==}
 
 def Laws.example_parse_dtc():
-  {==}
+  parse_vec(F.FdtOptions.default(), B.Octets.of_list([208, 13, 254, 237, 0, 0, 2, 196, 0, 0, 0, 72, 0, 0, 2, 84, 0, 0, 0, 40, 0, 0, 0, 17, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 112, 0, 0, 2, 12, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 14, 0, 0, 0, 0, 102, 115, 108, 44, 109, 112, 99, 56, 53, 55, 50, 100, 115, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 14, 0, 0, 0, 6, 102, 115, 108, 44, 109, 112, 99, 56, 53, 55, 50, 100, 115, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 17, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 32, 0, 0, 0, 1, 0, 0, 0, 1, 99, 112, 117, 115, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 17, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 1, 99, 112, 117, 64, 48, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 44, 99, 112, 117, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 56, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 60, 49, 44, 128, 64, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 79, 49, 44, 128, 64, 0, 0, 0, 2, 0, 0, 0, 1, 99, 112, 117, 64, 49, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 44, 99, 112, 117, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 56, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 60, 49, 44, 128, 64, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 79, 49, 44, 128, 64, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 109, 101, 109, 111, 114, 121, 64, 48, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 7, 0, 0, 0, 44, 109, 101, 109, 111, 114, 121, 0, 0, 0, 0, 0, 3, 0, 0, 0, 8, 0, 0, 0, 56, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 117, 97, 114, 116, 64, 102, 101, 48, 48, 49, 48, 48, 48, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 8, 0, 0, 0, 6, 110, 115, 49, 54, 53, 53, 48, 0, 0, 0, 0, 3, 0, 0, 0, 8, 0, 0, 0, 56, 254, 0, 16, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 1, 99, 104, 111, 115, 101, 110, 0, 0, 0, 0, 0, 3, 0, 0, 0, 15, 0, 0, 0, 95, 114, 111, 111, 116, 61, 47, 100, 101, 118, 47, 115, 100, 97, 50, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 97, 108, 105, 97, 115, 101, 115, 0, 0, 0, 0, 3, 0, 0, 0, 15, 0, 0, 0, 104, 47, 117, 97, 114, 116, 64, 102, 101, 48, 48, 49, 48, 48, 48, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 9, 109, 111, 100, 101, 108, 0, 99, 111, 109, 112, 97, 116, 105, 98, 108, 101, 0, 35, 97, 100, 100, 114, 101, 115, 115, 45, 99, 101, 108, 108, 115, 0, 35, 115, 105, 122, 101, 45, 99, 101, 108, 108, 115, 0, 100, 101, 118, 105, 99, 101, 95, 116, 121, 112, 101, 0, 114, 101, 103, 0, 116, 105, 109, 101, 98, 97, 115, 101, 45, 102, 114, 101, 113, 117, 101, 110, 99, 121, 0, 99, 108, 111, 99, 107, 45, 102, 114, 101, 113, 117, 101, 110, 99, 121, 0, 98, 111, 111, 116, 97, 114, 103, 115, 0, 115, 101, 114, 105, 97, 108, 48, 0]), Done{F.FdtBlob{17, 0, X.FdtExample.rsv(), X.FdtExample.tree()}}, {==})
 
 def Laws.reject_short():
   {==}
@@ -1557,3 +1839,605 @@ def Laws.reject_nop():
 
 def Laws.accept_nop():
   {==}
+
+# By name: the reference is dedup.find, the first offset at which the
+# block holds the name and a NUL
+
+def pk.or(m: Maybe<&2, Nat>, n: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
+  match m:
+    case Some{x}:
+      Some{x}
+    case None{}:
+      n
+
+# the offset of a name after an entry at offset o, if the entry is that name
+def pk.pick(b: Bool, r: Maybe<&2, Nat>, o: Nat) -> Maybe<&2, Nat>:
+  match b:
+    case True{}:
+      I.nt.keep(r, o)
+    case False{}:
+      r
+
+def pk.leqs(a: List<&2, U32>, b: List<&2, U32>) -> Bool:
+  match a b:
+    case Nil{} Nil{}:
+      True{}
+    case Con{x, s} Con{y, t}:
+      Bool.and(U32.is_eq(x, y), pk.leqs(s, t))
+    case Nil{} Con{y, t}:
+      False{}
+    case Con{x, s} Nil{}:
+      False{}
+
+# the key m is the name u
+def pk.km(m: Maybe<&2, List<&2, U32>>, u: List<&2, U32>) -> Bool:
+  match m:
+    case None{}:
+      False{}
+    case Some{k}:
+      pk.leqs(u, k)
+
+# the list is empty or ends with a NUL
+def pk.term(xs: List<&2, U32>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case Con{h, +t}:
+      match t:
+        case Nil{}:
+          U32.is_eq(0, h)
+        case Con{h2, t2}:
+          pk.term(t)
+
+def and_false(+b: Bool) -> {Bool.and(b, False{}) == False{} : Bool}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def and_tl(+a: Bool, +b: Bool, +ea: {a == True{} : Bool}, +e: {Bool.and(a, b) == False{} : Bool}) -> {b == False{} : Bool}:
+  match a:
+    case True{}:
+      e
+    case False{}:
+      Empty.absurd({b == False{} : Bool}, ft_absurd(ea))
+
+def tf_absurd(+e: {True{} == False{} : Bool}) -> Empty:
+  ft_absurd(Equal.sym(Bool, True{}, False{}, e))
+
+def or_none(+m: Maybe<&2, Nat>) -> {pk.or(m, None{}) == m : Maybe<&2, Nat>}:
+  match m:
+    case Some{x}:
+      {==}
+    case None{}:
+      {==}
+
+def leqs_eq(+a: List<&2, U32>, +b: List<&2, U32>, +e: {pk.leqs(a, b) == True{} : Bool}) -> {a == b : List<&2, U32>}:
+  match a b:
+    case Nil{} Nil{}:
+      {==}
+    case Con{x, s} Con{y, t}:
+      %ieq(x, y, and_l(U32.is_eq(x, y), pk.leqs(s, t), e)) : {Con{x, s} == Con{_, t} : List<&2, U32>}
+      %leqs_eq(s, t, and_r(U32.is_eq(x, y), pk.leqs(s, t), e)) : {Con{x, s} == Con{x, _} : List<&2, U32>}
+      {==}
+    case Nil{} Con{y, t}:
+      Empty.absurd({Nil{} == Con{y, t} : List<&2, U32>}, ft_absurd(e))
+    case Con{x, s} Nil{}:
+      Empty.absurd({Con{x, s} == Nil{} : List<&2, U32>}, ft_absurd(e))
+
+def leqs_refl(+r: List<&2, U32>) -> {True{} == pk.leqs(r, r) : Bool}:
+  match r:
+    case Nil{}:
+      {==}
+    case Con{x, s}:
+      %irefl(x) : {True{} == Bool.and(_, pk.leqs(s, s)) : Bool}
+      leqs_refl(s)
+
+def pick_refl(+r: List<&2, U32>, +o: Nat) -> {pk.pick(pk.leqs(r, r), None{}, o) == I.nt.keep(None{}, o) : Maybe<&2, Nat>}:
+  %leqs_refl(r) : {pk.pick(_, None{}, o) == I.nt.keep(None{}, o) : Maybe<&2, Nat>}
+  {==}
+
+# The trie: a lookup after an entry is added
+
+def hit_chain(+r: List<&2, U32>, +c: U32, +o: Nat, +q: U32) -> {U32.is_eq(q, c) == I.nt.hit(I.nt.chain(r, c, o), q) : Bool}:
+  match r:
+    case Nil{}:
+      {==}
+    case Con{c2, r2}:
+      {==}
+
+def find_chain(+r: List<&2, U32>, +c: U32, +o: Nat, +b: Bool, +q: U32, +s: List<&2, U32>) -> {I.nt.find(I.nt.chain(r, c, o), b, q, s) == pk.pick(Bool.and(b, pk.leqs(s, r)), None{}, o) : Maybe<&2, Nat>}:
+  match r:
+    case Nil{}:
+      match b:
+        case True{}:
+          match s:
+            case Nil{}:
+              {==}
+            case Con{q2, s2}:
+              {==}
+        case False{}:
+          {==}
+    case Con{c2, r2}:
+      match b:
+        case True{}:
+          match s:
+            case Nil{}:
+              {==}
+            case Con{q2, s2}:
+              %hit_chain(r2, c2, o, q2) : {I.nt.find(I.nt.chain(r2, c2, o), _, q2, s2) == pk.pick(Bool.and(U32.is_eq(q2, c2), pk.leqs(s2, r2)), None{}, o) : Maybe<&2, Nat>}
+              find_chain(r2, c2, o, U32.is_eq(q2, c2), q2, s2)
+        case False{}:
+          {==}
+
+# the name just added has its old offset, or else o
+def find_same(+t: I.FdtNt, +c: U32, +o: Nat, +hc: Bool, +ehc: {I.nt.hit(t, c) == hc : Bool}, +r: List<&2, U32>, +h2: Bool, +eh2: {I.nt.hit(I.nt.add(t, hc, c, r, o), c) == h2 : Bool}) -> {I.nt.find(I.nt.add(t, hc, c, r, o), h2, c, r) == I.nt.keep(I.nt.find(t, hc, c, r), o) : Maybe<&2, Nat>}:
+  match t:
+    case I.NtEnd{}:
+      %Equal.trans(Bool, True{}, U32.is_eq(c, c), h2, irefl(c), Equal.trans(Bool, U32.is_eq(c, c), I.nt.hit(I.nt.chain(r, c, o), c), h2, hit_chain(r, c, o, c), eh2)) : {I.nt.find(I.nt.chain(r, c, o), _, c, r) == I.nt.keep(None{}, o) : Maybe<&2, Nat>}
+      Equal.trans(Maybe<&2, Nat>, I.nt.find(I.nt.chain(r, c, o), True{}, c, r), pk.pick(Bool.and(True{}, pk.leqs(r, r)), None{}, o), I.nt.keep(None{}, o), find_chain(r, c, o, True{}, c, r), pick_refl(r, o))
+    case I.NtKid{x, v, d, n}:
+      match hc:
+        case True{}:
+          match r:
+            case Nil{}:
+              %Equal.trans(Bool, True{}, U32.is_eq(c, x), h2, Equal.sym(Bool, U32.is_eq(c, x), True{}, ehc), eh2) : {I.nt.find(I.NtKid{x, I.nt.keep(v, o), d, n}, _, c, Nil{}) == I.nt.keep(v, o) : Maybe<&2, Nat>}
+              {==}
+            case Con{c2, r2}:
+              %Equal.trans(Bool, True{}, U32.is_eq(c, x), h2, Equal.sym(Bool, U32.is_eq(c, x), True{}, ehc), eh2) : {I.nt.find(I.NtKid{x, v, I.nt.add(d, I.nt.hit(d, c2), c2, r2, o), n}, _, c, Con{c2, r2}) == I.nt.keep(I.nt.find(d, I.nt.hit(d, c2), c2, r2), o) : Maybe<&2, Nat>}
+              find_same(d, c2, o, I.nt.hit(d, c2), {==}, r2, I.nt.hit(I.nt.add(d, I.nt.hit(d, c2), c2, r2, o), c2), {==})
+        case False{}:
+          %Equal.trans(Bool, False{}, U32.is_eq(c, x), h2, Equal.sym(Bool, U32.is_eq(c, x), False{}, ehc), eh2) : {I.nt.find(I.NtKid{x, v, d, I.nt.add(n, I.nt.hit(n, c), c, r, o)}, _, c, r) == I.nt.keep(I.nt.find(n, I.nt.hit(n, c), c, r), o) : Maybe<&2, Nat>}
+          find_same(n, c, o, I.nt.hit(n, c), {==}, r, I.nt.hit(I.nt.add(n, I.nt.hit(n, c), c, r, o), c), {==})
+
+# q and c are both x
+def qc_true(+q: U32, +c: U32, +x: U32, +eq: {U32.is_eq(q, x) == True{} : Bool}, +ec: {U32.is_eq(c, x) == True{} : Bool}) -> {U32.is_eq(q, c) == True{} : Bool}:
+  Equal.sym(Bool, True{}, U32.is_eq(q, c), ieq_sub(q, c, Equal.trans(U32, q, x, c, ieq(q, x, eq), Equal.sym(U32, c, x, ieq(c, x, ec)))))
+
+# a name other than the one added keeps its offset
+def find_other(+t: I.FdtNt, +c: U32, +o: Nat, +hc: Bool, +ehc: {I.nt.hit(t, c) == hc : Bool}, +r: List<&2, U32>, +q: U32, +hq: Bool, +ehq: {I.nt.hit(t, q) == hq : Bool}, +h2: Bool, +eh2: {I.nt.hit(I.nt.add(t, hc, c, r, o), q) == h2 : Bool}, +s: List<&2, U32>, +ne: {Bool.and(U32.is_eq(q, c), pk.leqs(s, r)) == False{} : Bool}) -> {I.nt.find(I.nt.add(t, hc, c, r, o), h2, q, s) == I.nt.find(t, hq, q, s) : Maybe<&2, Nat>}:
+  match t:
+    case I.NtEnd{}:
+      %Equal.sym(Maybe<&2, Nat>, I.nt.find(I.nt.chain(r, c, o), h2, q, s), pk.pick(Bool.and(h2, pk.leqs(s, r)), None{}, o), find_chain(r, c, o, h2, q, s)) : {_ == None{} : Maybe<&2, Nat>}
+      %Equal.trans(Bool, U32.is_eq(q, c), I.nt.hit(I.nt.chain(r, c, o), q), h2, hit_chain(r, c, o, q), eh2) : {pk.pick(Bool.and(_, pk.leqs(s, r)), None{}, o) == None{} : Maybe<&2, Nat>}
+      %Equal.sym(Bool, Bool.and(U32.is_eq(q, c), pk.leqs(s, r)), False{}, ne) : {pk.pick(_, None{}, o) == None{} : Maybe<&2, Nat>}
+      {==}
+    case I.NtKid{x, v, d, n}:
+      match hc:
+        case True{}:
+          match r:
+            case Nil{}:
+              match hq:
+                case True{}:
+                  match h2:
+                    case True{}:
+                      match s:
+                        case Nil{}:
+                          Empty.absurd({I.nt.keep(v, o) == v : Maybe<&2, Nat>}, tf_absurd(and_tl(U32.is_eq(q, c), True{}, qc_true(q, c, x, ehq, ehc), ne)))
+                        case Con{q2, s2}:
+                          {==}
+                    case False{}:
+                      Empty.absurd({I.nt.find(I.NtKid{x, I.nt.keep(v, o), d, n}, False{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, True{}, q, s) : Maybe<&2, Nat>}, tf_absurd(Equal.trans(Bool, True{}, U32.is_eq(q, x), False{}, Equal.sym(Bool, U32.is_eq(q, x), True{}, ehq), eh2)))
+                case False{}:
+                  match h2:
+                    case True{}:
+                      Empty.absurd({I.nt.find(I.NtKid{x, I.nt.keep(v, o), d, n}, True{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, False{}, q, s) : Maybe<&2, Nat>}, ft_absurd(Equal.trans(Bool, False{}, U32.is_eq(q, x), True{}, Equal.sym(Bool, U32.is_eq(q, x), False{}, ehq), eh2)))
+                    case False{}:
+                      {==}
+            case Con{c2, r2}:
+              match hq:
+                case True{}:
+                  match h2:
+                    case True{}:
+                      match s:
+                        case Nil{}:
+                          {==}
+                        case Con{q2, s2}:
+                          find_other(d, c2, o, I.nt.hit(d, c2), {==}, r2, q2, I.nt.hit(d, q2), {==}, I.nt.hit(I.nt.add(d, I.nt.hit(d, c2), c2, r2, o), q2), {==}, s2, and_tl(U32.is_eq(q, c), Bool.and(U32.is_eq(q2, c2), pk.leqs(s2, r2)), qc_true(q, c, x, ehq, ehc), ne))
+                    case False{}:
+                      Empty.absurd({I.nt.find(I.NtKid{x, v, I.nt.add(d, I.nt.hit(d, c2), c2, r2, o), n}, False{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, True{}, q, s) : Maybe<&2, Nat>}, tf_absurd(Equal.trans(Bool, True{}, U32.is_eq(q, x), False{}, Equal.sym(Bool, U32.is_eq(q, x), True{}, ehq), eh2)))
+                case False{}:
+                  match h2:
+                    case True{}:
+                      Empty.absurd({I.nt.find(I.NtKid{x, v, I.nt.add(d, I.nt.hit(d, c2), c2, r2, o), n}, True{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, False{}, q, s) : Maybe<&2, Nat>}, ft_absurd(Equal.trans(Bool, False{}, U32.is_eq(q, x), True{}, Equal.sym(Bool, U32.is_eq(q, x), False{}, ehq), eh2)))
+                    case False{}:
+                      {==}
+        case False{}:
+          match hq:
+            case True{}:
+              match h2:
+                case True{}:
+                  match s:
+                    case Nil{}:
+                      {==}
+                    case Con{q2, s2}:
+                      {==}
+                case False{}:
+                  Empty.absurd({I.nt.find(I.NtKid{x, v, d, I.nt.add(n, I.nt.hit(n, c), c, r, o)}, False{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, True{}, q, s) : Maybe<&2, Nat>}, tf_absurd(Equal.trans(Bool, True{}, U32.is_eq(q, x), False{}, Equal.sym(Bool, U32.is_eq(q, x), True{}, ehq), eh2)))
+            case False{}:
+              match h2:
+                case True{}:
+                  Empty.absurd({I.nt.find(I.NtKid{x, v, d, I.nt.add(n, I.nt.hit(n, c), c, r, o)}, True{}, q, s) == I.nt.find(I.NtKid{x, v, d, n}, False{}, q, s) : Maybe<&2, Nat>}, ft_absurd(Equal.trans(Bool, False{}, U32.is_eq(q, x), True{}, Equal.sym(Bool, U32.is_eq(q, x), False{}, ehq), eh2)))
+                case False{}:
+                  find_other(n, c, o, I.nt.hit(n, c), {==}, r, q, I.nt.hit(n, q), {==}, I.nt.hit(I.nt.add(n, I.nt.hit(n, c), c, r, o), q), {==}, s, ne)
+
+def get_put_b(+ks: I.FdtNt, +c: U32, +r: List<&2, U32>, +o: Nat, +q: U32, +s: List<&2, U32>, +b: Bool, +eb: {Bool.and(U32.is_eq(q, c), pk.leqs(s, r)) == b : Bool}) -> {pk.pick(b, I.nt.find(ks, I.nt.hit(ks, q), q, s), o) == I.nt.find(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), q), q, s) : Maybe<&2, Nat>}:
+  match b:
+    case False{}:
+      Equal.sym(Maybe<&2, Nat>, I.nt.find(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), q), q, s), I.nt.find(ks, I.nt.hit(ks, q), q, s), find_other(ks, c, o, I.nt.hit(ks, c), {==}, r, q, I.nt.hit(ks, q), {==}, I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), q), {==}, s, eb))
+    case True{}:
+      %Equal.sym(U32, q, c, ieq(q, c, and_l(U32.is_eq(q, c), pk.leqs(s, r), eb))) : {I.nt.keep(I.nt.find(ks, I.nt.hit(ks, _), _, s), o) == I.nt.find(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), _), _, s) : Maybe<&2, Nat>}
+      %Equal.sym(List<&2, U32>, s, r, leqs_eq(s, r, and_r(U32.is_eq(q, c), pk.leqs(s, r), eb))) : {I.nt.keep(I.nt.find(ks, I.nt.hit(ks, c), c, _), o) == I.nt.find(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), c), c, _) : Maybe<&2, Nat>}
+      Equal.sym(Maybe<&2, Nat>, I.nt.find(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), c), c, r), I.nt.keep(I.nt.find(ks, I.nt.hit(ks, c), c, r), o), find_same(ks, c, o, I.nt.hit(ks, c), {==}, r, I.nt.hit(I.nt.add(ks, I.nt.hit(ks, c), c, r, o), c), {==}))
+
+# a lookup after an entry is added: the entry's offset if it is that name
+# and the name had none, else what it was
+def get_put(+k: List<&2, U32>, +t: I.FdtDict, +o: Nat, +u: List<&2, U32>) -> {pk.pick(pk.leqs(u, k), I.nt.get(u, t), o) == I.nt.get(u, I.nt.put(k, t, o)) : Maybe<&2, Nat>}:
+  match k:
+    case Nil{}:
+      match t:
+        case I.FdtDict{v, ks}:
+          match u:
+            case Nil{}:
+              {==}
+            case Con{q, s}:
+              {==}
+    case Con{c, r}:
+      match t:
+        case I.FdtDict{v, ks}:
+          match u:
+            case Nil{}:
+              {==}
+            case Con{q, s}:
+              get_put_b(ks, c, r, o, q, s, Bool.and(U32.is_eq(q, c), pk.leqs(s, r)), {==})
+
+def get_empty(+u: List<&2, U32>) -> {I.nt.get(u, I.nt.empty()) == None{} : Maybe<&2, Nat>}:
+  match u:
+    case Nil{}:
+      {==}
+    case Con{c, r}:
+      {==}
+
+def get_dput(+m: Maybe<&2, List<&2, U32>>, +t: I.FdtDict, +o: Nat, +u: List<&2, U32>) -> {pk.pick(pk.km(m, u), I.nt.get(u, t), o) == I.nt.get(u, I.dk.put(m, t, o)) : Maybe<&2, Nat>}:
+  match m:
+    case None{}:
+      {==}
+    case Some{k}:
+      get_put(k, t, o, u)
+
+# The keys: the name at an offset is what the reference's byte comparison
+# finds there
+
+def q_none(+h: U32, +m: Maybe<&2, List<&2, U32>>) -> {False{} == pk.km(I.dk.mcon(h, m), Nil{}) : Bool}:
+  match m:
+    case None{}:
+      {==}
+    case Some{k}:
+      {==}
+
+def q_nil(+h: U32, +t: List<&2, U32>, +n: Bool) -> {n == pk.km(I.dk.key(Con{h, t}, n), Nil{}) : Bool}:
+  match n:
+    case True{}:
+      {==}
+    case False{}:
+      q_none(h, I.dk.key_of(t))
+
+def q_con(+c: U32, +h: U32, +u: List<&2, U32>, +m: Maybe<&2, List<&2, U32>>) -> {Bool.and(U32.is_eq(c, h), pk.km(m, u)) == pk.km(I.dk.mcon(h, m), Con{c, u}) : Bool}:
+  match m:
+    case None{}:
+      and_false(U32.is_eq(c, h))
+    case Some{k}:
+      {==}
+
+def q_step(+c: U32, +h: U32, +t: List<&2, U32>, +u: List<&2, U32>, +n: Bool, +en: {U32.is_eq(0, h) == n : Bool}, +nc: {U32.is_eq(c, 0) == False{} : Bool}) -> {Bool.and(U32.is_eq(c, h), pk.km(I.dk.key_of(t), u)) == pk.km(I.dk.key(Con{h, t}, n), Con{c, u}) : Bool}:
+  match n:
+    case True{}:
+      %ieq(0, h, en) : {Bool.and(U32.is_eq(c, _), pk.km(I.dk.key_of(t), u)) == False{} : Bool}
+      %Equal.sym(Bool, U32.is_eq(c, 0), False{}, nc) : {Bool.and(_, pk.km(I.dk.key_of(t), u)) == False{} : Bool}
+      {==}
+    case False{}:
+      q_con(c, h, u, I.dk.key_of(t))
+
+# for a name u without NULs, comparing u and a NUL with the bytes from an
+# offset on is comparing u with the key at that offset
+def q_prefix(+u: List<&2, U32>, +xs: List<&2, U32>, +ok: Bool, +nn: {L.fdt.nonul(u) == True{} : Bool}) -> {T.dedup.prefix(B.append(u, [0]), xs, ok) == Bool.and(ok, pk.km(I.dk.key_of(xs), u)) : Bool}:
+  match u:
+    case Nil{}:
+      match xs:
+        case Nil{}:
+          Equal.sym(Bool, Bool.and(ok, False{}), False{}, and_false(ok))
+        case Con{h, t}:
+          match ok:
+            case True{}:
+              q_nil(h, t, U32.is_eq(0, h))
+            case False{}:
+              {==}
+    case Con{c, u2}:
+      match xs:
+        case Nil{}:
+          Equal.sym(Bool, Bool.and(ok, False{}), False{}, and_false(ok))
+        case Con{h, t}:
+          match ok:
+            case True{}:
+              Equal.trans(Bool, T.dedup.prefix(B.append(u2, [0]), t, U32.is_eq(c, h)), Bool.and(U32.is_eq(c, h), pk.km(I.dk.key_of(t), u2)), pk.km(I.dk.key(Con{h, t}, U32.is_eq(0, h)), Con{c, u2}), q_prefix(u2, t, U32.is_eq(c, h), and_r(Bool.not(U32.is_eq(c, 0)), L.fdt.nonul(u2), nn)), q_step(c, h, t, u2, U32.is_eq(0, h), {==}, not_t(U32.is_eq(c, 0), and_l(Bool.not(U32.is_eq(c, 0)), L.fdt.nonul(u2), nn))))
+            case False{}:
+              {==}
+
+def find_some(+ys: List<&2, U32>, +k: List<&2, U32>, +i: Nat, +o: Nat) -> {T.dedup.find(ys, k, i, Some{o}) == Some{o} : Maybe<&2, Nat>}:
+  match ys:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      {==}
+
+def c_step(+b: Bool, +g: Maybe<&2, Nat>, +t: List<&2, U32>, +k: List<&2, U32>, +o: Nat) -> {pk.or(g, T.dedup.find(t, k, 1n+o, T.dedup.hit(b, o))) == pk.or(pk.pick(b, g, o), T.dedup.find(t, k, 1n+o, None{})) : Maybe<&2, Nat>}:
+  match b:
+    case True{}:
+      match g:
+        case Some{x}:
+          {==}
+        case None{}:
+          find_some(t, k, 1n+o, o)
+    case False{}:
+      {==}
+
+# the index of a block answers what searching the block answers
+def dk_find(+xs: List<&2, U32>, +t: I.FdtDict, +o: Nat, +u: List<&2, U32>, +nn: {L.fdt.nonul(u) == True{} : Bool}) -> {pk.or(I.nt.get(u, t), T.dedup.find(xs, B.append(u, [0]), o, None{})) == I.nt.get(u, I.dk.ins(xs, t, o)) : Maybe<&2, Nat>}:
+  match xs:
+    case Nil{}:
+      or_none(I.nt.get(u, t))
+    case Con{h, r}:
+      %dk_find(r, I.dk.put(I.dk.key_of(Con{h, r}), t, o), 1n+o, u, nn) : {pk.or(I.nt.get(u, t), T.dedup.find(Con{h, r}, B.append(u, [0]), o, None{})) == _ : Maybe<&2, Nat>}
+      %get_dput(I.dk.key_of(Con{h, r}), t, o, u) : {pk.or(I.nt.get(u, t), T.dedup.find(Con{h, r}, B.append(u, [0]), o, None{})) == pk.or(_, T.dedup.find(r, B.append(u, [0]), 1n+o, None{})) : Maybe<&2, Nat>}
+      %q_prefix(u, Con{h, r}, True{}, nn) : {pk.or(I.nt.get(u, t), T.dedup.find(Con{h, r}, B.append(u, [0]), o, None{})) == pk.or(pk.pick(_, I.nt.get(u, t), o), T.dedup.find(r, B.append(u, [0]), 1n+o, None{})) : Maybe<&2, Nat>}
+      c_step(T.dedup.prefix(B.append(u, [0]), Con{h, r}, True{}), I.nt.get(u, t), r, B.append(u, [0]), o)
+
+# Adding a block in two parts, the first ending with a NUL, is adding it whole
+
+def term_tail(+h: U32, +a: List<&2, U32>, +e: {pk.term(Con{h, a}) == True{} : Bool}) -> {pk.term(a) == True{} : Bool}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{h2, a2}:
+      e
+
+def key_app(+x: List<&2, U32>, +h: U32, +b: List<&2, U32>, +n: Bool, +et: {pk.term(Con{h, x}) == True{} : Bool}, +en: {U32.is_eq(0, h) == n : Bool}) -> {I.dk.key(Con{h, x}, n) == I.dk.key(Con{h, B.append(x, b)}, n) : Maybe<&2, List<&2, U32>>}:
+  match x:
+    case Nil{}:
+      match n:
+        case True{}:
+          {==}
+        case False{}:
+          Empty.absurd({I.dk.key(Con{h, Nil{}}, False{}) == I.dk.key(Con{h, B.append(Nil{}, b)}, False{}) : Maybe<&2, List<&2, U32>>}, ft_absurd(Equal.trans(Bool, False{}, U32.is_eq(0, h), True{}, Equal.sym(Bool, U32.is_eq(0, h), False{}, en), et)))
+    case Con{h2, x2}:
+      match n:
+        case True{}:
+          {==}
+        case False{}:
+          %key_app(x2, h2, b, U32.is_eq(0, h2), et, {==}) : {I.dk.mcon(h, I.dk.key(Con{h2, x2}, U32.is_eq(0, h2))) == I.dk.mcon(h, _) : Maybe<&2, List<&2, U32>>}
+          {==}
+
+def ins_app(+a: List<&2, U32>, +b: List<&2, U32>, +t: I.FdtDict, +o: Nat, +et: {pk.term(a) == True{} : Bool}) -> {I.dk.ins(b, I.dk.ins(a, t, o), Nat.add(B.len(a), o)) == I.dk.ins(B.append(a, b), t, o) : I.FdtDict}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{h, a2}:
+      %Equal.sym(Nat, 1n+Nat.add(B.len(a2), o), Nat.add(B.len(a2), 1n+o), add_succ_r(B.len(a2), o)) : {I.dk.ins(b, I.dk.ins(a2, I.dk.put(I.dk.key_of(Con{h, a2}), t, o), 1n+o), _) == I.dk.ins(B.append(a2, b), I.dk.put(I.dk.key_of(Con{h, B.append(a2, b)}), t, o), 1n+o) : I.FdtDict}
+      %key_app(a2, h, b, U32.is_eq(0, h), et, {==}) : {I.dk.ins(b, I.dk.ins(a2, I.dk.put(I.dk.key_of(Con{h, a2}), t, o), 1n+o), Nat.add(B.len(a2), 1n+o)) == I.dk.ins(B.append(a2, b), I.dk.put(_, t, o), 1n+o) : I.FdtDict}
+      ins_app(a2, b, I.dk.put(I.dk.key_of(Con{h, a2}), t, o), 1n+o, term_tail(h, a2, et))
+
+def term_cons(+n: List<&2, U32>, +c: U32) -> {pk.term(Con{c, B.append(n, [0])}) == True{} : Bool}:
+  match n:
+    case Nil{}:
+      {==}
+    case Con{d, n2}:
+      term_cons(n2, d)
+
+def term_nul(+n: List<&2, U32>) -> {pk.term(B.append(n, [0])) == True{} : Bool}:
+  match n:
+    case Nil{}:
+      {==}
+    case Con{c, n2}:
+      term_cons(n2, c)
+
+def term_appc(+a: List<&2, U32>, +x: U32, +n: List<&2, U32>) -> {pk.term(Con{x, B.append(a, B.append(n, [0]))}) == True{} : Bool}:
+  match a:
+    case Nil{}:
+      match n:
+        case Nil{}:
+          {==}
+        case Con{c, n2}:
+          term_cons(n2, c)
+    case Con{y, a2}:
+      term_appc(a2, y, n)
+
+def term_app(+a: List<&2, U32>, +n: List<&2, U32>) -> {pk.term(B.append(a, B.append(n, [0]))) == True{} : Bool}:
+  match a:
+    case Nil{}:
+      term_nul(n)
+    case Con{x, a2}:
+      term_appc(a2, x, n)
+
+# The writer: the indexed state is the reference state with its block
+# reversed and indexed, at every step
+
+def pk.lift(d: T.FdtFlatD) -> T.FdtFlatX:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{+bytes, size}:
+          T.FdtFlatX{toks, List.reverse(&2, U32, bytes), size, I.dk.ins(bytes, I.nt.empty(), 0n)}
+
+def pk.bytes(d: T.FdtFlatD) -> List<&2, U32>:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          bytes
+
+def pk.size(d: T.FdtFlatD) -> Nat:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          size
+
+def dfind_b(+kl: List<&2, U32>, +bytes: List<&2, U32>, +b: Bool, +eb: {L.fdt.nonul(kl) == b : Bool}) -> {T.dedup.find(bytes, B.append(kl, [0]), 0n, None{}) == T.dkx.find(b, List.reverse(&2, U32, bytes), kl, I.dk.ins(bytes, I.nt.empty(), 0n)) : Maybe<&2, Nat>}:
+  match b:
+    case True{}:
+      %get_empty(kl) : {pk.or(_, T.dedup.find(bytes, B.append(kl, [0]), 0n, None{})) == I.nt.get(kl, I.dk.ins(bytes, I.nt.empty(), 0n)) : Maybe<&2, Nat>}
+      dk_find(bytes, I.nt.empty(), 0n, kl, eb)
+    case False{}:
+      %revrev(U32, bytes) : {T.dedup.find(bytes, B.append(kl, [0]), 0n, None{}) == T.dedup.find(_, B.append(kl, [0]), 0n, None{}) : Maybe<&2, Nat>}
+      {==}
+
+def dfind(+kl: List<&2, U32>, +bytes: List<&2, U32>) -> {T.dedup.find(bytes, B.append(kl, [0]), 0n, None{}) == T.dkx.find(L.fdt.nonul.fast(kl), List.reverse(&2, U32, bytes), kl, I.dk.ins(bytes, I.nt.empty(), 0n)) : Maybe<&2, Nat>}:
+  %nonul_fast(kl) : {T.dedup.find(bytes, B.append(kl, [0]), 0n, None{}) == T.dkx.find(_, List.reverse(&2, U32, bytes), kl, I.dk.ins(bytes, I.nt.empty(), 0n)) : Maybe<&2, Nat>}
+  dfind_b(kl, bytes, L.fdt.nonul(kl), {==})
+
+def add_lift(+m: Maybe<&2, Nat>, +kl: List<&2, U32>, +bytes: List<&2, U32>, +size: Nat, +toks: List<&2, S.FdtToken>, +v: B.Octets, +et: {pk.term(bytes) == True{} : Bool}, +es: {size == B.len(bytes) : Nat}) -> {pk.lift(T.dedup.prop.at(T.dedup.add(m, B.append(kl, [0]), bytes, size), v, toks)) == T.dkx.add(m, B.append(kl, [0]), List.reverse(&2, U32, bytes), size, I.dk.ins(bytes, I.nt.empty(), 0n), v, toks) : T.FdtFlatX}:
+  match m:
+    case Some{o}:
+      {==}
+    case None{}:
+      %BL.append_fast(bytes, B.append(kl, [0])) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse(&2, U32, _), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(_, I.nt.empty(), 0n)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      %grev_app(U32, bytes, B.append(kl, [0]), Nil{}) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, _, Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(bytes, B.append(kl, [0])), I.nt.empty(), 0n)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      %ins_app(bytes, B.append(kl, [0]), I.nt.empty(), 0n, et) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), _} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      %Equal.sym(Nat, Nat.add(B.len(bytes), 0n), B.len(bytes), add_zero_r(B.len(bytes))) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), _)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      %es : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), _)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      {==}
+
+def lift_prop(+p: T.FdtProp, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.lift(T.dedup.prop(d, p)) == T.dkx.prop(pk.lift(d), p) : T.FdtFlatX}:
+  match p:
+    case T.FdtProp{k, v}:
+      match d:
+        case T.FdtFlatD{toks, tab}:
+          match tab:
+            case T.FdtStrTab{bytes, size}:
+              %dfind(B.Octets.to_list(k), bytes) : {pk.lift(T.dedup.prop.at(T.dedup.add(T.dedup.find(bytes, B.append(B.Octets.to_list(k), [0]), 0n, None{}), B.append(B.Octets.to_list(k), [0]), bytes, size), v, toks)) == T.dkx.add(_, B.append(B.Octets.to_list(k), [0]), List.reverse(&2, U32, bytes), size, I.dk.ins(bytes, I.nt.empty(), 0n), v, toks) : T.FdtFlatX}
+              add_lift(T.dedup.find(bytes, B.append(B.Octets.to_list(k), [0]), 0n, None{}), B.Octets.to_list(k), bytes, size, toks, v, et, es)
+
+def gpm_term(+m: Maybe<&2, Nat>, +kl: List<&2, U32>, +bytes: List<&2, U32>, +size: Nat, +toks: List<&2, S.FdtToken>, +v: B.Octets, +et: {pk.term(bytes) == True{} : Bool}) -> {pk.term(pk.bytes(T.dedup.prop.at(T.dedup.add(m, B.append(kl, [0]), bytes, size), v, toks))) == True{} : Bool}:
+  match m:
+    case Some{o}:
+      et
+    case None{}:
+      %BL.append_fast(bytes, B.append(kl, [0])) : {pk.term(_) == True{} : Bool}
+      term_app(bytes, kl)
+
+def gpm_size(+m: Maybe<&2, Nat>, +kl: List<&2, U32>, +bytes: List<&2, U32>, +size: Nat, +toks: List<&2, S.FdtToken>, +v: B.Octets, +es: {size == B.len(bytes) : Nat}) -> {pk.size(T.dedup.prop.at(T.dedup.add(m, B.append(kl, [0]), bytes, size), v, toks)) == B.len(pk.bytes(T.dedup.prop.at(T.dedup.add(m, B.append(kl, [0]), bytes, size), v, toks))) : Nat}:
+  match m:
+    case Some{o}:
+      es
+    case None{}:
+      %BL.append_fast(bytes, B.append(kl, [0])) : {Nat.add(size, B.len(B.append(kl, [0]))) == B.len(_) : Nat}
+      %Equal.sym(Nat, size, B.len(bytes), es) : {Nat.add(_, B.len(B.append(kl, [0]))) == B.len(B.append(bytes, B.append(kl, [0]))) : Nat}
+      len_app(bytes, B.append(kl, [0]))
+
+def gp_term(+p: T.FdtProp, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}) -> {pk.term(pk.bytes(T.dedup.prop(d, p))) == True{} : Bool}:
+  match p:
+    case T.FdtProp{k, v}:
+      match d:
+        case T.FdtFlatD{toks, tab}:
+          match tab:
+            case T.FdtStrTab{bytes, size}:
+              gpm_term(T.dedup.find(bytes, B.append(B.Octets.to_list(k), [0]), 0n, None{}), B.Octets.to_list(k), bytes, size, toks, v, et)
+
+def gp_size(+p: T.FdtProp, +d: T.FdtFlatD, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.size(T.dedup.prop(d, p)) == B.len(pk.bytes(T.dedup.prop(d, p))) : Nat}:
+  match p:
+    case T.FdtProp{k, v}:
+      match d:
+        case T.FdtFlatD{toks, tab}:
+          match tab:
+            case T.FdtStrTab{bytes, size}:
+              gpm_size(T.dedup.find(bytes, B.append(B.Octets.to_list(k), [0]), 0n, None{}), B.Octets.to_list(k), bytes, size, toks, v, es)
+
+def gps_term(+ps: List<&2, T.FdtProp>, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}) -> {pk.term(pk.bytes(T.dedup.props(ps, d))) == True{} : Bool}:
+  match ps:
+    case Nil{}:
+      et
+    case Con{p, t}:
+      gps_term(t, T.dedup.prop(d, p), gp_term(p, d, et))
+
+def gps_size(+ps: List<&2, T.FdtProp>, +d: T.FdtFlatD, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.size(T.dedup.props(ps, d)) == B.len(pk.bytes(T.dedup.props(ps, d))) : Nat}:
+  match ps:
+    case Nil{}:
+      es
+    case Con{p, t}:
+      gps_size(t, T.dedup.prop(d, p), gp_size(p, d, es))
+
+def tp_push(+d: T.FdtFlatD, +tok: S.FdtToken, +et: {pk.term(pk.bytes(d)) == True{} : Bool}) -> {pk.term(pk.bytes(T.dedup.push(d, tok))) == True{} : Bool}:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          et
+
+def sp_push(+d: T.FdtFlatD, +tok: S.FdtToken, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.size(T.dedup.push(d, tok)) == B.len(pk.bytes(T.dedup.push(d, tok))) : Nat}:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          es
+
+def gf_term(+ns: List<&2, T.FdtNode>, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}) -> {pk.term(pk.bytes(T.dedup.forest(ns, d))) == True{} : Bool}:
+  match ns:
+    case Nil{}:
+      et
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          gf_term(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}), tp_push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}, gf_term(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm})), gps_term(ps, T.dedup.push(d, S.FdtTokBegin{nm}), tp_push(d, S.FdtTokBegin{nm}, et)))))
+
+def gf_size(+ns: List<&2, T.FdtNode>, +d: T.FdtFlatD, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.size(T.dedup.forest(ns, d)) == B.len(pk.bytes(T.dedup.forest(ns, d))) : Nat}:
+  match ns:
+    case Nil{}:
+      es
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          gf_size(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}), sp_push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}, gf_size(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm})), gps_size(ps, T.dedup.push(d, S.FdtTokBegin{nm}), sp_push(d, S.FdtTokBegin{nm}, es)))))
+
+def lift_push(+d: T.FdtFlatD, +tok: S.FdtToken) -> {pk.lift(T.dedup.push(d, tok)) == T.dkx.push(pk.lift(d), tok) : T.FdtFlatX}:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          {==}
+
+def lift_props(+ps: List<&2, T.FdtProp>, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.lift(T.dedup.props(ps, d)) == T.dkx.props(ps, pk.lift(d)) : T.FdtFlatX}:
+  match ps:
+    case Nil{}:
+      {==}
+    case Con{p, t}:
+      %lift_prop(p, d, et, es) : {pk.lift(T.dedup.props(t, T.dedup.prop(d, p))) == T.dkx.props(t, _) : T.FdtFlatX}
+      lift_props(t, T.dedup.prop(d, p), gp_term(p, d, et), gp_size(p, d, es))
+
+def lift_forest(+ns: List<&2, T.FdtNode>, +d: T.FdtFlatD, +et: {pk.term(pk.bytes(d)) == True{} : Bool}, +es: {pk.size(d) == B.len(pk.bytes(d)) : Nat}) -> {pk.lift(T.dedup.forest(ns, d)) == T.dkx.forest(ns, pk.lift(d)) : T.FdtFlatX}:
+  match ns:
+    case Nil{}:
+      {==}
+    case Con{n, t}:
+      match n:
+        case T.FdtNode{nm, ps, cs}:
+          %lift_push(d, S.FdtTokBegin{nm}) : {pk.lift(T.dedup.forest(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}))) == T.dkx.forest(t, T.dkx.push(T.dkx.forest(cs, T.dkx.props(ps, _)), S.FdtTokEnd{})) : T.FdtFlatX}
+          %lift_props(ps, T.dedup.push(d, S.FdtTokBegin{nm}), tp_push(d, S.FdtTokBegin{nm}, et), sp_push(d, S.FdtTokBegin{nm}, es)) : {pk.lift(T.dedup.forest(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}))) == T.dkx.forest(t, T.dkx.push(T.dkx.forest(cs, _), S.FdtTokEnd{})) : T.FdtFlatX}
+          %lift_forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm})), gps_term(ps, T.dedup.push(d, S.FdtTokBegin{nm}), tp_push(d, S.FdtTokBegin{nm}, et)), gps_size(ps, T.dedup.push(d, S.FdtTokBegin{nm}), sp_push(d, S.FdtTokBegin{nm}, es))) : {pk.lift(T.dedup.forest(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}))) == T.dkx.forest(t, T.dkx.push(_, S.FdtTokEnd{})) : T.FdtFlatX}
+          %lift_push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}) : {pk.lift(T.dedup.forest(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}))) == T.dkx.forest(t, _) : T.FdtFlatX}
+          lift_forest(t, T.dedup.push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}), tp_push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}, gf_term(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm})), gps_term(ps, T.dedup.push(d, S.FdtTokBegin{nm}), tp_push(d, S.FdtTokBegin{nm}, et)))), sp_push(T.dedup.forest(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm}))), S.FdtTokEnd{}, gf_size(cs, T.dedup.props(ps, T.dedup.push(d, S.FdtTokBegin{nm})), gps_size(ps, T.dedup.push(d, S.FdtTokBegin{nm}), sp_push(d, S.FdtTokBegin{nm}, es)))))
+
+def fin_lift(+d: T.FdtFlatD) -> {T.dedup.fin(d) == T.dkx.fin(pk.lift(d)) : T.FdtFlatD}:
+  match d:
+    case T.FdtFlatD{toks, tab}:
+      match tab:
+        case T.FdtStrTab{bytes, size}:
+          %revrev(U32, bytes) : {T.FdtFlatD{List.reverse(&2, S.FdtToken, toks), T.FdtStrTab{bytes, size}} == T.FdtFlatD{List.reverse(&2, S.FdtToken, toks), T.FdtStrTab{_, size}} : T.FdtFlatD}
+          {==}
+
+# the deduplicating writer with the index is the writer that searches the
+# block
+def dedup_fast(+root: T.FdtNode) -> {T.dedup.run(root) == T.dkx.run(root) : T.FdtFlatD}:
+  %lift_forest([root], T.FdtFlatD{Nil{}, T.FdtStrTab{Nil{}, 0n}}, {==}, {==}) : {T.dedup.run(root) == T.dkx.fin(_) : T.FdtFlatD}
+  fin_lift(T.dedup.forest([root], T.FdtFlatD{Nil{}, T.FdtStrTab{Nil{}, 0n}}))
+

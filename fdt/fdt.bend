@@ -100,8 +100,23 @@ def parse.p1(opts: FdtOptions, +xs: List<&2, U32>) -> Result<&2, &2, E.FdtError,
   parse.p2(B.be32_at(xs, 0n), opts, xs)
 
 # The same reader, tail-recursive over the blob: bytes' fast forms for its
-# length and its slices (PROOF.bend: parse_fast proves it equal to
-# parse.p1 above, the reference the proofs compute through)
+# length and its slices, and the tree read with the strings block indexed
+# by offset (tree.bend: tb.run.fast). PROOF.bend: parse_fast proves it
+# equal to parse.p1 above, the reference the proofs compute through.
+
+def parse.f8(tr: Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>, rules: T.FdtTreeRules, v: U32, boot: U32, rs: List<&2, R.FdtRsv>, strs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match tr:
+    case Done{ts}:
+      parse.p9(T.tb.run.fast(ts, rules, strs), v, boot, rs)
+    case Fail{e}:
+      Fail{e}
+
+def parse.f7(rr: Result<&2, &2, E.FdtError, List<&2, R.FdtRsv>>, tr: Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>, rules: T.FdtTreeRules, v: U32, boot: U32, strs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
+  match rr:
+    case Done{rs}:
+      parse.f8(tr, rules, v, boot, rs, strs)
+    case Fail{e}:
+      Fail{e}
 
 def parse.fstruct(is17: Bool, os: Nat, sst: Nat, region: List<&2, U32>) -> Result<&2, &2, E.FdtError, List<&2, S.FdtToken>>:
   match is17:
@@ -111,7 +126,7 @@ def parse.fstruct(is17: Bool, os: Nat, sst: Nat, region: List<&2, U32>) -> Resul
       S.FdtLexer.finish(False{}, S.lx.go(B.drop(os, region), S.FdtLexer.start()))
 
 def parse.f6(rules: T.FdtTreeRules, +v: U32, boot: U32, +region: List<&2, U32>, orsv: Nat, os: Nat, sst: Nat, ostr: Nat, sstr: Nat) -> Result<&2, &2, E.FdtError, FdtBlob>:
-  parse.p7(R.rsv.read(B.drop(orsv, region)), parse.fstruct(U32.is_lt(16, v), os, sst, region), rules, v, boot, B.take.fast(sstr, B.drop(ostr, region)))
+  parse.f7(R.rsv.read(B.drop(orsv, region)), parse.fstruct(U32.is_lt(16, v), os, sst, region), rules, v, boot, B.take.fast(sstr, B.drop(ostr, region)))
 
 def parse.f5(r: Result<&2, &2, E.FdtError, Unit>, rules: T.FdtTreeRules, h: H.FdtHeader, xs: List<&2, U32>) -> Result<&2, &2, E.FdtError, FdtBlob>:
   match r:
@@ -189,7 +204,7 @@ def build.with(how: T.FdtStrings, +root: T.FdtNode, rsv: List<&2, R.FdtRsv>, boo
     case T.FdtStringsSimple{}:
       build.fast(root, rsv, boot)
     case T.FdtStringsDedup{}:
-      build.dedup(T.dedup.run(root), rsv, boot)
+      build.dedup(T.dkx.run(root), rsv, boot)
 
 # a version-17 blob (last_comp_version 16) holding the tree, the
 # reservations and the boot CPU, with the strings block laid out as chosen

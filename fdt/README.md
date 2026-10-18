@@ -44,7 +44,9 @@ Choices this package makes where the specification leaves room:
   turn, repeats included (the "simple" block; the round-trip law is proved
   for it). `Fdt.build_with(FdtStringsDedup{}, ...)` writes each name's bytes
   once. A name whose bytes and NUL already occur in the block, also as the
-  tail of a longer name, gets that offset, as dtc does. For the same tree,
+  tail of a longer name, gets that offset, as dtc does (the writer finds
+  it in an index of the names in the block, not by searching the block).
+  For the same tree,
   reservations and boot CPU its output is byte-identical to `dtc -I dts
   -O dtb` (checked on the spec example and on random trees).
 * **Checks on reading.** The magic; an accepted version; `last_comp_version`
@@ -72,6 +74,7 @@ Choices this package makes where the specification leaves room:
 | `error.bend` | `FdtError` |
 | `example.bend` | `FdtExample`: the sample tree used by the tests |
 | `layout.bend` | internal: sizes, padding, alignment, NUL scanning |
+| `strindex.bend` | internal: the indexes of the strings block, by offset (`FdtIx`, for the reader) and by name (`FdtDict`, for the deduplicating writer) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `check.bend` | examples with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
@@ -162,8 +165,10 @@ example devicetree in chapter 2 of the specification.
 Everything else (the `hdr.*`, `rsv.*`, `tok.*`, `toks.*`, `lx.*`,
 `flat.*`, `prop.*`, `pstrs.*`, `strs.*`, `ptoks.*`, `ftoks.*`, `pnames.*`,
 `names.*`, `pvalues.*`, `values.*`, `dedup.*`, `tb.*`, `pr.*`, `lk.*`,
-`parse.*`, `build.*`, `buildable.ref` and `fdt.*` defs, the `*.ref`
-reference forms, `FdtFrame`, `FdtTb`, `LxMode`, …) is internal.
+`parse.*`, `build.*`, `buildable.ref`, `fdt.*`, `dkx.*` and
+`strindex.bend`'s `ix.*`, `nt.*` and `dk.*` defs, the `*.ref` reference
+forms, `FdtFrame`, `FdtTb`, `FdtFlatX`, `FdtIx`, `FdtNt`, `FdtDict`,
+`LxMode`, …) is internal.
 
 ## Extension points
 
@@ -186,9 +191,13 @@ reference forms, `FdtFrame`, `FdtTb`, `LxMode`, …) is internal.
   through (`parse.p1`, `build.simple`, `toks.list`, `flat.toks`,
   `flat.strs`, `pr.cells.list`, `pr.sl.list`, the `*.ref` checks) stay
   beside the tail-recursive forms the package runs, and `PROOF.bend`
-  proves each pair equal for every input (Laws). A faster form (an index
-  of the strings block by offset, say) can replace a fast form, as long as
-  its lemma is proved again; the laws do not change.
+  proves each pair equal for every input (Laws). The two strings-block
+  lookups work the same way: `tb.name_at` (drop the offset's bytes, read up
+  to the NUL) and `dedup.find` (search the block) stay as the references,
+  and the indexes in `strindex.bend` replace them in the code that runs. A
+  different index (a wider trie, a hash table) can replace either one, as
+  long as its lemma (`ix_at`, `dk_find`) is proved again; the laws do not
+  change.
 * **New property types** are decoders over `Octets` beside those in
   `props.bend`; `FdtProp.cells` is the base for the prop-encoded arrays
   (`interrupts`, `ranges`, …).
@@ -210,6 +219,29 @@ every input (`half_fast`, `u32n_fast`, `fits_fast`, `nonul_fast`,
 `buildable_fast`, `parse_fast`, `strings_ok_fast`, `sl_fast`,
 `cells_fast`). Each law's proof first rewrites the public defs to their
 references with these lemmas, so the laws hold for the code as it runs.
+
+The indexed lookups are tied to the structural ones the same way, for
+every input:
+
+* the reader (`run_fast`): `tb.run.fast`, which reads property names
+  through the index by offset, equals `tb.run`, which drops that many bytes
+  of the strings block, for every token list and strings block. It rests on
+  `ix_at`: a lookup in `ix.of(strs)` at any 32-bit offset is
+  `B.drop(offset, strs)`, for every block of any length (an offset past the
+  end gives the empty list, as drop does). `parse_fast` (and so
+  `parse_build`) and `tree_round_trip` use it.
+* the deduplicating writer (`dedup_fast`): `dkx.run`, which finds names in
+  the index by name, equals `dedup.run`, which searches the block, for
+  every tree, names with NULs inside included (those are searched for).
+  It rests on `dk_find`: for every name without NULs, the index of a block
+  answers what `dedup.find` answers on that block; and on `ins_app`: adding
+  a block in two parts, the first ending with a NUL, indexes it as adding
+  it whole. Along the way `ieq` shows that `U32.is_eq` is equality, from
+  the bits.
+
+The vector `example_parse_dtc` is proved through the reference reader
+(`parse_vec`, which rewrites with `parse_fast`), so the kernel does not
+evaluate the index of a closed blob, which runs it out of fuel.
 
 **Properties, for every input (15):**
 
@@ -252,13 +284,23 @@ error ref/gen.py's reader gives. The option variants: NOPs refused,
 properties after children allowed, version 16 refused by
 `FdtV17Only`.
 
-The `FdtStringsDedup` writer, `FdtNode.find`'s alias and base-name rules,
-`find_phandle` and the `reg` decoder are covered by vectors and the
-differential test, not by laws for every input.
+The `FdtStringsDedup` writer's layout (its agreement with dtc),
+`FdtNode.find`'s alias and base-name rules, `find_phandle` and the `reg`
+decoder are covered by vectors and the differential test, not by laws for
+every input; the indexed form of that writer is proved equal to its
+searching form (`dedup_fast`, above).
 
 ## Tests
 
-`ref/run.sh` (839 cases) compares the package with `ref/gen.py`, an
+`check.bend` builds and reads the sample tree, and writes with the
+deduplicating writer a tree whose names share bytes (a tail of an earlier
+name, a repeat, the empty name, a name with a NUL inside), with the bytes
+`ref/gen.py`'s writer gives for it.
+
+`ref/run.sh` (839 cases, written by `gen.py` into case files of about
+150 KB each, `ref/cases00.bend` on, which run natively one after the other:
+a single file of them all needs more than 3 GB to build) compares the
+package with `ref/gen.py`, an
 independent writer and reader written in Python from the same
 specification, and with `dtc` and `fdtdump` (device-tree-compiler 1.7.0),
 which are third-party:
@@ -317,14 +359,6 @@ needs the apt package `device-tree-compiler`.
 
 ## Speed and size
 
-**Lanes.** The figures in this section were measured on bend's JavaScript lane
-(`bend file.bend`, which runs `main` inside the bend process). That lane's
-stack overflows at some tens of thousands of nested non-tail calls, and it
-uses several times the memory of a native build (`bend file.bend -o prog`),
-which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
-will be re-measured natively once W64-heavy code builds natively
-(bendlang/bend#1069).
-
 The package works on `Octets`, and has no length limit of its own: every
 loop over a blob's bytes, its tokens, its strings block, a property's value
 or a list of strings or cells is a tail call (bytes' `Octets` operations and
@@ -333,51 +367,74 @@ recurses is bounded by the tree: the writers and the checks recurse into a
 node's children (the tree's depth), and the lookups (`FdtNode.find`,
 `find_phandle`, `child`, `prop`) and `FdtNode.dump` recurse once per
 sibling or property: the lookups pass with 10,000 siblings under one node,
-and `dump` with 5,000. The
-reservation block's writer and `FdtRsv.valid_all` recurse once per
-reservation (there are a handful). The reader keeps an explicit stack, so a
-deep tree does not deepen its recursion.
+and `dump` with 5,000. The reservation block's writer and
+`FdtRsv.valid_all` recurse once per reservation (there are a handful). The
+reader keeps an explicit stack, so a deep tree does not deepen its
+recursion. The name index recurses once per byte of a name.
 
-Measured with Bend 2.0.37 (`bend file.bend`, WSL2), on generated trees of
-buses and devices (four properties each), times and peak memory for the
-whole run, building the tree included:
+**The strings block.** The reader builds an index of the strings block by
+offset once (`ix.of`: a binary trie over the offset's 32 bits, one pass
+over the suffixes per level), then finds each property's name in at most
+32 steps and the bytes up to its NUL; before, it walked the block from its
+start for each property, so its time grew with the number of properties
+times the size of the block. The deduplicating writer keeps an index of
+the names in the block (`FdtDict`: a trie with one level per byte, each
+level a list of siblings) and its block reversed, so a name is found in
+steps proportional to its length and a new name is added without copying
+the block; before, it searched the block so far for each name and copied
+the block to add one, quadratic in the block when every name differs.
+Adding a new name of n bytes enters its n + 1 tails into the index, about
+n²/2 steps, once per distinct name.
+
+**Measured natively** (Bend 2.0.37, `bend file.bend -o prog`, clang 22,
+WSL2, a shared machine: times vary by up to twice between runs; the
+figures below are typical runs; peak RAM from `/usr/bin/time`). Each run
+builds the tree, writes or reads, and prints a hash. The parse runs read the
+blob from a file and walk the tree they get back.
+
+* **d5k**: 5,052 nodes (50 buses of 100 devices), 25,104 properties, a
+  property name of its own on each device (`acme,cal-N`): 773,874 bytes
+  with the simple strings block (a 195 KB strings block), 647,538
+  deduplicated (a 69 KB strings block).
+* **dtc 10k**: 10,102 nodes (100 buses of 100 devices), 40,204
+  properties: dtc's blob, 1,001,048 bytes (`dtc -I dts -O dtb` of the same
+  tree, byte-identical to `Fdt.build_with(FdtStringsDedup{}, …)`), and
+  1,253,734 bytes with the simple strings block (a 253 KB strings
+  block).
+
+| Input | Operation | Before | After | Peak RAM |
+|---|---|---|---|---|
+| d5k | `Fdt.build` | 1.2 s | 1.2 s | 93 MB |
+| d5k | `Fdt.build_with(FdtStringsDedup{}, …)` | 10.1 to 10.4 s | 1.0 s | 79 MB |
+| d5k, deduplicated blob | `Fdt.parse` | 1.6 s | 0.44 s | 72 MB |
+| d5k, simple blob | `Fdt.parse` | 16.3 to 19.1 s | 0.55 to 0.73 s | 86 MB |
+| dtc 10k | `Fdt.build` | 2.0 s | 2.0 s | 149 MB |
+| dtc 10k | `Fdt.build_with(FdtStringsDedup{}, …)` | 1.3 s | 1.3 s | 120 MB |
+| dtc 10k, dtc's blob | `Fdt.parse` | 0.64 s | 0.63 s | 112 MB |
+| dtc 10k, simple blob | `Fdt.parse` | 35.8 s | 0.85 to 1.04 s | 136 MB |
+
+dtc's own blob has a 60-byte strings block, so its reader and writer
+were not slowed by the old searches; the index costs them nothing
+measurable. The benchmark programs are not part of the package (they read
+blobs written by `ref/gen.py`'s writer and by dtc).
+
+Earlier figures on the JavaScript lane (`bend file.bend`, before the
+indexes; that lane has a small stack and uses several times the memory of
+a native build, see AGENTS.md, "Runtime and checker limits"):
 
 | Input | Operation | Time | Peak RAM |
 |---|---|---|---|
 | 1,000 nodes, 130 KB | `Fdt.build`; `Fdt.parse` and build again | 1.1 s; 2.8 s | 300 MB; 500 MB |
-| 5,000 nodes, 654 KB | `Fdt.build` | 5.5 s | 930 MB |
-| 5,000 nodes, 501 KB | `Fdt.build_with(FdtStringsDedup{}, …)` | 3.3 s | 840 MB |
-| 5,000 nodes, 650 KB | `Fdt.build`, then `Fdt.parse` | 9 to 18 s | 1.3 GB |
 | 5,000 nodes | `FdtToken.decode_all` (the lexer), 30,408 tokens | 5.9 s | 1.2 GB |
-| 10,102 nodes, 1,001,053 bytes | `Fdt.build_with(FdtStringsDedup{}, …)`: byte-identical to `dtc -I dts -O dtb` | 8.4 s | 1.8 GB |
 | 10,000 siblings | `FdtNode.find`, `find_phandle` | 5.7 s | 1.6 GB |
 | a 500 KB property value | `Fdt.build`, then `Fdt.parse` | 2.9 s | 1.4 GB |
 | 100,000 cells; 50,000 strings | `FdtProp.of_cells`; `of_strings` then `strings` | 1.8 s | 440 MB; 480 MB |
 
-Before these loops were made tail-recursive, a 300-node tree (39 KB) did
-not parse and a 1,000-node tree did not build: Bend 2.0.37's runtime
-overflows its stack after some 10,000 to 40,000 nested calls.
-
-The limit now is memory: an `Octets` cost about 940 bytes of RAM per byte
-(when measured; bytes' compact `OctByte` storage, merged since, holds an
-`Octets` in about a third of that, about 150 bytes per byte, and these
-figures have not been re-measured), and the reader holds the blob, its byte
-list and the tree at once, so reading a 1 MB blob would need more than
-2 GB (not run here, on a shared machine). That will shrink when bytes makes
-`Octets` compact.
-
-Two costs grow faster than the blob. The reader finds each property's name
-by walking the strings block from its start, so its time grows with the
-number of properties times the size of the strings block: dtc's
-deduplicated blobs have small strings blocks, but the simple layout repeats
-every name (the 650 KB blob above has a 125 KB strings block and 20,000
-properties). And the deduplicating writer searches the block so far for
-each name, so a tree whose property names are all different costs time
-proportional to the square of its strings block. An index of the strings
-block by offset would remove both. Sizes and offsets are `Nat`.
+Sizes and offsets are `Nat`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 839 cases match (with dtc 1.7.0 and
-fdtdump installed), `scripts/deps.sh fdt` ok.
+Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
+`PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
+passes, `ref/run.sh` 839 cases match (with dtc 1.7.0 and fdtdump
+installed), `scripts/deps.sh fdt` ok.
