@@ -41,6 +41,7 @@ GPL source was read.
 | [caps](caps/) | Linux capability sets and how execve, capset and prctl change them |
 | [perms](perms/) | Unix permission checks, umask, POSIX ACLs, sticky directories |
 | [landlock](landlock/) | Landlock rule evaluation: rulesets, path and port rules, stacked domains, ABI 1–6, REFER rules, scoping; checked against the kernel |
+| [nftables](nftables/) | nftables rule evaluation as a pure model: tables, chains, rules, sets, maps and verdict maps, counters and limits (clean-room, from documentation only) |
 | [lz4](lz4/) | LZ4 block and frame compression and decompression |
 | [xz](xz/) | `.xz` decompression: LZMA2, delta, every check type, streaming |
 | [bzip2](bzip2/) | bzip2 compression and decompression, each stage (RLE, MTF, BWT, Huffman) usable alone |
