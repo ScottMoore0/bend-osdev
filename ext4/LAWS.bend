@@ -125,7 +125,6 @@ def Ext4Laws.ov(+d: D.MemDev, ws: List<&2, JW.Jbd2Write>) -> Result<&2, &2, E.Ex
 def Ext4Laws.direct(+d: D.MemDev, ws: List<&2, JW.Jbd2Write>) -> Result<&2, &2, E.Ext4Error, D.MemDev>:
   DW.Ext4Dev.write_all(~D.MemDev, ~D.MemDev.block_size, ~DW.Ext4Dev.mem_write, ws, Done{d}, D.MemDev.block_size(d))
 
-# DRAFT: not yet reviewed by the maintainer
 # The journalling device reads every block as the device written directly
 # would: so a writer that reaches its device only through block reads and
 # writes (ext2's) does on the overlay what it would do on the device.
@@ -137,7 +136,6 @@ law ov_reads:
   for +ok: {DW.Ext4Dev.fits(D.MemDev.block_size(d), D.MemDev.block_count(d), ws) == True{} : Bool}
   {OV.Ext4Ov.read_mem(Ext4Laws.ov(d, ws), m) == DW.Ext4Dev.read_mem(Ext4Laws.direct(d, ws), m) : Result<&2, &2, E.Ext4Error, B.Octets>}
 
-# DRAFT: not yet reviewed by the maintainer
 # The writes the journalling device keeps (each block once, its last
 # contents: what a transaction logs), written home, give every block the
 # device written directly has: a complete transaction, checkpointed, is the
@@ -159,7 +157,6 @@ law ov_flush:
 def Ext4Laws.tx(+g: J.Jbd2Geom, +uuid: B.Octets, +jsb: B.Octets, +seq: Nat, +m: JT.Jbd2Mode, +fresh: List<&2, Nat>, +ws: List<&2, JW.Jbd2Write>, +sec: U32, +nsec: U32) -> JT.Ext4JTx:
   JT.Ext4JTx.build(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)
 
-# DRAFT: not yet reviewed by the maintainer
 # A crash before the commit step: recovery replays nothing, so the
 # filesystem is as it was (the only blocks written in place by then are
 # fresh ones, jtx_in_place).
@@ -178,7 +175,6 @@ law jtx_uncommitted:
   for +h: {Nat.is_lt(k, JT.Ext4JTx.commit_at(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec))) == True{} : Bool}
   {JL.Jbd2Log.recover(seq, JT.Ext4JTx.records(seq, List.take(&2, JT.Ext4JStep, JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), k))) == Nil{} : List<&2, JL.Jbd2Do>}
 
-# DRAFT: not yet reviewed by the maintainer
 # A crash at the commit step or any number j of steps after it: recovery
 # replays every logged copy, in log order, none revoked.
 
@@ -195,7 +191,6 @@ law jtx_committed:
   for +j: Nat
   {JL.Jbd2Log.recover(seq, JT.Ext4JTx.records(seq, List.take(&2, JT.Ext4JStep, JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), Nat.add(JT.Ext4JTx.commit_at(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), j)))) == JL.Jbd2Log.unrevoked(seq, Nil{}, JT.Ext4JTx.data_puts(JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)))) : List<&2, JL.Jbd2Do>}
 
-# DRAFT: not yet reviewed by the maintainer
 # The logged copies are the writes: replaying them (each home, unescaped as
 # its tag says) writes exactly the transaction's writes that are not done
 # in place, in order (the superblock's copy marked needs_recovery).
@@ -212,7 +207,6 @@ law jtx_copies:
   for +nsec: U32
   {JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec))) == JT.Ext4JTx.logged(m, fresh, J.Jbd2Geom.bs(g), ws) : List<&2, JW.Jbd2Write>}
 
-# DRAFT: not yet reviewed by the maintainer
 # The checkpoint (the steps after the commit) writes home exactly what a
 # recovery from the commit on would replay.
 
@@ -228,7 +222,6 @@ law jtx_checkpoint:
   for +nsec: U32
   {JT.Ext4JTx.homes(List.drop(&2, JT.Ext4JStep, JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), JT.Ext4JTx.commit_at(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)))) == JT.Ext4JTx.replay_writes(JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec))) : List<&2, JW.Jbd2Write>}
 
-# DRAFT: not yet reviewed by the maintainer
 # Up to the commit, every block written in place is a fresh one (free
 # before the transaction, so the old filesystem never reads it)...
 
@@ -244,7 +237,6 @@ law jtx_in_place:
   for +nsec: U32
   {JT.Ext4JTx.fresh_homes(fresh, List.take(&2, JT.Ext4JStep, JT.Ext4JTx.steps(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), JT.Ext4JTx.commit_at(Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 # ...and in data=journal mode there is none.
 
 law jtx_journal_mode:
@@ -342,7 +334,6 @@ law scan_incomplete_witness:
 law replay_idempotent_witness:
   {DW.Ext4Dev.fits(D.MemDev.block_size(D.MemDev.blank(4n, 2n)), D.MemDev.block_count(D.MemDev.blank(4n, 2n)), [JW.Jbd2Write{1n, B.Octets.of_string("abcd")}]) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 # (ov_reads and ov_flush share replay_idempotent's hypothesis, witnessed
 # above; a crash after no steps at all comes before every commit)
 law jtx_uncommitted_witness:

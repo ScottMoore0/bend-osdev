@@ -28,9 +28,6 @@ customised without breaking anything else.
 
 ## Laws
 
-- [ ] A new `LAWS.bend` opens with the DRAFT line, and a new or changed law in
-      an accepted package has a DRAFT line above it, until the maintainer
-      accepts it.
 - [ ] Laws are about the public interface only; lemmas about internals are in
       `PROOF.bend`.
 - [ ] At least one law holds for every input, where tractable; any package

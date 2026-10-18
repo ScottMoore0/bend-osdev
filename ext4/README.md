@@ -334,8 +334,7 @@ the transaction's.
     journalled (escaping a block that starts with the magic number is
     undone; proved through bytes' laws and the soundness of bytes'
     `list_eq`, itself proved from Base's `Word.cmp`);
-* **for every input, journalled writes** (drafts, not yet reviewed by the
-  maintainer):
+* **for every input, journalled writes**:
   * `ov_reads`: on blockdev's `MemDev`, after any list of good writes, the
     journalling device (`Ext4Ov`) reads every block as the device written
     directly does; so a writer that reaches its device only through block
@@ -545,5 +544,4 @@ Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 20 tool checks and 1981 answers on 4 built directories match (seed 7 too),
 and journalled writes: 10 cases, 15 transactions, 42 crashes recovered as
 e2fsck recovers them, 52 images accepted by `e2fsck -fn` (seed 7 too);
-`scripts/deps.sh ext4` passes. The journalled-write laws (`ov_reads`,
-`ov_flush`, `jtx_*`) are drafts, not yet reviewed by the maintainer.
+`scripts/deps.sh ext4` passes.

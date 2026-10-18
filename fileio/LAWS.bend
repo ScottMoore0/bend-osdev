@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # The offset conversions (off.bend), for every input: an offset reaches an
 # effect as two halves and a size comes back as two, and nothing is lost
 # either way; a 32-bit offset has a zero high half, so it fits Base's

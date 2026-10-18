@@ -316,7 +316,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-`LAWS.bend` (a draft: not yet reviewed by the maintainer), 72 laws.
+`LAWS.bend` has 72 laws.
 
 **Generic, for every input and every algorithm of the shape:**
 `xor_involution`, `xor_streaming_data`, `xor_streaming_state` (CrXor, every
@@ -423,5 +423,4 @@ cipher-modes' `aes.bend`.
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 20 s), `--verdict` ALL
 PROOFS CHECK (about 1 min), `check.bend` passes, `ref/run.sh` 162 cases
-match, `scripts/deps.sh` passes. The laws are a draft, not yet reviewed by
-the maintainer.
+match, `scripts/deps.sh` passes.

@@ -276,7 +276,6 @@ def algo_index_nat(m: Maybe<&2, U32>) -> Maybe<&2, Nat>:
     case Some{i}:
       Some{U32.to_nat(i)}
 
-# DRAFT: not yet reviewed by the maintainer
 law array_lower_bound_list:
   for +d: Nat
   for a: Array<U32>
@@ -288,7 +287,6 @@ law array_lower_bound_list:
   for hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}
   {U32.to_nat(Pair.snd(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key))) == S.bsearch.lower_bound(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law array_lower_bound_same:
   for +d: Nat
   for a: Array<U32>
@@ -298,7 +296,6 @@ law array_lower_bound_same:
   for key: U32
   {Pair.fst(Array<U32>, U32, S.bsearch.array_lower_bound(a, n, key)) == a : Array<U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law array_find_list:
   for +d: Nat
   for a: Array<U32>
@@ -310,7 +307,6 @@ law array_find_list:
   for hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}
   {algo_index_nat(Pair.snd(Array<U32>, Maybe<&2, U32>, S.bsearch.array_find(a, n, key))) == S.bsearch.find(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n)), key) : Maybe<&2, Nat>}
 
-# DRAFT: not yet reviewed by the maintainer
 law array_find_same:
   for +d: Nat
   for a: Array<U32>
@@ -389,6 +385,5 @@ law wit_bsearch:
 
 # the array [1, 3, 3, 7, 9, 0, 0, 0] (depth 3), searched in its first 5
 # slots: perfect, of depth below 32, 5 <= 2^3, and those slots sorted
-# DRAFT: not yet reviewed by the maintainer
 law wit_array_bsearch:
   {(AR.Arrays.is_perfect(U32, 3n, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, [0 : U32*8n], 0, 1), 1, 3), 2, 3), 3, 7), 4, 9)), Nat.is_lt(3n, 32n), Nat.is_le(U32.to_nat(5), AR.Arrays.slots(3n)), S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, [0 : U32*8n], 0, 1), 1, 3), 2, 3), 3, 7), 4, 9)), U32.to_nat(5)))) == (True{}, True{}, True{}, True{}) : Bool & Bool & Bool & Bool}

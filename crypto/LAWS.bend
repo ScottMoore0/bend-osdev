@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Laws of the interfaces and of the generic algorithms built on them.
 #
 # Generic laws (first part) hold for every algorithm that has an interface's

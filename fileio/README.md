@@ -160,7 +160,7 @@ effects as template arguments, so iodev's proofs never see them.
 
 ## Laws
 
-`LAWS.bend` (draft, not yet reviewed by the maintainer), for `off.bend`
+`LAWS.bend`, for `off.bend`
 only; the effects themselves are tested, not proved (below), as nuxyel's
 library effect is.
 
@@ -205,7 +205,6 @@ are the word), `off_halves_join` (a joined pair splits back into it),
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes natively and on the JavaScript lane, `ref/run.sh` 543
 operations on 31 files, the 5 GiB sparse file included, match on both
-lanes, every file byte for byte; `scripts/deps.sh fileio` ok. Laws: a draft,
-not yet reviewed by the maintainer. Linux (WSL2) only so far; the C and
+lanes, every file byte for byte; `scripts/deps.sh fileio` ok. Linux (WSL2) only so far; the C and
 JavaScript sides use only POSIX calls and Node's `fs`, as Base's do, but
 macOS is untested.

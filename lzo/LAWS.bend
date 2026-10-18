@@ -321,7 +321,6 @@ law lzop_write_every_checksum:
 # the writer asked for checksums of the compressed bytes only writes the
 # same checksums of the uncompressed bytes too (flags 0x303), as the lzop
 # tool needs (LzopWriteOptions.normal)
-# DRAFT: not yet reviewed by the maintainer
 law lzop_write_compressed_checksums:
   {P.lzop_header(P.lzop_compress(P.LzopWriteOptions{262144, False{}, False{}, True{}, True{}, False{}, 1, 5, B.Octets.empty(), 0, 0, C.LzoCompressOptions.default()}, B.Octets.of_string("hello hello hello hello hello"))) == Done{P.LzopHeader{4144, 8320, 2368, 1, 5, 771, 0, 0, 0, B.Octets.empty()}} : Result<&2, &2, E.LzoError, P.LzopHeader>}
 

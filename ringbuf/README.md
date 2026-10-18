@@ -125,8 +125,7 @@ capacity; `push_list` answers the same count, and `pop_list` the same number
 of elements.
 
 **The Array ring against the model, element by element, for every sound
-ring** (draft laws, not yet reviewed by the maintainer; proved through
-bend-osdev-array's laws). `ring.sound(r)` says that the counters are valid,
+ring** (proved through bend-osdev-array's laws). `ring.sound(r)` says that the counters are valid,
 the order is below 32 and the slots are a perfect array, which is what
 `new` builds (`new_sound`, for an order below 32) and what `push`, `pop`,
 `peek`, `push_list` and `pop_list` keep (`push_sound` and the like); a sound
@@ -197,6 +196,4 @@ proved through array's laws (`PROOF.bend` and `proof_items.bend` import its
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 1491 operations in 24 sequences, on the
 Array ring and on the model, match,
-`scripts/deps.sh ringbuf` ok. The element laws (`ring.items`, `ring.sound`
-and the laws above that mention them) are drafts, not yet reviewed by the
-maintainer.
+`scripts/deps.sh ringbuf` ok.

@@ -300,8 +300,7 @@ trailing bytes, a file cut short); the writer's empty file, its file with
 every checksum (the very bytes built by hand), a streamed file read back,
 and the header it writes when asked for the compressed bytes' checksums
 alone (flags 0x303: the uncompressed bytes' too;
-`lzop_write_compressed_checksums`, added on 2026-10-18 and marked DRAFT
-until the maintainer reviews it).
+`lzop_write_compressed_checksums`).
 
 A successful M4 needs more than 16 KiB of output, so the vectors cover it
 only as a failure (`first_m4`);

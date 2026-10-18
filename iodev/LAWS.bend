@@ -1,5 +1,3 @@
-# DRAFT: not yet reviewed by the maintainer
-#
 # Block arithmetic, for every block size, offset and length: a range's
 # span starts at its offset, covers it exactly (with skip bytes before and
 # slack bytes after, each less than a block), and an offset inside block n

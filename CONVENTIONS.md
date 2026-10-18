@@ -109,12 +109,9 @@ A change to one of these rules is a change to every package.
 ## Laws
 
 - Bend's convention is that a human writes `LAWS.bend` and the AI writes
-  `PROOF.bend` and the code. In this repository the laws were drafted by an AI
-  and are reviewed by the maintainer: every package's laws were accepted on
-  2026-10-18. Until the maintainer accepts them, a new package's `LAWS.bend`
-  opens with `# DRAFT: not yet reviewed by the maintainer`, and a law added to
-  or changed in an accepted package has a `# DRAFT: not yet reviewed by the
-  maintainer` line directly above it.
+  `PROOF.bend` and the code. In this repository the laws are drafted by an AI
+  and reviewed by the maintainer continually, as they are written, so laws
+  carry no draft marker.
 - Laws state the behaviour of the **public interface** only, never of
   internal helpers, so internals can be restructured without changing a law.
   Lemmas about internals live in `PROOF.bend`.

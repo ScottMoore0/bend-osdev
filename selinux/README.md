@@ -385,10 +385,6 @@ that disagree (`load_refuses_conflicting_transitions`), and accepts two
 that disagree in the two branches of one booleanif
 (`load_branch_transitions`).
 
-The seven laws added on 2026-10-18 (the two transition laws, the witness
-and the four vectors) carry the DRAFT line until the maintainer reviews
-them.
-
 The CIL compiler is otherwise covered by `check.bend` and the differential
 test, not by a for-all law. A for-all law for it (CIL text
 printed and read back) would need a printer for the model and reasoning

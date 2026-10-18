@@ -279,14 +279,12 @@ law validate_refuses:
 
 # Conflicting transitions: the second load-time check
 
-# DRAFT: not yet reviewed by the maintainer
 law load_checks_transitions:
   for o: B.Octets
   for +p: P.SePolicy
   for +h: {S.Selinux.load(o) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}
   {T.SeTe.transitions_ok(p) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law validate_refuses_transitions:
   for +p: P.SePolicy
   for +h: {T.SeTe.transitions_ok(p) == False{} : Bool}
@@ -298,19 +296,15 @@ law validate_refuses_transitions:
 # transitions that conflict, unless they are the two branches of one
 # condition
 
-# DRAFT: not yet reviewed by the maintainer
 law load_refuses_operand_word:
   {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.load(B.Octets.of_string("(class file (read)) (type t1) (constrain (file (read)) (eq t2 t1))"))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law load_refuses_name_transition_in_booleanif:
   {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.load(B.Octets.of_string("(class file (read)) (type a_t) (boolean b true) (booleanif b (true (typetransition a_t a_t file \"x\" a_t)))"))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law load_refuses_conflicting_transitions:
   {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.load(B.Octets.of_string("(class file (read)) (type a_t) (type b_t) (typetransition a_t b_t file a_t) (typetransition a_t b_t file b_t)"))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law load_branch_transitions:
   exs p: P.SePolicy
   {S.Selinux.load(B.Octets.of_string("(class file (read)) (type a_t) (type b_t) (boolean b true) (booleanif b (true (typetransition a_t b_t file a_t)) (false (typetransition a_t b_t file b_t)))")) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}
@@ -421,7 +415,6 @@ law witness_neverallow_violated:
 
 # a policy whose two type rules conflict: the example's typetransition
 # a_t b_t file a_t, and another giving b_t (validate_refuses_transitions)
-# DRAFT: not yet reviewed by the maintainer
 law witness_transitions_conflict:
   {T.SeTe.transitions_ok(P.SePolicy{X.SeExample.decl(), P.SeRules{Nil{}, [P.SeTyRule{P.SeTyTransition{}, [True{}], [False{}, True{}], False{}, 0n, None{}, 0n}, P.SeTyRule{P.SeTyTransition{}, [True{}], [False{}, True{}], False{}, 0n, None{}, 1n}], Nil{}, Nil{}, Nil{}, Nil{}, Nil{}}, True{}, Nil{}}) == False{} : Bool}
 

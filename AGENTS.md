@@ -17,9 +17,8 @@ package: copy its shape.
    with the package's own error type `E` where input can be malformed, and
    take real choices as parameters or templates with named defaults. Use
    other packages only through their public interfaces.
-3. Write `x/LAWS.bend`, opening with `# DRAFT: not yet reviewed by the
-   maintainer` (in a package whose laws are already accepted, put that line
-   above each law you add or change instead). Aim for:
+3. Write `x/LAWS.bend` (no draft marker: the maintainer reviews laws as they
+   are written). Aim for:
    - **properties for every input** where they can be proved: round trips
      (parse after serialise gives the value back), invariants, the result of
      an operation on a structure;

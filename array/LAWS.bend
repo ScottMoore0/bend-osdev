@@ -136,7 +136,6 @@ law index_of_nat:
   for hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}
   {A.Arrays.index(d, U32.from_nat(k)) == k : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law index_wrap:
   for d: Nat
   for hd: {Nat.is_lt(d, 32n) == True{} : Bool}
@@ -144,7 +143,6 @@ law index_wrap:
   for hk: {Nat.is_lt(k, A.Arrays.slots(d)) == True{} : Bool}
   {A.Arrays.index(d, U32.from_nat(Nat.add(A.Arrays.slots(d), k))) == k : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law index_of_u32:
   for d: Nat
   for i: U32
@@ -264,7 +262,6 @@ law witness_other:
 law witness_index:
   {Nat.is_lt(3n, A.Arrays.slots(2n)) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law witness_index_wrap:
   {Bool.and(Nat.is_lt(U32.to_nat(5), A.Arrays.slots(3n)), Nat.is_lt(3n, A.Arrays.slots(2n))) == True{} : Bool}
 
@@ -285,7 +282,6 @@ law vector_index:
 law vector_of_list:
   {Pair.snd(Array<U32>, U32, Array.get(U32, Array.set(U32, A.Arrays.of_list(U32, 2n, [5, 6, 7, 8], 0), 1, 9), 5)) == 9 : U32}
 
-# DRAFT: not yet reviewed by the maintainer
 law vector_index_wrap:
   {A.Arrays.index(2n, U32.from_nat(Nat.add(A.Arrays.slots(2n), 3n))) == 3n : Nat}
 

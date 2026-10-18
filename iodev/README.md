@@ -247,7 +247,7 @@ the device is made.
 
 ## Laws
 
-`LAWS.bend` (draft, not yet reviewed by the maintainer). A law about an IO
+`LAWS.bend`. A law about an IO
 action states what the action gives a continuation `k`, for every `R` and
 `k`: the action run as `m(R, k)`. Effects themselves (`FileDev`, and
 `FileRW` on any effects) are tested, not proved.
@@ -370,6 +370,5 @@ Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 518 operations on 40 image files (43
 saves, 40 files written in place) match and 29 operations on a 5 GiB
 sparse image match, natively and on the JavaScript lane;
-`scripts/deps.sh iodev` ok. Laws: a draft, not yet reviewed by the
-maintainer; `FileRW` adds none. The 64 MB measurements above were run
+`scripts/deps.sh iodev` ok. `FileRW` adds no laws. The 64 MB measurements above were run
 separately, natively.

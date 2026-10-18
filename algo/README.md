@@ -103,8 +103,7 @@ Bits are numbered from the least significant, 0 to 31 (63).
   element from it on is not below the key; `find` answers only an index that
   holds the key, and, on a sorted list, `None` only when no element is the
   key;
-* **the `Array<U32>` binary search against the reference** (draft laws, not
-  yet reviewed by the maintainer), for every array `a` that is a perfect
+* **the `Array<U32>` binary search against the reference**, for every array `a` that is a perfect
   tree of depth `d < 32` (as `Array.new` and `Array.set` build), every
   `n <= 2^d` whose first `n` slots are sorted (in index order,
   bend-osdev-array's `Arrays.leaves`) and every key:
@@ -185,4 +184,4 @@ laws).
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 728 cases match, `scripts/deps.sh algo`
-ok. The `Array` search laws are drafts, not yet reviewed by the maintainer.
+ok.

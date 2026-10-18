@@ -436,62 +436,52 @@ law wit_model:
 # the defs build it, with valid counters, an order below 32 and a perfect
 # array of slots (ring.sound). Proved through bend-osdev-array's laws.
 
-# DRAFT: not yet reviewed by the maintainer
 law items_len:
   for r: R.RingBuf
   for hs: {R.ring.sound(r) == True{} : Bool}
   {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r))) == Pair.snd(R.RingBuf, Nat, R.ring.len(r)) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law items_same:
   for r: R.RingBuf
   for hs: {R.ring.sound(r) == True{} : Bool}
   {Pair.fst(R.RingBuf, List<&2, U32>, R.ring.items(r)) == r : R.RingBuf}
 
-# DRAFT: not yet reviewed by the maintainer
 law new_items:
   for o: Nat
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(R.ring.new(o))) == Nil{} : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law new_sound:
   for o: Nat
   for hd: {Nat.is_lt(o, 32n) == True{} : Bool}
   {R.ring.sound(R.ring.new(o)) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law sound_valid:
   for r: R.RingBuf
   for hs: {R.ring.sound(r) == True{} : Bool}
   {Pair.snd(R.RingBuf, Bool, R.ring.valid(r)) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law push_sound:
   for r: R.RingBuf
   for x: U32
   for hs: {R.ring.sound(r) == True{} : Bool}
   {R.ring.sound(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(r, x))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law pop_sound:
   for r: R.RingBuf
   for hs: {R.ring.sound(r) == True{} : Bool}
   {R.ring.sound(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.pop(r))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law peek_sound:
   for r: R.RingBuf
   for hs: {R.ring.sound(r) == True{} : Bool}
   {R.ring.sound(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.peek(r))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law push_list_sound:
   for r: R.RingBuf
   for xs: List<&2, U32>
   for hs: {R.ring.sound(r) == True{} : Bool}
   {R.ring.sound(Pair.fst(R.RingBuf, Nat, R.ring.push_list(r, xs))) == True{} : Bool}
 
-# DRAFT: not yet reviewed by the maintainer
 law pop_list_sound:
   for r: R.RingBuf
   for n: Nat
@@ -504,7 +494,6 @@ law pop_list_sound:
 # and the same elements (and the ring sound, above), so that a sequence of
 # operations can be followed on the model.
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push:
   for r: R.RingBuf
   for m: M.RingModel
@@ -514,7 +503,6 @@ law elems_push:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(r, x)) == Pair.snd(M.RingModel, Result<&2, &2, R.RingError, Unit>, M.model.push(m, x)) : Result<&2, &2, R.RingError, Unit>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push_items:
   for r: R.RingBuf
   for m: M.RingModel
@@ -524,7 +512,6 @@ law elems_push_items:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(r, x)))) == M.model.items(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, Unit>, M.model.push(m, x))) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push_capacity:
   for r: R.RingBuf
   for m: M.RingModel
@@ -534,7 +521,6 @@ law elems_push_capacity:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Nat, R.ring.capacity(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(r, x)))) == M.model.capacity(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, Unit>, M.model.push(m, x))) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop:
   for r: R.RingBuf
   for m: M.RingModel
@@ -543,7 +529,6 @@ law elems_pop:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.pop(r)) == Pair.snd(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.pop(m)) : Result<&2, &2, R.RingError, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop_items:
   for r: R.RingBuf
   for m: M.RingModel
@@ -552,7 +537,6 @@ law elems_pop_items:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.pop(r)))) == M.model.items(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.pop(m))) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop_capacity:
   for r: R.RingBuf
   for m: M.RingModel
@@ -561,7 +545,6 @@ law elems_pop_capacity:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Nat, R.ring.capacity(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.pop(r)))) == M.model.capacity(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.pop(m))) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_peek:
   for r: R.RingBuf
   for m: M.RingModel
@@ -570,7 +553,6 @@ law elems_peek:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.peek(r)) == Pair.snd(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.peek(m)) : Result<&2, &2, R.RingError, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_peek_items:
   for r: R.RingBuf
   for m: M.RingModel
@@ -579,7 +561,6 @@ law elems_peek_items:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.peek(r)))) == M.model.items(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.peek(m))) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_peek_capacity:
   for r: R.RingBuf
   for m: M.RingModel
@@ -588,7 +569,6 @@ law elems_peek_capacity:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Nat, R.ring.capacity(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.peek(r)))) == M.model.capacity(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, U32>, M.model.peek(m))) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push_list:
   for r: R.RingBuf
   for m: M.RingModel
@@ -598,7 +578,6 @@ law elems_push_list:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Nat, R.ring.push_list(r, xs)) == Pair.snd(M.RingModel, Nat, M.model.push_list(m, xs)) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push_list_items:
   for r: R.RingBuf
   for m: M.RingModel
@@ -608,7 +587,6 @@ law elems_push_list_items:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Nat, R.ring.push_list(r, xs)))) == M.model.items(Pair.fst(M.RingModel, Nat, M.model.push_list(m, xs))) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_push_list_capacity:
   for r: R.RingBuf
   for m: M.RingModel
@@ -618,7 +596,6 @@ law elems_push_list_capacity:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, Nat, R.ring.capacity(Pair.fst(R.RingBuf, Nat, R.ring.push_list(r, xs)))) == M.model.capacity(Pair.fst(M.RingModel, Nat, M.model.push_list(m, xs))) : Nat}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop_list:
   for r: R.RingBuf
   for m: M.RingModel
@@ -628,7 +605,6 @@ law elems_pop_list:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list(r, n)) == Pair.snd(M.RingModel, List<&2, U32>, M.model.pop_list(m, n)) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop_list_items:
   for r: R.RingBuf
   for m: M.RingModel
@@ -638,7 +614,6 @@ law elems_pop_list_items:
   for ei: {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(r)) == M.model.items(m) : List<&2, U32>}
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, List<&2, U32>, R.ring.pop_list(r, n)))) == M.model.items(Pair.fst(M.RingModel, List<&2, U32>, M.model.pop_list(m, n))) : List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law elems_pop_list_capacity:
   for r: R.RingBuf
   for m: M.RingModel
@@ -650,11 +625,9 @@ law elems_pop_list_capacity:
 
 # Witness: a sound ring and a model in the relation (order 2, one element)
 
-# DRAFT: not yet reviewed by the maintainer
 law wit_elems:
   {(R.ring.sound(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(R.ring.new(2n), 5))), Nat.is_lt(2n, 32n), Pair.snd(R.RingBuf, Nat, R.ring.capacity(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(R.ring.new(2n), 5)))), Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, Unit>, R.ring.push(R.ring.new(2n), 5))))) == (True{}, True{}, M.model.capacity(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, Unit>, M.model.push(M.model.new(2n), 5))), M.model.items(Pair.fst(M.RingModel, Result<&2, &2, R.RingError, Unit>, M.model.push(M.model.new(2n), 5)))) : Bool & Bool & Nat & List<&2, U32>}
 
-# DRAFT: not yet reviewed by the maintainer
 law vec_items:
   {Pair.snd(R.RingBuf, List<&2, U32>, R.ring.items(Pair.fst(R.RingBuf, Result<&2, &2, R.RingError, U32>, R.ring.pop(Pair.fst(R.RingBuf, Nat, R.ring.push_list(Pair.fst(R.RingBuf, List<&2, U32>, R.ring.pop_list(Pair.fst(R.RingBuf, Nat, R.ring.push_list(R.ring.new(2n), [1, 2])), 2n)), [9, 3, 4, 5])))))) == [3, 4, 5] : List<&2, U32>}
 

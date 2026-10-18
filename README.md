@@ -13,10 +13,8 @@ GPL source was read.
 
 ## Status
 
-- **Laws reviewed.** The maintainer has reviewed and accepted every
-  package's laws, except fileio's and crypto's, which are new and still
-  drafts. They
-  are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
+- **Laws reviewed.** The maintainer reviews every package's laws as they
+  are written. They are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
   all except four laws in cipher-modes that its kernel cannot yet model
   (see that README).
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
