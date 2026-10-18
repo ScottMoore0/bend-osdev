@@ -121,16 +121,106 @@ def phdr_drop(is64: Bool, big: Bool, x: P.ElfPhdr, r: List<&2, U32>) -> {r == B.
       %WL.parts_of(f7) : {r == B.drop(U32.to_nat(P.ElfPhdr.size(is64)), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, P.ElfPhdr{f0, f1, W.W64.from_parts(W.W64.hi(f2), W.W64.lo(f2)), W.W64.from_parts(W.W64.hi(f3), W.W64.lo(f3)), W.W64.from_parts(W.W64.hi(f4), W.W64.lo(f4)), W.W64.from_parts(W.W64.hi(f5), W.W64.lo(f5)), W.W64.from_parts(W.W64.hi(f6), W.W64.lo(f6)), _})), r)) : List<&2, U32>}
       phdr_drop_bits(is64, big, f0, f1, W.W64.hi(f2), W.W64.lo(f2), W.W64.hi(f3), W.W64.lo(f3), W.W64.hi(f4), W.W64.lo(f4), W.W64.hi(f5), W.W64.lo(f5), W.W64.hi(f6), W.W64.lo(f6), W.W64.hi(f7), W.W64.lo(f7), r)
 
-def phdr_table(+is64: Bool, +big: Bool, ps: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table(is64, big, ps)) == Done{P.ElfPhdr.normal_table(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+def phdr_table_ref(+is64: Bool, +big: Bool, ps: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, ps), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, ps))) == Done{P.ElfPhdr.normal_table.ref(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
   match ps:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
-      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(P.ElfPhdr.write(is64, big, x), P.ElfPhdr.write_table(is64, big, xs))), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table(is64, big, xs))), BL.octets_append_list(P.ElfPhdr.write(is64, big, x), P.ElfPhdr.write_table(is64, big, xs))) : {P.ElfPhdr.table.list(List.length(&2, P.ElfPhdr, Con{x, xs}), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), _) == Done{P.ElfPhdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, P.ElfPhdr>, P.ElfPhdr.parse.list(is64, big, B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table(is64, big, xs)))), Done{P.ElfPhdr.normal(is64, x)}, phdr_list(is64, big, x, B.Octets.to_list(P.ElfPhdr.write_table(is64, big, xs)))) : {F.elf_cons(P.ElfPhdr, _, P.ElfPhdr.table.list(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.drop(U32.to_nat(P.ElfPhdr.size(is64)), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table(is64, big, xs)))))) == Done{P.ElfPhdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-      %phdr_drop(is64, big, x, B.Octets.to_list(P.ElfPhdr.write_table(is64, big, xs))) : {F.elf_cons(P.ElfPhdr, Done{P.ElfPhdr.normal(is64, x)}, P.ElfPhdr.table.list(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), _)) == Done{P.ElfPhdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, xs), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table(is64, big, xs)), Done{P.ElfPhdr.normal_table(is64, xs)}, phdr_table(is64, big, xs)) : {F.elf_cons(P.ElfPhdr, Done{P.ElfPhdr.normal(is64, x)}, _) == Done{P.ElfPhdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(P.ElfPhdr.write(is64, big, x), P.ElfPhdr.write_table.ref(is64, big, xs))), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs))), BL.octets_append_list(P.ElfPhdr.write(is64, big, x), P.ElfPhdr.write_table.ref(is64, big, xs))) : {P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, Con{x, xs}), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), _) == Done{P.ElfPhdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, P.ElfPhdr>, P.ElfPhdr.parse.list(is64, big, B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs)))), Done{P.ElfPhdr.normal(is64, x)}, phdr_list(is64, big, x, B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs)))) : {F.elf_cons(P.ElfPhdr, _, P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.drop(U32.to_nat(P.ElfPhdr.size(is64)), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, x)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs)))))) == Done{P.ElfPhdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+      %phdr_drop(is64, big, x, B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs))) : {F.elf_cons(P.ElfPhdr, Done{P.ElfPhdr.normal(is64, x)}, P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), _)) == Done{P.ElfPhdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs))), Done{P.ElfPhdr.normal_table.ref(is64, xs)}, phdr_table_ref(is64, big, xs)) : {F.elf_cons(P.ElfPhdr, Done{P.ElfPhdr.normal(is64, x)}, _) == Done{P.ElfPhdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
       {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def phdr_fin(rs: List<&2, P.ElfPhdr>, m: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>) -> Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(P.ElfPhdr, rs, l)}
+
+def phdr_fin2(acc: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, m: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>) -> Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      phdr_fin(rs, m)
+
+def phdr_push(+r: Result<&2, &2, F.ElfError, P.ElfPhdr>, +rs: List<&2, P.ElfPhdr>, +m: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>) -> {phdr_fin2(F.elf_push(P.ElfPhdr, r, rs), m) == phdr_fin(rs, F.elf_cons(P.ElfPhdr, r, m)) : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def phdr_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {P.ElfPhdr.table.go(n, acc, is64, big, step, ys) == phdr_fin2(acc, P.ElfPhdr.table.list.ref(n, is64, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, P.ElfPhdr.table.go(p, F.elf_push(P.ElfPhdr, P.ElfPhdr.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), phdr_fin2(F.elf_push(P.ElfPhdr, P.ElfPhdr.parse.list(is64, big, ys), rs), P.ElfPhdr.table.list.ref(p, is64, big, step, B.drop(step, ys))), phdr_fin(rs, F.elf_cons(P.ElfPhdr, P.ElfPhdr.parse.list(is64, big, ys), P.ElfPhdr.table.list.ref(p, is64, big, step, B.drop(step, ys)))), phdr_go(p, F.elf_push(P.ElfPhdr, P.ElfPhdr.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), phdr_push(P.ElfPhdr.parse.list(is64, big, ys), rs, P.ElfPhdr.table.list.ref(p, is64, big, step, B.drop(step, ys))))
+
+def phdr_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>) -> {phdr_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def phdr_table_eq(+n: Nat, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {P.ElfPhdr.table.list.ref(n, is64, big, step, ys) == P.ElfPhdr.table.list(n, is64, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, P.ElfPhdr.table.list(n, is64, big, step, ys), P.ElfPhdr.table.list.ref(n, is64, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>, P.ElfPhdr.table.go(n, Done{Nil{}}, is64, big, step, ys), phdr_fin(Nil{}, P.ElfPhdr.table.list.ref(n, is64, big, step, ys)), P.ElfPhdr.table.list.ref(n, is64, big, step, ys), phdr_go(n, Done{Nil{}}, is64, big, step, ys), phdr_fin_nil(P.ElfPhdr.table.list.ref(n, is64, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def phdr_wgo(+is64: Bool, +big: Bool, +xs: List<&2, P.ElfPhdr>, +rs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.write_table.go(is64, big, F.elf_rev_onto(P.ElfPhdr, xs, rs), B.Octets.empty()) == P.ElfPhdr.write_table.go(is64, big, rs, P.ElfPhdr.write_table.ref(is64, big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      phdr_wgo(is64, big, t, Con{x, rs})
+
+def phdr_write_eq(+is64: Bool, +big: Bool, +xs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.write_table.ref(is64, big, xs) == P.ElfPhdr.write_table(is64, big, xs) : B.Octets}:
+  Equal.sym(B.Octets, P.ElfPhdr.write_table(is64, big, xs), P.ElfPhdr.write_table.ref(is64, big, xs), phdr_wgo(is64, big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def phdr_ngo(+is64: Bool, +xs: List<&2, P.ElfPhdr>, +acc: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.normal_table.go(is64, xs, acc) == F.elf_rev_onto(P.ElfPhdr, acc, P.ElfPhdr.normal_table.ref(is64, xs)) : List<&2, P.ElfPhdr>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      phdr_ngo(is64, t, Con{P.ElfPhdr.normal(is64, x), acc})
+
+def phdr_normal_eq(+is64: Bool, +xs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.normal_table.ref(is64, xs) == P.ElfPhdr.normal_table(is64, xs) : List<&2, P.ElfPhdr>}:
+  Equal.sym(List<&2, P.ElfPhdr>, P.ElfPhdr.normal_table(is64, xs), P.ElfPhdr.normal_table.ref(is64, xs), phdr_ngo(is64, xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def phdr_table(+is64: Bool, +big: Bool, +ps: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table(is64, big, ps)) == Done{P.ElfPhdr.normal_table(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  %phdr_write_eq(is64, big, ps) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), _) == Done{P.ElfPhdr.normal_table(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  %phdr_normal_eq(is64, ps) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table.ref(is64, big, ps)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  %phdr_table_eq(List.length(&2, P.ElfPhdr, ps), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, ps))) : {_ == Done{P.ElfPhdr.normal_table.ref(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  phdr_table_ref(is64, big, ps)
 
 def Laws.phdr_table_round_trip(is64, big, ps):
   phdr_table(is64, big, ps)
@@ -188,16 +278,106 @@ def shdr_drop(is64: Bool, big: Bool, x: S.ElfShdr, r: List<&2, U32>) -> {r == B.
       %WL.parts_of(f9) : {r == B.drop(U32.to_nat(S.ElfShdr.size(is64)), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, S.ElfShdr{f0, f1, W.W64.from_parts(W.W64.hi(f2), W.W64.lo(f2)), W.W64.from_parts(W.W64.hi(f3), W.W64.lo(f3)), W.W64.from_parts(W.W64.hi(f4), W.W64.lo(f4)), W.W64.from_parts(W.W64.hi(f5), W.W64.lo(f5)), f6, f7, W.W64.from_parts(W.W64.hi(f8), W.W64.lo(f8)), _})), r)) : List<&2, U32>}
       shdr_drop_bits(is64, big, f0, f1, W.W64.hi(f2), W.W64.lo(f2), W.W64.hi(f3), W.W64.lo(f3), W.W64.hi(f4), W.W64.lo(f4), W.W64.hi(f5), W.W64.lo(f5), f6, f7, W.W64.hi(f8), W.W64.lo(f8), W.W64.hi(f9), W.W64.lo(f9), r)
 
-def shdr_table(+is64: Bool, +big: Bool, ss: List<&2, S.ElfShdr>) -> {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table(is64, big, ss)) == Done{S.ElfShdr.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+def shdr_table_ref(+is64: Bool, +big: Bool, ss: List<&2, S.ElfShdr>) -> {S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, ss), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, ss))) == Done{S.ElfShdr.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
   match ss:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
-      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(S.ElfShdr.write(is64, big, x), S.ElfShdr.write_table(is64, big, xs))), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table(is64, big, xs))), BL.octets_append_list(S.ElfShdr.write(is64, big, x), S.ElfShdr.write_table(is64, big, xs))) : {S.ElfShdr.table.list(List.length(&2, S.ElfShdr, Con{x, xs}), is64, big, U32.to_nat(S.ElfShdr.size(is64)), _) == Done{S.ElfShdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, S.ElfShdr>, S.ElfShdr.parse.list(is64, big, B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table(is64, big, xs)))), Done{S.ElfShdr.normal(is64, x)}, shdr_list(is64, big, x, B.Octets.to_list(S.ElfShdr.write_table(is64, big, xs)))) : {F.elf_cons(S.ElfShdr, _, S.ElfShdr.table.list(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.drop(U32.to_nat(S.ElfShdr.size(is64)), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table(is64, big, xs)))))) == Done{S.ElfShdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-      %shdr_drop(is64, big, x, B.Octets.to_list(S.ElfShdr.write_table(is64, big, xs))) : {F.elf_cons(S.ElfShdr, Done{S.ElfShdr.normal(is64, x)}, S.ElfShdr.table.list(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), _)) == Done{S.ElfShdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, xs), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table(is64, big, xs)), Done{S.ElfShdr.normal_table(is64, xs)}, shdr_table(is64, big, xs)) : {F.elf_cons(S.ElfShdr, Done{S.ElfShdr.normal(is64, x)}, _) == Done{S.ElfShdr.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(S.ElfShdr.write(is64, big, x), S.ElfShdr.write_table.ref(is64, big, xs))), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs))), BL.octets_append_list(S.ElfShdr.write(is64, big, x), S.ElfShdr.write_table.ref(is64, big, xs))) : {S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, Con{x, xs}), is64, big, U32.to_nat(S.ElfShdr.size(is64)), _) == Done{S.ElfShdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, S.ElfShdr>, S.ElfShdr.parse.list(is64, big, B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs)))), Done{S.ElfShdr.normal(is64, x)}, shdr_list(is64, big, x, B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs)))) : {F.elf_cons(S.ElfShdr, _, S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.drop(U32.to_nat(S.ElfShdr.size(is64)), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, x)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs)))))) == Done{S.ElfShdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+      %shdr_drop(is64, big, x, B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs))) : {F.elf_cons(S.ElfShdr, Done{S.ElfShdr.normal(is64, x)}, S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), _)) == Done{S.ElfShdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs))), Done{S.ElfShdr.normal_table.ref(is64, xs)}, shdr_table_ref(is64, big, xs)) : {F.elf_cons(S.ElfShdr, Done{S.ElfShdr.normal(is64, x)}, _) == Done{S.ElfShdr.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
       {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def shdr_fin(rs: List<&2, S.ElfShdr>, m: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>) -> Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(S.ElfShdr, rs, l)}
+
+def shdr_fin2(acc: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, m: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>) -> Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      shdr_fin(rs, m)
+
+def shdr_push(+r: Result<&2, &2, F.ElfError, S.ElfShdr>, +rs: List<&2, S.ElfShdr>, +m: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>) -> {shdr_fin2(F.elf_push(S.ElfShdr, r, rs), m) == shdr_fin(rs, F.elf_cons(S.ElfShdr, r, m)) : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def shdr_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {S.ElfShdr.table.go(n, acc, is64, big, step, ys) == shdr_fin2(acc, S.ElfShdr.table.list.ref(n, is64, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, S.ElfShdr.table.go(p, F.elf_push(S.ElfShdr, S.ElfShdr.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), shdr_fin2(F.elf_push(S.ElfShdr, S.ElfShdr.parse.list(is64, big, ys), rs), S.ElfShdr.table.list.ref(p, is64, big, step, B.drop(step, ys))), shdr_fin(rs, F.elf_cons(S.ElfShdr, S.ElfShdr.parse.list(is64, big, ys), S.ElfShdr.table.list.ref(p, is64, big, step, B.drop(step, ys)))), shdr_go(p, F.elf_push(S.ElfShdr, S.ElfShdr.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), shdr_push(S.ElfShdr.parse.list(is64, big, ys), rs, S.ElfShdr.table.list.ref(p, is64, big, step, B.drop(step, ys))))
+
+def shdr_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>) -> {shdr_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def shdr_table_eq(+n: Nat, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {S.ElfShdr.table.list.ref(n, is64, big, step, ys) == S.ElfShdr.table.list(n, is64, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, S.ElfShdr.table.list(n, is64, big, step, ys), S.ElfShdr.table.list.ref(n, is64, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>, S.ElfShdr.table.go(n, Done{Nil{}}, is64, big, step, ys), shdr_fin(Nil{}, S.ElfShdr.table.list.ref(n, is64, big, step, ys)), S.ElfShdr.table.list.ref(n, is64, big, step, ys), shdr_go(n, Done{Nil{}}, is64, big, step, ys), shdr_fin_nil(S.ElfShdr.table.list.ref(n, is64, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def shdr_wgo(+is64: Bool, +big: Bool, +xs: List<&2, S.ElfShdr>, +rs: List<&2, S.ElfShdr>) -> {S.ElfShdr.write_table.go(is64, big, F.elf_rev_onto(S.ElfShdr, xs, rs), B.Octets.empty()) == S.ElfShdr.write_table.go(is64, big, rs, S.ElfShdr.write_table.ref(is64, big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      shdr_wgo(is64, big, t, Con{x, rs})
+
+def shdr_write_eq(+is64: Bool, +big: Bool, +xs: List<&2, S.ElfShdr>) -> {S.ElfShdr.write_table.ref(is64, big, xs) == S.ElfShdr.write_table(is64, big, xs) : B.Octets}:
+  Equal.sym(B.Octets, S.ElfShdr.write_table(is64, big, xs), S.ElfShdr.write_table.ref(is64, big, xs), shdr_wgo(is64, big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def shdr_ngo(+is64: Bool, +xs: List<&2, S.ElfShdr>, +acc: List<&2, S.ElfShdr>) -> {S.ElfShdr.normal_table.go(is64, xs, acc) == F.elf_rev_onto(S.ElfShdr, acc, S.ElfShdr.normal_table.ref(is64, xs)) : List<&2, S.ElfShdr>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      shdr_ngo(is64, t, Con{S.ElfShdr.normal(is64, x), acc})
+
+def shdr_normal_eq(+is64: Bool, +xs: List<&2, S.ElfShdr>) -> {S.ElfShdr.normal_table.ref(is64, xs) == S.ElfShdr.normal_table(is64, xs) : List<&2, S.ElfShdr>}:
+  Equal.sym(List<&2, S.ElfShdr>, S.ElfShdr.normal_table(is64, xs), S.ElfShdr.normal_table.ref(is64, xs), shdr_ngo(is64, xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def shdr_table(+is64: Bool, +big: Bool, +ss: List<&2, S.ElfShdr>) -> {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table(is64, big, ss)) == Done{S.ElfShdr.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  %shdr_write_eq(is64, big, ss) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), _) == Done{S.ElfShdr.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  %shdr_normal_eq(is64, ss) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table.ref(is64, big, ss)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  %shdr_table_eq(List.length(&2, S.ElfShdr, ss), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, ss))) : {_ == Done{S.ElfShdr.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  shdr_table_ref(is64, big, ss)
 
 def Laws.shdr_table_round_trip(is64, big, ss):
   shdr_table(is64, big, ss)
@@ -247,16 +427,106 @@ def sym_drop(is64: Bool, big: Bool, x: Y.ElfSym, r: List<&2, U32>) -> {r == B.dr
       %WL.parts_of(f2) : {r == B.drop(U32.to_nat(Y.ElfSym.size(is64)), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, Y.ElfSym{f0, W.W64.from_parts(W.W64.hi(f1), W.W64.lo(f1)), _, f3, f4, f5})), r)) : List<&2, U32>}
       sym_drop_bits(is64, big, f0, W.W64.hi(f1), W.W64.lo(f1), W.W64.hi(f2), W.W64.lo(f2), f3, f4, f5, r)
 
-def sym_table(+is64: Bool, +big: Bool, ss: List<&2, Y.ElfSym>) -> {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table(is64, big, ss)) == Done{Y.ElfSym.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+def sym_table_ref(+is64: Bool, +big: Bool, ss: List<&2, Y.ElfSym>) -> {Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, ss), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, ss))) == Done{Y.ElfSym.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
   match ss:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
-      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(Y.ElfSym.write(is64, big, x), Y.ElfSym.write_table(is64, big, xs))), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table(is64, big, xs))), BL.octets_append_list(Y.ElfSym.write(is64, big, x), Y.ElfSym.write_table(is64, big, xs))) : {Y.ElfSym.table.list(List.length(&2, Y.ElfSym, Con{x, xs}), is64, big, U32.to_nat(Y.ElfSym.size(is64)), _) == Done{Y.ElfSym.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, Y.ElfSym>, Y.ElfSym.parse.list(is64, big, B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table(is64, big, xs)))), Done{Y.ElfSym.normal(is64, x)}, sym_list(is64, big, x, B.Octets.to_list(Y.ElfSym.write_table(is64, big, xs)))) : {F.elf_cons(Y.ElfSym, _, Y.ElfSym.table.list(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.drop(U32.to_nat(Y.ElfSym.size(is64)), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table(is64, big, xs)))))) == Done{Y.ElfSym.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-      %sym_drop(is64, big, x, B.Octets.to_list(Y.ElfSym.write_table(is64, big, xs))) : {F.elf_cons(Y.ElfSym, Done{Y.ElfSym.normal(is64, x)}, Y.ElfSym.table.list(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), _)) == Done{Y.ElfSym.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, xs), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table(is64, big, xs)), Done{Y.ElfSym.normal_table(is64, xs)}, sym_table(is64, big, xs)) : {F.elf_cons(Y.ElfSym, Done{Y.ElfSym.normal(is64, x)}, _) == Done{Y.ElfSym.normal_table(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(Y.ElfSym.write(is64, big, x), Y.ElfSym.write_table.ref(is64, big, xs))), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs))), BL.octets_append_list(Y.ElfSym.write(is64, big, x), Y.ElfSym.write_table.ref(is64, big, xs))) : {Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, Con{x, xs}), is64, big, U32.to_nat(Y.ElfSym.size(is64)), _) == Done{Y.ElfSym.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, Y.ElfSym>, Y.ElfSym.parse.list(is64, big, B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs)))), Done{Y.ElfSym.normal(is64, x)}, sym_list(is64, big, x, B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs)))) : {F.elf_cons(Y.ElfSym, _, Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.drop(U32.to_nat(Y.ElfSym.size(is64)), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, x)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs)))))) == Done{Y.ElfSym.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+      %sym_drop(is64, big, x, B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs))) : {F.elf_cons(Y.ElfSym, Done{Y.ElfSym.normal(is64, x)}, Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), _)) == Done{Y.ElfSym.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs))), Done{Y.ElfSym.normal_table.ref(is64, xs)}, sym_table_ref(is64, big, xs)) : {F.elf_cons(Y.ElfSym, Done{Y.ElfSym.normal(is64, x)}, _) == Done{Y.ElfSym.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
       {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def sym_fin(rs: List<&2, Y.ElfSym>, m: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>) -> Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(Y.ElfSym, rs, l)}
+
+def sym_fin2(acc: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, m: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>) -> Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      sym_fin(rs, m)
+
+def sym_push(+r: Result<&2, &2, F.ElfError, Y.ElfSym>, +rs: List<&2, Y.ElfSym>, +m: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>) -> {sym_fin2(F.elf_push(Y.ElfSym, r, rs), m) == sym_fin(rs, F.elf_cons(Y.ElfSym, r, m)) : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def sym_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {Y.ElfSym.table.go(n, acc, is64, big, step, ys) == sym_fin2(acc, Y.ElfSym.table.list.ref(n, is64, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, Y.ElfSym.table.go(p, F.elf_push(Y.ElfSym, Y.ElfSym.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), sym_fin2(F.elf_push(Y.ElfSym, Y.ElfSym.parse.list(is64, big, ys), rs), Y.ElfSym.table.list.ref(p, is64, big, step, B.drop(step, ys))), sym_fin(rs, F.elf_cons(Y.ElfSym, Y.ElfSym.parse.list(is64, big, ys), Y.ElfSym.table.list.ref(p, is64, big, step, B.drop(step, ys)))), sym_go(p, F.elf_push(Y.ElfSym, Y.ElfSym.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), sym_push(Y.ElfSym.parse.list(is64, big, ys), rs, Y.ElfSym.table.list.ref(p, is64, big, step, B.drop(step, ys))))
+
+def sym_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>) -> {sym_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def sym_table_eq(+n: Nat, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {Y.ElfSym.table.list.ref(n, is64, big, step, ys) == Y.ElfSym.table.list(n, is64, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, Y.ElfSym.table.list(n, is64, big, step, ys), Y.ElfSym.table.list.ref(n, is64, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>, Y.ElfSym.table.go(n, Done{Nil{}}, is64, big, step, ys), sym_fin(Nil{}, Y.ElfSym.table.list.ref(n, is64, big, step, ys)), Y.ElfSym.table.list.ref(n, is64, big, step, ys), sym_go(n, Done{Nil{}}, is64, big, step, ys), sym_fin_nil(Y.ElfSym.table.list.ref(n, is64, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def sym_wgo(+is64: Bool, +big: Bool, +xs: List<&2, Y.ElfSym>, +rs: List<&2, Y.ElfSym>) -> {Y.ElfSym.write_table.go(is64, big, F.elf_rev_onto(Y.ElfSym, xs, rs), B.Octets.empty()) == Y.ElfSym.write_table.go(is64, big, rs, Y.ElfSym.write_table.ref(is64, big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      sym_wgo(is64, big, t, Con{x, rs})
+
+def sym_write_eq(+is64: Bool, +big: Bool, +xs: List<&2, Y.ElfSym>) -> {Y.ElfSym.write_table.ref(is64, big, xs) == Y.ElfSym.write_table(is64, big, xs) : B.Octets}:
+  Equal.sym(B.Octets, Y.ElfSym.write_table(is64, big, xs), Y.ElfSym.write_table.ref(is64, big, xs), sym_wgo(is64, big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def sym_ngo(+is64: Bool, +xs: List<&2, Y.ElfSym>, +acc: List<&2, Y.ElfSym>) -> {Y.ElfSym.normal_table.go(is64, xs, acc) == F.elf_rev_onto(Y.ElfSym, acc, Y.ElfSym.normal_table.ref(is64, xs)) : List<&2, Y.ElfSym>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      sym_ngo(is64, t, Con{Y.ElfSym.normal(is64, x), acc})
+
+def sym_normal_eq(+is64: Bool, +xs: List<&2, Y.ElfSym>) -> {Y.ElfSym.normal_table.ref(is64, xs) == Y.ElfSym.normal_table(is64, xs) : List<&2, Y.ElfSym>}:
+  Equal.sym(List<&2, Y.ElfSym>, Y.ElfSym.normal_table(is64, xs), Y.ElfSym.normal_table.ref(is64, xs), sym_ngo(is64, xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def sym_table(+is64: Bool, +big: Bool, +ss: List<&2, Y.ElfSym>) -> {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table(is64, big, ss)) == Done{Y.ElfSym.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  %sym_write_eq(is64, big, ss) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), _) == Done{Y.ElfSym.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  %sym_normal_eq(is64, ss) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table.ref(is64, big, ss)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  %sym_table_eq(List.length(&2, Y.ElfSym, ss), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, ss))) : {_ == Done{Y.ElfSym.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  sym_table_ref(is64, big, ss)
 
 def Laws.sym_table_round_trip(is64, big, ss):
   sym_table(is64, big, ss)

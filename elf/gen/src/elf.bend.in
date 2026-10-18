@@ -65,7 +65,8 @@ def ElfFile.names(+o: B.Octets, +h: H.ElfHeader, ss: List<&2, S.ElfShdr>) -> Res
 # The tables of the file o; the first failure if any of them is malformed
 def ElfFile.read_with(opts: H.ElfOptions, +o: B.Octets) -> Result<&2, &2, F.ElfError, ElfFile>:
   do Result<&2, &2, F.ElfError, ElfFile>:
-    +h : H.ElfHeader <- H.ElfHeader.parse_with(opts, o)
+    # the header is at most 64 bytes: only those become a list
+    +h : H.ElfHeader <- H.ElfHeader.parse_with(opts, B.Octets.take(64n, o))
     ps : List<&2, P.ElfPhdr> <- P.ElfPhdr.all(o, h)
     +ss : List<&2, S.ElfShdr> <- S.ElfShdr.all(o, h)
     t : B.Octets <- ElfFile.names(o, h, ss)
@@ -85,23 +86,29 @@ def ElfFile.name_is(r: Result<&2, &2, F.ElfError, B.Octets>, name: B.Octets) -> 
     case Fail{e}:
       False{}
 
-def ElfFile.find.pick(hit: Bool, s: S.ElfShdr, rest: Maybe<&2, S.ElfShdr>) -> Maybe<&2, S.ElfShdr>:
+def ElfFile.find.pick(hit: Bool, s: S.ElfShdr) -> Maybe<&2, S.ElfShdr>:
   match hit:
     case True{}:
       Some{s}
     case False{}:
-      rest
+      None{}
 
-def ElfFile.find.go(ss: List<&2, S.ElfShdr>, +names: B.Octets, +name: B.Octets) -> Maybe<&2, S.ElfShdr>:
+# the first of ss named name, unless found holds one already; tail-recursive,
+# so a file can have any number of sections
+def ElfFile.find.go(ss: List<&2, S.ElfShdr>, found: Maybe<&2, S.ElfShdr>, +names: B.Octets, +name: B.Octets) -> Maybe<&2, S.ElfShdr>:
   match ss:
     case Nil{}:
-      None{}
+      found
     case Con{+s, t}:
-      ElfFile.find.pick(ElfFile.name_is(S.ElfShdr.name(names, s), name), s, ElfFile.find.go(t, names, name))
+      match found:
+        case Some{f}:
+          Some{f}
+        case None{}:
+          ElfFile.find.go(t, ElfFile.find.pick(ElfFile.name_is(S.ElfShdr.name(names, s), name), s), names, name)
 
 # the first section named name (".symtab", ".dynsym", ".text", ...)
 def ElfFile.find_section(+f: ElfFile, name: B.Octets) -> Maybe<&2, S.ElfShdr>:
-  ElfFile.find.go(ElfFile.sections(f), ElfFile.shstrtab(f), name)
+  ElfFile.find.go(ElfFile.sections(f), None{}, ElfFile.shstrtab(f), name)
 
 # the symbols of section s of the file o, read as f
 def ElfFile.symbols(o: B.Octets, f: ElfFile, s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>:

@@ -68,13 +68,35 @@ def ElfSym.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &2
     case False{}:
       ElfSym.parse.y32(big, xs)
 
-# n entries, step bytes apart
-def ElfSym.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
+# n entries, step bytes apart (structural: the reference the proofs reason
+# about)
+def ElfSym.table.list.ref(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
   match n:
     case 0n:
       Done{Nil{}}
     case 1n+p:
-      F.elf_cons(ElfSym, ElfSym.parse.list(is64, big, xs), ElfSym.table.list(p, is64, big, step, B.drop(step, xs)))
+      F.elf_cons(ElfSym, ElfSym.parse.list(is64, big, xs), ElfSym.table.list.ref(p, is64, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfSym.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfSym>>, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfSym, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfSym.table.go(p, F.elf_push(ElfSym, ElfSym.parse.list(is64, big, xs), rs), is64, big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# sym_table_eq), so a table can have any number of entries
+def ElfSym.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
+  ElfSym.table.go(n, Done{Nil{}}, is64, big, step, xs)
 
 # Public: one entry, and a table
 
@@ -101,19 +123,44 @@ def ElfSym.normal(+is64: Bool, s: ElfSym) -> ElfSym:
       ElfSym{st_name, F.elf_fit(is64, st_value), F.elf_fit(is64, st_size), B.byte(st_info), B.byte(st_other), B.low16(st_shndx)}
 
 # a table's bytes, its entries packed
-def ElfSym.write_table(+is64: Bool, +big: Bool, ss: List<&2, ElfSym>) -> B.Octets:
+def ElfSym.write_table.ref(+is64: Bool, +big: Bool, ss: List<&2, ElfSym>) -> B.Octets:
   match ss:
     case Nil{}:
       B.Octets.empty()
     case Con{s, t}:
-      B.Octets.append(ElfSym.write(is64, big, s), ElfSym.write_table(is64, big, t))
+      B.Octets.append(ElfSym.write(is64, big, s), ElfSym.write_table.ref(is64, big, t))
 
-def ElfSym.normal_table(+is64: Bool, ss: List<&2, ElfSym>) -> List<&2, ElfSym>:
+# the entries rs (the table's entries, last first) in front of acc
+def ElfSym.write_table.go(+is64: Bool, +big: Bool, rs: List<&2, ElfSym>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{s, t}:
+      ElfSym.write_table.go(is64, big, t, B.Octets.append(ElfSym.write(is64, big, s), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: sym_write_eq)
+def ElfSym.write_table(+is64: Bool, +big: Bool, ss: List<&2, ElfSym>) -> B.Octets:
+  ElfSym.write_table.go(is64, big, F.elf_rev_onto(ElfSym, ss, Nil{}), B.Octets.empty())
+
+def ElfSym.normal_table.ref(+is64: Bool, ss: List<&2, ElfSym>) -> List<&2, ElfSym>:
   match ss:
     case Nil{}:
       Nil{}
     case Con{s, t}:
-      Con{ElfSym.normal(is64, s), ElfSym.normal_table(is64, t)}
+      Con{ElfSym.normal(is64, s), ElfSym.normal_table.ref(is64, t)}
+
+def ElfSym.normal_table.go(+is64: Bool, ss: List<&2, ElfSym>, acc: List<&2, ElfSym>) -> List<&2, ElfSym>:
+  match ss:
+    case Nil{}:
+      F.elf_rev_onto(ElfSym, acc, Nil{})
+    case Con{s, t}:
+      ElfSym.normal_table.go(is64, t, Con{ElfSym.normal(is64, s), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: sym_normal_eq)
+def ElfSym.normal_table(+is64: Bool, ss: List<&2, ElfSym>) -> List<&2, ElfSym>:
+  ElfSym.normal_table.go(is64, ss, Nil{})
 
 # The symbol table of a section
 

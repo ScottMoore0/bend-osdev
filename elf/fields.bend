@@ -2,9 +2,9 @@
 # type, and (internal) the byte-order field readers and writers and the exact
 # slicing the readers need.
 #
-# The readers work on the bytes as a list (B.Octets.to_list), so that reading
-# at an offset walks the list once; the public defs in the other files take
-# and answer Octets.
+# The readers of one structure work on its bytes as a list (B.Octets.to_list);
+# the readers of a whole file walk to what they read through Octets first
+# (below), and the public defs in the other files take and answer Octets.
 import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
@@ -49,37 +49,6 @@ def elf_check(ok: Bool, e: ElfError) -> Result<&2, &2, ElfError, Unit>:
     case False{}:
       Fail{e}
 
-# the bytes from offset n on; None if n is past the end
-def elf_skip(n: Nat, xs: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
-  match n:
-    case 0n:
-      Some{xs}
-    case 1n+p:
-      match xs:
-        case Nil{}:
-          None{}
-        case Con{h, t}:
-          elf_skip(p, t)
-
-def elf_take.cons(h: U32, m: Maybe<&2, List<&2, U32>>) -> Maybe<&2, List<&2, U32>>:
-  match m:
-    case Some{t}:
-      Some{Con{h, t}}
-    case None{}:
-      None{}
-
-# exactly the first n bytes; None if there are fewer
-def elf_take(n: Nat, xs: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
-  match n:
-    case 0n:
-      Some{Nil{}}
-    case 1n+p:
-      match xs:
-        case Nil{}:
-          None{}
-        case Con{h, t}:
-          elf_take.cons(h, elf_take(p, t))
-
 # whether there are at least n bytes
 def elf_at_least(n: Nat, xs: List<&2, U32>) -> Bool:
   match n:
@@ -101,18 +70,19 @@ def elf_nul_first(xs: List<&2, U32>) -> Bool:
       U32.is_eq(B.byte(h), 0)
 
 # the bytes before the first NUL, if there is one; nul: whether the first byte
-# of xs is NUL
-def elf_cstr.go(xs: List<&2, U32>, nul: Bool) -> Maybe<&2, List<&2, U32>>:
+# of xs is NUL; acc: the bytes before xs, reversed (tail-recursive, so a
+# string, or a table missing its NUL, can be of any length)
+def elf_cstr.go(xs: List<&2, U32>, nul: Bool, acc: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
   match xs nul:
     case Nil{} _:
       None{}
     case Con{h, t} True{}:
-      Some{Nil{}}
+      Some{B.rev(acc)}
     case Con{h, +t} False{}:
-      elf_take.cons(B.byte(h), elf_cstr.go(t, elf_nul_first(t)))
+      elf_cstr.go(t, elf_nul_first(t), Con{B.byte(h), acc})
 
 def elf_cstr(+xs: List<&2, U32>) -> Maybe<&2, List<&2, U32>>:
-  elf_cstr.go(xs, elf_nul_first(xs))
+  elf_cstr.go(xs, elf_nul_first(xs), Nil{})
 
 # a W64 offset or size as a U32, if it is below 2^32
 def elf_small.go(fits: Bool, v: U32) -> Result<&2, &2, ElfError, U32>:
@@ -125,12 +95,56 @@ def elf_small.go(fits: Bool, v: U32) -> Result<&2, &2, ElfError, U32>:
 def elf_small(+v: W.W64) -> Result<&2, &2, ElfError, U32>:
   elf_small.go(U32.is_eq(W.W64.hi(v), 0), W.W64.lo(v))
 
-# the bytes from offset off on
-def elf_seek(xs: List<&2, U32>, +off: W.W64) -> Result<&2, &2, ElfError, List<&2, U32>>:
-  do Result<&2, &2, ElfError, List<&2, U32>>:
-    o : U32 <- elf_small(off)
-    r : List<&2, U32> <- elf_need(List<&2, U32>, elf_skip(U32.to_nat(o), xs), ElfOffsetOutOfRange{})
-    return r
+# Octets-level access: a reader of a whole file walks to the bytes it reads
+# (B.Octets.drop shares the rest) and converts only those to a list, so that
+# reading a table or a section of a large file does not hold a list of the
+# whole file
+
+def elf_skip.oct.at(m: Maybe<&2, U32>, +n: Nat, o: B.Octets) -> Maybe<&2, B.Octets>:
+  match m:
+    case Some{b}:
+      Some{B.Octets.drop(n, o)}
+    case None{}:
+      None{}
+
+# the bytes from offset n on; None if n is past the end
+def elf_skip.oct(n: Nat, +o: B.Octets) -> Maybe<&2, B.Octets>:
+  match n:
+    case 0n:
+      Some{o}
+    case 1n+(+p):
+      elf_skip.oct.at(B.Octets.at(o, p), 1n+p, o)
+
+def elf_take.oct.at(m: Maybe<&2, U32>, +n: Nat, o: B.Octets) -> Maybe<&2, B.Octets>:
+  match m:
+    case Some{b}:
+      Some{B.Octets.take(n, o)}
+    case None{}:
+      None{}
+
+# exactly the first n bytes; None if there are fewer
+def elf_take.oct(n: Nat, +o: B.Octets) -> Maybe<&2, B.Octets>:
+  match n:
+    case 0n:
+      Some{B.Octets.empty()}
+    case 1n+(+p):
+      elf_take.oct.at(B.Octets.at(o, p), 1n+p, o)
+
+# the first n bytes of o as a list (fewer if o is shorter)
+def elf_head(n: Nat, o: B.Octets) -> List<&2, U32>:
+  B.Octets.to_list(B.Octets.take(n, o))
+
+def elf_cstr.oct.go(m: Maybe<&2, List<&2, U32>>, o: B.Octets) -> Maybe<&2, List<&2, U32>>:
+  match m:
+    case Some{s}:
+      Some{s}
+    case None{}:
+      elf_cstr(B.Octets.to_list(o))
+
+# elf_cstr of o's bytes: looked for in the first 256 bytes, and only if the
+# NUL is not there in all of them
+def elf_cstr.oct(+o: B.Octets) -> Maybe<&2, List<&2, U32>>:
+  elf_cstr.oct.go(elf_cstr(elf_head(256n, o)), o)
 
 # Fields, in the file's byte order (big: most significant byte first)
 
@@ -205,6 +219,22 @@ def elf_fit(is64: Bool, v: W.W64) -> W.W64:
     case False{}:
       W.W64.from_parts(0, W.W64.lo(v))
 
+# a list reversed in front of acc
+def elf_rev_onto(-A: Data, xs: List<&2, A>, acc: List<&2, A>) -> List<&2, A>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{h, t}:
+      elf_rev_onto(A, t, Con{h, acc})
+
+# an entry pushed onto the entries read so far (kept reversed)
+def elf_push(-A: Data, r: Result<&2, &2, ElfError, A>, rs: List<&2, A>) -> Result<&2, &2, ElfError, List<&2, A>>:
+  match r:
+    case Done{x}:
+      Done{Con{x, rs}}
+    case Fail{e}:
+      Fail{e}
+
 # an entry in front of the rest of a table
 def elf_cons(-A: Data, r: Result<&2, &2, ElfError, A>, rs: Result<&2, &2, ElfError, List<&2, A>>) -> Result<&2, &2, ElfError, List<&2, A>>:
   match r rs:
@@ -220,16 +250,24 @@ def elf_cons(-A: Data, r: Result<&2, &2, ElfError, A>, rs: Result<&2, &2, ElfErr
 def elf_table_ok(+n: U32, entsize: U32, size: U32) -> Bool:
   Bool.or(U32.is_eq(n, 0), U32.is_ge(entsize, size))
 
-# the bytes of a table of n entries at offset off (none are needed if n is 0)
-def elf_region.go(empty: Bool, xs: List<&2, U32>, off: W.W64) -> Result<&2, &2, ElfError, List<&2, U32>>:
+# the bytes of o from offset off on; ElfOffsetOutOfRange if off is past the
+# end (or 2^32 or more)
+def elf_seek.oct(+o: B.Octets, +off: W.W64) -> Result<&2, &2, ElfError, B.Octets>:
+  do Result<&2, &2, ElfError, B.Octets>:
+    k : U32 <- elf_small(off)
+    r : B.Octets <- elf_need(B.Octets, elf_skip.oct(U32.to_nat(k), o), ElfOffsetOutOfRange{})
+    return r
+
+def elf_region.oct.go(empty: Bool, o: B.Octets, off: W.W64) -> Result<&2, &2, ElfError, B.Octets>:
   match empty:
     case True{}:
-      Done{Nil{}}
+      Done{B.Octets.empty()}
     case False{}:
-      elf_seek(xs, off)
+      elf_seek.oct(o, off)
 
-def elf_region(xs: List<&2, U32>, off: W.W64, n: U32) -> Result<&2, &2, ElfError, List<&2, U32>>:
-  elf_region.go(U32.is_eq(n, 0), xs, off)
+# the bytes of a table of n entries at offset off (none are needed if n is 0)
+def elf_region.oct(o: B.Octets, off: W.W64, n: U32) -> Result<&2, &2, ElfError, B.Octets>:
+  elf_region.oct.go(U32.is_eq(n, 0), o, off)
 
 # Fields read for a structure: a field past the end means the input ends
 # inside the structure

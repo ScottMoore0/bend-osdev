@@ -152,12 +152,47 @@ specification. That reader is itself checked field by field against
 
 Eight further seeds (`SEED=1..8`) also match.
 
+## Sizes
+
+Every loop over a file's bytes or a table's entries is a tail call (Bend
+2.0.37's runtime overflows its stack at some tens of thousands of nested
+calls), so neither a section's size nor the number of sections or symbols has
+a limit beyond memory. The tables' structural forms stay beside the loops as
+the reference the proofs reason about (`table.list.ref`, `write_table.ref`,
+`normal_table.ref` for each of `ElfPhdr`, `ElfShdr` and `ElfSym`), and
+`PROOF.bend` proves each equal to its loop for every input (`*_table_eq`,
+`*_write_eq`, `*_normal_eq`). The whole-file readers (`ElfFile.read`,
+`ElfPhdr.all`, `ElfShdr.all`, `ElfShdr.count`, `ElfShdr.bytes`, ...) walk
+to what they read through `Octets` and convert only those bytes to a list,
+and a string is looked for in the 256 bytes at its offset before the rest of
+its table is converted.
+
+Measured on Bend 2.0.37 (native build, WSL2) on files built by gcc, read
+from disk, every count and sum checked against `readelf`:
+
+| File | Run | Time | Peak RAM |
+|---|---|---|---|
+| 1.27 MB executable, 20,006 symbols | `ElfFile.read`, `.symtab` found, its symbols read | 3.6 s | 1.6 GB |
+| the same | and every symbol's name looked up | 14.0 s | 1.7 GB |
+| 1.13 MB object (`-ffunction-sections`), 6,013 sections, 12,004 symbols | `ElfFile.read`, `.symtab` found by name, its symbols read | 4.5 s | 1.6 GB |
+| 480 KB symbol table, 20,000 symbols | `ElfSym.write_table`, then `read_table` and compared with `normal_table` | 2.8 s | 1.1 GB |
+
+Most of the memory is the file's `Octets` (about 940 bytes per byte today)
+and the list `File.read_bytes` gives; files of a few MB need a compact
+`Octets`. Before this, a 164 KB executable (2,506 symbols) overflowed the
+stack, and every reader converted the whole file to a list. `check.bend`
+builds and reads a file with 3,001 symbols (a 72 KB symbol table) as a
+regression test. `ElfHeader.parse` converts all of its input: give it a
+file's first 64 bytes, as `ElfFile.read` does.
+
 ## Limitations
 
-* Byte strings are lists: reading at an offset walks them, so keep inputs to
-  tens of KB. Under Bend 2.0.37 a 16 KB file read after several others ran
-  out of stack in the reference test, so the test links gcc's binaries with
-  `-z noseparate-code` (all inputs are under 8 KB).
+* Reading at an offset walks the bytes (`Octets` is a list today), so each
+  lookup costs time in proportion to its offset: naming every symbol of a
+  table costs the table's length times its string table's (see Sizes).
+* The reference test links gcc's binaries with `-z noseparate-code`, so
+  that its inputs stay small (all under 8 KB); the sizes below were measured
+  separately.
 * Programs that build a record with four or more `W64` fields (`ElfPhdr`,
   `ElfShdr`) do not compile to native code in Bend 2.0.37 ("an arity over
   247"; `crc/check.bend` is affected the same way); `bend` runs them anyway,

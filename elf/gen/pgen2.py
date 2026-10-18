@@ -158,23 +158,116 @@ def Laws.%s_round_trip(is64, big, x, rest):
     # the drop lemma: an entry's bytes are its size
     out.append(bits_lemma("%s_drop_bits" % nm, T, dstmt, True, ", r: List<&2, U32>"))
     out.append(list_lemma("%s_drop" % nm, T, dstmt, "%s_drop_bits" % nm, True, "x", ", r", ", r: List<&2, U32>"))
-    # the table law
+    # the table law, on the structural forms (table.list.ref, write_table.ref,
+    # normal_table.ref)
     TY = RTY % ("List<&2, %s>" % T)
     S_ = "U32.to_nat(%s.size(is64))" % T
     LX = "B.Octets.to_list(%s.write(is64, big, x))" % T
-    LT = "B.Octets.to_list(%s.write_table(is64, big, xs))" % T
-    RHS = "Done{%s.normal_table(is64, Con{x, xs})}" % T
+    LT = "B.Octets.to_list(%s.write_table.ref(is64, big, xs))" % T
+    RHS = "Done{%s.normal_table.ref(is64, Con{x, xs})}" % T
     N = "List.length(&2, %s, xs)" % T
-    out.append(f"""def {nm}_table(+is64: Bool, +big: Bool, {xs}: List<&2, {T}>) -> {{{T}.read_table(is64, big, List.length(&2, {T}, {xs}), {S_}, {T}.write_table(is64, big, {xs})) == Done{{{T}.normal_table(is64, {xs})}} : {TY}}}:
+    N0 = "List.length(&2, %s, %s)" % (T, xs)
+    LT0 = "B.Octets.to_list(%s.write_table.ref(is64, big, %s))" % (T, xs)
+    out.append(f"""def {nm}_table_ref(+is64: Bool, +big: Bool, {xs}: List<&2, {T}>) -> {{{T}.table.list.ref({N0}, is64, big, {S_}, {LT0}) == Done{{{T}.normal_table.ref(is64, {xs})}} : {TY}}}:
   match {xs}:
     case Nil{{}}:
       {{==}}
     case Con{{+x, +xs}}:
-      %{octets_append_sym(f"{T}.write(is64, big, x)", f"{T}.write_table(is64, big, xs)")} : {{{T}.table.list(List.length(&2, {T}, Con{{x, xs}}), is64, big, {S_}, _) == {RHS} : {TY}}}
-      %Equal.sym({RTY % T}, {T}.parse.list(is64, big, B.append({LX}, {LT})), Done{{{T}.normal(is64, x)}}, {nm}_list(is64, big, x, {LT})) : {{F.elf_cons({T}, _, {T}.table.list({N}, is64, big, {S_}, B.drop({S_}, B.append({LX}, {LT})))) == {RHS} : {TY}}}
-      %{nm}_drop(is64, big, x, {LT}) : {{F.elf_cons({T}, Done{{{T}.normal(is64, x)}}, {T}.table.list({N}, is64, big, {S_}, _)) == {RHS} : {TY}}}
-      %Equal.sym({TY}, {T}.read_table(is64, big, {N}, {S_}, {T}.write_table(is64, big, xs)), Done{{{T}.normal_table(is64, xs)}}, {nm}_table(is64, big, xs)) : {{F.elf_cons({T}, Done{{{T}.normal(is64, x)}}, _) == {RHS} : {TY}}}
+      %{octets_append_sym(f"{T}.write(is64, big, x)", f"{T}.write_table.ref(is64, big, xs)")} : {{{T}.table.list.ref(List.length(&2, {T}, Con{{x, xs}}), is64, big, {S_}, _) == {RHS} : {TY}}}
+      %Equal.sym({RTY % T}, {T}.parse.list(is64, big, B.append({LX}, {LT})), Done{{{T}.normal(is64, x)}}, {nm}_list(is64, big, x, {LT})) : {{F.elf_cons({T}, _, {T}.table.list.ref({N}, is64, big, {S_}, B.drop({S_}, B.append({LX}, {LT})))) == {RHS} : {TY}}}
+      %{nm}_drop(is64, big, x, {LT}) : {{F.elf_cons({T}, Done{{{T}.normal(is64, x)}}, {T}.table.list.ref({N}, is64, big, {S_}, _)) == {RHS} : {TY}}}
+      %Equal.sym({TY}, {T}.table.list.ref({N}, is64, big, {S_}, {LT}), Done{{{T}.normal_table.ref(is64, xs)}}, {nm}_table_ref(is64, big, xs)) : {{F.elf_cons({T}, Done{{{T}.normal(is64, x)}}, _) == {RHS} : {TY}}}
       {{==}}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def {nm}_fin(rs: List<&2, {T}>, m: {TY}) -> {TY}:
+  match m:
+    case Fail{{e}}:
+      Fail{{e}}
+    case Done{{l}}:
+      Done{{F.elf_rev_onto({T}, rs, l)}}
+
+def {nm}_fin2(acc: {TY}, m: {TY}) -> {TY}:
+  match acc:
+    case Fail{{e}}:
+      Fail{{e}}
+    case Done{{rs}}:
+      {nm}_fin(rs, m)
+
+def {nm}_push(+r: {RTY % T}, +rs: List<&2, {T}>, +m: {TY}) -> {{{nm}_fin2(F.elf_push({T}, r, rs), m) == {nm}_fin(rs, F.elf_cons({T}, r, m)) : {TY}}}:
+  match r:
+    case Done{{x}}:
+      match m:
+        case Done{{l}}:
+          {{==}}
+        case Fail{{e}}:
+          {{==}}
+    case Fail{{e}}:
+      match m:
+        case Done{{l}}:
+          {{==}}
+        case Fail{{f}}:
+          {{==}}
+
+def {nm}_go(n: Nat, +acc: {TY}, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {{{T}.table.go(n, acc, is64, big, step, ys) == {nm}_fin2(acc, {T}.table.list.ref(n, is64, big, step, ys)) : {TY}}}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{{e}}:
+          {{==}}
+        case Done{{rs}}:
+          {{==}}
+    case 1n+(+p):
+      match acc:
+        case Fail{{e}}:
+          {{==}}
+        case Done{{+rs}}:
+          Equal.trans({TY}, {T}.table.go(p, F.elf_push({T}, {T}.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), {nm}_fin2(F.elf_push({T}, {T}.parse.list(is64, big, ys), rs), {T}.table.list.ref(p, is64, big, step, B.drop(step, ys))), {nm}_fin(rs, F.elf_cons({T}, {T}.parse.list(is64, big, ys), {T}.table.list.ref(p, is64, big, step, B.drop(step, ys)))), {nm}_go(p, F.elf_push({T}, {T}.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), {nm}_push({T}.parse.list(is64, big, ys), rs, {T}.table.list.ref(p, is64, big, step, B.drop(step, ys))))
+
+def {nm}_fin_nil(+m: {TY}) -> {{{nm}_fin(Nil{{}}, m) == m : {TY}}}:
+  match m:
+    case Fail{{e}}:
+      {{==}}
+    case Done{{l}}:
+      {{==}}
+
+def {nm}_table_eq(+n: Nat, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {{{T}.table.list.ref(n, is64, big, step, ys) == {T}.table.list(n, is64, big, step, ys) : {TY}}}:
+  Equal.sym({TY}, {T}.table.list(n, is64, big, step, ys), {T}.table.list.ref(n, is64, big, step, ys), Equal.trans({TY}, {T}.table.go(n, Done{{Nil{{}}}}, is64, big, step, ys), {nm}_fin(Nil{{}}, {T}.table.list.ref(n, is64, big, step, ys)), {T}.table.list.ref(n, is64, big, step, ys), {nm}_go(n, Done{{Nil{{}}}}, is64, big, step, ys), {nm}_fin_nil({T}.table.list.ref(n, is64, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def {nm}_wgo(+is64: Bool, +big: Bool, +xs: List<&2, {T}>, +rs: List<&2, {T}>) -> {{{T}.write_table.go(is64, big, F.elf_rev_onto({T}, xs, rs), B.Octets.empty()) == {T}.write_table.go(is64, big, rs, {T}.write_table.ref(is64, big, xs)) : B.Octets}}:
+  match xs:
+    case Nil{{}}:
+      {{==}}
+    case Con{{x, t}}:
+      {nm}_wgo(is64, big, t, Con{{x, rs}})
+
+def {nm}_write_eq(+is64: Bool, +big: Bool, +xs: List<&2, {T}>) -> {{{T}.write_table.ref(is64, big, xs) == {T}.write_table(is64, big, xs) : B.Octets}}:
+  Equal.sym(B.Octets, {T}.write_table(is64, big, xs), {T}.write_table.ref(is64, big, xs), {nm}_wgo(is64, big, xs, Nil{{}}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def {nm}_ngo(+is64: Bool, +xs: List<&2, {T}>, +acc: List<&2, {T}>) -> {{{T}.normal_table.go(is64, xs, acc) == F.elf_rev_onto({T}, acc, {T}.normal_table.ref(is64, xs)) : List<&2, {T}>}}:
+  match xs:
+    case Nil{{}}:
+      {{==}}
+    case Con{{x, t}}:
+      {nm}_ngo(is64, t, Con{{{T}.normal(is64, x), acc}})
+
+def {nm}_normal_eq(+is64: Bool, +xs: List<&2, {T}>) -> {{{T}.normal_table.ref(is64, xs) == {T}.normal_table(is64, xs) : List<&2, {T}>}}:
+  Equal.sym(List<&2, {T}>, {T}.normal_table(is64, xs), {T}.normal_table.ref(is64, xs), {nm}_ngo(is64, xs, Nil{{}}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def {nm}_table(+is64: Bool, +big: Bool, +{xs}: List<&2, {T}>) -> {{{T}.read_table(is64, big, {N0}, {S_}, {T}.write_table(is64, big, {xs})) == Done{{{T}.normal_table(is64, {xs})}} : {TY}}}:
+  %{nm}_write_eq(is64, big, {xs}) : {{{T}.read_table(is64, big, {N0}, {S_}, _) == Done{{{T}.normal_table(is64, {xs})}} : {TY}}}
+  %{nm}_normal_eq(is64, {xs}) : {{{T}.read_table(is64, big, {N0}, {S_}, {T}.write_table.ref(is64, big, {xs})) == Done{{_}} : {TY}}}
+  %{nm}_table_eq({N0}, is64, big, {S_}, {LT0}) : {{_ == Done{{{T}.normal_table.ref(is64, {xs})}} : {TY}}}
+  {nm}_table_ref(is64, big, {xs})
 
 def Laws.{nm}_table_round_trip(is64, big, {xs}):
   {nm}_table(is64, big, {xs})
