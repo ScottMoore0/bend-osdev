@@ -1,5 +1,7 @@
 # bend-osdev-ext4: a device that keeps writes aside: reads see them, the
-# device underneath is not touched. A writer (ext2's, or any code over
+# device underneath is not touched. It is the journalling layer's device:
+# a writer runs on it unchanged, and its writes become one transaction
+# (jtx.bend, jext2.bend), or are written straight through (Ext4Ov.flush). A writer (ext2's, or any code over
 # blockdev's pure interface and a pure write) runs on it, and its writes
 # become one journal transaction (Ext4Journal.transact).
 #
@@ -9,7 +11,9 @@
 import Base
 import ../bytes/bytes.bend as B
 import ../blockdev/blockdev.bend as D
+import ./error.bend as E
 import ./jwrite.bend as JW
+import ./devwrite.bend as DW
 
 type Ext4Ov<-Dv: Data> is Data:
   Ext4Ov{base: Dv, writes: List<&2, JW.Jbd2Write>}
@@ -105,3 +109,34 @@ def Ext4Ov.base(-Dv: Data, o: Ext4Ov<Dv>) -> Dv:
   match o:
     case Ext4Ov{d, ws}:
       d
+
+# The device underneath with the writes written on it (no journal): what a
+# writer run on the overlay would have done on the device directly
+# (LAWS.bend: ov_flush); a failed writer's failure is the answer
+def Ext4Ov.flush(~Dv: Data, ~block_size: Dv -> Nat, ~write_block: Dv -> Nat -> B.Octets -> Result<&2, &2, D.DevError, Dv>, r: Result<&2, &2, E.Ext4Error, Ext4Ov<Dv>>) -> Result<&2, &2, E.Ext4Error, Dv>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{Ext4Ov{+d, ws}}:
+      DW.Ext4Dev.write_all(~Dv, ~block_size, ~write_block, Ext4Ov.dedup(ws, (Nil{}, Nil{})), Done{d}, block_size(d))
+
+# The overlay of a MemDev, with plain parameters (to pass as template
+# arguments: ~Ext4Ov<MemDev>, ~Ext4Ov.mem_block_size, ~Ext4Ov.mem_read,
+# ~Ext4Ov.mem_write)
+
+def Ext4Ov.mem_block_size(o: Ext4Ov<D.MemDev>) -> Nat:
+  Ext4Ov.block_size(~D.MemDev, ~D.MemDev.block_size, o)
+
+def Ext4Ov.mem_read(o: Ext4Ov<D.MemDev>, n: Nat) -> Result<&2, &2, D.DevError, B.Octets>:
+  Ext4Ov.read_block(~D.MemDev, ~D.MemDev.read_block, o, n)
+
+def Ext4Ov.mem_write(o: Ext4Ov<D.MemDev>, n: Nat, data: B.Octets) -> Result<&2, &2, D.DevError, Ext4Ov<D.MemDev>>:
+  Ext4Ov.write_block(~D.MemDev, ~D.MemDev.block_size, o, n, data)
+
+# block m of the overlay a writing gave (or why the writing failed)
+def Ext4Ov.read_mem(r: Result<&2, &2, E.Ext4Error, Ext4Ov<D.MemDev>>, m: Nat) -> Result<&2, &2, E.Ext4Error, B.Octets>:
+  match r:
+    case Done{o}:
+      DW.Ext4Dev.dev_read(Ext4Ov.mem_read(o, m))
+    case Fail{e}:
+      Fail{e}

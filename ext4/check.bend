@@ -19,6 +19,17 @@ import ./journal.bend as JR
 import ./overlay.bend as OV
 import ./ext4.bend as X4
 import ./sample.bend as SM
+import ../ext2/error.bend as XE
+import ../ext2/ops.bend as XP
+import ../ext2/run.bend as XR
+import ../ext2/wopts.bend as XW
+import ../ext2/fsck.bend as XF
+import ./jlog.bend as JL
+import ./jscan.bend as JN
+import ./jsuper.bend as J
+import ./jtx.bend as JT
+import ./jext2.bend as JX
+import ./jsample.bend as JS
 
 # The sample image (sample.bend; ref/sample.py writes it with mke2fs and
 # debugfs): /big (12, indexed, 150 names of inode 13), /small (17, an
@@ -355,6 +366,297 @@ def Ext4Check.transact(+d: D.MemDev, r: Result<&2, &2, E.Ext4Error, JR.Ext4Recov
     case Done{JR.Ext4Recovered{+d2, rep}}:
       Ext4Check.transacted(Ext4Check.transact.go(d2, Ext4Check.fs(d2)))
 
+# Journalled writes (jtx.bend, jext2.bend) on the journalled sample
+# (jsample.bend: ext4 with metadata_csum and a csum_v3 journal): five of
+# ext2's operations as one transaction, in both modes, compared with the
+# same operations done directly; crashes before the commit, at it and
+# during the checkpoint, recovered; the plan's log read back by the
+# streaming scanner; a refused operation.
+
+def Ext4Check.pat(n: Nat, +i: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n:
+    case 0n:
+      List.reverse(&2, U32, acc)
+    case 1n+k:
+      Ext4Check.pat(k, U32.add(i, 1), Con{U32.and(U32.add(U32.mul(i, 7), 3), 255), acc})
+
+def Ext4Check.jops() -> List<&2, XP.Ext2Op>:
+  [XP.Ext2OpMkdir{Ext4Check.p("/new"), 493}, XP.Ext2OpCreate{Ext4Check.p("/new/f"), 420}, XP.Ext2OpWrite{Ext4Check.p("/new/f"), 0n, B.Octets.of_list(Ext4Check.pat(3000n, 0, Nil{}))}, XP.Ext2OpRename{Ext4Check.p("/dir/b"), Ext4Check.p("/new/b")}, XP.Ext2OpAppend{Ext4Check.p("/a"), Ext4Check.p("appended\n")}]
+
+def Ext4Check.wo() -> XW.Ext2WriteOptions:
+  XW.Ext2WriteOptions.with_time(XW.Ext2WriteOptions.default(), 1700000000)
+
+def Ext4Check.jo() -> O.Jbd2Options:
+  O.Jbd2Options.with_commit_time(O.Jbd2Options.default(), 1700000000, 0)
+
+def Ext4Check.direct(ops: List<&2, XP.Ext2Op>, r: Result<&2, &2, E.Ext4Error, D.MemDev>, +fs: S.Ext4Fs) -> Result<&2, &2, E.Ext4Error, D.MemDev>:
+  match ops r:
+    case _ Fail{e}:
+      Fail{e}
+    case Nil{} Done{d}:
+      Done{d}
+    case Con{op, t} Done{d}:
+      Ext4Check.direct(t, E.Ext4Error.lift(D.MemDev, XR.Ext2Op.run(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, op, d, S.Ext4Fs.ext2(fs), Ext4Check.wo())), fs)
+
+def Ext4Check.same_blk(a: Result<&2, &2, D.DevError, B.Octets>, b: Result<&2, &2, D.DevError, B.Octets>) -> Bool:
+  match a b:
+    case Done{x} Done{y}:
+      B.Octets.is_eq(x, y)
+    case _ _:
+      False{}
+
+def Ext4Check.keep_diff(same: Bool, +n: Nat, acc: List<&2, Nat>) -> List<&2, Nat>:
+  match same:
+    case True{}:
+      acc
+    case False{}:
+      Con{n, acc}
+
+def Ext4Check.blocks_of(ws: List<&2, JW.Jbd2Write>, acc: List<&2, Nat>) -> List<&2, Nat>:
+  match ws:
+    case Nil{}:
+      acc
+    case Con{JW.Jbd2Write{b, o}, t}:
+      Ext4Check.blocks_of(t, Con{b, acc})
+
+# the blocks of ns where a and b differ
+def Ext4Check.diffs(ns: List<&2, Nat>, +a: D.MemDev, +b: D.MemDev, acc: List<&2, Nat>) -> List<&2, Nat>:
+  match ns:
+    case Nil{}:
+      acc
+    case Con{+k, t}:
+      Ext4Check.diffs(t, a, b, Ext4Check.keep_diff(Ext4Check.same_blk(D.MemDev.read_block(a, k), D.MemDev.read_block(b, k)), k, acc))
+
+def Ext4Check.within(xs: List<&2, Nat>, +ys: List<&2, Nat>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case Con{+x, t}:
+      Bool.and(JL.Jbd2Log.member(ys, x), Ext4Check.within(t, ys))
+
+def Ext4Check.add_home(r: Result<&2, &2, E.Ext4Error, Nat>, acc: List<&2, Nat>) -> List<&2, Nat>:
+  match r:
+    case Done{n}:
+      Con{n, acc}
+    case Fail{e}:
+      acc
+
+# the filesystem blocks of the journal blocks the steps write
+def Ext4Check.jhomes(xs: List<&2, JT.Ext4JStep>, +d: D.MemDev, +fs: S.Ext4Fs, +j: JR.Ext4Journal, acc: List<&2, Nat>) -> List<&2, Nat>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{JT.Ext4JLog{p, o}, t}:
+      Ext4Check.jhomes(t, d, fs, j, Ext4Check.add_home(JR.Ext4Journal.home(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, j, p), acc))
+    case Con{JT.Ext4JDesc{p, o, ps}, t}:
+      Ext4Check.jhomes(t, d, fs, j, Ext4Check.add_home(JR.Ext4Journal.home(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, j, p), acc))
+    case Con{JT.Ext4JData{p, u, o}, t}:
+      Ext4Check.jhomes(t, d, fs, j, Ext4Check.add_home(JR.Ext4Journal.home(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, j, p), acc))
+    case Con{JT.Ext4JCommit{p, o}, t}:
+      Ext4Check.jhomes(t, d, fs, j, Ext4Check.add_home(JR.Ext4Journal.home(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, fs, j, p), acc))
+    case Con{x, t}:
+      Ext4Check.jhomes(t, d, fs, j, acc)
+
+def Ext4Check.plan_homes(+p: JT.Ext4JPlan, +d: D.MemDev, +fs: S.Ext4Fs) -> List<&2, Nat>:
+  Ext4Check.jhomes(JT.Ext4JTx.steps(JT.Ext4JPlan.tx(p)), d, fs, JT.Ext4JPlan.journal(p), Nil{})
+
+# every block the plan writes: its homes, its journal blocks, the
+# superblock's block (a direct run writes only the homes)
+def Ext4Check.uniq(xs: List<&2, Nat>, +acc: List<&2, Nat>) -> List<&2, Nat>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{+x, t}:
+      Ext4Check.uniq(t, Ext4Check.keep_diff(JL.Jbd2Log.member(acc, x), x, acc))
+
+def Ext4Check.scope(+p: JT.Ext4JPlan, +d: D.MemDev, +fs: S.Ext4Fs) -> List<&2, Nat>:
+  Ext4Check.uniq(Con{JT.Ext4JTx.super_block(S.Ext4Fs.block_size(fs)), Ext4Check.blocks_of(JT.Ext4JTx.homes(JT.Ext4JTx.steps(JT.Ext4JPlan.tx(p))), Ext4Check.plan_homes(p, d, fs))}, Nil{})
+
+# whether a and b differ only in blocks of js, of the blocks a plan
+# touches (sc: every block that either image can have changed)
+def Ext4Check.only(+a: D.MemDev, +b: D.MemDev, +sc: List<&2, Nat>, +js: List<&2, Nat>) -> String:
+  +ds = Ext4Check.diffs(sc, a, b, Nil{})
+  Bool.show(Ext4Check.within(ds, js)) ++ " (" ++ Nat.show(List.length(&2, Nat, ds)) ++ " blocks differ)"
+
+def Ext4Check.tree(+d: D.MemDev, +fs: S.Ext4Fs) -> String:
+  "/new/f " ++ Ext4Check.read(d, fs, "/new/f") ++ "; /new/b " ++ Ext4Check.read(d, fs, "/new/b") ++ "; /dir/b " ++ Ext4Check.lookup(d, fs, "/dir/b") ++ "; /a " ++ Ext4Check.read(d, fs, "/a")
+
+def Ext4Check.fsck(r: Result<&2, &2, XE.Ext2Error, Unit>) -> String:
+  match r:
+    case Done{u}:
+      "fsck ok"
+    case Fail{e}:
+      "fsck " ++ XE.Ext2Error.kind(e)
+
+# a journalled run of ops in mode m: the plan, the image against the
+# direct run's, what the image holds
+def Ext4Check.jran(r: Result<&2, &2, E.Ext4Error, D.MemDev>, +p: JT.Ext4JPlan, +d0: D.MemDev, +fs: S.Ext4Fs, rd: Result<&2, &2, E.Ext4Error, D.MemDev>) -> IO(Unit):
+  match r rd:
+    case Done{+d} Done{+dd}:
+      +tx = JT.Ext4JPlan.tx(p)
+      do IO<Unit>:
+        IO.print(Nat.show(JT.Ext4JPlan.length(p)) ++ " steps, commit at " ++ Nat.show(JT.Ext4JPlan.commit_at(p)) ++ ", " ++ Nat.show(JT.Ext4JTx.log_blocks(tx)) ++ " log blocks, " ++ Nat.show(List.length(&2, JW.Jbd2Write, JT.Ext4JTx.homes(JT.Ext4JTx.pre(tx)))) ++ " written in place")
+        IO.print("as the direct run outside the journal: " ++ Ext4Check.only(d, dd, Ext4Check.scope(p, d0, fs), Ext4Check.plan_homes(p, d0, fs)))
+        IO.print(Ext4Check.tree(d, fs))
+        IO.print(Ext4Check.fsck(XF.Ext2Fsck.full(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, S.Ext4Fs.ext2(fs))))
+    case Fail{+e} _:
+      IO.print(Ext4Check.err(e))
+    case _ Fail{+e}:
+      IO.print("direct " ++ Ext4Check.err(e))
+
+def Ext4Check.jrun(r: Result<&2, &2, E.Ext4Error, JT.Ext4JPlan>, +d0: D.MemDev, +fs: S.Ext4Fs) -> IO(Unit):
+  match r:
+    case Done{+p}:
+      Ext4Check.jran(JT.Ext4JTx.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, d0, fs, p, JT.Ext4JPlan.length(p)), p, d0, fs, Ext4Check.direct(Ext4Check.jops(), Done{d0}, fs))
+    case Fail{+e}:
+      IO.print(Ext4Check.err(e))
+
+def Ext4Check.jplan(+d0: D.MemDev, +fs: S.Ext4Fs, m: JT.Jbd2Mode) -> Result<&2, &2, E.Ext4Error, JT.Ext4JPlan>:
+  JX.Ext4JExt2.plan(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, Ext4Check.jops(), d0, fs, Ext4Check.wo(), Ext4Check.jo(), m)
+
+# Crashes: the plan's first k steps, then this package's recovery; against
+# the image before the transaction (k before the commit) or the complete
+# run's (from the commit on), outside the journal and the blocks written
+# in place
+
+def Ext4Check.recovered_at(r: Result<&2, &2, E.Ext4Error, JR.Ext4Recovered<D.MemDev>>, +want: D.MemDev, +sc: List<&2, Nat>, +js: List<&2, Nat>, +fs: S.Ext4Fs) -> String:
+  match r:
+    case Done{JR.Ext4Recovered{+d, +rep}}:
+      "recovered " ++ Nat.show(JR.Jbd2Report.transactions(rep)) ++ " transactions, " ++ Nat.show(JR.Jbd2Report.replayed(rep)) ++ " blocks; /new " ++ Ext4Check.lookup(d, fs, "/new") ++ "; as expected outside the journal: " ++ Ext4Check.only(d, want, sc, js)
+    case Fail{+e}:
+      Ext4Check.err(e)
+
+def Ext4Check.crash.go(r: Result<&2, &2, E.Ext4Error, D.MemDev>, +want: D.MemDev, +sc: List<&2, Nat>, +js: List<&2, Nat>, +fs: S.Ext4Fs) -> String:
+  match r:
+    case Done{+d}:
+      Ext4Check.recovered_at(JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, d, fs, Ext4Check.jo()), want, sc, js, fs)
+    case Fail{+e}:
+      Ext4Check.err(e)
+
+# a crash after k steps; the blocks allowed to differ: the journal's, and
+# those written in place before the commit (fresh ones, data=ordered)
+def Ext4Check.crash(+k: Nat, +p: JT.Ext4JPlan, +d0: D.MemDev, +fs: S.Ext4Fs, +want: D.MemDev) -> String:
+  +js = Ext4Check.blocks_of(JT.Ext4JTx.homes(JT.Ext4JTx.pre(JT.Ext4JPlan.tx(p))), Ext4Check.plan_homes(p, d0, fs))
+  "after " ++ Nat.show(k) ++ " steps: " ++ Ext4Check.crash.go(JT.Ext4JTx.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, d0, fs, p, k), want, Ext4Check.scope(p, d0, fs), js, fs)
+
+# The scanner over the plan's log: the block at each position it asks for
+
+def Ext4Check.log_at.pick(hit: Bool, o: B.Octets) -> Maybe<&2, B.Octets>:
+  match hit:
+    case True{}:
+      Some{o}
+    case False{}:
+      None{}
+
+def Ext4Check.log_at(xs: List<&2, JT.Ext4JStep>, +p: Nat, found: Maybe<&2, B.Octets>) -> Maybe<&2, B.Octets>:
+  match xs found:
+    case _ Some{o}:
+      Some{o}
+    case Nil{} None{}:
+      None{}
+    case Con{JT.Ext4JDesc{q, o, ps}, t} None{}:
+      Ext4Check.log_at(t, p, Ext4Check.log_at.pick(Nat.is_eq(q, p), o))
+    case Con{JT.Ext4JData{q, u, o}, t} None{}:
+      Ext4Check.log_at(t, p, Ext4Check.log_at.pick(Nat.is_eq(q, p), o))
+    case Con{JT.Ext4JCommit{q, o}, t} None{}:
+      Ext4Check.log_at(t, p, Ext4Check.log_at.pick(Nat.is_eq(q, p), o))
+    case Con{x, t} None{}:
+      Ext4Check.log_at(t, p, None{})
+
+def Ext4Check.feed(m: Maybe<&2, B.Octets>, +g: J.Jbd2Geom, st: JN.Jbd2Scan) -> Maybe<&2, JN.Jbd2Scan>:
+  match m:
+    case Some{b}:
+      Some{JN.Jbd2Scan.feed(True{}, g, st, b)}
+    case None{}:
+      None{}
+
+def Ext4Check.scan.go(fuel: Nat, m: Maybe<&2, JN.Jbd2Scan>, last: JN.Jbd2Scan, +xs: List<&2, JT.Ext4JStep>, +g: J.Jbd2Geom) -> JN.Jbd2Scan:
+  match fuel m:
+    case 0n _:
+      last
+    case _ None{}:
+      last
+    case 1n+f Some{+st}:
+      Ext4Check.scan.go(f, Ext4Check.feed(Ext4Check.log_at(xs, JN.Jbd2Scan.pos(st), None{}), g, st), st, xs, g)
+
+def Ext4Check.put(p: JL.Jbd2Put) -> String:
+  match p:
+    case JL.Jbd2Put{b, s, f, c}:
+      " " ++ Nat.show(b) ++ "/" ++ Nat.show(s) ++ "/" ++ U32.show(f) ++ "/" ++ U32.show(c)
+
+def Ext4Check.puts(ps: List<&2, JL.Jbd2Put>) -> String:
+  match ps:
+    case Nil{}:
+      ""
+    case Con{p, t}:
+      Ext4Check.put(p) ++ Ext4Check.puts(t)
+
+def Ext4Check.recs(rs: List<&2, JL.Jbd2Rec>) -> String:
+  match rs:
+    case Nil{}:
+      ""
+    case Con{JL.Jbd2RDesc{s, ps}, t}:
+      " desc " ++ Nat.show(s) ++ Ext4Check.puts(ps) ++ Ext4Check.recs(t)
+    case Con{JL.Jbd2RRevoke{s, bs}, t}:
+      " revoke " ++ Nat.show(s) ++ Ext4Check.recs(t)
+    case Con{JL.Jbd2RCommit{s}, t}:
+      " commit " ++ Nat.show(s) ++ Ext4Check.recs(t)
+
+def Ext4Check.scanned(+p: JT.Ext4JPlan) -> String:
+  +tx = JT.Ext4JPlan.tx(p)
+  +g = JR.Ext4Journal.geom(JT.Ext4JPlan.journal(p))
+  +s = JT.Ext4JTx.seq(tx)
+  +xs = List.append(&2, JT.Ext4JStep, JT.Ext4JTx.log(tx), [JT.Ext4JTx.commit(tx)])
+  +st0 = JN.Jbd2Scan.start(J.Jbd2Geom.first(g), s)
+  +st = Ext4Check.scan.go(List.length(&2, JT.Ext4JStep, xs), Some{st0}, st0, xs, g)
+  +got = Ext4Check.recs(JN.Jbd2Scan.records(st))
+  "the scanner reads the plan's log as its records: " ++ Bool.show(String.eq(got, Ext4Check.recs(JT.Ext4JTx.records(s, xs)))) ++ " (" ++ Nat.show(List.length(&2, JL.Jbd2Rec, JN.Jbd2Scan.records(st))) ++ " records)"
+
+def Ext4Check.dev_or(r: Result<&2, &2, E.Ext4Error, D.MemDev>, d: D.MemDev) -> D.MemDev:
+  match r:
+    case Done{x}:
+      x
+    case Fail{e}:
+      d
+
+def Ext4Check.crashes(r: Result<&2, &2, E.Ext4Error, JT.Ext4JPlan>, +d0: D.MemDev, +fs: S.Ext4Fs) -> IO(Unit):
+  match r:
+    case Done{+p}:
+      +c = JT.Ext4JPlan.commit_at(p)
+      +full = JT.Ext4JTx.apply(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, d0, fs, p, JT.Ext4JPlan.length(p))
+      +dfull = Ext4Check.dev_or(full, d0)
+      do IO<Unit>:
+        IO.print(Ext4Check.crash(2n, p, d0, fs, d0))
+        IO.print(Ext4Check.crash(Nat.sub(c, 1n), p, d0, fs, d0))
+        IO.print(Ext4Check.crash(c, p, d0, fs, dfull))
+        IO.print(Ext4Check.crash(Nat.add(c, 4n), p, d0, fs, dfull))
+        IO.print(Ext4Check.scanned(p))
+    case Fail{+e}:
+      IO.print(Ext4Check.err(e))
+
+def Ext4Check.refused(r: Result<&2, &2, E.Ext4Error, D.MemDev>) -> String:
+  match r:
+    case Done{d}:
+      "done"
+    case Fail{+e}:
+      Ext4Check.err(e)
+
+def Ext4Check.journalled(+d0: D.MemDev, r: Result<&2, &2, E.Ext4Error, S.Ext4Fs>) -> IO(Unit):
+  match r:
+    case Done{+fs}:
+      do IO<Unit>:
+        IO.print("data=journal:")
+        Ext4Check.jrun(Ext4Check.jplan(d0, fs, JT.Jbd2DataJournal{}), d0, fs)
+        IO.print("data=ordered:")
+        Ext4Check.jrun(Ext4Check.jplan(d0, fs, JT.Jbd2DataOrdered{}), d0, fs)
+        IO.print("crashes (data=journal):")
+        Ext4Check.crashes(Ext4Check.jplan(d0, fs, JT.Jbd2DataJournal{}), d0, fs)
+        IO.print("crashes (data=ordered):")
+        Ext4Check.crashes(Ext4Check.jplan(d0, fs, JT.Jbd2DataOrdered{}), d0, fs)
+        IO.print("rmdir /dir: " ++ Ext4Check.refused(JX.Ext4JExt2.op(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~DW.Ext4Dev.mem_write, XP.Ext2OpRmdir{Ext4Check.p("/dir")}, d0, fs, Ext4Check.wo(), Ext4Check.jo(), JT.Jbd2DataJournal{})))
+    case Fail{+e}:
+      IO.print(Ext4Check.err(e))
+
 def main() -> IO(Unit):
   +d = SM.Ext4Sample.device()
   do IO<Unit>:
@@ -378,6 +680,8 @@ def main() -> IO(Unit):
     IO.print("== htree writer")
     IO.print(Ext4Check.built(HW.Ext4Htree.build(HW.Ext4HtreeParams.default(1024n, 11, 2), Ext4Check.names.go(300n, Nil{}))))
     IO.print(Ext4Check.planned(HW.Ext4Htree.hashed(Ext4Check.names.go(300n, Nil{}), 1, [0, 0, 0, 0], Nil{})))
+    IO.print("== journalled writes")
+    Ext4Check.journalled(JS.Ext4JSample.device(), X4.Ext4.open(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, JS.Ext4JSample.device(), O.Ext4Options.default()))
 
 #|== reading
 #|inode 13 file
@@ -420,3 +724,27 @@ def main() -> IO(Unit):
 #|== htree writer
 #|built 7 blocks; root levels 0, 6 entries
 #|plan: 6 leaves, ordered True; entry-123: inode 143 (scan: inode 143); entry-300: none (scan: none)
+#|== journalled writes
+#|data=journal:
+#|34 steps, commit at 18, 16 log blocks, 0 written in place
+#|as the direct run outside the journal: True (17 blocks differ)
+#|/new/f 3000 bytes, crc32 1460149745; /new/b 2000 bytes, crc32 2627585784; /dir/b err Ext4NotFound; /a 24 bytes, crc32 449833378
+#|fsck ok
+#|data=ordered:
+#|30 steps, commit at 18, 12 log blocks, 4 written in place
+#|as the direct run outside the journal: True (13 blocks differ)
+#|/new/f 3000 bytes, crc32 1460149745; /new/b 2000 bytes, crc32 2627585784; /dir/b err Ext4NotFound; /a 24 bytes, crc32 449833378
+#|fsck ok
+#|crashes (data=journal):
+#|after 2 steps: recovered 0 transactions, 0 blocks; /new err Ext4NotFound; as expected outside the journal: True (1 blocks differ)
+#|after 17 steps: recovered 0 transactions, 0 blocks; /new err Ext4NotFound; as expected outside the journal: True (16 blocks differ)
+#|after 18 steps: recovered 1 transactions, 14 blocks; /new inode 15 dir; as expected outside the journal: True (1 blocks differ)
+#|after 22 steps: recovered 1 transactions, 14 blocks; /new inode 15 dir; as expected outside the journal: True (1 blocks differ)
+#|the scanner reads the plan's log as its records: True (2 records)
+#|crashes (data=ordered):
+#|after 2 steps: recovered 0 transactions, 0 blocks; /new err Ext4NotFound; as expected outside the journal: True (2 blocks differ)
+#|after 17 steps: recovered 0 transactions, 0 blocks; /new err Ext4NotFound; as expected outside the journal: True (16 blocks differ)
+#|after 18 steps: recovered 1 transactions, 10 blocks; /new inode 15 dir; as expected outside the journal: True (1 blocks differ)
+#|after 22 steps: recovered 1 transactions, 10 blocks; /new inode 15 dir; as expected outside the journal: True (1 blocks differ)
+#|the scanner reads the plan's log as its records: True (2 records)
+#|rmdir /dir: err Ext4Ext2 Ext2NotEmpty

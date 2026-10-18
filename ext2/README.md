@@ -63,7 +63,9 @@ that is ignored rather than overflow. Sizes in records are `W64`.
 | Refused, named | htree (indexed) directories (`Ext2HtreeDir`: entries go into a linear directory only; the index would go stale), an inode with an extended attribute block on release (`Ext2Xattr`), extent trees deeper than 1 or past four leaves (`Ext2ExtentFull`), a write into an unwritten extent (`Ext2Unwritten`), a block past the triply indirect block (`Ext2FileTooBig`), a file of 2 GiB or more without large_file, a 65,000th link (`Ext2TooManyLinks`), names with "/" or NUL or over 255 bytes (`Ext2BadName`), 64 KiB blocks (rec_len cannot hold them), a filesystem marked as having errors |
 
 Not written: the journal (a filesystem with one is written around it: its
-inode and blocks are left alone, and nothing is journalled), htree indexes,
+inode and blocks are left alone; bend-osdev-ext4's `jext2.bend` runs this
+writer, unchanged, through the journal, logging, committing and
+checkpointing each operation's writes as a jbd2 transaction), htree indexes,
 extended attributes, inline data, flex_bg's packing at mkfs (an opened
 filesystem with flex_bg is written correctly, its bitmaps and tables
 wherever they are), resize_inode, uninit_bg's lazy groups at mkfs (all
@@ -307,7 +309,9 @@ journal, htree directories) to reuse:
   after every operation; a caller can also run `Ext2Fsck.full` itself.
 * **More of ext4 (the ext4 package builds on these):** a journal (every write goes
   through the `write_block` argument, so a device that collects an
-  operation's blocks can log them before they reach their places), htree
+  operation's blocks can log them before they reach their places: ext4's
+  `Ext4Ov` is that device, and its `jext2.bend` journals this writer's
+  operations), htree
   directories (refused now as `Ext2HtreeDir`; `Ext2Slots` handles the leaf
   blocks), deeper extent trees (`Ext2ExtentFull` marks the limit), writes
   into unwritten extents, extended attribute blocks, flex_bg packing at
