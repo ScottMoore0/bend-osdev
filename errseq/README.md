@@ -3,9 +3,9 @@
 Error sequence counters, in the style of the Linux kernel's `errseq_t`, as a
 pure state machine: a writer records errors in one place, and any number of
 observers, each holding a cursor, learn of an error they have not seen
-exactly once. A file's writeback errors are the usual use: every open file
-description samples a cursor when it is opened and learns at its next
-`fsync` of any error recorded since.
+exactly once. The kernel's documentation names the file synchronisation
+calls (`fsync`, `fdatasync`, `msync`, `sync_file_range`) as the use it was
+designed for.
 
 Nothing here reads shared memory or a clock: each operation takes the state
 and answers the new one, so the caller decides where the state lives and how
@@ -13,34 +13,53 @@ it is shared between observers.
 
 ## Specification
 
-The Linux kernel's documentation of `errseq_t`,
-`Documentation/core-api/errseq.rst` (Jeff Layton): an error sequence counter
-records the latest error and counts errors, observers sample it
-(`errseq_sample`), test whether it changed since their sample
-(`errseq_check`), and test and move their sample forward
-(`errseq_check_and_advance`), and a "seen" flag records whether the latest
-error has been reported to anyone. This package was written from that
-documented behaviour, as an abstract data type; **no kernel source was
-read**, and the document was not re-read in this session (it had no network
-access): the behaviour below is what this package commits to, and its laws
-and tests hold it to that.
+One document: **"The errseq_t datatype"** (Jeff Layton),
+<https://docs.kernel.org/core-api/errseq.html>
+(`Documentation/core-api/errseq.rst`), including its rendered kernel-doc
+section "Functions". It was read on 2026-10-18. **No kernel source was
+read.**
 
-Where the document leaves room, or describes the kernel's packing, this
-package chooses:
+What comes from which section of the page:
 
-* **The counter is a `Nat`**, not a field of a packed 32-bit word, so it
-  never wraps, and every recorded error moves it on. The kernel packs the
-  error, the seen flag and a counter into 32 bits and, to make the counter
-  wrap more slowly, moves it on only when the previous error was seen; with
-  an unbounded counter that economy is not needed, and an observer behind
-  the counter learns of the latest error, once, however many were recorded.
-* **Errors are `U32` error numbers**, with 0 meaning "no error": recording
-  0 records nothing.
-* **A fresh observer learns only of errors after it sampled** (by default).
-  The kernel's sample is set one error back when nobody has been told of the
-  latest error yet, so that the first observer to check learns of it; that
-  is `ErrseqOptions.kernel()`.
-* **Cursors are values**, `ErrseqCursor`; an observer keeps its own.
+| Fact | Section |
+|---|---|
+| an errseq_t records the latest error and a counter, so that subscribers learn whether it changed since they sampled it, and the latest error; an all-zero value is the epoch, no error recorded | introduction (above "API usage") |
+| its kernel form: a 32-bit word, the errno in bits 0 to 11, a flag (SF, "seen") in bit 12, and a 19-bit counter, with a risk of collisions when errors come often | introduction |
+| each subscriber keeps a private cursor, samples it when its watch begins, and is told of a new error once; later checks report nothing until another error is recorded; subscribers cannot count errors | "API usage" |
+| updates of one cursor must be serialised, or the cursor can move back and an error be reported twice | "Serializing errseq_t cursor updates" |
+| `errseq_set`: the error is between -1 and -MAX_ERRNO; a new error overwrites the old; the counter moves on only if the last value was sampled | "Functions": `errseq_set` |
+| `errseq_sample`: a seen error is not reported to a new sampler; **an unseen error is reported to the sampler at its next check** | "Functions": `errseq_sample` |
+| `errseq_check`: the latest error if the value changed since the cursor, else 0; it advances nothing and marks nothing seen | "Functions": `errseq_check` |
+| `errseq_check_and_advance`: 0 if unchanged; otherwise sets the seen flag, moves the cursor to the current value and answers the error | "Functions": `errseq_check_and_advance` |
+
+**Divergences from the page, each a deliberate choice:**
+
+* **A fresh observer learns only of errors after it sampled (the
+  default).** The page's `errseq_sample` reports an unseen error to a new
+  sampler. That behaviour is `ErrseqOptions.kernel()`, with laws of its own
+  (`errseq_kernel_*`). The default follows the brief for this package,
+  which asks that a fresh observer see only later errors, and the page's
+  "API usage" advice that a subscriber samples when its watch begins so as
+  to ignore earlier history.
+* **The counter is a `Nat` and moves on with every error recorded.** The
+  page packs errno, flag and a 19-bit counter into 32 bits, and moves the
+  counter only when the previous value was seen, which slows its wrap and
+  warns of collisions. With an unbounded counter there is no wrap and no
+  collision. What observers are told is the same: an observer behind the
+  counter is told of the latest error, once, however many were recorded.
+  The seen flag is kept, since the kernel option's sample needs it.
+* **Errors are positive `U32` error numbers, and 0 records nothing.** The
+  page passes negative errnos between -1 and -MAX_ERRNO (4095), the range
+  that fits its 12-bit field. This package does not pack the value, so any
+  nonzero number is stored; a caller that wants the page's range checks it
+  before `Errseq.set`.
+* **Results are values, not codes**: `Errseq.check` answers `Some{error}`
+  or `None` (the page's error or 0); `Errseq.set` answers the new state
+  (the page's previous value, which it says is mainly for debugging, is the
+  caller's input).
+* **Cursor updates need no lock**: each observer's cursor is a value it
+  owns, and a check-and-advance answers the new one, so the page's
+  serialisation concern is the caller's (as with any shared state here).
 
 ## Files
 
