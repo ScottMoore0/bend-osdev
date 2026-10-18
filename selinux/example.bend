@@ -108,7 +108,9 @@ def SeExample.cil() -> String:
 (dontaudit user_t shadow_t (file (read getattr)))
 (booleanif allow_etc_write
   (true (allow user_t etc_t (file (write create)))
-        (typetransition user_t etc_t file \"passwd\" shadow_t)))
+        (typetransition user_t bin_t file etc_t))
+  (false (typetransition user_t bin_t file shadow_t)))
+(typetransition user_t etc_t file \"passwd\" shadow_t)
 (typetransition user_t bin_t process passwd_t)
 (typetransition passwd_t etc_t file shadow_t)
 (typechange passwd_t etc_t file shadow_t)

@@ -11,8 +11,11 @@ pages), by the same author, so it is independent code but not an
 independent reading of the documents: it catches implementation slips
 (the CIL reader and compiler, attribute expansion, booleans, constraints,
 MLS, transitions, decisions), not shared misreadings. secilc, when
-installed, checks that each generated policy is CIL it accepts (see
-run.sh).
+installed, checks that it accepts exactly the generated policies the
+package loads (see run.sh). The model refuses a policy as the package
+does: a constraint operand word misused (`(eq t2 t1)`: t1 is the source
+type there, not a type named t1), a name transition inside a booleanif, a
+neverallow violation, and conflicting type or role transitions.
 
 The model reads the generated CIL text with its own S-expression reader
 and compiler, not the generator's data, so the package's CIL subset is
@@ -53,9 +56,46 @@ class Policy:
 
 OPS = ('and', 'or', 'xor', 'not', 'all', 'range')
 
+# the operand words of a constraint expression: never a user, role or type
+# of that name; a right operand that is one must be the left one's partner
+WORDS = {'u1', 'u2', 'u3', 'r1', 'r2', 'r3', 't1', 't2', 't3', 'l1', 'l2', 'h1', 'h2'}
+PARTNER = {'u1': 'u2', 'r1': 'r2', 't1': 't2'}
+
+def cons_error(e):
+    op = e[0]
+    if op in ('and', 'or'):
+        return cons_error(e[1]) or cons_error(e[2])
+    if op == 'not':
+        return cons_error(e[1])
+    x, y = e[1], e[2]
+    if x in ('l1', 'h1', 'l2', 'h2'):
+        return None
+    if isinstance(y, str) and y in WORDS and PARTNER.get(x) != y:
+        return 'bad statement: constraint operand ' + y
+    return None
+
+def compile_error(st):
+    """The compiler's first refusal, in statement order, of the rules the
+    generator can get wrong: a misused constraint operand, and a name
+    transition inside a booleanif."""
+    for s in st:
+        if s[0] in ('constrain', 'mlsconstrain'):
+            err = cons_error(s[2])
+            if err:
+                return err
+        elif s[0] == 'booleanif':
+            for br in s[2:]:
+                for r in br[1:]:
+                    if r[0] == 'typetransition' and len(r) == 6:
+                        return 'bad statement: booleanif: typetransition with an object name'
+    return None
+
 def compile_cil(stmts):
     P = Policy()
     st = [s for s in stmts if isinstance(s, list)]
+    P.error = compile_error(st)
+    if P.error:
+        return P
     kw = lambda k: [s for s in st if s[0] == k]
     P.types, P.attr = [], []          # names in the type namespace, in order
     for s in st:
@@ -194,7 +234,7 @@ def compile_cil(stmts):
         elif k in TY:
             P.ty.append(tyrule(s))
         elif k == 'booleanif':
-            c = [bexpr(s[1]), [], [], [], []]
+            c = [bexpr(s[1]), [], [], [], [], s[1]]
             for br in s[2:]:
                 off = 1 if br[0] == 'true' else 3
                 for r in br[1:]:
@@ -248,6 +288,34 @@ def neverallow_ok(P):
                 if ts:
                     return False
     return True
+
+def trans_conflict(P):
+    """The load-time transition check: 'type rule conflict' when two type
+    rules of the same kind match some source, target and class in common,
+    name the same object (or none) and give different types, unless they
+    are in the two branches of one condition ((not e) is e with its branches
+    swapped); 'role transition conflict' likewise for roletransition."""
+    def place(e, br):
+        return (e[1], not br) if isinstance(e, list) and e[0] == 'not' else (e, br)
+    placed = [(None, r) for r in P.ty]
+    for c in P.conds:
+        placed += [(place(c[5], True), r) for r in c[2]] + [(place(c[5], False), r) for r in c[4]]
+    def meet(a, b):
+        for s_ in a[1] & b[1]:
+            if (a[2] | ({s_} if a[3] else set())) & (b[2] | ({s_} if b[3] else set())):
+                return True
+        return False
+    for i, (pa, a) in enumerate(placed):
+        for pb, b in placed[i + 1:]:
+            excl = pa is not None and pb is not None and pa[0] == pb[0] and pa[1] != pb[1]
+            if not excl and a[0] == b[0] and a[4] == b[4] and a[5] == b[5] and a[6] != b[6] and meet(a, b):
+                return 'type rule conflict'
+    rts = P.roletrans
+    for i, a in enumerate(rts):
+        for b in rts[i + 1:]:
+            if a[0] == b[0] and a[1] & b[1] and a[2] == b[2] and a[3] != b[3]:
+                return 'role transition conflict'
+    return None
 
 def compute_av(P, s, t, c):
     nperms = len(P.classes[c][1])
@@ -418,7 +486,8 @@ def gen_policy(rng):
     for b in bools:
         if rng.random() < 0.8:
             e = b if rng.random() < 0.6 else rng.choice(['(not %s)' % b, '(and %s %s)' % (b, bools[0]), '(or %s %s)' % (b, bools[-1]), '(xor %s %s)' % (b, bools[0]), '(eq %s %s)' % (b, bools[-1])])
-            tb = ' '.join([avr('allow') for _ in range(rng.randint(1, 2))] + ([tyr('typetransition', rng.random() < 0.5)] if rng.random() < 0.4 else []))
+            # a name transition here is refused (rarely, so most policies load)
+            tb = ' '.join([avr('allow') for _ in range(rng.randint(1, 2))] + ([tyr('typetransition', rng.random() < 0.15)] if rng.random() < 0.4 else []))
             fb = ' '.join([avr(rng.choice(['allow', 'dontaudit'])) for _ in range(rng.randint(0, 2))])
             L.append('(booleanif %s (true %s)%s)' % (e, tb, (' (false %s)' % fb) if fb else ''))
     for i in range(rng.randint(0, 3)):
@@ -431,6 +500,8 @@ def gen_policy(rng):
         L.append('(roleallow %s %s)' % (roles[0], roles[1]))
     if rng.random() < 0.5:
         L.append('(roletransition %s %s process %s)' % (rng.choice(roles), rng.choice(tnames), rng.choice(roles)))
+    plain_t = [n for n in tnames if n not in WORDS]
+    plain_r = [n for n in roles if n not in WORDS]
     def cexpr(depth):
         r = rng.random()
         if depth < 2 and r < 0.25:
@@ -441,10 +512,13 @@ def gen_policy(rng):
         op = rng.choice(['eq', 'neq'])
         if r < 0.25:
             return '(%s %s)' % (op, rng.choice(['u1 u2', 'r1 r2', 't1 t2']))
+        # a name that is an operand word (t1, r1, ...) reads as that operand
+        # in CIL, and is mostly refused there: chosen rarely, so most
+        # policies load
         if r < 0.5:
-            return '(%s %s %s)' % (op, rng.choice(['t1', 't2']), rng.choice(tnames))
+            return '(%s %s %s)' % (op, rng.choice(['t1', 't2']), rng.choice(tnames if rng.random() < 0.15 else plain_t))
         if r < 0.6:
-            return '(%s %s %s)' % (op, rng.choice(['r1', 'r2']), rng.choice(roles))
+            return '(%s %s %s)' % (op, rng.choice(['r1', 'r2']), rng.choice(roles if rng.random() < 0.15 else plain_r))
         if r < 0.7:
             return '(%s %s (%s))' % (op, rng.choice(['u1', 'u2']), ' '.join(rng.sample(users, len(users))))
         return '(%s %s %s)' % (rng.choice(['dom', 'domby', 'incomp', 'eq', 'neq']), rng.choice(['l1', 'h1']), rng.choice(['l2', 'h2']))
@@ -576,9 +650,9 @@ def main():
         cils.append(text)
         P = compile_cil(read_sexps(text))
         lines = []
-        ok = neverallow_ok(P)
-        if not ok:
-            expect.append('policy %d: neverallow violated' % k)
+        refused = P.error or ('neverallow violated' if not neverallow_ok(P) else trans_conflict(P))
+        if refused:
+            expect.append('policy %d: %s' % (k, refused))
         else:
             expect.append('policy %d: loaded' % k)
             cnames = [n for n, _ in classes]

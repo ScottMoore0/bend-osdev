@@ -87,6 +87,8 @@ def SeChk.run(+p: P.SePolicy, +q: P.SePolicy) -> IO(Unit):
     IO.print(SeChk.show_str(S.Selinux.create(p, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", Some{"passwd"})))
     IO.print(SeChk.show_str(S.Selinux.create(q, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", Some{"passwd"})))
     IO.print(SeChk.show_str(S.Selinux.create(q, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", Some{"group"})))
+    IO.print(SeChk.show_str(S.Selinux.create(p, "user_u:user_r:user_t:s0", "user_u:object_r:bin_t:s0", "file", None{})))
+    IO.print(SeChk.show_str(S.Selinux.create(q, "user_u:user_r:user_t:s0", "user_u:object_r:bin_t:s0", "file", None{})))
     IO.print(SeChk.show_dec(S.Selinux.check(A.SeOptions.default(), p, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", ["read"])))
     IO.print(SeChk.show_dec(S.Selinux.check(A.SeOptions.default(), p, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", ["read", "write"])))
     IO.print(SeChk.show_dec(S.Selinux.check(A.SeOptions.permissive(), p, "user_u:user_r:user_t:s0", "user_u:object_r:etc_t:s0", "file", ["write"])))
@@ -120,6 +122,12 @@ def main() -> IO(Unit):
     IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(type user_t)")))
     IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(allow user_t etc_t (file (read))")))
     IO.print(SeChk.show_load(S.Selinux.load_string("(typeattribute a) (typeattribute b) (typeattributeset a (b)) (typeattributeset b (a))")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(constrain (file (read)) (eq t2 t1))")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(constrain (file (read)) (eq t1 t2))")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(booleanif allow_etc_write (false (typetransition user_t shadow_t file \"x\" etc_t)))")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(typetransition domain etc_t file bin_t)")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(booleanif allow_etc_write (true (typetransition user_t bin_t file shadow_t)))")))
+    IO.print(SeChk.show_load(S.Selinux.load_string(ex ++ "(roletransition user_r bin_t process user_r)")))
     SeChk.top(S.Selinux.load_string(ex))
 
 #|neverallow violated
@@ -131,6 +139,12 @@ def main() -> IO(Unit):
 #|duplicate: t:user_t
 #|syntax: unbalanced (
 #|attribute cycle: typeattributeset
+#|bad statement: constraint operand t1
+#|loaded
+#|bad statement: booleanif: typetransition with an object name
+#|type rule conflict
+#|type rule conflict
+#|role transition conflict
 #|allowed { read getattr } auditallow { } auditdeny { read write getattr execute entrypoint create }
 #|allowed { read write getattr create } auditallow { } auditdeny { read write getattr execute entrypoint create }
 #|allowed { read execute } auditallow { } auditdeny { read write getattr execute entrypoint create }
@@ -140,6 +154,8 @@ def main() -> IO(Unit):
 #|allowed { fork } auditallow { } auditdeny { fork transition }
 #|allowed { transition } auditallow { } auditdeny { fork transition }
 #|user_u:passwd_r:passwd_t:s0-s1:c0,c1,c2
+#|user_u:object_r:shadow_t:s0
+#|user_u:object_r:shadow_t:s0
 #|user_u:object_r:shadow_t:s0
 #|user_u:object_r:etc_t:s0
 #|user_u:object_r:shadow_t:s0

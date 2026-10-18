@@ -413,6 +413,8 @@ type SeError is Data:
   SeErrUnsupported{name: String}
   SeErrBadContext{text: String}
   SeErrNeverallow{never: SeAvRule, allow: SeAvRule}
+  SeErrTypeConflict{first: SeTyRule, second: SeTyRule}
+  SeErrRoleTransConflict{first: SeRoleTrans, second: SeRoleTrans}
 
 def SeAvKind.is_eq(a: SeAvKind, b: SeAvKind) -> Bool:
   match a:
@@ -480,6 +482,53 @@ def SeBexpr.eval(e: SeBexpr, +bs: List<&2, Bool>) -> Bool:
       Bool.not(Bool.xor(SeBexpr.eval(a, bs), SeBexpr.eval(b, bs)))
     case SeBNeq{a, b}:
       Bool.xor(SeBexpr.eval(a, bs), SeBexpr.eval(b, bs))
+
+# the two conditions are written the same (the same tree of operators over
+# the same booleans)
+def SeBexpr.is_eq(a: SeBexpr, b: SeBexpr) -> Bool:
+  match a:
+    case SeBVar{i}:
+      match b:
+        case SeBVar{j}:
+          Nat.is_eq(i, j)
+        case o:
+          False{}
+    case SeBNot{x}:
+      match b:
+        case SeBNot{y}:
+          SeBexpr.is_eq(x, y)
+        case o:
+          False{}
+    case SeBAnd{x1, x2}:
+      match b:
+        case SeBAnd{y1, y2}:
+          Bool.and(SeBexpr.is_eq(x1, y1), SeBexpr.is_eq(x2, y2))
+        case o:
+          False{}
+    case SeBOr{x1, x2}:
+      match b:
+        case SeBOr{y1, y2}:
+          Bool.and(SeBexpr.is_eq(x1, y1), SeBexpr.is_eq(x2, y2))
+        case o:
+          False{}
+    case SeBXor{x1, x2}:
+      match b:
+        case SeBXor{y1, y2}:
+          Bool.and(SeBexpr.is_eq(x1, y1), SeBexpr.is_eq(x2, y2))
+        case o:
+          False{}
+    case SeBEq{x1, x2}:
+      match b:
+        case SeBEq{y1, y2}:
+          Bool.and(SeBexpr.is_eq(x1, y1), SeBexpr.is_eq(x2, y2))
+        case o:
+          False{}
+    case SeBNeq{x1, x2}:
+      match b:
+        case SeBNeq{y1, y2}:
+          Bool.and(SeBexpr.is_eq(x1, y1), SeBexpr.is_eq(x2, y2))
+        case o:
+          False{}
 
 # Accessors
 

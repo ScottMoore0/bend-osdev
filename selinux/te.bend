@@ -276,3 +276,157 @@ def SeTe.role_trans.go(rs: List<&2, P.SeRoleTrans>, +r: Nat, +tt: Nat, +c: Nat) 
 # the role a roletransition gives role r on target type tt, class c
 def SeTe.role_trans(+p: P.SePolicy, +r: Nat, +tt: Nat, +c: Nat) -> Maybe<&2, Nat>:
   SeTe.role_trans.go(P.SeRules.roletrans(P.SePolicy.rules(p)), r, tt, c)
+
+# Conflicting transitions: the load-time check secilc makes. Two type rules
+# conflict when they are of the same kind, match some source, target and
+# class in common, name the same object (or neither names one), and give
+# different types; two roletransition rules conflict when they match some
+# role, target type and class in common and give different roles. Rules in
+# the two branches of one condition are never in force together, so they
+# do not conflict; a condition written (not e) is taken as e with its
+# branches swapped. Any other two rules can be in force together, whatever
+# their conditions say, and are compared.
+
+# where a type rule sits: unconditional, or in one branch of a condition
+type SeTyPlace is Data:
+  SeTyUncond{}
+  SeTyIn{cond: P.SeBexpr, branch: Bool}
+
+type SeTyPlaced is Data:
+  SeTyPlaced{place: SeTyPlace, rule: P.SeTyRule}
+
+# the pair of rules that conflict
+type SeTransConflict is Data:
+  SeTyClash{first: P.SeTyRule, second: P.SeTyRule}
+  SeRoleClash{first: P.SeRoleTrans, second: P.SeRoleTrans}
+
+def SeTyPlace.of(e: P.SeBexpr, branch: Bool) -> SeTyPlace:
+  match e:
+    case P.SeBNot{a}:
+      SeTyIn{a, Bool.not(branch)}
+    case other:
+      SeTyIn{other, branch}
+
+# the two places are the two branches of one condition
+def SeTyPlace.exclusive(a: SeTyPlace, b: SeTyPlace) -> Bool:
+  match a:
+    case SeTyUncond{}:
+      False{}
+    case SeTyIn{ea, ba}:
+      match b:
+        case SeTyUncond{}:
+          False{}
+        case SeTyIn{eb, bb}:
+          Bool.and(P.SeBexpr.is_eq(ea, eb), Bool.xor(ba, bb))
+
+def SeTe.name_eq(a: Maybe<&2, String>, b: Maybe<&2, String>) -> Bool:
+  match a:
+    case None{}:
+      match b:
+        case None{}:
+          True{}
+        case Some{y}:
+          False{}
+    case Some{x}:
+      match b:
+        case None{}:
+          False{}
+        case Some{y}:
+          String.eq(x, y)
+
+# some source s and target t match both rules
+def SeTe.ty_meet(a: P.SeTyRule, b: P.SeTyRule) -> Bool:
+  match a:
+    case P.SeTyRule{ak, +asrc, +atgt, +aself, acls, an, ar}:
+      match b:
+        case P.SeTyRule{bk, +bsrc, +btgt, +bself, bcls, bn, br}:
+          Bool.or(SeTe.meet_tt(asrc, bsrc, atgt, btgt), Bool.or(SeTe.meet_ts(asrc, bsrc, atgt, bself), Bool.or(SeTe.meet_st(asrc, bsrc, btgt, aself), SeTe.meet_ss(asrc, bsrc, aself, bself))))
+
+# the two type rules give different types for the same query
+def SeTe.ty_clash(+a: P.SeTyRule, +b: P.SeTyRule) -> Bool:
+  Bool.and(P.SeTyKind.is_eq(P.SeTyRule.kind(a), P.SeTyRule.kind(b)), Bool.and(Nat.is_eq(P.SeTyRule.cls(a), P.SeTyRule.cls(b)), Bool.and(SeTe.name_eq(P.SeTyRule.name(a), P.SeTyRule.name(b)), Bool.and(Bool.not(Nat.is_eq(P.SeTyRule.result(a), P.SeTyRule.result(b))), SeTe.ty_meet(a, b)))))
+
+def SeTe.placed_clash(x: SeTyPlaced, y: SeTyPlaced) -> Bool:
+  match x:
+    case SeTyPlaced{px, rx}:
+      match y:
+        case SeTyPlaced{py, ry}:
+          Bool.and(Bool.not(SeTyPlace.exclusive(px, py)), SeTe.ty_clash(rx, ry))
+
+def SeTyPlaced.rule(x: SeTyPlaced) -> P.SeTyRule:
+  match x:
+    case SeTyPlaced{_, r}:
+      r
+
+def SeTe.place_all(rs: List<&2, P.SeTyRule>, +pl: SeTyPlace) -> List<&2, SeTyPlaced>:
+  match rs:
+    case Nil{}:
+      Nil{}
+    case Con{r, t}:
+      Con{SeTyPlaced{pl, r}, SeTe.place_all(t, pl)}
+
+def SeTe.placed_conds(cs: List<&2, P.SeCond>) -> List<&2, SeTyPlaced>:
+  match cs:
+    case Nil{}:
+      Nil{}
+    case Con{cd, t}:
+      match cd:
+        case P.SeCond{+e, tav, tty, fav, fty}:
+          List.append(&2, SeTyPlaced, List.append(&2, SeTyPlaced, SeTe.place_all(tty, SeTyPlace.of(e, True{})), SeTe.place_all(fty, SeTyPlace.of(e, False{}))), SeTe.placed_conds(t))
+
+# every type rule, unconditional or in a branch of a booleanif, with its place
+def SeTe.placed_ty(+p: P.SePolicy) -> List<&2, SeTyPlaced>:
+  List.append(&2, SeTyPlaced, SeTe.place_all(P.SePolicy.ty(p), SeTyUncond{}), SeTe.placed_conds(P.SePolicy.conds(p)))
+
+def SeTe.trans.hit(b: Bool, c: SeTransConflict, rest: Maybe<&2, SeTransConflict>) -> Maybe<&2, SeTransConflict>:
+  match b:
+    case True{}:
+      Some{c}
+    case False{}:
+      rest
+
+def SeTe.first_ty.one(ys: List<&2, SeTyPlaced>, +x: SeTyPlaced) -> Maybe<&2, SeTransConflict>:
+  match ys:
+    case Nil{}:
+      None{}
+    case Con{+y, t}:
+      SeTe.trans.hit(SeTe.placed_clash(x, y), SeTyClash{SeTyPlaced.rule(x), SeTyPlaced.rule(y)}, SeTe.first_ty.one(t, x))
+
+def SeTe.first_ty.go(xs: List<&2, SeTyPlaced>) -> Maybe<&2, SeTransConflict>:
+  match xs:
+    case Nil{}:
+      None{}
+    case Con{+x, +t}:
+      Maybe.or(&2, SeTransConflict, SeTe.first_ty.one(t, x), SeTe.first_ty.go(t))
+
+# the two roletransition rules give different roles for the same query
+def SeTe.role_clash(a: P.SeRoleTrans, b: P.SeRoleTrans) -> Bool:
+  match a:
+    case P.SeRoleTrans{asrc, atgt, acls, ares}:
+      match b:
+        case P.SeRoleTrans{bsrc, btgt, bcls, bres}:
+          Bool.and(Bits.SeBits.any(Bits.SeBits.and(asrc, bsrc)), Bool.and(Bits.SeBits.any(Bits.SeBits.and(atgt, btgt)), Bool.and(Nat.is_eq(acls, bcls), Bool.not(Nat.is_eq(ares, bres)))))
+
+def SeTe.first_role.one(ys: List<&2, P.SeRoleTrans>, +x: P.SeRoleTrans) -> Maybe<&2, SeTransConflict>:
+  match ys:
+    case Nil{}:
+      None{}
+    case Con{+y, t}:
+      SeTe.trans.hit(SeTe.role_clash(x, y), SeRoleClash{x, y}, SeTe.first_role.one(t, x))
+
+def SeTe.first_role.go(xs: List<&2, P.SeRoleTrans>) -> Maybe<&2, SeTransConflict>:
+  match xs:
+    case Nil{}:
+      None{}
+    case Con{+x, +t}:
+      Maybe.or(&2, SeTransConflict, SeTe.first_role.one(t, x), SeTe.first_role.go(t))
+
+# the first two type rules, else the first two roletransition rules, that
+# conflict, if any (for the load-time error)
+def SeTe.first_trans_conflict(+p: P.SePolicy) -> Maybe<&2, SeTransConflict>:
+  Maybe.or(&2, SeTransConflict, SeTe.first_ty.go(SeTe.placed_ty(p)), SeTe.first_role.go(P.SeRules.roletrans(P.SePolicy.rules(p))))
+
+# no two type rules and no two roletransition rules conflict: the check
+# made at load time, after the neverallow check
+def SeTe.transitions_ok(+p: P.SePolicy) -> Bool:
+  Maybe.is_none(&2, SeTransConflict, SeTe.first_trans_conflict(p))

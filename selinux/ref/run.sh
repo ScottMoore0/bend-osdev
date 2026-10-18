@@ -3,7 +3,9 @@
 # package and through the independent Python model in gen.py. When secilc is
 # installed (apt package secilc), each generated policy is also compiled by
 # it, as a black box: it must accept exactly the policies the package loads
-# (it refuses the others for their neverallow violation). Exit 77 skips.
+# (it refuses the others for the reason the package gives: a misused
+# constraint operand, a name transition in a booleanif, a neverallow
+# violation, conflicting transitions). Exit 77 skips.
 set -uo pipefail
 cd "$(dirname "$0")"
 command -v python3 > /dev/null || { echo "python3 missing"; exit 77; }

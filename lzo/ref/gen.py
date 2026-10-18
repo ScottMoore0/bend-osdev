@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Differential test cases for bend-osdev-lzo.
 
-No LZO implementation is installed (no lzop tool, no Python lzo module), so
-this file holds an independent one, written here from the same documents as
-the package and from nothing else (no LZO source code was read):
+No LZO implementation was installed when this was written (no lzop tool,
+no Python lzo module), so this file holds an independent one, written here
+from the same documents as the package and from nothing else (no LZO source
+code was read):
   * Documentation/staging/lzo.rst from the Linux kernel ("LZO stream format
     as understood by Linux's LZO decompressor"), for the LZO1X stream;
   * the lzop file-format notes, for the .lzo container.
@@ -371,8 +372,11 @@ def tool(args, data):
         return subprocess.run(["lzop", "-c"] + args + [f], check=True, capture_output=True).stdout
 
 def tool_decode(src):
+    """The tool's content of the file src, or its complaint."""
     r = subprocess.run(["lzop", "-dc"], input=src, capture_output=True)
-    return r.stdout if r.returncode == 0 else None
+    if r.returncode == 0:
+        return r.stdout
+    return "lzop -d: " + (r.stderr.decode(errors="replace").strip().split("\n") or [""])[0]
 
 # Inputs
 
@@ -565,6 +569,7 @@ def verify(here, outfile):
         return 1
     bad, tooled, smaller = 0, 0, 0
     for k, (c, g) in enumerate(zip(cases, got)):
+        why = None
         data = bytes.fromhex(c["data"])
         comp = bytes.fromhex(g[1]) if len(g) > 1 else b""
         if c["kind"] == "stream":
@@ -575,11 +580,14 @@ def verify(here, outfile):
         else:
             ok = lzop_read(comp, len(data)) == data
             if TOOL:
-                ok = ok and tool_decode(comp) == data
+                got_tool = tool_decode(comp)
+                if isinstance(got_tool, str):
+                    why = got_tool
+                ok = ok and got_tool == data
                 tooled += 1
         if not ok:
             bad += 1
-            print("case %d (%s) does not decode back" % (k, c["kind"]))
+            print("case %d (%s) does not decode back%s" % (k, c["kind"], (" (%s)" % why) if why else ""))
     if bad:
         return 1
     print("%d compressed (%d through lzop -d; %d repetitive inputs below a quarter of their size)" % (len(cases), tooled, smaller))

@@ -2937,5 +2937,8 @@ def Laws.lzop_write_empty():
 def Laws.lzop_write_every_checksum():
   {==}
 
+def Laws.lzop_write_compressed_checksums():
+  {==}
+
 def Laws.lzop_stream_round_trip():
   {==}
