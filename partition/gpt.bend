@@ -391,19 +391,39 @@ def Gpt.entries_list(es: List<&2, GptEntry>) -> List<&2, U32>:
 def Gpt.entries_encode(es: List<&2, GptEntry>) -> B.Octets:
   B.Octets.of_list(Gpt.entries_list(es))
 
-def Gpt.entries.cons(r: Result<&2, &2, GptError, GptEntry>, rest: List<&2, GptEntry>) -> List<&2, GptEntry>:
+def Gpt.entries.rev(es: List<&2, GptEntry>, acc: List<&2, GptEntry>) -> List<&2, GptEntry>:
+  match es:
+    case Nil{}:
+      acc
+    case Con{e, t}:
+      Gpt.entries.rev(t, Con{e, acc})
+
+# an entry pushed onto the entries so far (reversed); once one fails to
+# decode, Fail holds the entries before it, in order: the answer
+def Gpt.entries.push(r: Result<&2, &2, GptError, GptEntry>, acc: List<&2, GptEntry>) -> Result<&2, &2, List<&2, GptEntry>, List<&2, GptEntry>>:
   match r:
     case Done{e}:
-      Con{e, rest}
+      Done{Con{e, acc}}
     case Fail{e}:
-      Nil{}
+      Fail{Gpt.entries.rev(acc, Nil{})}
 
-def Gpt.entries.go(n: Nat, +size: Nat, +o: B.Octets) -> List<&2, GptEntry>:
+# n entries size bytes apart, each decoded from its first 128 bytes (so that
+# only those become a list), up to the first that does not decode;
+# tail-recursive, so an array can have any number of entries
+def Gpt.entries.go(n: Nat, st: Result<&2, &2, List<&2, GptEntry>, List<&2, GptEntry>>, +size: Nat, +o: B.Octets) -> List<&2, GptEntry>:
   match n:
     case 0n:
-      Nil{}
+      match st:
+        case Done{acc}:
+          Gpt.entries.rev(acc, Nil{})
+        case Fail{es}:
+          es
     case 1n+p:
-      Gpt.entries.cons(GptEntry.decode(o), Gpt.entries.go(p, size, B.Octets.drop(size, o)))
+      match st:
+        case Done{acc}:
+          Gpt.entries.go(p, Gpt.entries.push(GptEntry.decode(B.Octets.take(128n, o)), acc), size, B.Octets.drop(size, o))
+        case Fail{es}:
+          es
 
 def Gpt.entries.size(ok: Bool, +h: GptHeader, +o: B.Octets) -> Result<&2, &2, GptError, List<&2, GptEntry>>:
   match ok:
@@ -411,7 +431,7 @@ def Gpt.entries.size(ok: Bool, +h: GptHeader, +o: B.Octets) -> Result<&2, &2, Gp
       match h:
         case GptHeader{rev, size, crc, my, alt, first, last, guid, elba, count, +esize, ecrc}:
           +n = U32.min(count, U32.div(U32.from_nat(B.Octets.len(o)), esize))
-          Done{Gpt.entries.go(U32.to_nat(n), U32.to_nat(esize), o)}
+          Done{Gpt.entries.go(U32.to_nat(n), Done{Nil{}}, U32.to_nat(esize), o)}
     case False{}:
       Fail{GptBadEntrySize{}}
 

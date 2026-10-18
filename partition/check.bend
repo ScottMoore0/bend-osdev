@@ -90,7 +90,52 @@ def from_scratch(a: Result<&2, &2, G.GptError, G.GptEntry>, b: Result<&2, &2, G.
     case Fail{e}:
       "error"
 
+# A larger table, as a regression test for long inputs: 384 entries (a
+# 48 KB array). Entry i: type GUID 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+# (Linux data), a unique GUID with i in its first two bytes, LBAs 2048 + 64i
+# to 2111 + 64i, the name "part" and i's last digit.
+def big.entry(+i: U32) -> G.GptEntry:
+  G.GptEntry{U.Uuid.make(15, 198, 61, 175, 132, 131, 71, 114, 142, 121, 61, 105, 216, 71, 125, 228), U.Uuid.make(U32.and(i, 255), U32.shrn(i, 8n), 1, 2, 3, 4, 69, 6, 135, 8, 9, 10, 11, 12, 13, 14), W.W64.from_u32(U32.add(2048, U32.mul(64, i))), W.W64.from_u32(U32.add(2111, U32.mul(64, i))), W.W64.zero(), [112, 97, 114, 116, U32.add(48, U32.mod(i, 10))]}
+
+def big.entries(n: Nat, +i: U32, acc: List<&2, G.GptEntry>) -> List<&2, G.GptEntry>:
+  match n:
+    case 0n:
+      acc
+    case 1n+p:
+      big.entries(p, U32.sub(i, 1), Con{big.entry(i), acc})
+
+def big.used(b: Bool, n: Nat) -> Nat:
+  match b:
+    case True{}:
+      1n+n
+    case False{}:
+      n
+
+def big.tally(es: List<&2, G.GptEntry>, n: Nat, used: Nat, last: String) -> String:
+  match es:
+    case Nil{}:
+      Nat.show(n) ++ " entries, " ++ Nat.show(used) ++ " used, last '" ++ last ++ "'"
+    case Con{+e, t}:
+      big.tally(t, 1n+n, big.used(G.GptEntry.is_used(e), used), G.GptEntry.name_text(e))
+
+def big.show_entries(r: Result<&2, &2, G.GptError, List<&2, G.GptEntry>>) -> String:
+  match r:
+    case Done{es}:
+      big.tally(es, 0n, 0n, "")
+    case Fail{e}:
+      "error: " ++ G.GptError.show(e)
+
+def big.check(r: Result<&2, &2, G.GptError, G.GptHeader>, +arr: B.Octets) -> String:
+  match r:
+    case Done{+h}:
+      "entries CRC " ++ Bool.show(G.Gpt.entries_crc_ok(h, arr)) ++ ", " ++ big.show_entries(G.Gpt.entries(h, arr))
+    case Fail{e}:
+      "error: " ++ G.GptError.show(e)
+
 def main() -> IO(Unit):
+  +big_es = big.entries(384n, 383, Nil{})
+  +big_arr = G.Gpt.entries_encode(big_es)
+  +big_hdr = G.Gpt.build(G.GptHeader.standard(G.GptLayout{512, 384}, W.W64.from_u32(1048576), U.Uuid.make(148, 32, 48, 27, 137, 177, 64, 179, 170, 235, 143, 149, 202, 132, 158, 228)), big_es)
   do IO<Unit>:
     IO.print(show_hdr(G.Gpt.parse_header(hdr())))
     IO.print(show_hdr(G.Gpt.validate_header(hdr())))
@@ -108,6 +153,7 @@ def main() -> IO(Unit):
     IO.print(P.PartitionScheme.show(P.Partition.detect(pmbr(), hdr())))
     IO.print(P.PartitionScheme.show(P.Partition.detect(mbr(), hdr())))
     IO.print(P.PartitionScheme.show(P.Partition.detect(pmbr(), B.Octets.zeros(512n))))
+    IO.print("big " ++ Nat.show(B.Octets.len(big_arr)) ++ " bytes, CRC " ++ U32.show(C.crc32(big_arr)) ++ "; " ++ big.check(G.Gpt.validate_header(big_hdr), big_arr))
 
 #|65536 92 3335760765 1 8191 34 8158 9420301b-89b1-40b3-aaeb-8f95ca849ee4 2 128 128 2459342387
 #|65536 92 3335760765 1 8191 34 8158 9420301b-89b1-40b3-aaeb-8f95ca849ee4 2 128 128 2459342387
@@ -125,3 +171,4 @@ def main() -> IO(Unit):
 #|gpt
 #|mbr
 #|bad gpt: no EFI PART signature
+#|big 49152 bytes, CRC 2414624829; entries CRC True, 384 entries, 384 used, last 'part3'
