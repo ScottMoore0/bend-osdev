@@ -44,6 +44,7 @@ GPL source was read.
 | [lz4](lz4/) | LZ4 block and frame compression and decompression |
 | [xz](xz/) | `.xz` decompression: LZMA2, delta, every check type, streaming |
 | [bzip2](bzip2/) | bzip2 compression and decompression, each stage (RLE, MTF, BWT, Huffman) usable alone |
+| [zstd](zstd/) | Zstandard (RFC 8878) decompression with dictionaries and streaming, and a compressor; FSE, Huffman and XXH64 usable alone |
 | [lzo](lzo/) | LZO1X compression and decompression, and the lzop container (clean-room, from documentation only) |
 | [ringbuf](ringbuf/) | A kfifo-style ring buffer, with a list reference model |
 | [idalloc](idalloc/) | IDR/IDA-style ID allocators |
