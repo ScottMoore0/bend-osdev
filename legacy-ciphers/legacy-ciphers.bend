@@ -1,12 +1,16 @@
 # bend-osdev-legacy-ciphers: the older block and stream ciphers a kernel's
 # crypto layer still carries (DES, 3DES, SM4, Camellia, Serpent, Twofish,
-# RC4), one file per cipher. This file holds what they share: the package's
-# error type, the 64-bit block, and word helpers.
+# ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt, RC4), one file per
+# cipher. This file holds what they share: the package's error type, the
+# 64-bit block, word helpers, tables, and Feistel rounds over any round
+# function.
 #
 # The 128-bit block ciphers (sm4.bend, camellia.bend, serpent.bend,
-# twofish.bend) work on cipher-modes' CmBlock, so they plug into every mode
-# there as the template arguments ~K, ~enc, ~dec. DES and 3DES have 64-bit
-# blocks: LcBlock64 below, and the 64-bit modes in modes64.bend.
+# twofish.bend, aria.bend, cast6.bend) work on cipher-modes' CmBlock, so they
+# plug into every mode there as the template arguments ~K, ~enc, ~dec. The
+# 64-bit ones (des.bend, tdes.bend, blowfish.bend, cast5.bend, tea.bend,
+# xtea.bend, fcrypt.bend) work on LcBlock64 below, and the 64-bit modes in
+# modes64.bend.
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
@@ -295,6 +299,68 @@ def lc.tab.get(d: Nat, t: LcTab, +i: U32) -> U32:
           v
         case LcNode{l, r}:
           lc.tab.get(p, lc.tab.pick(U32.is_eq(lc.bit(i, p), 1), l, r), i)
+
+# the bits of i (below 2^d) that pick its entry, most significant first
+def lc.tab.path(d: Nat, +i: U32) -> List<&2, Bool>:
+  match d:
+    case 0n:
+      Nil{}
+    case 1n+(+p):
+      Con{U32.is_eq(lc.bit(i, p), 1), lc.tab.path(p, i)}
+
+def lc.tab.set.go(t: LcTab, path: List<&2, Bool>, v: U32) -> LcTab:
+  match t:
+    case LcLeaf{w}:
+      LcLeaf{v}
+    case LcNode{l, r}:
+      match path:
+        case Nil{}:
+          LcNode{l, r}
+        case Con{b, rest}:
+          match b:
+            case True{}:
+              LcNode{l, lc.tab.set.go(r, rest, v)}
+            case False{}:
+              LcNode{lc.tab.set.go(l, rest, v), r}
+
+# entry i of a table of depth d set to v (i below 2^d)
+def lc.tab.set(d: Nat, t: LcTab, +i: U32, v: U32) -> LcTab:
+  lc.tab.set.go(t, lc.tab.path(d, i), v)
+
+# Feistel rounds over any round function f (CAST-128, FCrypt): the round with
+# round key k is (L, R) -> (R, L xor f(k, R)), and it is undone by
+# (L', R') -> (R' xor f(k, L'), L') whatever f is, so a list of rounds is
+# undone by its rounds undone in reverse order (PROOF.bend: fe_*)
+
+def lc.fe.step(~RK: Data, ~f: RK -> U32 -> U32, k: RK, b: LcBlock64) -> LcBlock64:
+  match b:
+    case LcBlock64{l, +r}:
+      LcBlock64{r, U32.xor(l, f(k, r))}
+
+def lc.fe.unstep(~RK: Data, ~f: RK -> U32 -> U32, k: RK, b: LcBlock64) -> LcBlock64:
+  match b:
+    case LcBlock64{+l, r}:
+      LcBlock64{U32.xor(r, f(k, l)), l}
+
+def lc.fe.run(~RK: Data, ~f: RK -> U32 -> U32, ks: List<&2, RK>, b: LcBlock64) -> LcBlock64:
+  match ks:
+    case Nil{}:
+      b
+    case Con{k, t}:
+      lc.fe.run(~RK, ~f, t, lc.fe.step(~RK, ~f, k, b))
+
+def lc.fe.unrun(~RK: Data, ~f: RK -> U32 -> U32, ks: List<&2, RK>, b: LcBlock64) -> LcBlock64:
+  match ks:
+    case Nil{}:
+      b
+    case Con{k, t}:
+      lc.fe.unstep(~RK, ~f, k, lc.fe.unrun(~RK, ~f, t, b))
+
+# the two halves exchanged
+def lc.swap(b: LcBlock64) -> LcBlock64:
+  match b:
+    case LcBlock64{h, l}:
+      LcBlock64{l, h}
 
 # Blocks as byte strings (built on bits, so the round trip is provable)
 

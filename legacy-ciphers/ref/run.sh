@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Differential test: every cipher against implementations outside this
-# package (Python's cryptography where it has the cipher, and the
-# specification models in model.py), on random keys, blocks and messages
+# package (Python's cryptography where it has the cipher, the openssl
+# command for ARIA, and the specification models in model.py), on random keys, blocks and messages
 # (see gen.py). Exit 77 skips (no python3).
 set -uo pipefail
 cd "$(dirname "$0")"
