@@ -79,6 +79,7 @@ GPL source was read.
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
 | [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, ECB, CBC and CTR over any instance; the existing ciphers, MACs, AEADs and CRCs, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
 | [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, SHA3-256 conditioning through crypto's hash interface |
+| [jitterclock](jitterclock/) | A monotonic nanosecond clock as a library effect (C and JavaScript sides), timing a hash loop to feed jitter |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 
