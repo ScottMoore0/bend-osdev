@@ -41,6 +41,8 @@ Bits are numbered from the least significant, 0 to 31 (63).
 | `bitmap.bend` | bitmaps: `bitmap.*`, on the bit sequences of `bitseq.*` |
 | `bsearch.bend` | binary search: the list reference and the `Array<U32>` implementation |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `proof_u32.bend` | lemmas `PROOF.bend` uses: `U32` subtraction, addition, increment and halving as `Nat` arithmetic when nothing wraps (prefixed `uq.`) |
+| `proof_bsearch.bend` | lemmas `PROOF.bend` uses: the `Array` search on a reflected array is the same search on Data, and the `Nat` and list facts its proof rests on (prefixed `bq.`) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
 
@@ -74,9 +76,10 @@ Bits are numbered from the least significant, 0 to 31 (63).
 * **Reference and fast binary search.** `bsearch.lower_bound` and
   `bsearch.find` are the reference (a scan, proved for every input);
   `bsearch.array_lower_bound` and `bsearch.array_find` are the fast
-  implementation (O(log n) array reads), held to the reference by the vectors
-  and by the differential test. Another fast implementation can be added
-  beside them the same way.
+  implementation (O(log n) array reads), held to the reference by laws for
+  every sorted array (through bend-osdev-array's laws), by the vectors and by
+  the differential test. Another fast implementation can be added beside
+  them the same way.
 * **Bitmaps of other word sizes.** `bitseq.next` works on any `List<&2,
   Bool>`; `bitmap.bits` is the one place that unpacks 32-bit words.
 
@@ -100,6 +103,17 @@ Bits are numbered from the least significant, 0 to 31 (63).
   element from it on is not below the key; `find` answers only an index that
   holds the key, and, on a sorted list, `None` only when no element is the
   key;
+* **the `Array<U32>` binary search against the reference** (draft laws, not
+  yet reviewed by the maintainer), for every array `a` that is a perfect
+  tree of depth `d < 32` (as `Array.new` and `Array.set` build), every
+  `n <= 2^d` whose first `n` slots are sorted (in index order,
+  bend-osdev-array's `Arrays.leaves`) and every key:
+  `array_lower_bound_list`: the value of `array_lower_bound(a, n, key)` is
+  `lower_bound(take(leaves(a), n), key)`; `array_find_list`: `array_find`
+  answers what `find` answers on that prefix (`algo_index_nat`, defined in
+  `LAWS.bend`, reads its `Maybe<&2, U32>` as a `Maybe<&2, Nat>`); and
+  `array_lower_bound_same`, `array_find_same`: both hand the array back (for
+  every perfect array of depth below 32, sorted or not);
 * **vectors:** edge cases of each function (zero, all ones, the top bit, the
   halves of a `W64`, a bitmap search past its size), and the `Array` search
   on a small sorted array.
@@ -108,18 +122,31 @@ Bits are numbered from the least significant, 0 to 31 (63).
 and 5) with a `j` below and above, and `None` (on 0), for `U32` and
 `W64`; `next_set` and `next_clear` answering below the size, with a `j`
 between the start and the answer; a sorted list with elements before and
-from its lower bound, and `find` answering `Some` and `None`.
+from its lower bound, and `find` answering `Some` and `None`; an array of
+depth 3 whose first 5 slots are sorted (`wit_array_bsearch`, the hypotheses
+of the `Array` search laws).
 
 The proofs work on the bits of a `Word(n)` by induction on the width, so one
 proof covers both widths. The binary search laws go through a proof that
 `U32`'s order is the order of its value as a `Nat`.
 
-**Not proved:** that the `Array<U32>` binary search agrees with the
-reference for every input. Its reads go through Base's `Array.get`, whose
-index arithmetic (a mask, and comparisons against the size, on a symbolic
-`U32`) does not compute on a symbolic index, and Base has no lemmas about
-`Array.get` and `Array.set` yet. It is checked by vectors and by the
-differential test instead.
+**How the `Array` search laws are proved.** The array is reflected once
+into `Arrays.of_list(d, l, 0)` for a Data list `l` (bend-osdev-array's
+`reflect`); by array's `of_list_get` each read of the search is a literal
+pair of the same array and the element of `l`, so the search is a search on
+Data (`bq.run`, `proof_bsearch.bend`) that hands the array back. Its indices
+are followed as `Nat`s: `mid = lo + (hi - lo) / 2` (`proof_u32.bend`: `U32`
+subtraction, halving and addition compute on the values when nothing
+wraps), and array's `index_of_u32` reads the slot of `mid`'s value. The
+invariant `lo <= lower_bound <= hi <= n` holds throughout (an element below
+the key sits before the lower bound, `lower_bound_below`, and on a sorted
+list one not below it sits from the lower bound on, `lower_bound_above`),
+and each halving at least halves `hi - lo`, so after the 33 halvings `lo` is
+the lower bound. Two limits shaped the statements: a literal `2^32` or
+`2^33` is never expanded (the checker would build it as a unary `Nat`), so
+"nothing wraps" is stated against another `U32`'s value; and `Array.get`
+consumes the array, so each law reflects it once and follows the search on
+Data.
 
 ## Tests
 
@@ -147,8 +174,15 @@ be proved for every word; it does not use hardware instructions. The bitmap
 search unpacks the words it reads into bits. The list reference is a linear
 scan; the `Array` search makes 33 halving steps.
 
+## Dependencies
+
+`bend-osdev-word64` (the `W64` bit search) and `bend-osdev-array` (the
+`Array` search laws state that the array is perfect and list its slots with
+array's `Arrays.is_perfect` and `Arrays.leaves`, and are proved through its
+laws).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 728 cases match, `scripts/deps.sh algo`
-ok.
+ok. The `Array` search laws are drafts, not yet reviewed by the maintainer.

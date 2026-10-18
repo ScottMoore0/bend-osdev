@@ -10,9 +10,9 @@
 #                                                  Array<U32>: a binary
 #                                                  search, O(log n) reads
 #
-# The two agree on the vectors in LAWS.bend and on the differential test in
-# ref/; a proof that they agree for every input needs lemmas about
-# Array.get that Base does not have yet (see the README).
+# LAWS.bend holds the two together for every perfect array whose searched
+# slots are sorted (proved through bend-osdev-array's laws), beside the
+# vectors and the differential test in ref/.
 import Base
 
 # Sorted: each element is at most the next
