@@ -8,6 +8,7 @@ import ./mem.bend as M
 import ./overlay.bend as O
 import ./filedev.bend as F
 import ./fileov.bend as FO
+import ./filerw.bend as R
 
 def path() -> String:
   "/tmp/bend-osdev-iodev-check.img"
@@ -159,6 +160,33 @@ def ov_opened(r: Result<&1, &1, F.FileDevError, O.IOOverlay<F.FileDev>>) -> IO(U
     case Fail{e}:
       IO.print(open_err(e))
 
+# the same file as a FileRW with the Base-only defaults (FileRW.base_*):
+# reads on demand, writes refused; ref/ runs FileRW on fileio's effects
+def rw_checks(d: R.FileRW) -> IO(Unit):
+  do IO<Unit>:
+    x : R.FileRW & Nat <- R.FileRW.block_count(d)
+    d : R.FileRW <- nsay(~R.FileRW, x)
+    r : R.FileRW & Result<&2, &2, D.DevError, B.Octets> <- R.FileRW.read_block(~R.FileRW.base_read_at, d, 2n)
+    d : R.FileRW <- say(~R.FileRW, r)
+    r : R.FileRW & Result<&2, &2, D.DevError, B.Octets> <- V.IODev.read_bytes(~R.FileRW, ~R.FileRW.block_size, ~R.FileRW.read_block(~R.FileRW.base_read_at), d, 2n, 7n)
+    d : R.FileRW <- say(~R.FileRW, r)
+    w : R.FileRW & Result<&2, &2, D.DevError, Unit> <- R.FileRW.write_block(~R.FileRW.base_write_at, d, 0n, B.Octets.of_string("WXYZ"))
+    d : R.FileRW <- usay(~R.FileRW, w)
+    w : R.FileRW & Result<&2, &2, D.DevError, Unit> <- R.FileRW.write_block(~R.FileRW.base_write_at, d, 0n, B.Octets.of_string("WXY"))
+    d : R.FileRW <- usay(~R.FileRW, w)
+    w : R.FileRW & Result<&2, &2, D.DevError, Unit> <- R.FileRW.write_block(~R.FileRW.base_write_at, d, 3n, B.Octets.of_string("WXYZ"))
+    d : R.FileRW <- usay(~R.FileRW, w)
+    w : R.FileRW & Result<&2, &2, D.DevError, Unit> <- R.FileRW.sync(~R.FileRW.base_sync, d)
+    d : R.FileRW <- usay(~R.FileRW, w)
+    R.FileRW.close(d)
+
+def rw_opened(r: Result<&1, &1, F.FileDevError, R.FileRW>) -> IO(Unit):
+  match r:
+    case Done{d}:
+      rw_checks(d)
+    case Fail{e}:
+      IO.print(open_err(e))
+
 def dev() -> D.MemDev:
   D.MemDev.of_octets(4n, B.Octets.of_string("abcdefghij"))
 
@@ -204,6 +232,12 @@ def main() -> IO(Unit):
     opened(saved_checks, e)
     g : Result<&1, &1, F.FileDevError, F.FileDev> <- F.FileDev.open("/nonexistent/bend-osdev-iodev.img", 4n)
     opened(saved_checks, g)
+    h : Result<&1, &1, F.FileDevError, R.FileRW> <- R.FileRW.open(~R.FileRW.base_open, ~R.FileRW.base_size, path(), 4n)
+    rw_opened(h)
+    h : Result<&1, &1, F.FileDevError, R.FileRW> <- R.FileRW.open(~R.FileRW.base_open, ~R.FileRW.base_size, path(), 0n)
+    rw_opened(h)
+    h : Result<&1, &1, F.FileDevError, R.FileRW> <- R.FileRW.open(~R.FileRW.base_open, ~R.FileRW.base_size, "/nonexistent/bend-osdev-iodev.img", 4n)
+    rw_opened(h)
 
 #|1 2 3 3
 #|3
@@ -229,5 +263,14 @@ def main() -> IO(Unit):
 #|ok
 #|2
 #|ok 61626358595a5768696a0000
+#|bad block size 0
+#|open failed 2
+#|3
+#|ok 696a0000
+#|ok 63646566676869
+#|failed 30
+#|bad length 4 3
+#|out of range 3
+#|ok
 #|bad block size 0
 #|open failed 2

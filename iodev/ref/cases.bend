@@ -2,11 +2,13 @@
 # file named in the ops file, the image is opened three ways, as a FileDev
 # under an overlay (read on demand from the file), as a MemDev (the whole
 # file read once, through IOMem) and, when its block size is a multiple of
-# 4, as an ImgDev (through IOImg); then every operation is run on each,
-# through the same IO helpers, and each answer printed.
+# 4, as an ImgDev (through IOImg); and a copy of it is opened as a FileRW
+# on bend-osdev-fileio's effects (read and written in place); then every
+# operation is run on each, through the same IO helpers, and each answer
+# printed.
 #
 # The ops file is little-endian u32 words: a count of images, then for each
-# the path's length and bytes, the block size, whether to run the ImgDev,
+# the path's length and bytes, the copy's path (the same way), the block size, whether to run the ImgDev,
 # the count of operations, and the operations:
 #   0 off len            read_bytes
 #   1 off len bytes...   write_bytes
@@ -20,6 +22,8 @@ import ../mem.bend as M
 import ../overlay.bend as O
 import ../filedev.bend as F
 import ../fileov.bend as FO
+import ../filerw.bend as R
+import ../../fileio/fileio.bend as FIO
 
 # Parsing
 
@@ -104,65 +108,70 @@ def img_write(use: Bool, img: I.ImgDev, +off: Nat, +data: B.Octets) -> IO(I.ImgD
       IO.pure(I.ImgDev, img)
 
 type CaseDevs is Type:
-  CaseDevs{ov: O.IOOverlay<F.FileDev>, mem: D.MemDev, img: I.ImgDev}
+  CaseDevs{ov: O.IOOverlay<F.FileDev>, mem: D.MemDev, img: I.ImgDev, rw: R.FileRW}
 
-def read_op(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, +off: Nat, +len: Nat) -> IO(CaseDevs):
+def read_op(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, +off: Nat, +len: Nat) -> IO(CaseDevs):
   do IO<CaseDevs>:
     r : O.IOOverlay<F.FileDev> & Result<&2, &2, D.DevError, B.Octets> <- V.IODev.read_bytes(~O.IOOverlay<F.FileDev>, ~FO.FileOv.block_size, ~FO.FileOv.read_block, ov, off, len)
     ov : O.IOOverlay<F.FileDev> <- say(~O.IOOverlay<F.FileDev>, "f ", r)
     m : D.MemDev & Result<&2, &2, D.DevError, B.Octets> <- V.IODev.read_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, mem, off, len)
     mem : D.MemDev <- say(~D.MemDev, "m ", m)
     img : I.ImgDev <- img_read(use, img, off, len)
-    return CaseDevs{ov, mem, img}
+    x : R.FileRW & Result<&2, &2, D.DevError, B.Octets> <- V.IODev.read_bytes(~R.FileRW, ~R.FileRW.block_size, ~R.FileRW.read_block(~FIO.FileIO.read_at), rw, off, len)
+    rw : R.FileRW <- say(~R.FileRW, "w ", x)
+    return CaseDevs{ov, mem, img, rw}
 
-def write_op(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, +off: Nat, +data: B.Octets) -> IO(CaseDevs):
+def write_op(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, +off: Nat, +data: B.Octets) -> IO(CaseDevs):
   do IO<CaseDevs>:
     r : O.IOOverlay<F.FileDev> & Result<&2, &2, D.DevError, Unit> <- V.IODev.write_bytes(~O.IOOverlay<F.FileDev>, ~FO.FileOv.block_size, ~FO.FileOv.read_block, ~FO.FileOv.write_block, ov, off, data)
     ov : O.IOOverlay<F.FileDev> <- usay(~O.IOOverlay<F.FileDev>, "f ", r)
     m : D.MemDev & Result<&2, &2, D.DevError, Unit> <- V.IODev.write_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, ~M.IOMem.write_block, mem, off, data)
     mem : D.MemDev <- usay(~D.MemDev, "m ", m)
     img : I.ImgDev <- img_write(use, img, off, data)
-    return CaseDevs{ov, mem, img}
+    x : R.FileRW & Result<&2, &2, D.DevError, Unit> <- V.IODev.write_bytes(~R.FileRW, ~R.FileRW.block_size, ~R.FileRW.read_block(~FIO.FileIO.read_at), ~R.FileRW.write_block(~FIO.FileIO.write_at), rw, off, data)
+    rw : R.FileRW <- usay(~R.FileRW, "w ", x)
+    return CaseDevs{ov, mem, img, rw}
 
-def save_op(ov: O.IOOverlay<F.FileDev>, mem: D.MemDev, img: I.ImgDev, path: String) -> IO(CaseDevs):
+def save_op(ov: O.IOOverlay<F.FileDev>, mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, path: String) -> IO(CaseDevs):
   do IO<CaseDevs>:
     r : O.IOOverlay<F.FileDev> & Result<&2, &2, D.DevError, Unit> <- FO.FileOv.save(ov, path)
     ov : O.IOOverlay<F.FileDev> <- usay(~O.IOOverlay<F.FileDev>, "s ", r)
-    return CaseDevs{ov, mem, img}
+    return CaseDevs{ov, mem, img, rw}
 
-def run_op.read(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, +off: Nat, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
+def run_op.read(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, +off: Nat, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
   (len, zs) = r
-  IO.bind(CaseDevs, List<&2, U32>, read_op(ov, mem, img, use, off, len), ds => k(ds, zs))
+  IO.bind(CaseDevs, List<&2, U32>, read_op(ov, mem, img, rw, use, off, len), ds => k(ds, zs))
 
-def run_op.write(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, +off: Nat, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
+def run_op.write(ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, +off: Nat, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
   (+len, +zs) = r
-  IO.bind(CaseDevs, List<&2, U32>, write_op(ov, mem, img, use, off, B.Octets.of_list(B.take.fast(len, zs))), ds => k(ds, B.drop(len, zs)))
+  IO.bind(CaseDevs, List<&2, U32>, write_op(ov, mem, img, rw, use, off, B.Octets.of_list(B.take.fast(len, zs))), ds => k(ds, B.drop(len, zs)))
 
-def run_op.pick(rd: Bool, wr: Bool, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, +off: Nat, +ys: List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
+def run_op.pick(rd: Bool, wr: Bool, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, +off: Nat, +ys: List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
   match rd wr:
     case True{} _:
-      run_op.read(ov, mem, img, use, off, nat(ys), k)
+      run_op.read(ov, mem, img, rw, use, off, nat(ys), k)
     case False{} True{}:
-      run_op.write(ov, mem, img, use, off, nat(ys), k)
+      run_op.write(ov, mem, img, rw, use, off, nat(ys), k)
     case False{} False{}:
-      IO.bind(CaseDevs, List<&2, U32>, save_op(ov, mem, img, B.to_string.fast(B.take.fast(off, ys))), ds => k(ds, B.drop(off, ys)))
+      IO.bind(CaseDevs, List<&2, U32>, save_op(ov, mem, img, rw, B.to_string.fast(B.take.fast(off, ys))), ds => k(ds, B.drop(off, ys)))
 
-def run_op.go(+kind: U32, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
+def run_op.go(+kind: U32, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, r: Nat & List<&2, U32>, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
   (+off, ys) = r
-  run_op.pick(U32.is_eq(kind, 0), U32.is_eq(kind, 1), ov, mem, img, use, off, ys, k)
+  run_op.pick(U32.is_eq(kind, 0), U32.is_eq(kind, 1), ov, mem, img, rw, use, off, ys, k)
 
-def run_op(r: U32 & List<&2, U32>, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, +use: Bool, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
+def run_op(r: U32 & List<&2, U32>, ov: O.IOOverlay<F.FileDev>, +mem: D.MemDev, img: I.ImgDev, rw: R.FileRW, +use: Bool, k: CaseDevs -> List<&2, U32> -> IO(List<&2, U32>)) -> IO(List<&2, U32>):
   (+kind, xs) = r
-  run_op.go(kind, ov, mem, img, use, nat(xs), k)
+  run_op.go(kind, ov, mem, img, rw, use, nat(xs), k)
 
 def run_ops(n: Nat, ds: CaseDevs, +use: Bool, xs: List<&2, U32>) -> IO(List<&2, U32>):
   match n ds:
-    case 0n CaseDevs{ov, mem, img}:
+    case 0n CaseDevs{ov, mem, img, rw}:
       do IO<List<&2, U32>>:
         FO.FileOv.close(ov)
+        R.FileRW.close(rw)
         return xs
-    case 1n+p CaseDevs{ov, mem, img}:
-      run_op(word(xs), ov, mem, img, use, ds2 => zs => run_ops(p, ds2, use, zs))
+    case 1n+p CaseDevs{ov, mem, img, rw}:
+      run_op(word(xs), ov, mem, img, rw, use, ds2 => zs => run_ops(p, ds2, use, zs))
 
 # The whole file, for the MemDev and ImgDev twins
 
@@ -191,42 +200,51 @@ def img_of(use: Bool, +bs: Nat, o: B.Octets) -> I.ImgDev:
     case False{}:
       I.ImgDev.blank(1n, 0n)
 
-def section.opened(r: Result<&1, &1, F.FileDevError, O.IOOverlay<F.FileDev>>, +o: B.Octets, +bs: Nat, +use: Bool, +nops: Nat, xs: List<&2, U32>) -> IO(List<&2, U32>):
-  match r:
-    case Done{ov}:
-      run_ops(nops, CaseDevs{ov, D.MemDev.of_octets(bs, o), img_of(use, bs, o)}, use, xs)
-    case Fail{e}:
+def section.opened(r: Result<&1, &1, F.FileDevError, O.IOOverlay<F.FileDev>>, q: Result<&1, &1, F.FileDevError, R.FileRW>, +o: B.Octets, +bs: Nat, +use: Bool, +nops: Nat, xs: List<&2, U32>) -> IO(List<&2, U32>):
+  match r q:
+    case Done{ov} Done{rw}:
+      run_ops(nops, CaseDevs{ov, D.MemDev.of_octets(bs, o), img_of(use, bs, o), rw}, use, xs)
+    case Fail{e} _:
       do IO<List<&2, U32>>:
         IO.print(open_err(e))
         return Nil{}
+    case Done{ov} Fail{e}:
+      do IO<List<&2, U32>>:
+        IO.print("w " ++ open_err(e))
+        return Nil{}
 
 type CaseHead is Data:
-  CaseHead{path: String, bs: Nat, use: Bool, nops: Nat, rest: List<&2, U32>}
+  CaseHead{path: String, rw: String, bs: Nat, use: Bool, nops: Nat, rest: List<&2, U32>}
 
-def head.nops(+path: String, +bs: Nat, +use: Bool, r: Nat & List<&2, U32>) -> CaseHead:
+def head.nops(+path: String, +rw: String, +bs: Nat, +use: Bool, r: Nat & List<&2, U32>) -> CaseHead:
   (n, xs) = r
-  CaseHead{path, bs, use, n, xs}
+  CaseHead{path, rw, bs, use, n, xs}
 
-def head.use(+path: String, +bs: Nat, r: U32 & List<&2, U32>) -> CaseHead:
+def head.use(+path: String, +rw: String, +bs: Nat, r: U32 & List<&2, U32>) -> CaseHead:
   (u, xs) = r
-  head.nops(path, bs, U32.is_eq(u, 1), nat(xs))
+  head.nops(path, rw, bs, U32.is_eq(u, 1), nat(xs))
 
-def head.bs(+path: String, r: Nat & List<&2, U32>) -> CaseHead:
+def head.bs(+path: String, +rw: String, r: Nat & List<&2, U32>) -> CaseHead:
   (bs, xs) = r
-  head.use(path, bs, word(xs))
+  head.use(path, rw, bs, word(xs))
+
+def head.rw(+path: String, r: Nat & List<&2, U32>) -> CaseHead:
+  (+plen, +ys) = r
+  head.bs(path, B.to_string.fast(B.take.fast(plen, ys)), nat(B.drop(plen, ys)))
 
 def head.path(r: Nat & List<&2, U32>) -> CaseHead:
   (+plen, +ys) = r
-  head.bs(B.to_string.fast(B.take.fast(plen, ys)), nat(B.drop(plen, ys)))
+  head.rw(B.to_string.fast(B.take.fast(plen, ys)), nat(B.drop(plen, ys)))
 
 def section.go(h: CaseHead) -> IO(List<&2, U32>):
   match h:
-    case CaseHead{+path, +bs, +use, +nops, vs}:
+    case CaseHead{+path, rw, +bs, +use, +nops, vs}:
       do IO<List<&2, U32>>:
         IO.print("image " ++ path ++ " " ++ Nat.show(bs))
         o : B.Octets <- whole(path)
         r : Result<&1, &1, F.FileDevError, O.IOOverlay<F.FileDev>> <- FO.FileOv.open(path, bs)
-        section.opened(r, o, bs, use, nops, vs)
+        q : Result<&1, &1, F.FileDevError, R.FileRW> <- R.FileRW.open(~FIO.FileIO.open_rw, ~FIO.FileIO.size, rw, bs)
+        section.opened(r, q, o, bs, use, nops, vs)
 
 def section(xs: List<&2, U32>) -> IO(List<&2, U32>):
   section.go(head.path(nat(xs)))
