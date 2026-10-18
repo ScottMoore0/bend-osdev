@@ -317,6 +317,14 @@ needs the apt package `device-tree-compiler`.
 
 ## Speed and size
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 The package works on `Octets`, and has no length limit of its own: every
 loop over a blob's bytes, its tokens, its strings block, a property's value
 or a list of strings or cells is a tail call (bytes' `Octets` operations and

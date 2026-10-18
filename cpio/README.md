@@ -133,6 +133,14 @@ checked by hand against cpio(5).
 
 ## Sizes
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 Every loop over an archive's bytes or entries is a tail call (Bend 2.0.37's
 runtime overflows its stack at some tens of thousands of nested calls), so
 neither a file's length nor the number of entries has a limit beyond
@@ -141,7 +149,7 @@ in `cpio.bend` (`split.ref`, `nat.half.ref`, `parse.go.ref`,
 `Cpio.build.ref`), and `PROOF.bend` proves each equal to its loop for every
 input (`split_eq`, `half_eq`, `parse_eq`, `build_eq`).
 
-Measured on Bend 2.0.37 (native build, WSL2), building an archive in the crc
+Measured on Bend 2.0.37's JavaScript lane (WSL2), building an archive in the crc
 format and parsing it back (the archive's length, byte sum and entries
 checked against a Python encoder):
 

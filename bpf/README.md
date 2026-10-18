@@ -204,9 +204,17 @@ installing a filter is not permitted, the rest runs and `run.sh` exits 77.
 
 ## Sizes
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 A packet is read only at the offsets a program loads from (through bytes'
 tail-recursive `Octets` operations), so its size has no limit beyond memory.
-Measured on Bend 2.0.37 (native build, WSL2): a 4096-instruction program
+Measured on Bend 2.0.37's JavaScript lane (WSL2): a 4096-instruction program
 (`BPF_MAXINSNS`: loads, ALU, scratch memory, jumps), written as 32 KB of
 `Octets` with `bpf_to_octets`, read back with `bpf_of_octets`, prepared
 (decoded and validated) and run on a 64 KB packet, the answer checked
@@ -219,7 +227,7 @@ instruction without being tail calls; that is fine for the 4096
 instructions a filter may have (and a seccomp path is checked filter by
 filter). A stored program of 16,384 instructions still decodes and is
 refused as too long (`BpfErrTooLong`), but at 32,768 instructions (256 KB)
-Bend 2.0.37's runtime overflows its stack: a caller handed untrusted bytes
+Bend 2.0.37's JavaScript lane overflows its stack: a caller handed untrusted bytes
 should refuse more than `8 * bpf_maxinsns()` of them before decoding.
 
 ## Status

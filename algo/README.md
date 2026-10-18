@@ -142,6 +142,14 @@ library's `bisect.bisect_left` for both binary searches.
 
 ## Speed
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 The bit search walks the 32 (64) bits of a word one at a time, so that it can
 be proved for every word; it does not use hardware instructions. The bitmap
 search unpacks the words it reads into bits. The list reference is a linear

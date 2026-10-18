@@ -186,13 +186,21 @@ the expected one:
 
 ## Speed and limits
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 Every loop over the input or the output is a tail call: the buffered input
 (appended and counted with bytes' `B.append.fast` and `B.len.fast`), the
 LZMA2 chunks (taken with `B.take.fast`), the range decoder, the dictionary,
 the output (gathered in a list, then made `Octets` once per feed; a single
 piece is not copied again), the delta filter, the checks and the index (its
 records compared by a tail call). So there is no length limit from the
-runtime's stack. Before this, a 38 KB `.xz` file (100 KB of output) and a
+JavaScript lane's stack. Before this, a 38 KB `.xz` file (100 KB of output) and a
 raw LZMA2 stream of 100 KB overflowed it; a small file with a large output
 (100 KB from 820 bytes) did not.
 

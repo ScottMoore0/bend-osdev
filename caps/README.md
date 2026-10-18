@@ -156,7 +156,7 @@ names, 5 sets of the running process) with:
   that break the invariants; every result is compared field by field, and
   errors by name;
 * `capsh --decode` (libcap's tool), for the name of every capability number;
-* the kernel's `/proc/self/status` (`CapInh` … `CapAmb`), for the text form
+* the kernel's `/proc/self/status` (`CapInh` â€¦ `CapAmb`), for the text form
   of a set.
 
 A cross-check against the real kernel would need privileges (setting file

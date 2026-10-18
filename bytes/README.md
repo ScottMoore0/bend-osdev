@@ -83,12 +83,20 @@ The same operations on `List<&2, U32>` directly. Packages written before
 
 ## Speed
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 The field readers and writers are built from bit slicing, not shifts and
 masks, so their round trips can be proved for every value. That costs speed:
 use them for header fields, not bulk data.
 
-Bend 2.0.37's runtime overflows its own fixed stack (raising `ulimit -s`
-does not help) somewhere between 10,000 and 40,000 nested non-tail calls.
+Bend 2.0.37's JavaScript lane overflows its stack (a native build has a
+2 GB stack and does not) somewhere between 10,000 and 40,000 nested non-tail calls.
 So `Octets` runs tail-recursive forms (`w8s.*.fast`, `w8s.len.go`, `w8s.eq`,
 and the text and hex builders), and each is proved equal to its structural
 form for every input in `PROOF.bend`, which is what the laws reason about.

@@ -75,6 +75,14 @@ path, on random inputs (277 cases) with:
 
 ## Speed
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 The reference engines in `crc.bend` run bit by bit. The fast path in
 `table.bend` looks up one 256-entry table per byte instead of eight bit
 steps: on a native build, CRC32C over 400 KB took 3 ms bit by bit and 1 ms

@@ -154,8 +154,16 @@ Eight further seeds (`SEED=1..8`) also match.
 
 ## Sizes
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 Every loop over a file's bytes or a table's entries is a tail call (Bend
-2.0.37's runtime overflows its stack at some tens of thousands of nested
+2.0.37's JavaScript lane overflows its stack at some tens of thousands of nested
 calls), so neither a section's size nor the number of sections or symbols has
 a limit beyond memory. The tables' structural forms stay beside the loops as
 the reference the proofs reason about (`table.list.ref`, `write_table.ref`,
@@ -167,7 +175,7 @@ to what they read through `Octets` and convert only those bytes to a list,
 and a string is looked for in the 256 bytes at its offset before the rest of
 its table is converted.
 
-Measured on Bend 2.0.37 (native build, WSL2) on files built by gcc, read
+Measured on Bend 2.0.37's JavaScript lane (WSL2) on files built by gcc, read
 from disk, every count and sum checked against `readelf`:
 
 | File | Run | Time | Peak RAM |

@@ -264,6 +264,14 @@ reading of real images is covered by `check.bend` and the differential test.
 
 ## Speed and size
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 Measured with Bend 2.0.37's JavaScript runtime (bun; no clang on the test
 machine): `check.bend` runs in about 1.5 s; the differential test takes
 about 100 s in all (0.7 to 12 s an image, 0.2 to 0.55 GB of memory each:
@@ -301,7 +309,7 @@ at most the options' `max_depth` nodes), and a group's descriptor and an
 inode are found by arithmetic, whatever the number of groups. (Before,
 reading a range and listing a directory recursed once per block: listing
 the 10,000-block directory took 2.5 GB and 16 s, and either would have
-overflowed the runtime's stack somewhere between 10,000 and 40,000 blocks.)
+overflowed the JavaScript lane's stack somewhere between 10,000 and 40,000 blocks.)
 A block read through blockdev's `Dev.read_bytes` recurses once per device
 block it spans: at most 128 (a 64 KiB block on a 512-byte device).
 

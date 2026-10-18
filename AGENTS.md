@@ -75,29 +75,41 @@ package: copy its shape.
 - **Induction:** a recursive call of the proof def is the induction
   hypothesis. When the goal after one step unfolds to exactly the hypothesis's
   type, return the recursive call itself.
-- **`check.bend` mains return `IO(Unit)`**, so they compile to native code; a
-  pure main is normalised by the checker, which is slow.
+- **`check.bend` mains return `IO(Unit)`**: `scripts/check.sh` builds them,
+  and the ref tests' case files, into native binaries (`scripts/bend-run.sh`);
+  a pure main is normalised by the checker, which is slow.
 - **Imports:** siblings by relative path (`import ../bytes/bytes.bend as B`);
   hub packages by name (`import bend-kit-int@0.2.0.0/int.bend as Int`).
 
 ## Runtime and checker limits (Bend 2.0.37)
 
-- **Recursion depth:** the runtime overflows its own fixed stack ("memory
-  fault (machine stack overflow?)") somewhere between 10,000 and 40,000 nested
-  non-tail calls; `ulimit -s` does not help. Write loops over long data as tail
-  calls with an accumulator. If a proof needs the structural form, keep it as
-  the reference and prove the tail form equal to it, as bytes does
-  (`PROOF.bend`, the `F_*` lemmas). `Octets` operations have no length limit;
-  the `List<&2, U32>` list layer in bytes is structural.
-- **Octets memory:** about 150 bytes of memory per byte held (each byte is
-  one `OctByte` record of eight `Bool`s); a pipeline that builds, copies and
-  reads data peaks at several times its size. Hold images of more than a few
-  MB a block at a time.
+- **Two lanes:** `bend file.bend` checks the file and runs `main` on its
+  JavaScript lane, in the bend process; `bend file.bend -o prog` builds a
+  native binary (with clang 14 or newer, from `$CC` or PATH). The native
+  binary starts at about 2 MB; the `bend` process itself (Bun plus the
+  checker) takes about 120 MB. `scripts/check.sh` runs programs natively
+  through `scripts/bend-run.sh`; measure sizes and times on native builds.
+- **Recursion depth:** only the JavaScript lane has a small stack: it fails
+  ("memory fault (machine stack overflow?)") somewhere between 10,000 and
+  40,000 nested non-tail calls. A native binary has a 2 GB stack for its own
+  calls (5,000,000 nested calls run fine). Library code still uses tail calls
+  over long data, so that it runs on both lanes and stays fast: if a proof
+  needs the structural form, keep it as the reference and prove the tail form
+  equal to it, as bytes does (`PROOF.bend`, the `F_*` lemmas). `Octets`
+  operations have no length limit; the `List<&2, U32>` list layer in bytes is
+  structural, with `*.fast` forms beside it.
+- **Memory:** natively, an `Array<U32>` holds 4 bytes per slot, and a 1 MB
+  `Octets` pipeline (build, append, cut, print) peaks at about 280 MB (about
+  960 MB on the JavaScript lane). Hold images of more than a few MB a block
+  at a time, or in an `Array<U32>`.
 - **List literals** of more than about 3,000 elements overflow: build long
   test inputs in pieces or with a generator function.
-- **Native builds:** a record with four or more `W64` fields fails to compile
-  to C ("an arity over 247"); `bend file.bend` still runs it. Group `W64`
-  fields into sub-records.
+- **Native builds:** code with more than 247 live one-word values in one
+  segment, which a record with four or more `W64` fields or other W64-heavy
+  code produces, fails to compile to C ("an arity over 247",
+  bendlang/bend#1069). `scripts/bend-run.sh` runs such a program on the
+  JavaScript lane and `check.sh` reports it (`js` lines). Group `W64` fields
+  into sub-records where you can.
 - **`--verdict`:** it cannot model a template parameter whose type is a
   proposition (`~inv: {...}`); a large `Nat` literal (about 2^24 and up)
   bound to a reused `+` parameter trips a kernel mismatch

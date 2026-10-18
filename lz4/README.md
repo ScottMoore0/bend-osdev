@@ -226,6 +226,14 @@ and limits were run by hand against the lz4 tool, not in CI.
 
 ## Speed and limits
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 * Nothing recurses over the data's length except as a tail call: the
   decoder, the matcher, the frame reader and writer, the stream reader and
   the length bytes of a literal run (`lit.ext`, tail-recursive, proved equal

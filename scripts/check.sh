@@ -9,10 +9,20 @@
 # VERDICT=1 also runs PROOF.bend --verdict (needs Lean 4.34.0).
 # BEND names the command to run (default: bend); it may be several words,
 # e.g. BEND="bun ~/bend/bend2/main.ts".
+#
+# Programs (check.bend, the ref tests' cases) run as native binaries through
+# scripts/bend-run.sh, which needs clang 14 or newer ($CC or on PATH);
+# BEND_LANE=js runs them on bend's JavaScript lane instead. A program the C
+# backend refuses (bendlang/bend#1069) runs on the JavaScript lane, and the
+# report says so.
 set -uo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 read -r -a bend <<< "${BEND:-bend}"
 export BEND_NO_TELEMETRY=1
+export BEND_CMD="${bend[*]}"
+run=(bash "$root/scripts/bend-run.sh")
+export BEND_RUN_LOG=$(mktemp)
+trap 'rm -f "$BEND_RUN_LOG"' EXIT
 
 if [ $# -eq 0 ]; then
   set -- $(cd "$root" && for d in */; do d=${d%/}; [ -f "$d/$d.bend" ] && echo "$d"; done)
@@ -37,17 +47,22 @@ for p in "$@"; do
   fi
 
   want=$(grep '^#|' "$dir/check.bend" | sed 's/^#|//')
-  got=$(cd "$dir" && "${bend[@]}" check.bend 2>&1)
+  got=$(cd "$dir" && "${run[@]}" check.bend 2>&1)
   if [ "$got" = "$want" ]; then note ok "check.bend"
   else note FAIL "check.bend"; diff <(printf '%s\n' "$want") <(printf '%s\n' "$got") | head -20 | sed 's/^/      /'; ok=0; fi
 
   if [ -f "$dir/ref/run.sh" ]; then
-    out=$(cd "$dir" && BEND="${bend[*]}" bash ref/run.sh 2>&1); code=$?
+    out=$(cd "$dir" && BEND="${run[*]}" bash ref/run.sh 2>&1); code=$?
     case $code in
       0) note ok "ref: $(printf '%s\n' "$out" | tail -1)";;
       77) note skip "ref: $(printf '%s\n' "$out" | tail -1)";;
       *) note FAIL "ref"; printf '%s\n' "$out" | tail -20 | sed 's/^/      /'; ok=0;;
     esac
+  fi
+  if [ -s "$BEND_RUN_LOG" ]; then
+    note js "on the JavaScript lane: $(sort -u "$BEND_RUN_LOG" | tr '
+' ' ')"
+    : > "$BEND_RUN_LOG"
   fi
   [ $ok = 1 ] || failed+=("$p")
 done

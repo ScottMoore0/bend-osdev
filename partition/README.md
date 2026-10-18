@@ -151,13 +151,21 @@ so surrogate pairs are covered by the vectors only.
 
 ## Speed
 
+**Lanes.** The figures in this section were measured on bend's JavaScript lane
+(`bend file.bend`, which runs `main` inside the bend process). That lane's
+stack overflows at some tens of thousands of nested non-tail calls, and it
+uses several times the memory of a native build (`bend file.bend -o prog`),
+which has a 2 GB stack; see AGENTS.md, "Runtime and checker limits". They
+will be re-measured natively once W64-heavy code builds natively
+(bendlang/bend#1069).
+
 Byte strings are lists and the fields are read by bit slicing, so a table is
 read one sector at a time: read the blocks you need (`File.read_at`), not
 the disk.
 
 ## Sizes
 
-Measured on Bend 2.0.37 (native build, WSL2):
+Measured on Bend 2.0.37's JavaScript lane (WSL2):
 
 | Run | Time | Peak RAM |
 |---|---|---|
