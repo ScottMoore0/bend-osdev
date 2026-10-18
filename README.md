@@ -61,6 +61,7 @@ GPL source was read.
 | [genalloc](genalloc/) | A general-purpose pool allocator in the style of genalloc, the fit algorithm a template (first, best, aligned, order-aligned, fixed offset) |
 | [algo](algo/) | Bit search, bitmaps, binary search |
 | [ksort](ksort/) | Sorting: a stable merge sort on lists and an in-place heapsort on an `Array`, the comparison a template |
+| [textsearch](textsearch/) | Searching a byte stream that arrives in chunks, matches spanning chunk boundaries: KMP, Boyer-Moore (Horspool or good suffix) and a token automaton behind one interface |
 | [xarray](xarray/) | A sparse array with marks, in the style of the kernel's XArray |
 | [itree](itree/) | An augmented AVL interval tree |
 | [maple](maple/) | A range-indexed B-tree in the style of the kernel's maple tree, with gap search |
