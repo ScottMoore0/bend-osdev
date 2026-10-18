@@ -30,11 +30,15 @@ interfaces) and ref/expected.txt (the same values from Python):
   * HMAC over CRC-32, CRC-32C and CRC-64/XZ against Python's hmac module
     (with each CRC as its digestmod), one-shot, in pieces, and verify, with
     keys shorter and longer than the block size;
-  * HKDF over CRC-32 and CRC-64/XZ against this file's RFC 5869 HKDF on
-    Python's hmac, which is first checked against cryptography's HKDF with
-    SHA-256 on RFC 5869's test case 1.
+  * SHA-256 and SHA-512 (bend-collections, through inst_sha2.bend), one-shot
+    and in pieces, against hashlib; HMAC over them (keys of 0 to 200 bytes,
+    across both block sizes) against hmac with hashlib;
+  * HKDF over SHA-256 and SHA-512 against cryptography's HKDF, and over
+    CRC-32 and CRC-64/XZ against this file's RFC 5869 HKDF on Python's
+    hmac, which is first checked against cryptography's HKDF with SHA-256
+    on RFC 5869's test case 1.
 """
-import binascii, hmac, os, random, sys, warnings
+import binascii, hashlib, hmac, os, random, sys, warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
@@ -230,7 +234,10 @@ HASHES = {
     "crc32": (Crc32, "~U32, ~64n, ~4n, ~CR.CrCrc32.init(~C.crc32.spec()), ~CR.CrCrc32.update(~C.crc32.spec()), ~CR.CrCrc32.final(~C.crc32.spec()), ~CR.CrCrc32.digest(~C.crc32.spec())"),
     "crc32c": (Crc32c, "~U32, ~64n, ~4n, ~CR.CrCrc32.init(~C.crc32c.spec()), ~CR.CrCrc32.update(~C.crc32c.spec()), ~CR.CrCrc32.final(~C.crc32c.spec()), ~CR.CrCrc32.digest(~C.crc32c.spec())"),
     "crc64xz": (Crc64xz, "~W.W64, ~64n, ~8n, ~CR.CrCrc64.init(~C.crc64_xz.spec()), ~CR.CrCrc64.update(~C.crc64_xz.spec()), ~CR.CrCrc64.final(~C.crc64_xz.spec()), ~CR.CrCrc64.digest(~C.crc64_xz.spec())"),
+    "sha256": (hashlib.sha256, "~SH.CrSha2State, ~64n, ~32n, ~SH.CrSha2.init256(), ~SH.CrSha2.update, ~SH.CrSha2.final, ~SH.CrSha2.sha256"),
+    "sha512": (hashlib.sha512, "~SH.CrSha2State, ~128n, ~64n, ~SH.CrSha2.init512(), ~SH.CrSha2.update, ~SH.CrSha2.final, ~SH.CrSha2.sha512"),
 }
+SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512}
 
 
 def hkdf(H, ikm, salt, info, n):
@@ -302,6 +309,7 @@ import ../inst_rc4.bend as RC
 import ../inst_ccm.bend as CC
 import ../inst_cmac.bend as CMI
 import ../inst_crc.bend as CR
+import ../inst_sha2.bend as SH
 
 def res(r: Result<&2, &2, Cr.CrError, B.Octets>) -> String:
   match r:
@@ -478,20 +486,24 @@ def main():
             d = Hc(a + b).digest().hex()
             case("%s_hash" % name, i, "hash(%s, %s, %s)" % (ht, o(a), o(b)), "%s %s" % (d, d), "python")
         for i in range(6):
-            key = rb([0, 3, 32, 64, 65, 100][i])
+            key = rb([0, 3, 32, 64, 65, 200][i])
             a, b = rb(rng.randrange(0, 50)), rb(rng.randrange(0, 50))
             t = hmac.new(key, a + b, Hc).digest().hex()
             case("%s_hmac" % name, i, "hmac(%s, %s, %s, %s)" % (ht, o(key), o(a), o(b)), "%s %s yes" % (t, t), "python")
         for i in range(3):
             ikm, salt, info = rb(rng.randrange(1, 40)), rb([0, 8, 70][i]), rb(rng.randrange(0, 20))
-            n = [1, Hc.digest_size * 3 + 1, rng.randrange(1, 60)][i]
-            case("%s_hkdf" % name, i, "hkdf(%s, %s, %s, %s, %dn)" % (ht, o(ikm), o(salt), o(info), n), hkdf(Hc, ikm, salt, info, n).hex(), "python")
+            n = [1, Hc().digest_size * 3 + 1, rng.randrange(1, 60)][i]
+            if name in SHA:
+                want, src = HKDF(SHA[name](), n, salt or None, info).derive(ikm), "cryptography"
+            else:
+                want, src = hkdf(Hc, ikm, salt, info, n), "python"
+            case("%s_hkdf" % name, i, "hkdf(%s, %s, %s, %s, %dn)" % (ht, o(ikm), o(salt), o(info), n), want.hex(), src)
 
     with open(os.path.join(HERE, "cases.bend"), "w", newline="\n") as f:
         f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from legacy-ciphers' models, %d from Python's hmac and binascii and this file's CRCs)"
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs)"
           % (len(lines), counts["cryptography"], counts["model"], counts["python"]))
 
 

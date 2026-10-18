@@ -84,17 +84,27 @@ STREAM = [
 ]
 
 # hashes: tparams are the template parameters an instance's defs share (a
-# CRC's parameter set), streaming(s, a, b) and split(a, b) the terms proving
-# its two laws
+# CRC's parameter set); streaming(s, a, b), split(a, b) and split3(a, b, c)
+# the terms proving its laws (streaming None where it has none)
 HASH = [
     dict(name="crc32", title="CRC-32 of any parameter set (crc)", tparams=[("spec", "C.Crc32Spec")], H="U32",
          init="CR.CrCrc32.init(~spec)", update="CR.CrCrc32.update(~spec)", final="CR.CrCrc32.final(~spec)",
          digest="CR.CrCrc32.digest(~spec)",
-         streaming="Laws.crc32_hash_streaming(~spec, %s, %s, %s)", split="Laws.crc32_hash_split(~spec, %s, %s)"),
+         streaming="Laws.crc32_hash_streaming(~spec, %s, %s, %s)", split="Laws.crc32_hash_split(~spec, %s, %s)",
+         split3="Laws.crc32_hash_split3(~spec, %s, %s, %s)"),
     dict(name="crc64", title="CRC-64 of any parameter set (crc)", tparams=[("spec", "C.Crc64Spec")], H="W.W64",
          init="CR.CrCrc64.init(~spec)", update="CR.CrCrc64.update(~spec)", final="CR.CrCrc64.final(~spec)",
          digest="CR.CrCrc64.digest(~spec)",
-         streaming="Laws.crc64_hash_streaming(~spec, %s, %s, %s)", split="Laws.crc64_hash_split(~spec, %s, %s)"),
+         streaming="Laws.crc64_hash_streaming(~spec, %s, %s, %s)", split="Laws.crc64_hash_split(~spec, %s, %s)",
+         split3="Laws.crc64_hash_split3(~spec, %s, %s, %s)"),
+    # bend-collections proves SHA-2's pieces only from the start state, so
+    # these rows have no streaming law (and no HMAC streaming law)
+    dict(name="sha256", title="SHA-256 (bend-collections)", tparams=[], H="SH.CrSha2State",
+         init="SH.CrSha2.init256()", update="SH.CrSha2.update", final="SH.CrSha2.final", digest="SH.CrSha2.sha256",
+         streaming=None, split="Laws.sha256_hash_split(%s, %s)", split3="Laws.sha256_hash_split3(%s, %s, %s)"),
+    dict(name="sha512", title="SHA-512 (bend-collections)", tparams=[], H="SH.CrSha2State",
+         init="SH.CrSha2.init512()", update="SH.CrSha2.update", final="SH.CrSha2.final", digest="SH.CrSha2.sha512",
+         streaming=None, split="Laws.sha512_hash_split(%s, %s)", split3="Laws.sha512_hash_split3(%s, %s, %s)"),
 ]
 
 # ---------------------------------------------------------------- schemas
@@ -203,23 +213,26 @@ def stream_laws(c):
 
 
 def hash_laws(h):
-    """HMAC over the hash (hmac.bend): in pieces, from the hash's streaming
-    and split laws"""
+    """HMAC over the hash (hmac.bend): in pieces, from the hash's laws (the
+    streaming law, where it has one, for HMAC's state in pieces; split and
+    split3 for the tag in pieces)"""
     n, H = h["name"], h["H"]
     tp = ["~%s: %s" % (v, t) for v, t in h["tparams"]]
-    tn = ", ".join(v for v, _ in h["tparams"])
+    tn = "".join(v + ", " for v, _ in h["tparams"])
     init, upd, fin, dig = h["init"], h["update"], h["final"], h["digest"]
     U = lambda s, m: call(upd, s, m)
     F = lambda s: call(fin, s)
     D = lambda m: call(dig, m)
-    S = lambda s, a, b: h["streaming"] % (s, a, b)
     SP = lambda a, b: h["split"] % (a, b)
+    SP3 = lambda a, b, c: h["split3"] % (a, b, c)
     st = "Hm.CrHmacState<%s>" % H
     hupd = lambda s, m: "Hm.CrHmac.update(~%s, ~%s, %s, %s)" % (H, upd, s, m)
-    law("hmac_%s_streaming" % n, "HMAC over %s: the state after a ++ b is the state after a, then b" % h["title"],
-        tp + ["s: %s" % st, "+a: B.Octets", "+b: B.Octets"],
-        "{%s == %s : %s}" % (hupd("s", "B.Octets.append(a, b)"), hupd(hupd("s", "a"), "b"), st))
-    proof("""def Laws.hmac_%s_streaming(%s, s, a, b):
+    if h["streaming"]:
+        S = lambda s, a, b: h["streaming"] % (s, a, b)
+        law("hmac_%s_streaming" % n, "HMAC over %s: the state after a ++ b is the state after a, then b" % h["title"],
+            tp + ["s: %s" % st, "+a: B.Octets", "+b: B.Octets"],
+            "{%s == %s : %s}" % (hupd("s", "B.Octets.append(a, b)"), hupd(hupd("s", "a"), "b"), st))
+        proof("""def Laws.hmac_%s_streaming(%ss, a, b):
   match s:
     case Hm.CrHmacState{h, o}:
       %%%s : {Hm.CrHmacState{%s, o} == Hm.CrHmacState{_, o} : %s}
@@ -230,19 +243,16 @@ def hash_laws(h):
         tp + ["+kk: Hm.CrHmacKey", "+a: B.Octets", "+b: B.Octets"],
         "{Hm.CrHmac.finish(~%s, ~%s, ~%s, ~%s, %s) == Hm.CrHmac.mac(~%s, kk, B.Octets.append(a, b)) : B.Octets}"
         % (H, init, upd, fin, hupd(hupd(start, "a"), "b"), dig))
-    ab = "B.Octets.append(a, b)"
-    inner = D("B.Octets.append(i, %s)" % ab)
+    inner = D("B.Octets.append(i, B.Octets.append(a, b))")
     rhs = D("B.Octets.append(o, %s)" % inner)
-    proof("""def Laws.hmac_%s_split(%s, kk, a, b):
+    proof("""def Laws.hmac_%s_split(%skk, a, b):
   match kk:
     case Hm.CrHmacKey{+i, +o}:
-      %%%s : {%s == %s : B.Octets}
       %%Equal.sym(B.Octets, %s, %s, %s) : {%s == %s : B.Octets}
       %%Equal.sym(B.Octets, %s, %s, %s) : {_ == %s : B.Octets}
       {==}
 """ % (n, tn,
-       S(U(init, "i"), "a", "b"), F(U(U(init, "o"), F("_"))), rhs,
-       F(U(U(init, "i"), ab)), inner, SP("i", ab), F(U(U(init, "o"), "_")), rhs,
+       F(U(U(U(init, "i"), "a"), "b")), inner, SP3("i", "a", "b"), F(U(U(init, "o"), "_")), rhs,
        F(U(U(init, "o"), inner)), rhs, SP("o", inner), rhs))
 
 
