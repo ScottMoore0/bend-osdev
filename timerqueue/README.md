@@ -1,7 +1,7 @@
 # bend-osdev-timerqueue
 
-Timers keyed by expiry, in the style of the Linux kernel's `timerqueue` (the
-time-ordered queue under its high-resolution timers), as a pure state
+Timers keyed by expiry, after the Linux kernel's time-ordered timer queues
+(the queue under its high-resolution timers), as a pure state
 machine: add a timer, delete one, ask for the next expiry, and expire every
 timer due by a time. Time is passed in, never read: an expiry is a `W64`
 (bend-osdev-word64) in whatever unit the caller keeps, and
@@ -14,28 +14,42 @@ priority queue or ordered map with the six calls of `TqStore`. The default,
 
 ## Specification
 
-The kernel's documented behaviour of its timer queues: high-resolution
-timers are kept sorted by expiry, the earliest expiry is at hand for
-programming the next interrupt, and the interrupt expires every timer whose
-time has come, earliest first (`Documentation/timers/hrtimers.rst`; the
-queue's interface is `timerqueue_add`, `timerqueue_del` and
-`timerqueue_getnext`). This package was written from that documented
-behaviour, as an abstract data type; **no kernel source was read**, and the
-document was not re-read in this session (it had no network access): the
-behaviour below is what this package commits to, and its laws and tests
-hold it to that.
+**The kernel's timerqueue has no published documentation.** No
+docs.kernel.org page documents it, and no rendered kernel-doc for its
+functions was found. "The Linux Kernel API"
+(<https://docs.kernel.org/core-api/kernel-api.html>) was read in full and
+has none, and a search of docs.kernel.org finds the name only in passing.
+The one document that describes the behaviour it serves is **"hrtimers -
+subsystem for high-resolution kernel timers"**,
+<https://docs.kernel.org/timers/hrtimers.html>
+(`Documentation/timers/hrtimers.rst`), section **"hrtimer subsystem
+implementation details"**, read on 2026-10-18. It says that timers are
+enqueued at activation time into a red-black tree used solely for
+time-sorted ordering, and that a separate list gives the expiry code fast
+access to the queued timers. **No kernel source was read**: search results
+pointing at mailing-list patches or source mirrors were skipped.
+
+So this package's interface and behaviour are **its own design**, built on
+that one documented fact (timers held in time order) and on the brief for
+this package. In particular, the page does not say any of the following;
+each is a choice made here:
 
 * **A timer** (`TqTimer{expiry, id}`) is its expiry and an id the queue
   hands out in the order timers are added (0, 1, 2, ...). It is also the
   handle `delete` takes. A timer carries no payload: the caller keeps what a
   timer is for under its id (in an IDR from bend-osdev-idalloc, say).
 * **The order** (`TqTimer.cmp`): by expiry, and timers with the same expiry
-  by id, so by insertion order. Expiries compare as unsigned 64-bit values
+  by id, so by insertion order (the brief asks for this; hrtimers.rst says
+  nothing about ties). Expiries compare as unsigned 64-bit values
   (`TqTime.cmp`: the high halves, then the low halves, through word64's
   `W64.hi` and `W64.lo`); there is no wrap-around.
-* **Expiring** (`TimerQueue.expire(q, now)`) answers every timer with
-  expiry at or before `now`, in order, and the queue without them.
+* **The next expiry** is the least expiry held, or `None`.
+* **Expiring** (`TimerQueue.expire(q, now)`) answers every timer with an
+  expiry at or before `now`, earliest first, and the queue without them.
+  hrtimers.rst does not describe how the expiry code runs due timers.
 * **Deleting** a timer the queue does not hold changes nothing.
+* **The store is any ordered structure**: the page's red-black tree is one
+  possible `TqStore`; the default is a sorted list (see Extension points).
 
 ## Files
 
@@ -63,9 +77,9 @@ hold it to that.
 | `TqSorted.store()` | the default store, on `List<&2, TqTimer>` |
 | `TimerQueue<Q>` | a queue over store type `Q` (opaque) |
 | `TimerQueue.new(~Q, ~st)` | the empty queue |
-| `TimerQueue.add(~Q, ~st, q, expiry)` | `TqAdded{queue, timer}`: the queue with a timer expiring at `expiry`, and that timer (`timerqueue_add`) |
-| `TimerQueue.delete(~Q, ~st, q, x)` | the queue without `x` (`timerqueue_del`) |
-| `TimerQueue.next_expiry(~Q, ~st, q)` | `Some` earliest expiry, or `None` (`timerqueue_getnext`) |
+| `TimerQueue.add(~Q, ~st, q, expiry)` | `TqAdded{queue, timer}`: the queue with a timer expiring at `expiry`, and that timer |
+| `TimerQueue.delete(~Q, ~st, q, x)` | the queue without `x` |
+| `TimerQueue.next_expiry(~Q, ~st, q)` | `Some` earliest expiry, or `None` |
 | `TimerQueue.expire(~Q, ~st, q, now)` | `TqExpired{queue, fired}`: the timers due by `now`, in order, and the queue without them |
 | `TimerQueue.pending(~Q, ~st, q)`, `TimerQueue.contains(~Q, ~st, q, x)` | the timers held, in order; whether `x` is held |
 | `TimerQueue.next_id(Q, q)`, `TimerQueue.issued(Q, q, x)` | the id the next timer gets; whether `x`'s id was handed out |

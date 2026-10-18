@@ -75,13 +75,13 @@ def TimerQueue.pending(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>) -> List<&
 def TimerQueue.contains(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>, +x: T.TqTimer) -> Bool:
   T.TqTimer.member(TimerQueue.pending(~Q, ~st, tq), x)
 
-# a timer expiring at expiry, with the next id (timerqueue_add)
+# a timer expiring at expiry, with the next id
 def TimerQueue.add(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>, +expiry: W.W64) -> TqAdded<Q>:
   match tq:
     case TimerQueue{q, +n}:
       TqAdded{TimerQueue{S.TqStore.insert(~Q, ~st, q, T.TqTimer{expiry, n}), 1n+n}, T.TqTimer{expiry, n}}
 
-# the queue without x (timerqueue_del); a timer not held changes nothing
+# the queue without x; a timer not held changes nothing
 def TimerQueue.delete(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>, x: T.TqTimer) -> TimerQueue<Q>:
   match tq:
     case TimerQueue{q, n}:
@@ -94,7 +94,7 @@ def TimerQueue.first_expiry(m: Maybe<&2, T.TqTimer>) -> Maybe<&2, W.W64>:
     case Some{x}:
       Some{T.TqTimer.expiry(x)}
 
-# the earliest expiry, if any timer is held (timerqueue_getnext)
+# the earliest expiry, if any timer is held
 def TimerQueue.next_expiry(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>) -> Maybe<&2, W.W64>:
   match tq:
     case TimerQueue{q, n}:
@@ -147,8 +147,7 @@ def TimerQueue.expire.split(~Q: Data, ~st: S.TqStore<Q>, +q: Q, +now: W.W64) -> 
   +m = S.TqStore.first(~Q, ~st, q)
   TimerQueue.expire.go(~Q, ~st, List.length(&2, T.TqTimer, S.TqStore.timers(~Q, ~st, q)), m, TimerQueue.expire.due(m, now), q, now)
 
-# every timer due by now, in order, and the queue without them (the loop of
-# timerqueue_getnext and timerqueue_del that a timer interrupt runs)
+# every timer due by now, in order, and the queue without them
 def TimerQueue.expire(~Q: Data, ~st: S.TqStore<Q>, tq: TimerQueue<Q>, +now: W.W64) -> TqExpired<Q>:
   match tq:
     case TimerQueue{q, n}:
