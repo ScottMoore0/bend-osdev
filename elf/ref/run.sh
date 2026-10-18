@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Differential test: the reader against readelf and against an independent
 # reader written from the specification, on ELF files built by gcc and by
-# hand (see gen.py). Exit 77 skips.
+# hand (see gen.py). Exit 77 skips (only when python3 is missing).
 set -uo pipefail
 cd "$(dirname "$0")"
+# python3 runs the reader written here from the specification; readelf (GNU
+# binutils) and gcc, when installed, check that reader and supply real files
 command -v python3 > /dev/null || { echo "python3 missing"; exit 77; }
-command -v readelf > /dev/null || { echo "readelf missing"; exit 77; }
 read -r -a bend <<< "${BEND:-bend}"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

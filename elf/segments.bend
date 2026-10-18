@@ -97,8 +97,30 @@ def ElfPhdr.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &
     case False{}:
       ElfPhdr.parse.p32(big, xs)
 
-# n entries, step bytes apart (structural: the reference the proofs reason
-# about)
+# Public: writing one entry (its bytes), and the entry as the file stores it
+
+def ElfPhdr.write(is64: Bool, +big: Bool, p: ElfPhdr) -> B.Octets:
+  match is64 p:
+    case True{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, p_flags), F.elf_w64(big, p_offset), F.elf_w64(big, p_vaddr), F.elf_w64(big, p_paddr), F.elf_w64(big, p_filesz), F.elf_w64(big, p_memsz), F.elf_w64(big, p_align)])
+    case False{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, W.W64.lo(p_offset)), F.elf_w32(big, W.W64.lo(p_vaddr)), F.elf_w32(big, W.W64.lo(p_paddr)), F.elf_w32(big, W.W64.lo(p_filesz)), F.elf_w32(big, W.W64.lo(p_memsz)), F.elf_w32(big, p_flags), F.elf_w32(big, W.W64.lo(p_align))])
+
+# the program header as the file stores it (ELF32 keeps the low 32 bits of its
+# 32-bit fields)
+def ElfPhdr.normal(+is64: Bool, p: ElfPhdr) -> ElfPhdr:
+  match p:
+    case ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
+      ElfPhdr{p_type, p_flags, F.elf_fit(is64, p_offset), F.elf_fit(is64, p_vaddr), F.elf_fit(is64, p_paddr), F.elf_fit(is64, p_filesz), F.elf_fit(is64, p_memsz), F.elf_fit(is64, p_align)}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfPhdr.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfPhdr>:
+  ElfPhdr.parse.list(is64, big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
 def ElfPhdr.table.list.ref(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
   match n:
     case 0n:
@@ -127,69 +149,50 @@ def ElfPhdr.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>,
 def ElfPhdr.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
   ElfPhdr.table.go(n, Done{Nil{}}, is64, big, step, xs)
 
-# Public: one entry, and a table
-
-# the program header at the start of o (ElfTruncated if o is too short)
-def ElfPhdr.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfPhdr>:
-  ElfPhdr.parse.list(is64, big, B.Octets.to_list(o))
-
-# n program headers, step bytes apart, from the start of o
+# Public: n entries, step bytes apart, from the start of o
 def ElfPhdr.read_table(is64: Bool, big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfPhdr>>:
   ElfPhdr.table.list(n, is64, big, step, B.Octets.to_list(o))
 
-def ElfPhdr.write(is64: Bool, +big: Bool, p: ElfPhdr) -> B.Octets:
-  match is64 p:
-    case True{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
-      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, p_flags), F.elf_w64(big, p_offset), F.elf_w64(big, p_vaddr), F.elf_w64(big, p_paddr), F.elf_w64(big, p_filesz), F.elf_w64(big, p_memsz), F.elf_w64(big, p_align)])
-    case False{} ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
-      B.Octets.concat([F.elf_w32(big, p_type), F.elf_w32(big, W.W64.lo(p_offset)), F.elf_w32(big, W.W64.lo(p_vaddr)), F.elf_w32(big, W.W64.lo(p_paddr)), F.elf_w32(big, W.W64.lo(p_filesz)), F.elf_w32(big, W.W64.lo(p_memsz)), F.elf_w32(big, p_flags), F.elf_w32(big, W.W64.lo(p_align))])
-
-# the program header as the file stores it (ELF32 keeps the low 32 bits of its
-# 32-bit fields)
-def ElfPhdr.normal(+is64: Bool, p: ElfPhdr) -> ElfPhdr:
-  match p:
-    case ElfPhdr{p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align}:
-      ElfPhdr{p_type, p_flags, F.elf_fit(is64, p_offset), F.elf_fit(is64, p_vaddr), F.elf_fit(is64, p_paddr), F.elf_fit(is64, p_filesz), F.elf_fit(is64, p_memsz), F.elf_fit(is64, p_align)}
-
-# a table's bytes, its entries packed
-def ElfPhdr.write_table.ref(+is64: Bool, +big: Bool, ps: List<&2, ElfPhdr>) -> B.Octets:
-  match ps:
+# a table's bytes, its entries packed (structural)
+def ElfPhdr.write_table.ref(+is64: Bool, +big: Bool, xs: List<&2, ElfPhdr>) -> B.Octets:
+  match xs:
     case Nil{}:
       B.Octets.empty()
-    case Con{p, t}:
-      B.Octets.append(ElfPhdr.write(is64, big, p), ElfPhdr.write_table.ref(is64, big, t))
+    case Con{x, r}:
+      B.Octets.append(ElfPhdr.write(is64, big, x), ElfPhdr.write_table.ref(is64, big, r))
 
 # the entries rs (the table's entries, last first) in front of acc
 def ElfPhdr.write_table.go(+is64: Bool, +big: Bool, rs: List<&2, ElfPhdr>, acc: B.Octets) -> B.Octets:
   match rs:
     case Nil{}:
       acc
-    case Con{p, t}:
-      ElfPhdr.write_table.go(is64, big, t, B.Octets.append(ElfPhdr.write(is64, big, p), acc))
+    case Con{x, r}:
+      ElfPhdr.write_table.go(is64, big, r, B.Octets.append(ElfPhdr.write(is64, big, x), acc))
 
 # a table's bytes, built from the last entry back, tail-recursively
 # (write_table.ref is the structural form; PROOF.bend: phdr_write_eq)
-def ElfPhdr.write_table(+is64: Bool, +big: Bool, ps: List<&2, ElfPhdr>) -> B.Octets:
-  ElfPhdr.write_table.go(is64, big, F.elf_rev_onto(ElfPhdr, ps, Nil{}), B.Octets.empty())
+def ElfPhdr.write_table(+is64: Bool, +big: Bool, xs: List<&2, ElfPhdr>) -> B.Octets:
+  ElfPhdr.write_table.go(is64, big, F.elf_rev_onto(ElfPhdr, xs, Nil{}), B.Octets.empty())
 
-def ElfPhdr.normal_table.ref(+is64: Bool, ps: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
-  match ps:
+def ElfPhdr.normal_table.ref(+is64: Bool, xs: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
+  match xs:
     case Nil{}:
       Nil{}
-    case Con{p, t}:
-      Con{ElfPhdr.normal(is64, p), ElfPhdr.normal_table.ref(is64, t)}
+    case Con{x, r}:
+      Con{ElfPhdr.normal(is64, x), ElfPhdr.normal_table.ref(is64, r)}
 
-def ElfPhdr.normal_table.go(+is64: Bool, ps: List<&2, ElfPhdr>, acc: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
-  match ps:
+def ElfPhdr.normal_table.go(+is64: Bool, xs: List<&2, ElfPhdr>, acc: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
+  match xs:
     case Nil{}:
       F.elf_rev_onto(ElfPhdr, acc, Nil{})
-    case Con{p, t}:
-      ElfPhdr.normal_table.go(is64, t, Con{ElfPhdr.normal(is64, p), acc})
+    case Con{x, r}:
+      ElfPhdr.normal_table.go(is64, r, Con{ElfPhdr.normal(is64, x), acc})
 
 # every entry as the file stores it, tail-recursively (normal_table.ref is
 # the structural form; PROOF.bend: phdr_normal_eq)
-def ElfPhdr.normal_table(+is64: Bool, ps: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
-  ElfPhdr.normal_table.go(is64, ps, Nil{})
+def ElfPhdr.normal_table(+is64: Bool, xs: List<&2, ElfPhdr>) -> List<&2, ElfPhdr>:
+  ElfPhdr.normal_table.go(is64, xs, Nil{})
+
 
 # The program header table
 

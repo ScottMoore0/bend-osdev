@@ -1,0 +1,945 @@
+# bend-osdev-elf, versions.bend: symbol versions, as the Linux Standard Base
+# Core specification defines them ("Symbol Versioning": the sections
+# .gnu.version, .gnu.version_d and .gnu.version_r, of types SHT_GNU_versym,
+# SHT_GNU_verdef and SHT_GNU_verneed). The same layout serves both classes;
+# every field is an Elfxx_Half (16 bits) or Elfxx_Word (32 bits).
+#
+# * .gnu.version (ElfVersym): one entry per .dynsym symbol, the index of its
+#   version (0 local, 1 global, 2 and up a definition's vd_ndx or a need's
+#   vna_other), with bit 15 set if the symbol is hidden.
+# * .gnu.version_d (ElfVerdef, ElfVerdaux): the versions this file defines, a
+#   chain of definitions (sh_info of them), each with a chain of names (the
+#   first its own, then its parents').
+# * .gnu.version_r (ElfVerneed, ElfVernaux): the versions this file needs, a
+#   chain of files (sh_info of them), each with a chain of versions.
+#
+# Each chain links an entry to the next by an offset from the entry (vd_next,
+# vda_next, vn_next, vna_next; 0 at the end), and an entry to its first
+# auxiliary entry by vd_aux or vn_aux. Names are offsets into the section at
+# sh_link (.dynstr).
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+import ./sections.bend as S
+
+# Records (16-bit fields are U32s, normalised to their low 16 bits)
+
+# a .gnu.version entry
+type ElfVersym is Data:
+  ElfVersym{vs_ndx: U32}
+
+# a version definition (Elfxx_Verdef: 20 bytes)
+type ElfVerdef is Data:
+  ElfVerdef{vd_version: U32, vd_flags: U32, vd_ndx: U32, vd_cnt: U32, vd_hash: U32, vd_aux: U32, vd_next: U32}
+
+# a definition's name (Elfxx_Verdaux: 8 bytes)
+type ElfVerdaux is Data:
+  ElfVerdaux{vda_name: U32, vda_next: U32}
+
+# a needed file (Elfxx_Verneed: 16 bytes)
+type ElfVerneed is Data:
+  ElfVerneed{vn_version: U32, vn_cnt: U32, vn_file: U32, vn_aux: U32, vn_next: U32}
+
+# a version needed from it (Elfxx_Vernaux: 16 bytes)
+type ElfVernaux is Data:
+  ElfVernaux{vna_hash: U32, vna_flags: U32, vna_other: U32, vna_name: U32, vna_next: U32}
+
+# a definition with its names, and a needed file with its versions, as the
+# chains link them
+type ElfVerdefEntry is Data:
+  ElfVerdefEntry{vdef: ElfVerdef, names: List<&2, ElfVerdaux>}
+
+type ElfVerneedEntry is Data:
+  ElfVerneedEntry{vneed: ElfVerneed, vers: List<&2, ElfVernaux>}
+
+# the fields of an ElfVersym
+
+def ElfVersym.vs_ndx(r: ElfVersym) -> U32:
+  match r:
+    case ElfVersym{x}:
+      x
+
+
+# the fields of an ElfVerdef
+
+def ElfVerdef.vd_version(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{x, _, _, _, _, _, _}:
+      x
+
+def ElfVerdef.vd_flags(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, x, _, _, _, _, _}:
+      x
+
+def ElfVerdef.vd_ndx(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, _, x, _, _, _, _}:
+      x
+
+def ElfVerdef.vd_cnt(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, _, _, x, _, _, _}:
+      x
+
+def ElfVerdef.vd_hash(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, _, _, _, x, _, _}:
+      x
+
+def ElfVerdef.vd_aux(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, _, _, _, _, x, _}:
+      x
+
+def ElfVerdef.vd_next(r: ElfVerdef) -> U32:
+  match r:
+    case ElfVerdef{_, _, _, _, _, _, x}:
+      x
+
+
+# the fields of an ElfVerdaux
+
+def ElfVerdaux.vda_name(r: ElfVerdaux) -> U32:
+  match r:
+    case ElfVerdaux{x, _}:
+      x
+
+def ElfVerdaux.vda_next(r: ElfVerdaux) -> U32:
+  match r:
+    case ElfVerdaux{_, x}:
+      x
+
+
+# the fields of an ElfVerneed
+
+def ElfVerneed.vn_version(r: ElfVerneed) -> U32:
+  match r:
+    case ElfVerneed{x, _, _, _, _}:
+      x
+
+def ElfVerneed.vn_cnt(r: ElfVerneed) -> U32:
+  match r:
+    case ElfVerneed{_, x, _, _, _}:
+      x
+
+def ElfVerneed.vn_file(r: ElfVerneed) -> U32:
+  match r:
+    case ElfVerneed{_, _, x, _, _}:
+      x
+
+def ElfVerneed.vn_aux(r: ElfVerneed) -> U32:
+  match r:
+    case ElfVerneed{_, _, _, x, _}:
+      x
+
+def ElfVerneed.vn_next(r: ElfVerneed) -> U32:
+  match r:
+    case ElfVerneed{_, _, _, _, x}:
+      x
+
+
+# the fields of an ElfVernaux
+
+def ElfVernaux.vna_hash(r: ElfVernaux) -> U32:
+  match r:
+    case ElfVernaux{x, _, _, _, _}:
+      x
+
+def ElfVernaux.vna_flags(r: ElfVernaux) -> U32:
+  match r:
+    case ElfVernaux{_, x, _, _, _}:
+      x
+
+def ElfVernaux.vna_other(r: ElfVernaux) -> U32:
+  match r:
+    case ElfVernaux{_, _, x, _, _}:
+      x
+
+def ElfVernaux.vna_name(r: ElfVernaux) -> U32:
+  match r:
+    case ElfVernaux{_, _, _, x, _}:
+      x
+
+def ElfVernaux.vna_next(r: ElfVernaux) -> U32:
+  match r:
+    case ElfVernaux{_, _, _, _, x}:
+      x
+
+
+# the fields of an ElfVerdefEntry
+
+def ElfVerdefEntry.vdef(r: ElfVerdefEntry) -> ElfVerdef:
+  match r:
+    case ElfVerdefEntry{x, _}:
+      x
+
+def ElfVerdefEntry.names(r: ElfVerdefEntry) -> List<&2, ElfVerdaux>:
+  match r:
+    case ElfVerdefEntry{_, x}:
+      x
+
+
+# the fields of an ElfVerneedEntry
+
+def ElfVerneedEntry.vneed(r: ElfVerneedEntry) -> ElfVerneed:
+  match r:
+    case ElfVerneedEntry{x, _}:
+      x
+
+def ElfVerneedEntry.vers(r: ElfVerneedEntry) -> List<&2, ElfVernaux>:
+  match r:
+    case ElfVerneedEntry{_, x}:
+      x
+
+
+# the entries' sizes
+def ElfVersym.size() -> U32:
+  2
+
+def ElfVerdef.size() -> U32:
+  20
+
+def ElfVerdaux.size() -> U32:
+  8
+
+def ElfVerneed.size() -> U32:
+  16
+
+def ElfVernaux.size() -> U32:
+  16
+
+# a version index without its hidden bit (VERSYM_VERSION, 0x7fff), and whether
+# the symbol is hidden (VERSYM_HIDDEN, 0x8000)
+def ElfVersym.index(v: ElfVersym) -> U32:
+  U32.and(32767, ElfVersym.vs_ndx(v))
+
+def ElfVersym.hidden(v: ElfVersym) -> Bool:
+  U32.is_ne(U32.and(32768, ElfVersym.vs_ndx(v)), 0)
+
+# vd_flags: VER_FLG_BASE (1), the file's own version; VER_FLG_WEAK (2)
+def ElfVerdef.is_base(d: ElfVerdef) -> Bool:
+  U32.is_ne(U32.and(1, ElfVerdef.vd_flags(d)), 0)
+
+def ElfVerdef.is_weak(d: ElfVerdef) -> Bool:
+  U32.is_ne(U32.and(2, ElfVerdef.vd_flags(d)), 0)
+
+# ElfVersym
+
+def ElfVersym.parse.list(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfVersym>:
+  do Result<&2, &2, F.ElfError, ElfVersym>:
+    v : U32 <- F.elf_r16(big, xs, 0n)
+    return ElfVersym{v}
+
+def ElfVersym.write(+big: Bool, v: ElfVersym) -> B.Octets:
+  match v:
+    case ElfVersym{n}:
+      F.elf_w16(big, n)
+
+def ElfVersym.normal(v: ElfVersym) -> ElfVersym:
+  match v:
+    case ElfVersym{n}:
+      ElfVersym{B.low16(n)}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfVersym.parse(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfVersym>:
+  ElfVersym.parse.list(big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
+def ElfVersym.table.list.ref(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfVersym, ElfVersym.parse.list(big, xs), ElfVersym.table.list.ref(p, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfVersym.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfVersym>>, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfVersym, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfVersym.table.go(p, F.elf_push(ElfVersym, ElfVersym.parse.list(big, xs), rs), big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# versym_table_eq), so a table can have any number of entries
+def ElfVersym.table.list(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  ElfVersym.table.go(n, Done{Nil{}}, big, step, xs)
+
+# Public: n entries, step bytes apart, from the start of o
+def ElfVersym.read_table(big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  ElfVersym.table.list(n, big, step, B.Octets.to_list(o))
+
+# a table's bytes, its entries packed (structural)
+def ElfVersym.write_table.ref(+big: Bool, xs: List<&2, ElfVersym>) -> B.Octets:
+  match xs:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{x, r}:
+      B.Octets.append(ElfVersym.write(big, x), ElfVersym.write_table.ref(big, r))
+
+# the entries rs (the table's entries, last first) in front of acc
+def ElfVersym.write_table.go(+big: Bool, rs: List<&2, ElfVersym>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{x, r}:
+      ElfVersym.write_table.go(big, r, B.Octets.append(ElfVersym.write(big, x), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: versym_write_eq)
+def ElfVersym.write_table(+big: Bool, xs: List<&2, ElfVersym>) -> B.Octets:
+  ElfVersym.write_table.go(big, F.elf_rev_onto(ElfVersym, xs, Nil{}), B.Octets.empty())
+
+def ElfVersym.normal_table.ref(xs: List<&2, ElfVersym>) -> List<&2, ElfVersym>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, r}:
+      Con{ElfVersym.normal(x), ElfVersym.normal_table.ref(r)}
+
+def ElfVersym.normal_table.go(xs: List<&2, ElfVersym>, acc: List<&2, ElfVersym>) -> List<&2, ElfVersym>:
+  match xs:
+    case Nil{}:
+      F.elf_rev_onto(ElfVersym, acc, Nil{})
+    case Con{x, r}:
+      ElfVersym.normal_table.go(r, Con{ElfVersym.normal(x), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: versym_normal_eq)
+def ElfVersym.normal_table(xs: List<&2, ElfVersym>) -> List<&2, ElfVersym>:
+  ElfVersym.normal_table.go(xs, Nil{})
+
+
+# ElfVerdef
+
+def ElfVerdef.parse.list(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfVerdef>:
+  do Result<&2, &2, F.ElfError, ElfVerdef>:
+    vd_version : U32 <- F.elf_r16(big, xs, 0n)
+    vd_flags : U32 <- F.elf_r16(big, xs, 2n)
+    vd_ndx : U32 <- F.elf_r16(big, xs, 4n)
+    vd_cnt : U32 <- F.elf_r16(big, xs, 6n)
+    vd_hash : U32 <- F.elf_r32(big, xs, 8n)
+    vd_aux : U32 <- F.elf_r32(big, xs, 12n)
+    vd_next : U32 <- F.elf_r32(big, xs, 16n)
+    return ElfVerdef{vd_version, vd_flags, vd_ndx, vd_cnt, vd_hash, vd_aux, vd_next}
+
+def ElfVerdef.write(+big: Bool, d: ElfVerdef) -> B.Octets:
+  match d:
+    case ElfVerdef{vd_version, vd_flags, vd_ndx, vd_cnt, vd_hash, vd_aux, vd_next}:
+      B.Octets.concat([F.elf_w16(big, vd_version), F.elf_w16(big, vd_flags), F.elf_w16(big, vd_ndx), F.elf_w16(big, vd_cnt), F.elf_w32(big, vd_hash), F.elf_w32(big, vd_aux), F.elf_w32(big, vd_next)])
+
+def ElfVerdef.normal(d: ElfVerdef) -> ElfVerdef:
+  match d:
+    case ElfVerdef{vd_version, vd_flags, vd_ndx, vd_cnt, vd_hash, vd_aux, vd_next}:
+      ElfVerdef{B.low16(vd_version), B.low16(vd_flags), B.low16(vd_ndx), B.low16(vd_cnt), vd_hash, vd_aux, vd_next}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfVerdef.parse(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfVerdef>:
+  ElfVerdef.parse.list(big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
+def ElfVerdef.table.list.ref(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdef>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfVerdef, ElfVerdef.parse.list(big, xs), ElfVerdef.table.list.ref(p, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfVerdef.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfVerdef>>, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdef>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfVerdef, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfVerdef.table.go(p, F.elf_push(ElfVerdef, ElfVerdef.parse.list(big, xs), rs), big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# verdef_table_eq), so a table can have any number of entries
+def ElfVerdef.table.list(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdef>>:
+  ElfVerdef.table.go(n, Done{Nil{}}, big, step, xs)
+
+# Public: n entries, step bytes apart, from the start of o
+def ElfVerdef.read_table(big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdef>>:
+  ElfVerdef.table.list(n, big, step, B.Octets.to_list(o))
+
+# a table's bytes, its entries packed (structural)
+def ElfVerdef.write_table.ref(+big: Bool, xs: List<&2, ElfVerdef>) -> B.Octets:
+  match xs:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{x, r}:
+      B.Octets.append(ElfVerdef.write(big, x), ElfVerdef.write_table.ref(big, r))
+
+# the entries rs (the table's entries, last first) in front of acc
+def ElfVerdef.write_table.go(+big: Bool, rs: List<&2, ElfVerdef>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{x, r}:
+      ElfVerdef.write_table.go(big, r, B.Octets.append(ElfVerdef.write(big, x), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: verdef_write_eq)
+def ElfVerdef.write_table(+big: Bool, xs: List<&2, ElfVerdef>) -> B.Octets:
+  ElfVerdef.write_table.go(big, F.elf_rev_onto(ElfVerdef, xs, Nil{}), B.Octets.empty())
+
+def ElfVerdef.normal_table.ref(xs: List<&2, ElfVerdef>) -> List<&2, ElfVerdef>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, r}:
+      Con{ElfVerdef.normal(x), ElfVerdef.normal_table.ref(r)}
+
+def ElfVerdef.normal_table.go(xs: List<&2, ElfVerdef>, acc: List<&2, ElfVerdef>) -> List<&2, ElfVerdef>:
+  match xs:
+    case Nil{}:
+      F.elf_rev_onto(ElfVerdef, acc, Nil{})
+    case Con{x, r}:
+      ElfVerdef.normal_table.go(r, Con{ElfVerdef.normal(x), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: verdef_normal_eq)
+def ElfVerdef.normal_table(xs: List<&2, ElfVerdef>) -> List<&2, ElfVerdef>:
+  ElfVerdef.normal_table.go(xs, Nil{})
+
+
+# ElfVerdaux
+
+def ElfVerdaux.parse.list(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfVerdaux>:
+  do Result<&2, &2, F.ElfError, ElfVerdaux>:
+    vda_name : U32 <- F.elf_r32(big, xs, 0n)
+    vda_next : U32 <- F.elf_r32(big, xs, 4n)
+    return ElfVerdaux{vda_name, vda_next}
+
+def ElfVerdaux.write(+big: Bool, a: ElfVerdaux) -> B.Octets:
+  match a:
+    case ElfVerdaux{vda_name, vda_next}:
+      B.Octets.append(F.elf_w32(big, vda_name), F.elf_w32(big, vda_next))
+
+def ElfVerdaux.normal(a: ElfVerdaux) -> ElfVerdaux:
+  a
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfVerdaux.parse(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfVerdaux>:
+  ElfVerdaux.parse.list(big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
+def ElfVerdaux.table.list.ref(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfVerdaux, ElfVerdaux.parse.list(big, xs), ElfVerdaux.table.list.ref(p, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfVerdaux.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfVerdaux, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfVerdaux.table.go(p, F.elf_push(ElfVerdaux, ElfVerdaux.parse.list(big, xs), rs), big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# verdaux_table_eq), so a table can have any number of entries
+def ElfVerdaux.table.list(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+  ElfVerdaux.table.go(n, Done{Nil{}}, big, step, xs)
+
+# Public: n entries, step bytes apart, from the start of o
+def ElfVerdaux.read_table(big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+  ElfVerdaux.table.list(n, big, step, B.Octets.to_list(o))
+
+# a table's bytes, its entries packed (structural)
+def ElfVerdaux.write_table.ref(+big: Bool, xs: List<&2, ElfVerdaux>) -> B.Octets:
+  match xs:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{x, r}:
+      B.Octets.append(ElfVerdaux.write(big, x), ElfVerdaux.write_table.ref(big, r))
+
+# the entries rs (the table's entries, last first) in front of acc
+def ElfVerdaux.write_table.go(+big: Bool, rs: List<&2, ElfVerdaux>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{x, r}:
+      ElfVerdaux.write_table.go(big, r, B.Octets.append(ElfVerdaux.write(big, x), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: verdaux_write_eq)
+def ElfVerdaux.write_table(+big: Bool, xs: List<&2, ElfVerdaux>) -> B.Octets:
+  ElfVerdaux.write_table.go(big, F.elf_rev_onto(ElfVerdaux, xs, Nil{}), B.Octets.empty())
+
+def ElfVerdaux.normal_table.ref(xs: List<&2, ElfVerdaux>) -> List<&2, ElfVerdaux>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, r}:
+      Con{ElfVerdaux.normal(x), ElfVerdaux.normal_table.ref(r)}
+
+def ElfVerdaux.normal_table.go(xs: List<&2, ElfVerdaux>, acc: List<&2, ElfVerdaux>) -> List<&2, ElfVerdaux>:
+  match xs:
+    case Nil{}:
+      F.elf_rev_onto(ElfVerdaux, acc, Nil{})
+    case Con{x, r}:
+      ElfVerdaux.normal_table.go(r, Con{ElfVerdaux.normal(x), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: verdaux_normal_eq)
+def ElfVerdaux.normal_table(xs: List<&2, ElfVerdaux>) -> List<&2, ElfVerdaux>:
+  ElfVerdaux.normal_table.go(xs, Nil{})
+
+
+# ElfVerneed
+
+def ElfVerneed.parse.list(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfVerneed>:
+  do Result<&2, &2, F.ElfError, ElfVerneed>:
+    vn_version : U32 <- F.elf_r16(big, xs, 0n)
+    vn_cnt : U32 <- F.elf_r16(big, xs, 2n)
+    vn_file : U32 <- F.elf_r32(big, xs, 4n)
+    vn_aux : U32 <- F.elf_r32(big, xs, 8n)
+    vn_next : U32 <- F.elf_r32(big, xs, 12n)
+    return ElfVerneed{vn_version, vn_cnt, vn_file, vn_aux, vn_next}
+
+def ElfVerneed.write(+big: Bool, n: ElfVerneed) -> B.Octets:
+  match n:
+    case ElfVerneed{vn_version, vn_cnt, vn_file, vn_aux, vn_next}:
+      B.Octets.concat([F.elf_w16(big, vn_version), F.elf_w16(big, vn_cnt), F.elf_w32(big, vn_file), F.elf_w32(big, vn_aux), F.elf_w32(big, vn_next)])
+
+def ElfVerneed.normal(n: ElfVerneed) -> ElfVerneed:
+  match n:
+    case ElfVerneed{vn_version, vn_cnt, vn_file, vn_aux, vn_next}:
+      ElfVerneed{B.low16(vn_version), B.low16(vn_cnt), vn_file, vn_aux, vn_next}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfVerneed.parse(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfVerneed>:
+  ElfVerneed.parse.list(big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
+def ElfVerneed.table.list.ref(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneed>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfVerneed, ElfVerneed.parse.list(big, xs), ElfVerneed.table.list.ref(p, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfVerneed.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfVerneed>>, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneed>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfVerneed, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfVerneed.table.go(p, F.elf_push(ElfVerneed, ElfVerneed.parse.list(big, xs), rs), big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# verneed_table_eq), so a table can have any number of entries
+def ElfVerneed.table.list(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneed>>:
+  ElfVerneed.table.go(n, Done{Nil{}}, big, step, xs)
+
+# Public: n entries, step bytes apart, from the start of o
+def ElfVerneed.read_table(big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneed>>:
+  ElfVerneed.table.list(n, big, step, B.Octets.to_list(o))
+
+# a table's bytes, its entries packed (structural)
+def ElfVerneed.write_table.ref(+big: Bool, xs: List<&2, ElfVerneed>) -> B.Octets:
+  match xs:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{x, r}:
+      B.Octets.append(ElfVerneed.write(big, x), ElfVerneed.write_table.ref(big, r))
+
+# the entries rs (the table's entries, last first) in front of acc
+def ElfVerneed.write_table.go(+big: Bool, rs: List<&2, ElfVerneed>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{x, r}:
+      ElfVerneed.write_table.go(big, r, B.Octets.append(ElfVerneed.write(big, x), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: verneed_write_eq)
+def ElfVerneed.write_table(+big: Bool, xs: List<&2, ElfVerneed>) -> B.Octets:
+  ElfVerneed.write_table.go(big, F.elf_rev_onto(ElfVerneed, xs, Nil{}), B.Octets.empty())
+
+def ElfVerneed.normal_table.ref(xs: List<&2, ElfVerneed>) -> List<&2, ElfVerneed>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, r}:
+      Con{ElfVerneed.normal(x), ElfVerneed.normal_table.ref(r)}
+
+def ElfVerneed.normal_table.go(xs: List<&2, ElfVerneed>, acc: List<&2, ElfVerneed>) -> List<&2, ElfVerneed>:
+  match xs:
+    case Nil{}:
+      F.elf_rev_onto(ElfVerneed, acc, Nil{})
+    case Con{x, r}:
+      ElfVerneed.normal_table.go(r, Con{ElfVerneed.normal(x), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: verneed_normal_eq)
+def ElfVerneed.normal_table(xs: List<&2, ElfVerneed>) -> List<&2, ElfVerneed>:
+  ElfVerneed.normal_table.go(xs, Nil{})
+
+
+# ElfVernaux
+
+def ElfVernaux.parse.list(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfVernaux>:
+  do Result<&2, &2, F.ElfError, ElfVernaux>:
+    vna_hash : U32 <- F.elf_r32(big, xs, 0n)
+    vna_flags : U32 <- F.elf_r16(big, xs, 4n)
+    vna_other : U32 <- F.elf_r16(big, xs, 6n)
+    vna_name : U32 <- F.elf_r32(big, xs, 8n)
+    vna_next : U32 <- F.elf_r32(big, xs, 12n)
+    return ElfVernaux{vna_hash, vna_flags, vna_other, vna_name, vna_next}
+
+def ElfVernaux.write(+big: Bool, a: ElfVernaux) -> B.Octets:
+  match a:
+    case ElfVernaux{vna_hash, vna_flags, vna_other, vna_name, vna_next}:
+      B.Octets.concat([F.elf_w32(big, vna_hash), F.elf_w16(big, vna_flags), F.elf_w16(big, vna_other), F.elf_w32(big, vna_name), F.elf_w32(big, vna_next)])
+
+def ElfVernaux.normal(a: ElfVernaux) -> ElfVernaux:
+  match a:
+    case ElfVernaux{vna_hash, vna_flags, vna_other, vna_name, vna_next}:
+      ElfVernaux{vna_hash, B.low16(vna_flags), B.low16(vna_other), vna_name, vna_next}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfVernaux.parse(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfVernaux>:
+  ElfVernaux.parse.list(big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
+def ElfVernaux.table.list.ref(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+  match n:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      F.elf_cons(ElfVernaux, ElfVernaux.parse.list(big, xs), ElfVernaux.table.list.ref(p, big, step, B.drop(step, xs)))
+
+# the entries read so far are kept reversed in acc; the first failure ends it
+def ElfVernaux.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          Done{F.elf_rev_onto(ElfVernaux, rs, Nil{})}
+    case 1n+p:
+      match acc:
+        case Fail{e}:
+          Fail{e}
+        case Done{rs}:
+          ElfVernaux.table.go(p, F.elf_push(ElfVernaux, ElfVernaux.parse.list(big, xs), rs), big, step, B.drop(step, xs))
+
+# n entries, step bytes apart: table.list.ref, tail-recursive (PROOF.bend:
+# vernaux_table_eq), so a table can have any number of entries
+def ElfVernaux.table.list(n: Nat, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+  ElfVernaux.table.go(n, Done{Nil{}}, big, step, xs)
+
+# Public: n entries, step bytes apart, from the start of o
+def ElfVernaux.read_table(big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+  ElfVernaux.table.list(n, big, step, B.Octets.to_list(o))
+
+# a table's bytes, its entries packed (structural)
+def ElfVernaux.write_table.ref(+big: Bool, xs: List<&2, ElfVernaux>) -> B.Octets:
+  match xs:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{x, r}:
+      B.Octets.append(ElfVernaux.write(big, x), ElfVernaux.write_table.ref(big, r))
+
+# the entries rs (the table's entries, last first) in front of acc
+def ElfVernaux.write_table.go(+big: Bool, rs: List<&2, ElfVernaux>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{x, r}:
+      ElfVernaux.write_table.go(big, r, B.Octets.append(ElfVernaux.write(big, x), acc))
+
+# a table's bytes, built from the last entry back, tail-recursively
+# (write_table.ref is the structural form; PROOF.bend: vernaux_write_eq)
+def ElfVernaux.write_table(+big: Bool, xs: List<&2, ElfVernaux>) -> B.Octets:
+  ElfVernaux.write_table.go(big, F.elf_rev_onto(ElfVernaux, xs, Nil{}), B.Octets.empty())
+
+def ElfVernaux.normal_table.ref(xs: List<&2, ElfVernaux>) -> List<&2, ElfVernaux>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, r}:
+      Con{ElfVernaux.normal(x), ElfVernaux.normal_table.ref(r)}
+
+def ElfVernaux.normal_table.go(xs: List<&2, ElfVernaux>, acc: List<&2, ElfVernaux>) -> List<&2, ElfVernaux>:
+  match xs:
+    case Nil{}:
+      F.elf_rev_onto(ElfVernaux, acc, Nil{})
+    case Con{x, r}:
+      ElfVernaux.normal_table.go(r, Con{ElfVernaux.normal(x), acc})
+
+# every entry as the file stores it, tail-recursively (normal_table.ref is
+# the structural form; PROOF.bend: vernaux_normal_eq)
+def ElfVernaux.normal_table(xs: List<&2, ElfVernaux>) -> List<&2, ElfVernaux>:
+  ElfVernaux.normal_table.go(xs, Nil{})
+
+
+# Internal: the chains, one link at a time
+
+def ElfVerdaux.step.go(+big: Bool, +o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdaux>>:
+  do Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdaux>>:
+    +a : ElfVerdaux <- ElfVerdaux.parse(big, B.Octets.take(8n, o))
+    next : Maybe<&2, B.Octets> <- F.elf_link.next(o, ElfVerdaux.vda_next(a))
+    return F.ElfLink{a, next}
+
+# (affine parameters: a chain's step)
+def ElfVerdaux.step(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdaux>>:
+  ElfVerdaux.step.go(big, o)
+
+def ElfVernaux.step.go(+big: Bool, +o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVernaux>>:
+  do Result<&2, &2, F.ElfError, F.ElfLink<ElfVernaux>>:
+    +a : ElfVernaux <- ElfVernaux.parse(big, B.Octets.take(16n, o))
+    next : Maybe<&2, B.Octets> <- F.elf_link.next(o, ElfVernaux.vna_next(a))
+    return F.ElfLink{a, next}
+
+# (affine parameters: a chain's step)
+def ElfVernaux.step(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVernaux>>:
+  ElfVernaux.step.go(big, o)
+
+# the cnt auxiliary entries off bytes after the entry that starts o
+def ElfVerdef.names.go(none: Bool, +cnt: U32, +big: Bool, +o: B.Octets, +off: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+  match none:
+    case True{}:
+      Done{Nil{}}
+    case False{}:
+      do Result<&2, &2, F.ElfError, List<&2, ElfVerdaux>>:
+        a : B.Octets <- F.elf_seek.oct(o, W.W64.from_parts(0, off))
+        r : List<&2, ElfVerdaux> <- F.elf_chain.start(~ElfVerdaux, ~ElfVerdaux.step, U32.to_nat(cnt), big, a)
+        return r
+
+def ElfVerneed.vers.go(none: Bool, +cnt: U32, +big: Bool, +o: B.Octets, +off: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+  match none:
+    case True{}:
+      Done{Nil{}}
+    case False{}:
+      do Result<&2, &2, F.ElfError, List<&2, ElfVernaux>>:
+        a : B.Octets <- F.elf_seek.oct(o, W.W64.from_parts(0, off))
+        r : List<&2, ElfVernaux> <- F.elf_chain.start(~ElfVernaux, ~ElfVernaux.step, U32.to_nat(cnt), big, a)
+        return r
+
+def ElfVerdef.step.go(+big: Bool, +o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdefEntry>>:
+  do Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdefEntry>>:
+    +d : ElfVerdef <- ElfVerdef.parse(big, B.Octets.take(20n, o))
+    +cnt : U32 = ElfVerdef.vd_cnt(d)
+    ns : List<&2, ElfVerdaux> <- ElfVerdef.names.go(U32.is_eq(cnt, 0), cnt, big, o, ElfVerdef.vd_aux(d))
+    next : Maybe<&2, B.Octets> <- F.elf_link.next(o, ElfVerdef.vd_next(d))
+    return F.ElfLink{ElfVerdefEntry{d, ns}, next}
+
+# (affine parameters: a chain's step)
+def ElfVerdef.step(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerdefEntry>>:
+  ElfVerdef.step.go(big, o)
+
+def ElfVerneed.step.go(+big: Bool, +o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerneedEntry>>:
+  do Result<&2, &2, F.ElfError, F.ElfLink<ElfVerneedEntry>>:
+    +n : ElfVerneed <- ElfVerneed.parse(big, B.Octets.take(16n, o))
+    +cnt : U32 = ElfVerneed.vn_cnt(n)
+    vs : List<&2, ElfVernaux> <- ElfVerneed.vers.go(U32.is_eq(cnt, 0), cnt, big, o, ElfVerneed.vn_aux(n))
+    next : Maybe<&2, B.Octets> <- F.elf_link.next(o, ElfVerneed.vn_next(n))
+    return F.ElfLink{ElfVerneedEntry{n, vs}, next}
+
+# (affine parameters: a chain's step)
+def ElfVerneed.step(big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, F.ElfLink<ElfVerneedEntry>>:
+  ElfVerneed.step.go(big, o)
+
+# Public: the chains
+
+# n definitions, the first at the start of o (a .gnu.version_d section's
+# bytes, n its sh_info or DT_VERDEFNUM), each with its vd_cnt names. A chain
+# ends after n entries or at an entry whose next offset is 0;
+# ElfOffsetOutOfRange for an offset past the end, ElfTruncated for an entry
+# cut off.
+def ElfVerdef.chain(+big: Bool, n: U32, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdefEntry>>:
+  F.elf_chain.start(~ElfVerdefEntry, ~ElfVerdef.step, U32.to_nat(n), big, o)
+
+# n needed files, the first at the start of o (a .gnu.version_r section's
+# bytes, n its sh_info or DT_VERNEEDNUM), each with its vn_cnt versions
+def ElfVerneed.chain(+big: Bool, n: U32, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneedEntry>>:
+  F.elf_chain.start(~ElfVerneedEntry, ~ElfVerneed.step, U32.to_nat(n), big, o)
+
+# Public: writing packed chains
+
+# the number of entries of a list, as a U32
+def ElfVerdef.count.go(-A: Data, xs: List<&2, A>, n: U32) -> U32:
+  match xs:
+    case Nil{}:
+      n
+    case Con{x, r}:
+      ElfVerdef.count.go(A, r, U32.add(n, 1))
+
+# names linked one after another: vda_next 8, the last 0 (rs: the names, last
+# first)
+def ElfVerdaux.pack.go(rs: List<&2, ElfVerdaux>, +next: U32, acc: List<&2, ElfVerdaux>) -> List<&2, ElfVerdaux>:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{ElfVerdaux{name, _}, r}:
+      ElfVerdaux.pack.go(r, 8, Con{ElfVerdaux{name, next}, acc})
+
+def ElfVernaux.pack.go(rs: List<&2, ElfVernaux>, +next: U32, acc: List<&2, ElfVernaux>) -> List<&2, ElfVernaux>:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{ElfVernaux{hash, flags, other, name, _}, r}:
+      ElfVernaux.pack.go(r, 16, Con{ElfVernaux{hash, flags, other, name, next}, acc})
+
+def ElfVerdef.pack.entry(e: ElfVerdefEntry, last: Bool) -> ElfVerdefEntry:
+  match e:
+    case ElfVerdefEntry{ElfVerdef{version, flags, ndx, _, hash, _, _}, +ns}:
+      +cnt = ElfVerdef.count.go(ElfVerdaux, ns, 0)
+      ElfVerdefEntry{ElfVerdef{version, flags, ndx, cnt, hash, 20, F.elf_link.off(last, U32.add(20, U32.mul(8, cnt)))}, ElfVerdaux.pack.go(F.elf_rev_onto(ElfVerdaux, ns, Nil{}), 0, Nil{})}
+
+def ElfVerneed.pack.entry(e: ElfVerneedEntry, last: Bool) -> ElfVerneedEntry:
+  match e:
+    case ElfVerneedEntry{ElfVerneed{version, _, file, _, _}, +vs}:
+      +cnt = ElfVerdef.count.go(ElfVernaux, vs, 0)
+      ElfVerneedEntry{ElfVerneed{version, cnt, file, 16, F.elf_link.off(last, U32.add(16, U32.mul(16, cnt)))}, ElfVernaux.pack.go(F.elf_rev_onto(ElfVernaux, vs, Nil{}), 0, Nil{})}
+
+# (rs: the entries, last first; last: whether the head of rs is the last)
+def ElfVerdef.pack.go(rs: List<&2, ElfVerdefEntry>, last: Bool, acc: List<&2, ElfVerdefEntry>) -> List<&2, ElfVerdefEntry>:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{e, r}:
+      ElfVerdef.pack.go(r, False{}, Con{ElfVerdef.pack.entry(e, last), acc})
+
+def ElfVerneed.pack.go(rs: List<&2, ElfVerneedEntry>, last: Bool, acc: List<&2, ElfVerneedEntry>) -> List<&2, ElfVerneedEntry>:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{e, r}:
+      ElfVerneed.pack.go(r, False{}, Con{ElfVerneed.pack.entry(e, last), acc})
+
+# the entries with their links set for a packed chain: each definition
+# followed by its names (vd_cnt their number, vd_aux 20, vda_next 8, the last
+# 0), then the next definition (vd_next 20 + 8 * vd_cnt, the last 0)
+def ElfVerdef.pack(es: List<&2, ElfVerdefEntry>) -> List<&2, ElfVerdefEntry>:
+  ElfVerdef.pack.go(F.elf_rev_onto(ElfVerdefEntry, es, Nil{}), True{}, Nil{})
+
+# the same for needed files (vn_aux 16, vna_next 16, vn_next 16 + 16 * vn_cnt)
+def ElfVerneed.pack(es: List<&2, ElfVerneedEntry>) -> List<&2, ElfVerneedEntry>:
+  ElfVerneed.pack.go(F.elf_rev_onto(ElfVerneedEntry, es, Nil{}), True{}, Nil{})
+
+def ElfVerdef.write_chain.go(+big: Bool, rs: List<&2, ElfVerdefEntry>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{ElfVerdefEntry{d, ns}, r}:
+      ElfVerdef.write_chain.go(big, r, B.Octets.append(B.Octets.append(ElfVerdef.write(big, d), ElfVerdaux.write_table(big, ns)), acc))
+
+def ElfVerneed.write_chain.go(+big: Bool, rs: List<&2, ElfVerneedEntry>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{ElfVerneedEntry{n, vs}, r}:
+      ElfVerneed.write_chain.go(big, r, B.Octets.append(B.Octets.append(ElfVerneed.write(big, n), ElfVernaux.write_table(big, vs)), acc))
+
+# each entry's bytes followed by its auxiliary entries', in order; the links
+# are written as they are (ElfVerdef.pack sets them for this layout)
+def ElfVerdef.write_chain(+big: Bool, es: List<&2, ElfVerdefEntry>) -> B.Octets:
+  ElfVerdef.write_chain.go(big, F.elf_rev_onto(ElfVerdefEntry, es, Nil{}), B.Octets.empty())
+
+def ElfVerneed.write_chain(+big: Bool, es: List<&2, ElfVerneedEntry>) -> B.Octets:
+  ElfVerneed.write_chain.go(big, F.elf_rev_onto(ElfVerneedEntry, es, Nil{}), B.Octets.empty())
+
+# Public: the sections
+
+def ElfVersym.all.go(d: B.Octets, big: Bool, +entsize: U32, size: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+    n : U32 <- F.elf_count(entsize, 2, size)
+    vs : List<&2, ElfVersym> <- ElfVersym.read_table(big, U32.to_nat(n), U32.to_nat(entsize), d)
+    return vs
+
+# whether section s is .gnu.version, .gnu.version_d, .gnu.version_r
+# (SHT_GNU_versym 0x6fffffff, SHT_GNU_verdef 0x6ffffffd, SHT_GNU_verneed
+# 0x6ffffffe)
+def ElfVersym.is_section(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 1879048191)
+
+def ElfVerdef.is_section(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 1879048189)
+
+def ElfVerneed.is_section(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 1879048190)
+
+# the entries of a .gnu.version section s of the file o, whose header is h:
+# sh_size / sh_entsize of them (ElfBadSectionType, ElfBadEntrySize as for
+# symbols)
+def ElfVersym.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfVersym>>:
+    ok : Unit <- F.elf_check(ElfVersym.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    entsize : U32 <- F.elf_small(S.ElfShdr.sh_entsize(s))
+    size : U32 <- F.elf_small(S.ElfShdr.sh_size(s))
+    vs : List<&2, ElfVersym> <- ElfVersym.all.go(d, H.ElfHeader.big(h), entsize, size)
+    return vs
+
+# the definitions of a .gnu.version_d section (sh_info of them)
+def ElfVerdef.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfVerdefEntry>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfVerdefEntry>>:
+    ok : Unit <- F.elf_check(ElfVerdef.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    es : List<&2, ElfVerdefEntry> <- ElfVerdef.chain(H.ElfHeader.big(h), S.ElfShdr.sh_info(s), d)
+    return es
+
+# the needed files of a .gnu.version_r section (sh_info of them)
+def ElfVerneed.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfVerneedEntry>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfVerneedEntry>>:
+    ok : Unit <- F.elf_check(ElfVerneed.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    es : List<&2, ElfVerneedEntry> <- ElfVerneed.chain(H.ElfHeader.big(h), S.ElfShdr.sh_info(s), d)
+    return es

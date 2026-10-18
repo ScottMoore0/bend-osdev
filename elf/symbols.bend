@@ -7,6 +7,7 @@ import ../bytes/bytes.bend as B
 import ./fields.bend as F
 import ./header.bend as H
 import ./sections.bend as S
+import ./strtab.bend as T
 
 # A symbol table entry. st_info and st_other are bytes, st_shndx is 16 bits;
 # in ELF32, st_value and st_size are widened to W64.
@@ -99,8 +100,30 @@ def ElfSym.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &2
     case False{}:
       ElfSym.parse.y32(big, xs)
 
-# n entries, step bytes apart (structural: the reference the proofs reason
-# about)
+# Public: writing one entry (its bytes), and the entry as the file stores it
+
+def ElfSym.write(is64: Bool, +big: Bool, s: ElfSym) -> B.Octets:
+  match is64 s:
+    case True{} ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
+      B.Octets.concat([F.elf_w32(big, st_name), B.Octets.of_list([st_info, st_other]), F.elf_w16(big, st_shndx), F.elf_w64(big, st_value), F.elf_w64(big, st_size)])
+    case False{} ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
+      B.Octets.concat([F.elf_w32(big, st_name), F.elf_w32(big, W.W64.lo(st_value)), F.elf_w32(big, W.W64.lo(st_size)), B.Octets.of_list([st_info, st_other]), F.elf_w16(big, st_shndx)])
+
+# the entry as the file stores it: st_info and st_other keep their low 8 bits,
+# st_shndx its low 16, and ELF32 the low 32 bits of st_value and st_size
+def ElfSym.normal(+is64: Bool, s: ElfSym) -> ElfSym:
+  match s:
+    case ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
+      ElfSym{st_name, F.elf_fit(is64, st_value), F.elf_fit(is64, st_size), B.byte(st_info), B.byte(st_other), B.low16(st_shndx)}
+
+# Public: one entry, and a table
+
+# the entry at the start of o (ElfTruncated if o is too short)
+def ElfSym.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfSym>:
+  ElfSym.parse.list(is64, big, B.Octets.to_list(o))
+
+# Internal: n entries, step bytes apart (structural: the reference the proofs
+# reason about)
 def ElfSym.table.list.ref(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
   match n:
     case 0n:
@@ -129,69 +152,50 @@ def ElfSym.table.go(n: Nat, acc: Result<&2, &2, F.ElfError, List<&2, ElfSym>>, +
 def ElfSym.table.list(n: Nat, +is64: Bool, +big: Bool, +step: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
   ElfSym.table.go(n, Done{Nil{}}, is64, big, step, xs)
 
-# Public: one entry, and a table
-
-# the symbol table entry at the start of o (ElfTruncated if o is too short)
-def ElfSym.parse(is64: Bool, big: Bool, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfSym>:
-  ElfSym.parse.list(is64, big, B.Octets.to_list(o))
-
-# n entries, step bytes apart, from the start of o
+# Public: n entries, step bytes apart, from the start of o
 def ElfSym.read_table(is64: Bool, big: Bool, n: Nat, step: Nat, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfSym>>:
   ElfSym.table.list(n, is64, big, step, B.Octets.to_list(o))
 
-def ElfSym.write(is64: Bool, +big: Bool, s: ElfSym) -> B.Octets:
-  match is64 s:
-    case True{} ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
-      B.Octets.concat([F.elf_w32(big, st_name), B.Octets.of_list([st_info, st_other]), F.elf_w16(big, st_shndx), F.elf_w64(big, st_value), F.elf_w64(big, st_size)])
-    case False{} ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
-      B.Octets.concat([F.elf_w32(big, st_name), F.elf_w32(big, W.W64.lo(st_value)), F.elf_w32(big, W.W64.lo(st_size)), B.Octets.of_list([st_info, st_other]), F.elf_w16(big, st_shndx)])
-
-# the entry as the file stores it: st_info and st_other keep their low 8 bits,
-# st_shndx its low 16, and ELF32 the low 32 bits of st_value and st_size
-def ElfSym.normal(+is64: Bool, s: ElfSym) -> ElfSym:
-  match s:
-    case ElfSym{st_name, st_value, st_size, st_info, st_other, st_shndx}:
-      ElfSym{st_name, F.elf_fit(is64, st_value), F.elf_fit(is64, st_size), B.byte(st_info), B.byte(st_other), B.low16(st_shndx)}
-
-# a table's bytes, its entries packed
-def ElfSym.write_table.ref(+is64: Bool, +big: Bool, ss: List<&2, ElfSym>) -> B.Octets:
-  match ss:
+# a table's bytes, its entries packed (structural)
+def ElfSym.write_table.ref(+is64: Bool, +big: Bool, xs: List<&2, ElfSym>) -> B.Octets:
+  match xs:
     case Nil{}:
       B.Octets.empty()
-    case Con{s, t}:
-      B.Octets.append(ElfSym.write(is64, big, s), ElfSym.write_table.ref(is64, big, t))
+    case Con{x, r}:
+      B.Octets.append(ElfSym.write(is64, big, x), ElfSym.write_table.ref(is64, big, r))
 
 # the entries rs (the table's entries, last first) in front of acc
 def ElfSym.write_table.go(+is64: Bool, +big: Bool, rs: List<&2, ElfSym>, acc: B.Octets) -> B.Octets:
   match rs:
     case Nil{}:
       acc
-    case Con{s, t}:
-      ElfSym.write_table.go(is64, big, t, B.Octets.append(ElfSym.write(is64, big, s), acc))
+    case Con{x, r}:
+      ElfSym.write_table.go(is64, big, r, B.Octets.append(ElfSym.write(is64, big, x), acc))
 
 # a table's bytes, built from the last entry back, tail-recursively
 # (write_table.ref is the structural form; PROOF.bend: sym_write_eq)
-def ElfSym.write_table(+is64: Bool, +big: Bool, ss: List<&2, ElfSym>) -> B.Octets:
-  ElfSym.write_table.go(is64, big, F.elf_rev_onto(ElfSym, ss, Nil{}), B.Octets.empty())
+def ElfSym.write_table(+is64: Bool, +big: Bool, xs: List<&2, ElfSym>) -> B.Octets:
+  ElfSym.write_table.go(is64, big, F.elf_rev_onto(ElfSym, xs, Nil{}), B.Octets.empty())
 
-def ElfSym.normal_table.ref(+is64: Bool, ss: List<&2, ElfSym>) -> List<&2, ElfSym>:
-  match ss:
+def ElfSym.normal_table.ref(+is64: Bool, xs: List<&2, ElfSym>) -> List<&2, ElfSym>:
+  match xs:
     case Nil{}:
       Nil{}
-    case Con{s, t}:
-      Con{ElfSym.normal(is64, s), ElfSym.normal_table.ref(is64, t)}
+    case Con{x, r}:
+      Con{ElfSym.normal(is64, x), ElfSym.normal_table.ref(is64, r)}
 
-def ElfSym.normal_table.go(+is64: Bool, ss: List<&2, ElfSym>, acc: List<&2, ElfSym>) -> List<&2, ElfSym>:
-  match ss:
+def ElfSym.normal_table.go(+is64: Bool, xs: List<&2, ElfSym>, acc: List<&2, ElfSym>) -> List<&2, ElfSym>:
+  match xs:
     case Nil{}:
       F.elf_rev_onto(ElfSym, acc, Nil{})
-    case Con{s, t}:
-      ElfSym.normal_table.go(is64, t, Con{ElfSym.normal(is64, s), acc})
+    case Con{x, r}:
+      ElfSym.normal_table.go(is64, r, Con{ElfSym.normal(is64, x), acc})
 
 # every entry as the file stores it, tail-recursively (normal_table.ref is
 # the structural form; PROOF.bend: sym_normal_eq)
-def ElfSym.normal_table(+is64: Bool, ss: List<&2, ElfSym>) -> List<&2, ElfSym>:
-  ElfSym.normal_table.go(is64, ss, Nil{})
+def ElfSym.normal_table(+is64: Bool, xs: List<&2, ElfSym>) -> List<&2, ElfSym>:
+  ElfSym.normal_table.go(is64, xs, Nil{})
+
 
 # The symbol table of a section
 
@@ -217,3 +221,10 @@ def ElfSym.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.
 # symbol table's sh_link)
 def ElfSym.name(strtab: B.Octets, s: ElfSym) -> Result<&2, &2, F.ElfError, B.Octets>:
   S.ElfShdr.string(strtab, ElfSym.st_name(s))
+
+# the same through an index of the string table (strtab.bend): the same
+# answer (LAWS.bend: sym_name_indexed), each lookup in time in proportion to
+# the name's length, so naming every symbol of a table costs the table's
+# length, not its length times the string table's
+def ElfSym.name_in(strtab: T.ElfStrtab, s: ElfSym) -> Result<&2, &2, F.ElfError, B.Octets>:
+  T.ElfStrtab.string(strtab, ElfSym.st_name(s))

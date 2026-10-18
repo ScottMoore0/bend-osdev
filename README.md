@@ -32,7 +32,7 @@ GPL source was read.
 | [blockdev](blockdev/) | The block-device interface the file systems read through, and an in-memory device |
 | [crc](crc/) | CRCs in the Rocksoft parameter model (CRC-32C, CRC-32, CRC-16, CRC-T10DIF, three CRC-64s), bitwise and table-driven |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
-| [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols |
+| [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |
 | [partition](partition/) | MBR and GPT partition tables, with GPT's CRCs |
 | [uuid](uuid/) | UUIDs (RFC 9562), text and both byte orders |
 | [netheaders](netheaders/) | Ethernet, ARP, IPv4, IPv6, ICMP, UDP and TCP headers, and the Internet checksum |

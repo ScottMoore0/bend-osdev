@@ -1,0 +1,182 @@
+# bend-osdev-elf, relocs.bend: relocation entries (gABI, "Relocation"; ELF-64
+# Object File Format, section 8): Elf32_Rel, Elf32_Rela, Elf64_Rel and
+# Elf64_Rela, one by one and as the table of a SHT_REL or SHT_RELA section,
+# and r_info's symbol index and relocation type. A relocation section's
+# sh_link is its symbol table and its sh_info the section it applies to
+# (gABI, "Sections"); relocation types are processor-specific and are not
+# named here.
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+import ./sections.bend as S
+
+# A relocation entry. The same record serves both kinds: with an addend
+# (rela: SHT_RELA's Elf32_Rela and Elf64_Rela) and without (SHT_REL's
+# Elf32_Rel and Elf64_Rel, whose r_addend reads as 0). In ELF32, r_offset and
+# r_info are widened to W64, and r_addend, an Elf32_Sword, is sign-extended:
+# in both classes r_addend is the addend as a 64-bit two's complement value.
+type ElfReloc is Data:
+  ElfReloc{r_offset: W.W64, r_info: W.W64, r_addend: W.W64}
+
+#@ACCESSORS ElfReloc
+
+# an entry's size: Elf64_Rela 24 bytes, Elf64_Rel 16, Elf32_Rela 12, Elf32_Rel 8
+def ElfReloc.size(is64: Bool, rela: Bool) -> U32:
+  match is64 rela:
+    case True{} True{}:
+      24
+    case True{} False{}:
+      16
+    case False{} True{}:
+      12
+    case False{} False{}:
+      8
+
+# r_info's symbol table index: ELF64_R_SYM (the high 32 bits), ELF32_R_SYM
+# (all but the low 8 bits)
+def ElfReloc.sym(is64: Bool, r: ElfReloc) -> U32:
+  match is64:
+    case True{}:
+      W.W64.hi(ElfReloc.r_info(r))
+    case False{}:
+      U32.shrn(W.W64.lo(ElfReloc.r_info(r)), 8n)
+
+# r_info's relocation type: ELF64_R_TYPE (the low 32 bits), ELF32_R_TYPE (the
+# low 8 bits)
+def ElfReloc.type(is64: Bool, r: ElfReloc) -> U32:
+  match is64:
+    case True{}:
+      W.W64.lo(ElfReloc.r_info(r))
+    case False{}:
+      U32.and(255, W.W64.lo(ElfReloc.r_info(r)))
+
+# r_info from a symbol index and a type (ELF64_R_INFO, ELF32_R_INFO)
+def ElfReloc.info(is64: Bool, sym: U32, kind: U32) -> W.W64:
+  match is64:
+    case True{}:
+      W.W64.from_parts(sym, kind)
+    case False{}:
+      W.W64.from_parts(0, U32.or(U32.shln(sym, 8n), U32.and(255, kind)))
+
+# Internal: reading from a list
+
+def ElfReloc.addend.r64(rela: Bool, +big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, W.W64>:
+  match rela:
+    case True{}:
+      F.elf_r64(big, xs, 16n)
+    case False{}:
+      Done{W.W64.zero()}
+
+def ElfReloc.addend.r32(rela: Bool, +big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, W.W64>:
+  match rela:
+    case True{}:
+      do Result<&2, &2, F.ElfError, W.W64>:
+        a : U32 <- F.elf_r32(big, xs, 8n)
+        return F.elf_sext(a)
+    case False{}:
+      Done{W.W64.zero()}
+
+def ElfReloc.parse.r64(+big: Bool, rela: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfReloc>:
+  do Result<&2, &2, F.ElfError, ElfReloc>:
+    r_offset : W.W64 <- F.elf_r64(big, xs, 0n)
+    r_info : W.W64 <- F.elf_r64(big, xs, 8n)
+    r_addend : W.W64 <- ElfReloc.addend.r64(rela, big, xs)
+    return ElfReloc{r_offset, r_info, r_addend}
+
+def ElfReloc.parse.r32(+big: Bool, rela: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfReloc>:
+  do Result<&2, &2, F.ElfError, ElfReloc>:
+    r_offset : W.W64 <- F.elf_r32w(big, xs, 0n)
+    r_info : W.W64 <- F.elf_r32w(big, xs, 4n)
+    r_addend : W.W64 <- ElfReloc.addend.r32(rela, big, xs)
+    return ElfReloc{r_offset, r_info, r_addend}
+
+def ElfReloc.parse.list(is64: Bool, big: Bool, rela: Bool, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfReloc>:
+  match is64:
+    case True{}:
+      ElfReloc.parse.r64(big, rela, xs)
+    case False{}:
+      ElfReloc.parse.r32(big, rela, xs)
+
+# Public: writing one entry (its bytes), and the entry as the file stores it
+
+def ElfReloc.write.addend(rela: Bool, +is64: Bool, +big: Bool, a: W.W64) -> B.Octets:
+  match rela:
+    case True{}:
+      F.elf_wword(is64, big, a)
+    case False{}:
+      B.Octets.empty()
+
+def ElfReloc.write(+is64: Bool, +big: Bool, rela: Bool, r: ElfReloc) -> B.Octets:
+  match r:
+    case ElfReloc{r_offset, r_info, r_addend}:
+      B.Octets.concat([F.elf_wword(is64, big, r_offset), F.elf_wword(is64, big, r_info), ElfReloc.write.addend(rela, is64, big, r_addend)])
+
+def ElfReloc.normal.addend(rela: Bool, is64: Bool, a: W.W64) -> W.W64:
+  match rela is64:
+    case True{} True{}:
+      a
+    case True{} False{}:
+      F.elf_sext(W.W64.lo(a))
+    case False{} _:
+      W.W64.zero()
+
+# the entry as the file stores it: in ELF32 the low 32 bits of r_offset and
+# r_info and the sign-extended low 32 bits of r_addend; r_addend 0 without an
+# addend
+def ElfReloc.normal(+is64: Bool, rela: Bool, r: ElfReloc) -> ElfReloc:
+  match r:
+    case ElfReloc{r_offset, r_info, r_addend}:
+      ElfReloc{F.elf_fit(is64, r_offset), F.elf_fit(is64, r_info), ElfReloc.normal.addend(rela, is64, r_addend)}
+
+#@TABLE ElfReloc is64,big,rela is64,rela
+
+# Relocation sections
+
+# whether section s holds relocations with addends (SHT_RELA, 4)
+def ElfReloc.is_rela(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 4)
+
+# whether section s holds relocations: SHT_RELA (4) or SHT_REL (9)
+def ElfReloc.is_section(s: S.ElfShdr) -> Bool:
+  +t = S.ElfShdr.sh_type(s)
+  Bool.or(U32.is_eq(t, 4), U32.is_eq(t, 9))
+
+def ElfReloc.sections.pick(hit: Bool, s: S.ElfShdr, acc: List<&2, S.ElfShdr>) -> List<&2, S.ElfShdr>:
+  match hit:
+    case True{}:
+      Con{s, acc}
+    case False{}:
+      acc
+
+def ElfReloc.sections.go(ss: List<&2, S.ElfShdr>, acc: List<&2, S.ElfShdr>) -> List<&2, S.ElfShdr>:
+  match ss:
+    case Nil{}:
+      F.elf_rev_onto(S.ElfShdr, acc, Nil{})
+    case Con{+s, t}:
+      ElfReloc.sections.go(t, ElfReloc.sections.pick(ElfReloc.is_section(s), s, acc))
+
+# the relocation sections (SHT_REL and SHT_RELA) of a section header table,
+# in order (from ElfShdr.all, or ElfFile.sections)
+def ElfReloc.sections(ss: List<&2, S.ElfShdr>) -> List<&2, S.ElfShdr>:
+  ElfReloc.sections.go(ss, Nil{})
+
+def ElfReloc.all.go(d: B.Octets, +is64: Bool, big: Bool, +rela: Bool, +entsize: U32, size: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfReloc>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfReloc>>:
+    n : U32 <- F.elf_count(entsize, ElfReloc.size(is64, rela), size)
+    rs : List<&2, ElfReloc> <- ElfReloc.read_table(is64, big, rela, U32.to_nat(n), U32.to_nat(entsize), d)
+    return rs
+
+# The relocations of section s of the file o, whose header is h: sh_size /
+# sh_entsize entries, with addends if s is SHT_RELA. ElfBadSectionType unless
+# s is SHT_REL or SHT_RELA; ElfBadEntrySize unless sh_entsize is at least an
+# entry's size and divides sh_size.
+def ElfReloc.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfReloc>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfReloc>>:
+    ok : Unit <- F.elf_check(ElfReloc.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    entsize : U32 <- F.elf_small(S.ElfShdr.sh_entsize(s))
+    size : U32 <- F.elf_small(S.ElfShdr.sh_size(s))
+    rs : List<&2, ElfReloc> <- ElfReloc.all.go(d, H.ElfHeader.is64(h), H.ElfHeader.big(h), ElfReloc.is_rela(s), entsize, size)
+    return rs

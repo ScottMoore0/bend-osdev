@@ -1,0 +1,158 @@
+# bend-osdev-elf, dynamic.bend: the dynamic section (gABI, "Dynamic Section";
+# ELF-64 Object File Format, section 9): Elf32_Dyn and Elf64_Dyn entries, one
+# by one and as the table of a SHT_DYNAMIC section; the common d_tag values,
+# named (ElfDynTag); and the strings some entries point to (DT_NEEDED,
+# DT_SONAME, DT_RPATH, DT_RUNPATH: offsets into the section at the dynamic
+# section's sh_link).
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+import ./sections.bend as S
+import ./strtab.bend as T
+
+# A dynamic section entry: d_tag and d_un (d_val or d_ptr, one field here). In
+# ELF32 both are widened to W64 (d_tag, an Elf32_Sword, is not sign-extended:
+# no tag is negative).
+type ElfDyn is Data:
+  ElfDyn{d_tag: W.W64, d_val: W.W64}
+
+#@ACCESSORS ElfDyn
+
+# an entry's size: 16 bytes in ELF64, 8 in ELF32
+def ElfDyn.size(is64: Bool) -> U32:
+  match is64:
+    case True{}:
+      16
+    case False{}:
+      8
+
+#@ENUM ElfDynTag
+
+# Internal: reading from a list
+
+def ElfDyn.parse.d64(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfDyn>:
+  do Result<&2, &2, F.ElfError, ElfDyn>:
+    d_tag : W.W64 <- F.elf_r64(big, xs, 0n)
+    d_val : W.W64 <- F.elf_r64(big, xs, 8n)
+    return ElfDyn{d_tag, d_val}
+
+def ElfDyn.parse.d32(+big: Bool, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfDyn>:
+  do Result<&2, &2, F.ElfError, ElfDyn>:
+    d_tag : W.W64 <- F.elf_r32w(big, xs, 0n)
+    d_val : W.W64 <- F.elf_r32w(big, xs, 4n)
+    return ElfDyn{d_tag, d_val}
+
+def ElfDyn.parse.list(is64: Bool, big: Bool, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfDyn>:
+  match is64:
+    case True{}:
+      ElfDyn.parse.d64(big, xs)
+    case False{}:
+      ElfDyn.parse.d32(big, xs)
+
+# Public: writing one entry (its bytes), and the entry as the file stores it
+
+def ElfDyn.write(+is64: Bool, +big: Bool, d: ElfDyn) -> B.Octets:
+  match d:
+    case ElfDyn{d_tag, d_val}:
+      B.Octets.append(F.elf_wword(is64, big, d_tag), F.elf_wword(is64, big, d_val))
+
+# the entry as the file stores it (ELF32 keeps the low 32 bits)
+def ElfDyn.normal(+is64: Bool, d: ElfDyn) -> ElfDyn:
+  match d:
+    case ElfDyn{d_tag, d_val}:
+      ElfDyn{F.elf_fit(is64, d_tag), F.elf_fit(is64, d_val)}
+
+#@TABLE ElfDyn is64,big is64
+
+# Tags
+
+def ElfDyn.tag.go(small: Bool, lo: U32) -> Maybe<&2, ElfDynTag>:
+  match small:
+    case True{}:
+      ElfDynTag.of_code(lo)
+    case False{}:
+      None{}
+
+# the entry's tag, if it is one of the named ones
+def ElfDyn.tag(d: ElfDyn) -> Maybe<&2, ElfDynTag>:
+  +t = ElfDyn.d_tag(d)
+  ElfDyn.tag.go(U32.is_eq(W.W64.hi(t), 0), W.W64.lo(t))
+
+# whether the entry is DT_NULL, which ends the dynamic array
+def ElfDyn.is_null(d: ElfDyn) -> Bool:
+  W.W64.is_zero(ElfDyn.d_tag(d))
+
+# (ended: the last entry kept, at the head of acc, is DT_NULL)
+def ElfDyn.until_null.go(ds: List<&2, ElfDyn>, ended: Bool, acc: List<&2, ElfDyn>) -> List<&2, ElfDyn>:
+  match ds ended:
+    case _ True{}:
+      F.elf_rev_onto(ElfDyn, acc, Nil{})
+    case Nil{} False{}:
+      F.elf_rev_onto(ElfDyn, acc, Nil{})
+    case Con{+d, r} False{}:
+      ElfDyn.until_null.go(r, ElfDyn.is_null(d), Con{d, acc})
+
+# the entries up to and including the first DT_NULL, which ends the array
+# (gABI); all of them if there is none. A section may hold DT_NULL entries
+# after the end as padding.
+def ElfDyn.until_null(ds: List<&2, ElfDyn>) -> List<&2, ElfDyn>:
+  ElfDyn.until_null.go(ds, False{}, Nil{})
+
+# the string an entry's d_val points to (DT_NEEDED, DT_SONAME, DT_RPATH,
+# DT_RUNPATH), given the indexed string table at the dynamic section's
+# sh_link; ElfOffsetOutOfRange if d_val is 2^32 or more
+def ElfDyn.string(strtab: T.ElfStrtab, d: ElfDyn) -> Result<&2, &2, F.ElfError, B.Octets>:
+  do Result<&2, &2, F.ElfError, B.Octets>:
+    i : U32 <- F.elf_small(ElfDyn.d_val(d))
+    s : B.Octets <- T.ElfStrtab.string(strtab, i)
+    return s
+
+# The dynamic section
+
+# whether section s is the dynamic section (SHT_DYNAMIC, 6)
+def ElfDyn.is_section(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 6)
+
+def ElfDyn.section.pick(hit: Bool, s: S.ElfShdr) -> Maybe<&2, S.ElfShdr>:
+  match hit:
+    case True{}:
+      Some{s}
+    case False{}:
+      None{}
+
+def ElfDyn.section.go(ss: List<&2, S.ElfShdr>, found: Maybe<&2, S.ElfShdr>) -> Maybe<&2, S.ElfShdr>:
+  match ss:
+    case Nil{}:
+      found
+    case Con{+s, r}:
+      match found:
+        case Some{f}:
+          Some{f}
+        case None{}:
+          ElfDyn.section.go(r, ElfDyn.section.pick(ElfDyn.is_section(s), s))
+
+# the first SHT_DYNAMIC section of a section header table (the gABI allows
+# one)
+def ElfDyn.section(ss: List<&2, S.ElfShdr>) -> Maybe<&2, S.ElfShdr>:
+  ElfDyn.section.go(ss, None{})
+
+def ElfDyn.all.go(d: B.Octets, +is64: Bool, big: Bool, +entsize: U32, size: U32) -> Result<&2, &2, F.ElfError, List<&2, ElfDyn>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfDyn>>:
+    n : U32 <- F.elf_count(entsize, ElfDyn.size(is64), size)
+    ds : List<&2, ElfDyn> <- ElfDyn.read_table(is64, big, U32.to_nat(n), U32.to_nat(entsize), d)
+    return ds
+
+# The entries of section s of the file o, whose header is h: sh_size /
+# sh_entsize entries (ElfDyn.until_null keeps those before the end).
+# ElfBadSectionType unless s is SHT_DYNAMIC; ElfBadEntrySize unless
+# sh_entsize is at least an entry's size and divides sh_size.
+def ElfDyn.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfDyn>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfDyn>>:
+    ok : Unit <- F.elf_check(ElfDyn.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    entsize : U32 <- F.elf_small(S.ElfShdr.sh_entsize(s))
+    size : U32 <- F.elf_small(S.ElfShdr.sh_size(s))
+    ds : List<&2, ElfDyn> <- ElfDyn.all.go(d, H.ElfHeader.is64(h), H.ElfHeader.big(h), entsize, size)
+    return ds

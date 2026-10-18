@@ -1,0 +1,123 @@
+# String tables, indexed (strtab.bend): the trie's lookup is List.get on the
+# suffixes it was built from, and the suffix at offset n, cut at its NUL, is
+# the reference lookup's string. No bit patterns: induction on the trie's
+# depth, the suffixes and the offset.
+
+def strtab_sfx_go(xs: List<&2, U32>, +acc: List<&2, List<&2, U32>>) -> {T.elf_suffixes.go(xs, acc) == F.elf_rev_onto(List<&2, U32>, acc, T.elf_suffixes(xs)) : List<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      strtab_sfx_go(t, Con{Con{h, t}, acc})
+
+def strtab_sfx_eq(+xs: List<&2, U32>) -> {T.elf_suffixes(xs) == T.elf_suffixes.fast(xs) : List<&2, List<&2, U32>>}:
+  Equal.sym(List<&2, List<&2, U32>>, T.elf_suffixes.fast(xs), T.elf_suffixes(xs), strtab_sfx_go(xs, Nil{}))
+
+def strtab_alt_go(ys: List<&2, List<&2, U32>>, +keep: Bool, +acc: List<&2, List<&2, U32>>) -> {T.elf_alt.go(ys, keep, acc) == F.elf_rev_onto(List<&2, U32>, acc, T.elf_alt(ys, keep)) : List<&2, List<&2, U32>>}:
+  match ys:
+    case Nil{}:
+      {==}
+    case Con{+y, t}:
+      match keep:
+        case True{}:
+          strtab_alt_go(t, False{}, Con{y, acc})
+        case False{}:
+          strtab_alt_go(t, True{}, acc)
+
+def strtab_alt_eq(+ys: List<&2, List<&2, U32>>, +keep: Bool) -> {T.elf_alt(ys, keep) == T.elf_alt.fast(ys, keep) : List<&2, List<&2, U32>>}:
+  Equal.sym(List<&2, List<&2, U32>>, T.elf_alt.fast(ys, keep), T.elf_alt(ys, keep), strtab_alt_go(ys, keep, Nil{}))
+
+# where the m-th element of the even (keep) or odd half was
+def strtab_pos(keep: Bool, m: Nat) -> Nat:
+  match keep:
+    case True{}:
+      Nat.double(m)
+    case False{}:
+      1n+Nat.double(m)
+
+def strtab_alt_get(ys: List<&2, List<&2, U32>>, keep: Bool, m: Nat) -> {List.get(&2, List<&2, U32>, T.elf_alt(ys, keep), m) == List.get(&2, List<&2, U32>, ys, strtab_pos(keep, m)) : Maybe<&2, List<&2, U32>>}:
+  match ys:
+    case Nil{}:
+      {==}
+    case Con{y, t}:
+      match keep:
+        case True{}:
+          match m:
+            case 0n:
+              {==}
+            case 1n+(+q):
+              strtab_alt_get(t, False{}, q)
+        case False{}:
+          strtab_alt_get(t, True{}, m)
+
+# a one-element list doubled
+def strtab_dbl1(+s: List<&2, U32>, k: Nat) -> {List.get(&2, List<&2, U32>, [s], Nat.double(k)) == List.get(&2, List<&2, U32>, [s], k) : Maybe<&2, List<&2, U32>>}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+(+q):
+      {==}
+
+def strtab_zero(d: Nat, w: Word(d), +s: List<&2, U32>) -> {T.elf_trie.at0(T.elf_trie.zero(d, w), s) == List.get(&2, List<&2, U32>, [s], Word.to_nat(d, w)) : Maybe<&2, List<&2, U32>>}:
+  match d:
+    case 0n:
+      {==}
+    case 1n+(+p):
+      match w:
+        case WCon{False{}, +r}:
+          Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.at0(T.elf_trie.zero(p, r), s), List.get(&2, List<&2, U32>, [s], Word.to_nat(p, r)), List.get(&2, List<&2, U32>, [s], Nat.double(Word.to_nat(p, r))), strtab_zero(p, r, s), Equal.sym(Maybe<&2, List<&2, U32>>, List.get(&2, List<&2, U32>, [s], Nat.double(Word.to_nat(p, r))), List.get(&2, List<&2, U32>, [s], Word.to_nat(p, r)), strtab_dbl1(s, Word.to_nat(p, r))))
+        case WCon{True{}, r}:
+          {==}
+
+def strtab_find(d: Nat, +ys: List<&2, List<&2, U32>>, w: Word(d)) -> {T.elf_trie.find(d, T.elf_trie(d, ys), w) == List.get(&2, List<&2, U32>, ys, Word.to_nat(d, w)) : Maybe<&2, List<&2, U32>>}:
+  match d:
+    case 0n:
+      match ys:
+        case Nil{}:
+          {==}
+        case Con{y, t}:
+          {==}
+    case 1n+(+p):
+      match ys:
+        case Nil{}:
+          {==}
+        case Con{+a, +t}:
+          match t:
+            case Nil{}:
+              strtab_zero(1n+p, w, a)
+            case Con{+b, +r}:
+              match w:
+                case WCon{False{}, +q}:
+                  %strtab_alt_eq(Con{a, Con{b, r}}, True{}) : {T.elf_trie.find(p, T.elf_trie(p, _), q) == List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, Nat.double(Word.to_nat(p, q))) : Maybe<&2, List<&2, U32>>}
+                  Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.find(p, T.elf_trie(p, T.elf_alt(Con{a, Con{b, r}}, True{})), q), List.get(&2, List<&2, U32>, T.elf_alt(Con{a, Con{b, r}}, True{}), Word.to_nat(p, q)), List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, Nat.double(Word.to_nat(p, q))), strtab_find(p, T.elf_alt(Con{a, Con{b, r}}, True{}), q), strtab_alt_get(Con{a, Con{b, r}}, True{}, Word.to_nat(p, q)))
+                case WCon{True{}, +q}:
+                  %strtab_alt_eq(Con{a, Con{b, r}}, False{}) : {T.elf_trie.find(p, T.elf_trie(p, _), q) == List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, 1n+Nat.double(Word.to_nat(p, q))) : Maybe<&2, List<&2, U32>>}
+                  Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.find(p, T.elf_trie(p, T.elf_alt(Con{a, Con{b, r}}, False{})), q), List.get(&2, List<&2, U32>, T.elf_alt(Con{a, Con{b, r}}, False{}), Word.to_nat(p, q)), List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, 1n+Nat.double(Word.to_nat(p, q))), strtab_find(p, T.elf_alt(Con{a, Con{b, r}}, False{}), q), strtab_alt_get(Con{a, Con{b, r}}, False{}, Word.to_nat(p, q)))
+
+def strtab_cut(xs: List<&2, U32>, n: Nat) -> {T.elf_strtab.cut(List.get(&2, List<&2, U32>, T.elf_suffixes(xs), n)) == F.elf_string.list(xs, n) : Maybe<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      match n:
+        case 0n:
+          {==}
+        case 1n+(+p):
+          strtab_cut(t, p)
+
+def strtab_string(+strtab: B.Octets, i: U32) -> {T.ElfStrtab.string(T.ElfStrtab.of(strtab), i) == S.ElfShdr.string(strtab, i) : Result<&2, &2, F.ElfError, B.Octets>}:
+  match i:
+    case U32{+w}:
+      %strtab_sfx_eq(B.Octets.to_list(strtab)) : {F.elf_string.result(T.elf_strtab.cut(T.elf_trie.find(32n, T.elf_trie(32n, _), w))) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      %Equal.sym(Maybe<&2, List<&2, U32>>, T.elf_trie.find(32n, T.elf_trie(32n, T.elf_suffixes(B.Octets.to_list(strtab))), w), List.get(&2, List<&2, U32>, T.elf_suffixes(B.Octets.to_list(strtab)), Word.to_nat(32n, w)), strtab_find(32n, T.elf_suffixes(B.Octets.to_list(strtab)), w)) : {F.elf_string.result(T.elf_strtab.cut(_)) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      %Equal.sym(Maybe<&2, List<&2, U32>>, T.elf_strtab.cut(List.get(&2, List<&2, U32>, T.elf_suffixes(B.Octets.to_list(strtab)), Word.to_nat(32n, w))), F.elf_string.list(B.Octets.to_list(strtab), Word.to_nat(32n, w)), strtab_cut(B.Octets.to_list(strtab), Word.to_nat(32n, w))) : {F.elf_string.result(_) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      {==}
+
+def Laws.strtab_string(strtab, i):
+  strtab_string(strtab, i)
+
+def Laws.sym_name_indexed(strtab, s):
+  strtab_string(strtab, Y.ElfSym.st_name(s))
+
+def Laws.shdr_name_indexed(names, s):
+  strtab_string(names, S.ElfShdr.sh_name(s))

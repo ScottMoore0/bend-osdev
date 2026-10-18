@@ -10,16 +10,26 @@ import ./header.bend as H
 import ./sections.bend as S
 import ./segments.bend as P
 import ./symbols.bend as Y
+import ./strtab.bend as T
+import ./relocs.bend as R
+import ./dynamic.bend as D
+import ./notes.bend as N
+import ./versions.bend as V
 import ./elf.bend as E
 import ./LAWS.bend as Laws
 
+# Written by gen/pgen2.py: edit it, or gen/proof/*.bend.part, not this file.
+# (word64's and bytes' PROOF.bend are imported for the proofs of their laws,
+# which these proofs use; nothing of theirs but the laws is used.)
+#
 # The round trips go in three steps, never looking inside W64 or Octets:
 #   1. bytes' interface law octets_append_list turns the Octets append into a
 #      list append;
 #   2. word64's interface law parts_of writes each W64 field as its two 32-bit
 #      halves joined (from_parts(hi(v), lo(v)));
 #   3. with every U32 split into its 32 bits, the reader computes on symbolic
-#      bits and meets the writer's input ({==}), in each class and byte order.
+#      bits and meets the writer's input ({==}), in each class, byte order and
+#      kind.
 
 # The ELF header
 
@@ -121,8 +131,8 @@ def phdr_drop(is64: Bool, big: Bool, x: P.ElfPhdr, r: List<&2, U32>) -> {r == B.
       %WL.parts_of(f7) : {r == B.drop(U32.to_nat(P.ElfPhdr.size(is64)), B.append(B.Octets.to_list(P.ElfPhdr.write(is64, big, P.ElfPhdr{f0, f1, W.W64.from_parts(W.W64.hi(f2), W.W64.lo(f2)), W.W64.from_parts(W.W64.hi(f3), W.W64.lo(f3)), W.W64.from_parts(W.W64.hi(f4), W.W64.lo(f4)), W.W64.from_parts(W.W64.hi(f5), W.W64.lo(f5)), W.W64.from_parts(W.W64.hi(f6), W.W64.lo(f6)), _})), r)) : List<&2, U32>}
       phdr_drop_bits(is64, big, f0, f1, W.W64.hi(f2), W.W64.lo(f2), W.W64.hi(f3), W.W64.lo(f3), W.W64.hi(f4), W.W64.lo(f4), W.W64.hi(f5), W.W64.lo(f5), W.W64.hi(f6), W.W64.lo(f6), W.W64.hi(f7), W.W64.lo(f7), r)
 
-def phdr_table_ref(+is64: Bool, +big: Bool, ps: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, ps), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, ps))) == Done{P.ElfPhdr.normal_table.ref(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
-  match ps:
+def phdr_table_ref(+is64: Bool, +big: Bool, xs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.table.list.ref(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs))) == Done{P.ElfPhdr.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  match xs:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
@@ -216,14 +226,14 @@ def phdr_normal_eq(+is64: Bool, +xs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.normal_t
   Equal.sym(List<&2, P.ElfPhdr>, P.ElfPhdr.normal_table(is64, xs), P.ElfPhdr.normal_table.ref(is64, xs), phdr_ngo(is64, xs, Nil{}))
 
 # the table law: the tail-recursive forms rewritten to the structural ones
-def phdr_table(+is64: Bool, +big: Bool, +ps: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table(is64, big, ps)) == Done{P.ElfPhdr.normal_table(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
-  %phdr_write_eq(is64, big, ps) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), _) == Done{P.ElfPhdr.normal_table(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-  %phdr_normal_eq(is64, ps) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, ps), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table.ref(is64, big, ps)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-  %phdr_table_eq(List.length(&2, P.ElfPhdr, ps), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, ps))) : {_ == Done{P.ElfPhdr.normal_table.ref(is64, ps)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
-  phdr_table_ref(is64, big, ps)
+def phdr_table(+is64: Bool, +big: Bool, +xs: List<&2, P.ElfPhdr>) -> {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, xs), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table(is64, big, xs)) == Done{P.ElfPhdr.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}:
+  %phdr_write_eq(is64, big, xs) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, xs), U32.to_nat(P.ElfPhdr.size(is64)), _) == Done{P.ElfPhdr.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  %phdr_normal_eq(is64, xs) : {P.ElfPhdr.read_table(is64, big, List.length(&2, P.ElfPhdr, xs), U32.to_nat(P.ElfPhdr.size(is64)), P.ElfPhdr.write_table.ref(is64, big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  %phdr_table_eq(List.length(&2, P.ElfPhdr, xs), is64, big, U32.to_nat(P.ElfPhdr.size(is64)), B.Octets.to_list(P.ElfPhdr.write_table.ref(is64, big, xs))) : {_ == Done{P.ElfPhdr.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, P.ElfPhdr>>}
+  phdr_table_ref(is64, big, xs)
 
-def Laws.phdr_table_round_trip(is64, big, ps):
-  phdr_table(is64, big, ps)
+def Laws.phdr_table_round_trip(is64, big, xs):
+  phdr_table(is64, big, xs)
 
 # S.ElfShdr
 
@@ -278,8 +288,8 @@ def shdr_drop(is64: Bool, big: Bool, x: S.ElfShdr, r: List<&2, U32>) -> {r == B.
       %WL.parts_of(f9) : {r == B.drop(U32.to_nat(S.ElfShdr.size(is64)), B.append(B.Octets.to_list(S.ElfShdr.write(is64, big, S.ElfShdr{f0, f1, W.W64.from_parts(W.W64.hi(f2), W.W64.lo(f2)), W.W64.from_parts(W.W64.hi(f3), W.W64.lo(f3)), W.W64.from_parts(W.W64.hi(f4), W.W64.lo(f4)), W.W64.from_parts(W.W64.hi(f5), W.W64.lo(f5)), f6, f7, W.W64.from_parts(W.W64.hi(f8), W.W64.lo(f8)), _})), r)) : List<&2, U32>}
       shdr_drop_bits(is64, big, f0, f1, W.W64.hi(f2), W.W64.lo(f2), W.W64.hi(f3), W.W64.lo(f3), W.W64.hi(f4), W.W64.lo(f4), W.W64.hi(f5), W.W64.lo(f5), f6, f7, W.W64.hi(f8), W.W64.lo(f8), W.W64.hi(f9), W.W64.lo(f9), r)
 
-def shdr_table_ref(+is64: Bool, +big: Bool, ss: List<&2, S.ElfShdr>) -> {S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, ss), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, ss))) == Done{S.ElfShdr.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
-  match ss:
+def shdr_table_ref(+is64: Bool, +big: Bool, xs: List<&2, S.ElfShdr>) -> {S.ElfShdr.table.list.ref(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs))) == Done{S.ElfShdr.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  match xs:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
@@ -373,14 +383,14 @@ def shdr_normal_eq(+is64: Bool, +xs: List<&2, S.ElfShdr>) -> {S.ElfShdr.normal_t
   Equal.sym(List<&2, S.ElfShdr>, S.ElfShdr.normal_table(is64, xs), S.ElfShdr.normal_table.ref(is64, xs), shdr_ngo(is64, xs, Nil{}))
 
 # the table law: the tail-recursive forms rewritten to the structural ones
-def shdr_table(+is64: Bool, +big: Bool, +ss: List<&2, S.ElfShdr>) -> {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table(is64, big, ss)) == Done{S.ElfShdr.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
-  %shdr_write_eq(is64, big, ss) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), _) == Done{S.ElfShdr.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-  %shdr_normal_eq(is64, ss) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, ss), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table.ref(is64, big, ss)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-  %shdr_table_eq(List.length(&2, S.ElfShdr, ss), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, ss))) : {_ == Done{S.ElfShdr.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
-  shdr_table_ref(is64, big, ss)
+def shdr_table(+is64: Bool, +big: Bool, +xs: List<&2, S.ElfShdr>) -> {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, xs), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table(is64, big, xs)) == Done{S.ElfShdr.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}:
+  %shdr_write_eq(is64, big, xs) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, xs), U32.to_nat(S.ElfShdr.size(is64)), _) == Done{S.ElfShdr.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  %shdr_normal_eq(is64, xs) : {S.ElfShdr.read_table(is64, big, List.length(&2, S.ElfShdr, xs), U32.to_nat(S.ElfShdr.size(is64)), S.ElfShdr.write_table.ref(is64, big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  %shdr_table_eq(List.length(&2, S.ElfShdr, xs), is64, big, U32.to_nat(S.ElfShdr.size(is64)), B.Octets.to_list(S.ElfShdr.write_table.ref(is64, big, xs))) : {_ == Done{S.ElfShdr.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, S.ElfShdr>>}
+  shdr_table_ref(is64, big, xs)
 
-def Laws.shdr_table_round_trip(is64, big, ss):
-  shdr_table(is64, big, ss)
+def Laws.shdr_table_round_trip(is64, big, xs):
+  shdr_table(is64, big, xs)
 
 # Y.ElfSym
 
@@ -427,8 +437,8 @@ def sym_drop(is64: Bool, big: Bool, x: Y.ElfSym, r: List<&2, U32>) -> {r == B.dr
       %WL.parts_of(f2) : {r == B.drop(U32.to_nat(Y.ElfSym.size(is64)), B.append(B.Octets.to_list(Y.ElfSym.write(is64, big, Y.ElfSym{f0, W.W64.from_parts(W.W64.hi(f1), W.W64.lo(f1)), _, f3, f4, f5})), r)) : List<&2, U32>}
       sym_drop_bits(is64, big, f0, W.W64.hi(f1), W.W64.lo(f1), W.W64.hi(f2), W.W64.lo(f2), f3, f4, f5, r)
 
-def sym_table_ref(+is64: Bool, +big: Bool, ss: List<&2, Y.ElfSym>) -> {Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, ss), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, ss))) == Done{Y.ElfSym.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
-  match ss:
+def sym_table_ref(+is64: Bool, +big: Bool, xs: List<&2, Y.ElfSym>) -> {Y.ElfSym.table.list.ref(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs))) == Done{Y.ElfSym.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  match xs:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
@@ -522,14 +532,1015 @@ def sym_normal_eq(+is64: Bool, +xs: List<&2, Y.ElfSym>) -> {Y.ElfSym.normal_tabl
   Equal.sym(List<&2, Y.ElfSym>, Y.ElfSym.normal_table(is64, xs), Y.ElfSym.normal_table.ref(is64, xs), sym_ngo(is64, xs, Nil{}))
 
 # the table law: the tail-recursive forms rewritten to the structural ones
-def sym_table(+is64: Bool, +big: Bool, +ss: List<&2, Y.ElfSym>) -> {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table(is64, big, ss)) == Done{Y.ElfSym.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
-  %sym_write_eq(is64, big, ss) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), _) == Done{Y.ElfSym.normal_table(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-  %sym_normal_eq(is64, ss) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, ss), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table.ref(is64, big, ss)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-  %sym_table_eq(List.length(&2, Y.ElfSym, ss), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, ss))) : {_ == Done{Y.ElfSym.normal_table.ref(is64, ss)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
-  sym_table_ref(is64, big, ss)
+def sym_table(+is64: Bool, +big: Bool, +xs: List<&2, Y.ElfSym>) -> {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, xs), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table(is64, big, xs)) == Done{Y.ElfSym.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}:
+  %sym_write_eq(is64, big, xs) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, xs), U32.to_nat(Y.ElfSym.size(is64)), _) == Done{Y.ElfSym.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  %sym_normal_eq(is64, xs) : {Y.ElfSym.read_table(is64, big, List.length(&2, Y.ElfSym, xs), U32.to_nat(Y.ElfSym.size(is64)), Y.ElfSym.write_table.ref(is64, big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  %sym_table_eq(List.length(&2, Y.ElfSym, xs), is64, big, U32.to_nat(Y.ElfSym.size(is64)), B.Octets.to_list(Y.ElfSym.write_table.ref(is64, big, xs))) : {_ == Done{Y.ElfSym.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>}
+  sym_table_ref(is64, big, xs)
 
-def Laws.sym_table_round_trip(is64, big, ss):
-  sym_table(is64, big, ss)
+def Laws.sym_table_round_trip(is64, big, xs):
+  sym_table(is64, big, xs)
+
+# R.ElfReloc
+
+def rel_bits(is64: Bool, big: Bool, rela: Bool, h0: U32, l0: U32, h1: U32, l1: U32, h2: U32, l2: U32, r: List<&2, U32>) -> {R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1), W.W64.from_parts(h2, l2)})), r)) == Done{R.ElfReloc.normal(is64, rela, R.ElfReloc{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1), W.W64.from_parts(h2, l2)})} : Result<&2, &2, F.ElfError, R.ElfReloc>}:
+  match is64 big rela h0 l0 h1 l1 h2 l2:
+    case True{} True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def rel_list(is64: Bool, big: Bool, rela: Bool, x: R.ElfReloc, r: List<&2, U32>) -> {R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), r)) == Done{R.ElfReloc.normal(is64, rela, x)} : Result<&2, &2, F.ElfError, R.ElfReloc>}:
+  match x:
+    case R.ElfReloc{+f0, +f1, +f2}:
+      %WL.parts_of(f0) : {R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{_, f1, f2})), r)) == Done{R.ElfReloc.normal(is64, rela, R.ElfReloc{_, f1, f2})} : Result<&2, &2, F.ElfError, R.ElfReloc>}
+      %WL.parts_of(f1) : {R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _, f2})), r)) == Done{R.ElfReloc.normal(is64, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _, f2})} : Result<&2, &2, F.ElfError, R.ElfReloc>}
+      %WL.parts_of(f2) : {R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), W.W64.from_parts(W.W64.hi(f1), W.W64.lo(f1)), _})), r)) == Done{R.ElfReloc.normal(is64, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), W.W64.from_parts(W.W64.hi(f1), W.W64.lo(f1)), _})} : Result<&2, &2, F.ElfError, R.ElfReloc>}
+      rel_bits(is64, big, rela, W.W64.hi(f0), W.W64.lo(f0), W.W64.hi(f1), W.W64.lo(f1), W.W64.hi(f2), W.W64.lo(f2), r)
+
+def rel_rt(+is64: Bool, +big: Bool, +rela: Bool, +x: R.ElfReloc, +rest: B.Octets) -> {R.ElfReloc.parse(is64, big, rela, B.Octets.append(R.ElfReloc.write(is64, big, rela, x), rest)) == Done{R.ElfReloc.normal(is64, rela, x)} : Result<&2, &2, F.ElfError, R.ElfReloc>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(R.ElfReloc.write(is64, big, rela, x), rest)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), B.Octets.to_list(rest)), BL.octets_append_list(R.ElfReloc.write(is64, big, rela, x), rest)) : {R.ElfReloc.parse.list(is64, big, rela, _) == Done{R.ElfReloc.normal(is64, rela, x)} : Result<&2, &2, F.ElfError, R.ElfReloc>}
+  rel_list(is64, big, rela, x, B.Octets.to_list(rest))
+
+def Laws.rel_round_trip(is64, big, rela, x, rest):
+  rel_rt(is64, big, rela, x, rest)
+
+def rel_drop_bits(is64: Bool, big: Bool, rela: Bool, h0: U32, l0: U32, h1: U32, l1: U32, h2: U32, l2: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1), W.W64.from_parts(h2, l2)})), r)) : List<&2, U32>}:
+  match is64 big rela h0 l0 h1 l1 h2 l2:
+    case True{} True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h2_0, WCon{h2_1, WCon{h2_2, WCon{h2_3, WCon{h2_4, WCon{h2_5, WCon{h2_6, WCon{h2_7, WCon{h2_8, WCon{h2_9, WCon{h2_10, WCon{h2_11, WCon{h2_12, WCon{h2_13, WCon{h2_14, WCon{h2_15, WCon{h2_16, WCon{h2_17, WCon{h2_18, WCon{h2_19, WCon{h2_20, WCon{h2_21, WCon{h2_22, WCon{h2_23, WCon{h2_24, WCon{h2_25, WCon{h2_26, WCon{h2_27, WCon{h2_28, WCon{h2_29, WCon{h2_30, WCon{h2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l2_0, WCon{l2_1, WCon{l2_2, WCon{l2_3, WCon{l2_4, WCon{l2_5, WCon{l2_6, WCon{l2_7, WCon{l2_8, WCon{l2_9, WCon{l2_10, WCon{l2_11, WCon{l2_12, WCon{l2_13, WCon{l2_14, WCon{l2_15, WCon{l2_16, WCon{l2_17, WCon{l2_18, WCon{l2_19, WCon{l2_20, WCon{l2_21, WCon{l2_22, WCon{l2_23, WCon{l2_24, WCon{l2_25, WCon{l2_26, WCon{l2_27, WCon{l2_28, WCon{l2_29, WCon{l2_30, WCon{l2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def rel_drop(is64: Bool, big: Bool, rela: Bool, x: R.ElfReloc, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), r)) : List<&2, U32>}:
+  match x:
+    case R.ElfReloc{+f0, +f1, +f2}:
+      %WL.parts_of(f0) : {r == B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{_, f1, f2})), r)) : List<&2, U32>}
+      %WL.parts_of(f1) : {r == B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _, f2})), r)) : List<&2, U32>}
+      %WL.parts_of(f2) : {r == B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, R.ElfReloc{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), W.W64.from_parts(W.W64.hi(f1), W.W64.lo(f1)), _})), r)) : List<&2, U32>}
+      rel_drop_bits(is64, big, rela, W.W64.hi(f0), W.W64.lo(f0), W.W64.hi(f1), W.W64.lo(f1), W.W64.hi(f2), W.W64.lo(f2), r)
+
+def rel_table_ref(+is64: Bool, +big: Bool, +rela: Bool, xs: List<&2, R.ElfReloc>) -> {R.ElfReloc.table.list.ref(List.length(&2, R.ElfReloc, xs), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs))) == Done{R.ElfReloc.normal_table.ref(is64, rela, xs)} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(R.ElfReloc.write(is64, big, rela, x), R.ElfReloc.write_table.ref(is64, big, rela, xs))), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs))), BL.octets_append_list(R.ElfReloc.write(is64, big, rela, x), R.ElfReloc.write_table.ref(is64, big, rela, xs))) : {R.ElfReloc.table.list.ref(List.length(&2, R.ElfReloc, Con{x, xs}), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), _) == Done{R.ElfReloc.normal_table.ref(is64, rela, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, R.ElfReloc>, R.ElfReloc.parse.list(is64, big, rela, B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs)))), Done{R.ElfReloc.normal(is64, rela, x)}, rel_list(is64, big, rela, x, B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs)))) : {F.elf_cons(R.ElfReloc, _, R.ElfReloc.table.list.ref(List.length(&2, R.ElfReloc, xs), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), B.drop(U32.to_nat(R.ElfReloc.size(is64, rela)), B.append(B.Octets.to_list(R.ElfReloc.write(is64, big, rela, x)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs)))))) == Done{R.ElfReloc.normal_table.ref(is64, rela, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+      %rel_drop(is64, big, rela, x, B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs))) : {F.elf_cons(R.ElfReloc, Done{R.ElfReloc.normal(is64, rela, x)}, R.ElfReloc.table.list.ref(List.length(&2, R.ElfReloc, xs), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), _)) == Done{R.ElfReloc.normal_table.ref(is64, rela, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, R.ElfReloc.table.list.ref(List.length(&2, R.ElfReloc, xs), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs))), Done{R.ElfReloc.normal_table.ref(is64, rela, xs)}, rel_table_ref(is64, big, rela, xs)) : {F.elf_cons(R.ElfReloc, Done{R.ElfReloc.normal(is64, rela, x)}, _) == Done{R.ElfReloc.normal_table.ref(is64, rela, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def rel_fin(rs: List<&2, R.ElfReloc>, m: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>) -> Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(R.ElfReloc, rs, l)}
+
+def rel_fin2(acc: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, m: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>) -> Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      rel_fin(rs, m)
+
+def rel_push(+r: Result<&2, &2, F.ElfError, R.ElfReloc>, +rs: List<&2, R.ElfReloc>, +m: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>) -> {rel_fin2(F.elf_push(R.ElfReloc, r, rs), m) == rel_fin(rs, F.elf_cons(R.ElfReloc, r, m)) : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def rel_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, +is64: Bool, +big: Bool, +rela: Bool, +step: Nat, +ys: List<&2, U32>) -> {R.ElfReloc.table.go(n, acc, is64, big, rela, step, ys) == rel_fin2(acc, R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys)) : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, R.ElfReloc.table.go(p, F.elf_push(R.ElfReloc, R.ElfReloc.parse.list(is64, big, rela, ys), rs), is64, big, rela, step, B.drop(step, ys)), rel_fin2(F.elf_push(R.ElfReloc, R.ElfReloc.parse.list(is64, big, rela, ys), rs), R.ElfReloc.table.list.ref(p, is64, big, rela, step, B.drop(step, ys))), rel_fin(rs, F.elf_cons(R.ElfReloc, R.ElfReloc.parse.list(is64, big, rela, ys), R.ElfReloc.table.list.ref(p, is64, big, rela, step, B.drop(step, ys)))), rel_go(p, F.elf_push(R.ElfReloc, R.ElfReloc.parse.list(is64, big, rela, ys), rs), is64, big, rela, step, B.drop(step, ys)), rel_push(R.ElfReloc.parse.list(is64, big, rela, ys), rs, R.ElfReloc.table.list.ref(p, is64, big, rela, step, B.drop(step, ys))))
+
+def rel_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>) -> {rel_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def rel_table_eq(+n: Nat, +is64: Bool, +big: Bool, +rela: Bool, +step: Nat, +ys: List<&2, U32>) -> {R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys) == R.ElfReloc.table.list(n, is64, big, rela, step, ys) : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, R.ElfReloc.table.list(n, is64, big, rela, step, ys), R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>, R.ElfReloc.table.go(n, Done{Nil{}}, is64, big, rela, step, ys), rel_fin(Nil{}, R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys)), R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys), rel_go(n, Done{Nil{}}, is64, big, rela, step, ys), rel_fin_nil(R.ElfReloc.table.list.ref(n, is64, big, rela, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def rel_wgo(+is64: Bool, +big: Bool, +rela: Bool, +xs: List<&2, R.ElfReloc>, +rs: List<&2, R.ElfReloc>) -> {R.ElfReloc.write_table.go(is64, big, rela, F.elf_rev_onto(R.ElfReloc, xs, rs), B.Octets.empty()) == R.ElfReloc.write_table.go(is64, big, rela, rs, R.ElfReloc.write_table.ref(is64, big, rela, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      rel_wgo(is64, big, rela, t, Con{x, rs})
+
+def rel_write_eq(+is64: Bool, +big: Bool, +rela: Bool, +xs: List<&2, R.ElfReloc>) -> {R.ElfReloc.write_table.ref(is64, big, rela, xs) == R.ElfReloc.write_table(is64, big, rela, xs) : B.Octets}:
+  Equal.sym(B.Octets, R.ElfReloc.write_table(is64, big, rela, xs), R.ElfReloc.write_table.ref(is64, big, rela, xs), rel_wgo(is64, big, rela, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def rel_ngo(+is64: Bool, +rela: Bool, +xs: List<&2, R.ElfReloc>, +acc: List<&2, R.ElfReloc>) -> {R.ElfReloc.normal_table.go(is64, rela, xs, acc) == F.elf_rev_onto(R.ElfReloc, acc, R.ElfReloc.normal_table.ref(is64, rela, xs)) : List<&2, R.ElfReloc>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      rel_ngo(is64, rela, t, Con{R.ElfReloc.normal(is64, rela, x), acc})
+
+def rel_normal_eq(+is64: Bool, +rela: Bool, +xs: List<&2, R.ElfReloc>) -> {R.ElfReloc.normal_table.ref(is64, rela, xs) == R.ElfReloc.normal_table(is64, rela, xs) : List<&2, R.ElfReloc>}:
+  Equal.sym(List<&2, R.ElfReloc>, R.ElfReloc.normal_table(is64, rela, xs), R.ElfReloc.normal_table.ref(is64, rela, xs), rel_ngo(is64, rela, xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def rel_table(+is64: Bool, +big: Bool, +rela: Bool, +xs: List<&2, R.ElfReloc>) -> {R.ElfReloc.read_table(is64, big, rela, List.length(&2, R.ElfReloc, xs), U32.to_nat(R.ElfReloc.size(is64, rela)), R.ElfReloc.write_table(is64, big, rela, xs)) == Done{R.ElfReloc.normal_table(is64, rela, xs)} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}:
+  %rel_write_eq(is64, big, rela, xs) : {R.ElfReloc.read_table(is64, big, rela, List.length(&2, R.ElfReloc, xs), U32.to_nat(R.ElfReloc.size(is64, rela)), _) == Done{R.ElfReloc.normal_table(is64, rela, xs)} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+  %rel_normal_eq(is64, rela, xs) : {R.ElfReloc.read_table(is64, big, rela, List.length(&2, R.ElfReloc, xs), U32.to_nat(R.ElfReloc.size(is64, rela)), R.ElfReloc.write_table.ref(is64, big, rela, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+  %rel_table_eq(List.length(&2, R.ElfReloc, xs), is64, big, rela, U32.to_nat(R.ElfReloc.size(is64, rela)), B.Octets.to_list(R.ElfReloc.write_table.ref(is64, big, rela, xs))) : {_ == Done{R.ElfReloc.normal_table.ref(is64, rela, xs)} : Result<&2, &2, F.ElfError, List<&2, R.ElfReloc>>}
+  rel_table_ref(is64, big, rela, xs)
+
+def Laws.rel_table_round_trip(is64, big, rela, xs):
+  rel_table(is64, big, rela, xs)
+
+# D.ElfDyn
+
+def dyn_bits(is64: Bool, big: Bool, h0: U32, l0: U32, h1: U32, l1: U32, r: List<&2, U32>) -> {D.ElfDyn.parse.list(is64, big, B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1)})), r)) == Done{D.ElfDyn.normal(is64, D.ElfDyn{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1)})} : Result<&2, &2, F.ElfError, D.ElfDyn>}:
+  match is64 big h0 l0 h1 l1:
+    case True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def dyn_list(is64: Bool, big: Bool, x: D.ElfDyn, r: List<&2, U32>) -> {D.ElfDyn.parse.list(is64, big, B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), r)) == Done{D.ElfDyn.normal(is64, x)} : Result<&2, &2, F.ElfError, D.ElfDyn>}:
+  match x:
+    case D.ElfDyn{+f0, +f1}:
+      %WL.parts_of(f0) : {D.ElfDyn.parse.list(is64, big, B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{_, f1})), r)) == Done{D.ElfDyn.normal(is64, D.ElfDyn{_, f1})} : Result<&2, &2, F.ElfError, D.ElfDyn>}
+      %WL.parts_of(f1) : {D.ElfDyn.parse.list(is64, big, B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _})), r)) == Done{D.ElfDyn.normal(is64, D.ElfDyn{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _})} : Result<&2, &2, F.ElfError, D.ElfDyn>}
+      dyn_bits(is64, big, W.W64.hi(f0), W.W64.lo(f0), W.W64.hi(f1), W.W64.lo(f1), r)
+
+def dyn_rt(+is64: Bool, +big: Bool, +x: D.ElfDyn, +rest: B.Octets) -> {D.ElfDyn.parse(is64, big, B.Octets.append(D.ElfDyn.write(is64, big, x), rest)) == Done{D.ElfDyn.normal(is64, x)} : Result<&2, &2, F.ElfError, D.ElfDyn>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(D.ElfDyn.write(is64, big, x), rest)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), B.Octets.to_list(rest)), BL.octets_append_list(D.ElfDyn.write(is64, big, x), rest)) : {D.ElfDyn.parse.list(is64, big, _) == Done{D.ElfDyn.normal(is64, x)} : Result<&2, &2, F.ElfError, D.ElfDyn>}
+  dyn_list(is64, big, x, B.Octets.to_list(rest))
+
+def Laws.dyn_round_trip(is64, big, x, rest):
+  dyn_rt(is64, big, x, rest)
+
+def dyn_drop_bits(is64: Bool, big: Bool, h0: U32, l0: U32, h1: U32, l1: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(D.ElfDyn.size(is64)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{W.W64.from_parts(h0, l0), W.W64.from_parts(h1, l1)})), r)) : List<&2, U32>}:
+  match is64 big h0 l0 h1 l1:
+    case True{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case True{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} True{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} False{} U32{WCon{h0_0, WCon{h0_1, WCon{h0_2, WCon{h0_3, WCon{h0_4, WCon{h0_5, WCon{h0_6, WCon{h0_7, WCon{h0_8, WCon{h0_9, WCon{h0_10, WCon{h0_11, WCon{h0_12, WCon{h0_13, WCon{h0_14, WCon{h0_15, WCon{h0_16, WCon{h0_17, WCon{h0_18, WCon{h0_19, WCon{h0_20, WCon{h0_21, WCon{h0_22, WCon{h0_23, WCon{h0_24, WCon{h0_25, WCon{h0_26, WCon{h0_27, WCon{h0_28, WCon{h0_29, WCon{h0_30, WCon{h0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l0_0, WCon{l0_1, WCon{l0_2, WCon{l0_3, WCon{l0_4, WCon{l0_5, WCon{l0_6, WCon{l0_7, WCon{l0_8, WCon{l0_9, WCon{l0_10, WCon{l0_11, WCon{l0_12, WCon{l0_13, WCon{l0_14, WCon{l0_15, WCon{l0_16, WCon{l0_17, WCon{l0_18, WCon{l0_19, WCon{l0_20, WCon{l0_21, WCon{l0_22, WCon{l0_23, WCon{l0_24, WCon{l0_25, WCon{l0_26, WCon{l0_27, WCon{l0_28, WCon{l0_29, WCon{l0_30, WCon{l0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{h1_0, WCon{h1_1, WCon{h1_2, WCon{h1_3, WCon{h1_4, WCon{h1_5, WCon{h1_6, WCon{h1_7, WCon{h1_8, WCon{h1_9, WCon{h1_10, WCon{h1_11, WCon{h1_12, WCon{h1_13, WCon{h1_14, WCon{h1_15, WCon{h1_16, WCon{h1_17, WCon{h1_18, WCon{h1_19, WCon{h1_20, WCon{h1_21, WCon{h1_22, WCon{h1_23, WCon{h1_24, WCon{h1_25, WCon{h1_26, WCon{h1_27, WCon{h1_28, WCon{h1_29, WCon{h1_30, WCon{h1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{l1_0, WCon{l1_1, WCon{l1_2, WCon{l1_3, WCon{l1_4, WCon{l1_5, WCon{l1_6, WCon{l1_7, WCon{l1_8, WCon{l1_9, WCon{l1_10, WCon{l1_11, WCon{l1_12, WCon{l1_13, WCon{l1_14, WCon{l1_15, WCon{l1_16, WCon{l1_17, WCon{l1_18, WCon{l1_19, WCon{l1_20, WCon{l1_21, WCon{l1_22, WCon{l1_23, WCon{l1_24, WCon{l1_25, WCon{l1_26, WCon{l1_27, WCon{l1_28, WCon{l1_29, WCon{l1_30, WCon{l1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def dyn_drop(is64: Bool, big: Bool, x: D.ElfDyn, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(D.ElfDyn.size(is64)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), r)) : List<&2, U32>}:
+  match x:
+    case D.ElfDyn{+f0, +f1}:
+      %WL.parts_of(f0) : {r == B.drop(U32.to_nat(D.ElfDyn.size(is64)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{_, f1})), r)) : List<&2, U32>}
+      %WL.parts_of(f1) : {r == B.drop(U32.to_nat(D.ElfDyn.size(is64)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, D.ElfDyn{W.W64.from_parts(W.W64.hi(f0), W.W64.lo(f0)), _})), r)) : List<&2, U32>}
+      dyn_drop_bits(is64, big, W.W64.hi(f0), W.W64.lo(f0), W.W64.hi(f1), W.W64.lo(f1), r)
+
+def dyn_table_ref(+is64: Bool, +big: Bool, xs: List<&2, D.ElfDyn>) -> {D.ElfDyn.table.list.ref(List.length(&2, D.ElfDyn, xs), is64, big, U32.to_nat(D.ElfDyn.size(is64)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs))) == Done{D.ElfDyn.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(D.ElfDyn.write(is64, big, x), D.ElfDyn.write_table.ref(is64, big, xs))), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs))), BL.octets_append_list(D.ElfDyn.write(is64, big, x), D.ElfDyn.write_table.ref(is64, big, xs))) : {D.ElfDyn.table.list.ref(List.length(&2, D.ElfDyn, Con{x, xs}), is64, big, U32.to_nat(D.ElfDyn.size(is64)), _) == Done{D.ElfDyn.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, D.ElfDyn>, D.ElfDyn.parse.list(is64, big, B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs)))), Done{D.ElfDyn.normal(is64, x)}, dyn_list(is64, big, x, B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs)))) : {F.elf_cons(D.ElfDyn, _, D.ElfDyn.table.list.ref(List.length(&2, D.ElfDyn, xs), is64, big, U32.to_nat(D.ElfDyn.size(is64)), B.drop(U32.to_nat(D.ElfDyn.size(is64)), B.append(B.Octets.to_list(D.ElfDyn.write(is64, big, x)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs)))))) == Done{D.ElfDyn.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+      %dyn_drop(is64, big, x, B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs))) : {F.elf_cons(D.ElfDyn, Done{D.ElfDyn.normal(is64, x)}, D.ElfDyn.table.list.ref(List.length(&2, D.ElfDyn, xs), is64, big, U32.to_nat(D.ElfDyn.size(is64)), _)) == Done{D.ElfDyn.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, D.ElfDyn.table.list.ref(List.length(&2, D.ElfDyn, xs), is64, big, U32.to_nat(D.ElfDyn.size(is64)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs))), Done{D.ElfDyn.normal_table.ref(is64, xs)}, dyn_table_ref(is64, big, xs)) : {F.elf_cons(D.ElfDyn, Done{D.ElfDyn.normal(is64, x)}, _) == Done{D.ElfDyn.normal_table.ref(is64, Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def dyn_fin(rs: List<&2, D.ElfDyn>, m: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>) -> Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(D.ElfDyn, rs, l)}
+
+def dyn_fin2(acc: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, m: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>) -> Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      dyn_fin(rs, m)
+
+def dyn_push(+r: Result<&2, &2, F.ElfError, D.ElfDyn>, +rs: List<&2, D.ElfDyn>, +m: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>) -> {dyn_fin2(F.elf_push(D.ElfDyn, r, rs), m) == dyn_fin(rs, F.elf_cons(D.ElfDyn, r, m)) : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def dyn_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {D.ElfDyn.table.go(n, acc, is64, big, step, ys) == dyn_fin2(acc, D.ElfDyn.table.list.ref(n, is64, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, D.ElfDyn.table.go(p, F.elf_push(D.ElfDyn, D.ElfDyn.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), dyn_fin2(F.elf_push(D.ElfDyn, D.ElfDyn.parse.list(is64, big, ys), rs), D.ElfDyn.table.list.ref(p, is64, big, step, B.drop(step, ys))), dyn_fin(rs, F.elf_cons(D.ElfDyn, D.ElfDyn.parse.list(is64, big, ys), D.ElfDyn.table.list.ref(p, is64, big, step, B.drop(step, ys)))), dyn_go(p, F.elf_push(D.ElfDyn, D.ElfDyn.parse.list(is64, big, ys), rs), is64, big, step, B.drop(step, ys)), dyn_push(D.ElfDyn.parse.list(is64, big, ys), rs, D.ElfDyn.table.list.ref(p, is64, big, step, B.drop(step, ys))))
+
+def dyn_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>) -> {dyn_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def dyn_table_eq(+n: Nat, +is64: Bool, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {D.ElfDyn.table.list.ref(n, is64, big, step, ys) == D.ElfDyn.table.list(n, is64, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, D.ElfDyn.table.list(n, is64, big, step, ys), D.ElfDyn.table.list.ref(n, is64, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>, D.ElfDyn.table.go(n, Done{Nil{}}, is64, big, step, ys), dyn_fin(Nil{}, D.ElfDyn.table.list.ref(n, is64, big, step, ys)), D.ElfDyn.table.list.ref(n, is64, big, step, ys), dyn_go(n, Done{Nil{}}, is64, big, step, ys), dyn_fin_nil(D.ElfDyn.table.list.ref(n, is64, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def dyn_wgo(+is64: Bool, +big: Bool, +xs: List<&2, D.ElfDyn>, +rs: List<&2, D.ElfDyn>) -> {D.ElfDyn.write_table.go(is64, big, F.elf_rev_onto(D.ElfDyn, xs, rs), B.Octets.empty()) == D.ElfDyn.write_table.go(is64, big, rs, D.ElfDyn.write_table.ref(is64, big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      dyn_wgo(is64, big, t, Con{x, rs})
+
+def dyn_write_eq(+is64: Bool, +big: Bool, +xs: List<&2, D.ElfDyn>) -> {D.ElfDyn.write_table.ref(is64, big, xs) == D.ElfDyn.write_table(is64, big, xs) : B.Octets}:
+  Equal.sym(B.Octets, D.ElfDyn.write_table(is64, big, xs), D.ElfDyn.write_table.ref(is64, big, xs), dyn_wgo(is64, big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def dyn_ngo(+is64: Bool, +xs: List<&2, D.ElfDyn>, +acc: List<&2, D.ElfDyn>) -> {D.ElfDyn.normal_table.go(is64, xs, acc) == F.elf_rev_onto(D.ElfDyn, acc, D.ElfDyn.normal_table.ref(is64, xs)) : List<&2, D.ElfDyn>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      dyn_ngo(is64, t, Con{D.ElfDyn.normal(is64, x), acc})
+
+def dyn_normal_eq(+is64: Bool, +xs: List<&2, D.ElfDyn>) -> {D.ElfDyn.normal_table.ref(is64, xs) == D.ElfDyn.normal_table(is64, xs) : List<&2, D.ElfDyn>}:
+  Equal.sym(List<&2, D.ElfDyn>, D.ElfDyn.normal_table(is64, xs), D.ElfDyn.normal_table.ref(is64, xs), dyn_ngo(is64, xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def dyn_table(+is64: Bool, +big: Bool, +xs: List<&2, D.ElfDyn>) -> {D.ElfDyn.read_table(is64, big, List.length(&2, D.ElfDyn, xs), U32.to_nat(D.ElfDyn.size(is64)), D.ElfDyn.write_table(is64, big, xs)) == Done{D.ElfDyn.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}:
+  %dyn_write_eq(is64, big, xs) : {D.ElfDyn.read_table(is64, big, List.length(&2, D.ElfDyn, xs), U32.to_nat(D.ElfDyn.size(is64)), _) == Done{D.ElfDyn.normal_table(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+  %dyn_normal_eq(is64, xs) : {D.ElfDyn.read_table(is64, big, List.length(&2, D.ElfDyn, xs), U32.to_nat(D.ElfDyn.size(is64)), D.ElfDyn.write_table.ref(is64, big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+  %dyn_table_eq(List.length(&2, D.ElfDyn, xs), is64, big, U32.to_nat(D.ElfDyn.size(is64)), B.Octets.to_list(D.ElfDyn.write_table.ref(is64, big, xs))) : {_ == Done{D.ElfDyn.normal_table.ref(is64, xs)} : Result<&2, &2, F.ElfError, List<&2, D.ElfDyn>>}
+  dyn_table_ref(is64, big, xs)
+
+def Laws.dyn_table_round_trip(is64, big, xs):
+  dyn_table(is64, big, xs)
+
+# V.ElfVersym
+
+def versym_bits(big: Bool, u0: U32, r: List<&2, U32>) -> {V.ElfVersym.parse.list(big, B.append(B.Octets.to_list(V.ElfVersym.write(big, V.ElfVersym{u0})), r)) == Done{V.ElfVersym.normal(V.ElfVersym{u0})} : Result<&2, &2, F.ElfError, V.ElfVersym>}:
+  match big u0:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def versym_list(big: Bool, x: V.ElfVersym, r: List<&2, U32>) -> {V.ElfVersym.parse.list(big, B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), r)) == Done{V.ElfVersym.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVersym>}:
+  match x:
+    case V.ElfVersym{f0}:
+      versym_bits(big, f0, r)
+
+def versym_rt(+big: Bool, +x: V.ElfVersym, +rest: B.Octets) -> {V.ElfVersym.parse(big, B.Octets.append(V.ElfVersym.write(big, x), rest)) == Done{V.ElfVersym.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVersym>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVersym.write(big, x), rest)), B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), B.Octets.to_list(rest)), BL.octets_append_list(V.ElfVersym.write(big, x), rest)) : {V.ElfVersym.parse.list(big, _) == Done{V.ElfVersym.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVersym>}
+  versym_list(big, x, B.Octets.to_list(rest))
+
+def Laws.versym_round_trip(big, x, rest):
+  versym_rt(big, x, rest)
+
+def versym_drop_bits(big: Bool, u0: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVersym.size()), B.append(B.Octets.to_list(V.ElfVersym.write(big, V.ElfVersym{u0})), r)) : List<&2, U32>}:
+  match big u0:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def versym_drop(big: Bool, x: V.ElfVersym, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVersym.size()), B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), r)) : List<&2, U32>}:
+  match x:
+    case V.ElfVersym{f0}:
+      versym_drop_bits(big, f0, r)
+
+def versym_table_ref(+big: Bool, xs: List<&2, V.ElfVersym>) -> {V.ElfVersym.table.list.ref(List.length(&2, V.ElfVersym, xs), big, U32.to_nat(V.ElfVersym.size()), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs))) == Done{V.ElfVersym.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVersym.write(big, x), V.ElfVersym.write_table.ref(big, xs))), B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs))), BL.octets_append_list(V.ElfVersym.write(big, x), V.ElfVersym.write_table.ref(big, xs))) : {V.ElfVersym.table.list.ref(List.length(&2, V.ElfVersym, Con{x, xs}), big, U32.to_nat(V.ElfVersym.size()), _) == Done{V.ElfVersym.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, V.ElfVersym>, V.ElfVersym.parse.list(big, B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs)))), Done{V.ElfVersym.normal(x)}, versym_list(big, x, B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs)))) : {F.elf_cons(V.ElfVersym, _, V.ElfVersym.table.list.ref(List.length(&2, V.ElfVersym, xs), big, U32.to_nat(V.ElfVersym.size()), B.drop(U32.to_nat(V.ElfVersym.size()), B.append(B.Octets.to_list(V.ElfVersym.write(big, x)), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs)))))) == Done{V.ElfVersym.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+      %versym_drop(big, x, B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs))) : {F.elf_cons(V.ElfVersym, Done{V.ElfVersym.normal(x)}, V.ElfVersym.table.list.ref(List.length(&2, V.ElfVersym, xs), big, U32.to_nat(V.ElfVersym.size()), _)) == Done{V.ElfVersym.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, V.ElfVersym.table.list.ref(List.length(&2, V.ElfVersym, xs), big, U32.to_nat(V.ElfVersym.size()), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs))), Done{V.ElfVersym.normal_table.ref(xs)}, versym_table_ref(big, xs)) : {F.elf_cons(V.ElfVersym, Done{V.ElfVersym.normal(x)}, _) == Done{V.ElfVersym.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def versym_fin(rs: List<&2, V.ElfVersym>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(V.ElfVersym, rs, l)}
+
+def versym_fin2(acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      versym_fin(rs, m)
+
+def versym_push(+r: Result<&2, &2, F.ElfError, V.ElfVersym>, +rs: List<&2, V.ElfVersym>, +m: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>) -> {versym_fin2(F.elf_push(V.ElfVersym, r, rs), m) == versym_fin(rs, F.elf_cons(V.ElfVersym, r, m)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def versym_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVersym.table.go(n, acc, big, step, ys) == versym_fin2(acc, V.ElfVersym.table.list.ref(n, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, V.ElfVersym.table.go(p, F.elf_push(V.ElfVersym, V.ElfVersym.parse.list(big, ys), rs), big, step, B.drop(step, ys)), versym_fin2(F.elf_push(V.ElfVersym, V.ElfVersym.parse.list(big, ys), rs), V.ElfVersym.table.list.ref(p, big, step, B.drop(step, ys))), versym_fin(rs, F.elf_cons(V.ElfVersym, V.ElfVersym.parse.list(big, ys), V.ElfVersym.table.list.ref(p, big, step, B.drop(step, ys)))), versym_go(p, F.elf_push(V.ElfVersym, V.ElfVersym.parse.list(big, ys), rs), big, step, B.drop(step, ys)), versym_push(V.ElfVersym.parse.list(big, ys), rs, V.ElfVersym.table.list.ref(p, big, step, B.drop(step, ys))))
+
+def versym_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>) -> {versym_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def versym_table_eq(+n: Nat, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVersym.table.list.ref(n, big, step, ys) == V.ElfVersym.table.list(n, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, V.ElfVersym.table.list(n, big, step, ys), V.ElfVersym.table.list.ref(n, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>, V.ElfVersym.table.go(n, Done{Nil{}}, big, step, ys), versym_fin(Nil{}, V.ElfVersym.table.list.ref(n, big, step, ys)), V.ElfVersym.table.list.ref(n, big, step, ys), versym_go(n, Done{Nil{}}, big, step, ys), versym_fin_nil(V.ElfVersym.table.list.ref(n, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def versym_wgo(+big: Bool, +xs: List<&2, V.ElfVersym>, +rs: List<&2, V.ElfVersym>) -> {V.ElfVersym.write_table.go(big, F.elf_rev_onto(V.ElfVersym, xs, rs), B.Octets.empty()) == V.ElfVersym.write_table.go(big, rs, V.ElfVersym.write_table.ref(big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      versym_wgo(big, t, Con{x, rs})
+
+def versym_write_eq(+big: Bool, +xs: List<&2, V.ElfVersym>) -> {V.ElfVersym.write_table.ref(big, xs) == V.ElfVersym.write_table(big, xs) : B.Octets}:
+  Equal.sym(B.Octets, V.ElfVersym.write_table(big, xs), V.ElfVersym.write_table.ref(big, xs), versym_wgo(big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def versym_ngo(+xs: List<&2, V.ElfVersym>, +acc: List<&2, V.ElfVersym>) -> {V.ElfVersym.normal_table.go(xs, acc) == F.elf_rev_onto(V.ElfVersym, acc, V.ElfVersym.normal_table.ref(xs)) : List<&2, V.ElfVersym>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      versym_ngo(t, Con{V.ElfVersym.normal(x), acc})
+
+def versym_normal_eq(+xs: List<&2, V.ElfVersym>) -> {V.ElfVersym.normal_table.ref(xs) == V.ElfVersym.normal_table(xs) : List<&2, V.ElfVersym>}:
+  Equal.sym(List<&2, V.ElfVersym>, V.ElfVersym.normal_table(xs), V.ElfVersym.normal_table.ref(xs), versym_ngo(xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def versym_table(+big: Bool, +xs: List<&2, V.ElfVersym>) -> {V.ElfVersym.read_table(big, List.length(&2, V.ElfVersym, xs), U32.to_nat(V.ElfVersym.size()), V.ElfVersym.write_table(big, xs)) == Done{V.ElfVersym.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}:
+  %versym_write_eq(big, xs) : {V.ElfVersym.read_table(big, List.length(&2, V.ElfVersym, xs), U32.to_nat(V.ElfVersym.size()), _) == Done{V.ElfVersym.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+  %versym_normal_eq(xs) : {V.ElfVersym.read_table(big, List.length(&2, V.ElfVersym, xs), U32.to_nat(V.ElfVersym.size()), V.ElfVersym.write_table.ref(big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+  %versym_table_eq(List.length(&2, V.ElfVersym, xs), big, U32.to_nat(V.ElfVersym.size()), B.Octets.to_list(V.ElfVersym.write_table.ref(big, xs))) : {_ == Done{V.ElfVersym.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVersym>>}
+  versym_table_ref(big, xs)
+
+def Laws.versym_table_round_trip(big, xs):
+  versym_table(big, xs)
+
+# V.ElfVerdef
+
+def verdef_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, u5: U32, u6: U32, r: List<&2, U32>) -> {V.ElfVerdef.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdef.write(big, V.ElfVerdef{u0, u1, u2, u3, u4, u5, u6})), r)) == Done{V.ElfVerdef.normal(V.ElfVerdef{u0, u1, u2, u3, u4, u5, u6})} : Result<&2, &2, F.ElfError, V.ElfVerdef>}:
+  match big u0 u1 u2 u3 u4 u5 u6:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u5_0, WCon{u5_1, WCon{u5_2, WCon{u5_3, WCon{u5_4, WCon{u5_5, WCon{u5_6, WCon{u5_7, WCon{u5_8, WCon{u5_9, WCon{u5_10, WCon{u5_11, WCon{u5_12, WCon{u5_13, WCon{u5_14, WCon{u5_15, WCon{u5_16, WCon{u5_17, WCon{u5_18, WCon{u5_19, WCon{u5_20, WCon{u5_21, WCon{u5_22, WCon{u5_23, WCon{u5_24, WCon{u5_25, WCon{u5_26, WCon{u5_27, WCon{u5_28, WCon{u5_29, WCon{u5_30, WCon{u5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u6_0, WCon{u6_1, WCon{u6_2, WCon{u6_3, WCon{u6_4, WCon{u6_5, WCon{u6_6, WCon{u6_7, WCon{u6_8, WCon{u6_9, WCon{u6_10, WCon{u6_11, WCon{u6_12, WCon{u6_13, WCon{u6_14, WCon{u6_15, WCon{u6_16, WCon{u6_17, WCon{u6_18, WCon{u6_19, WCon{u6_20, WCon{u6_21, WCon{u6_22, WCon{u6_23, WCon{u6_24, WCon{u6_25, WCon{u6_26, WCon{u6_27, WCon{u6_28, WCon{u6_29, WCon{u6_30, WCon{u6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u5_0, WCon{u5_1, WCon{u5_2, WCon{u5_3, WCon{u5_4, WCon{u5_5, WCon{u5_6, WCon{u5_7, WCon{u5_8, WCon{u5_9, WCon{u5_10, WCon{u5_11, WCon{u5_12, WCon{u5_13, WCon{u5_14, WCon{u5_15, WCon{u5_16, WCon{u5_17, WCon{u5_18, WCon{u5_19, WCon{u5_20, WCon{u5_21, WCon{u5_22, WCon{u5_23, WCon{u5_24, WCon{u5_25, WCon{u5_26, WCon{u5_27, WCon{u5_28, WCon{u5_29, WCon{u5_30, WCon{u5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u6_0, WCon{u6_1, WCon{u6_2, WCon{u6_3, WCon{u6_4, WCon{u6_5, WCon{u6_6, WCon{u6_7, WCon{u6_8, WCon{u6_9, WCon{u6_10, WCon{u6_11, WCon{u6_12, WCon{u6_13, WCon{u6_14, WCon{u6_15, WCon{u6_16, WCon{u6_17, WCon{u6_18, WCon{u6_19, WCon{u6_20, WCon{u6_21, WCon{u6_22, WCon{u6_23, WCon{u6_24, WCon{u6_25, WCon{u6_26, WCon{u6_27, WCon{u6_28, WCon{u6_29, WCon{u6_30, WCon{u6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verdef_list(big: Bool, x: V.ElfVerdef, r: List<&2, U32>) -> {V.ElfVerdef.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), r)) == Done{V.ElfVerdef.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdef>}:
+  match x:
+    case V.ElfVerdef{f0, f1, f2, f3, f4, f5, f6}:
+      verdef_bits(big, f0, f1, f2, f3, f4, f5, f6, r)
+
+def verdef_rt(+big: Bool, +x: V.ElfVerdef, +rest: B.Octets) -> {V.ElfVerdef.parse(big, B.Octets.append(V.ElfVerdef.write(big, x), rest)) == Done{V.ElfVerdef.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdef>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerdef.write(big, x), rest)), B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), B.Octets.to_list(rest)), BL.octets_append_list(V.ElfVerdef.write(big, x), rest)) : {V.ElfVerdef.parse.list(big, _) == Done{V.ElfVerdef.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdef>}
+  verdef_list(big, x, B.Octets.to_list(rest))
+
+def Laws.verdef_round_trip(big, x, rest):
+  verdef_rt(big, x, rest)
+
+def verdef_drop_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, u5: U32, u6: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerdef.size()), B.append(B.Octets.to_list(V.ElfVerdef.write(big, V.ElfVerdef{u0, u1, u2, u3, u4, u5, u6})), r)) : List<&2, U32>}:
+  match big u0 u1 u2 u3 u4 u5 u6:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u5_0, WCon{u5_1, WCon{u5_2, WCon{u5_3, WCon{u5_4, WCon{u5_5, WCon{u5_6, WCon{u5_7, WCon{u5_8, WCon{u5_9, WCon{u5_10, WCon{u5_11, WCon{u5_12, WCon{u5_13, WCon{u5_14, WCon{u5_15, WCon{u5_16, WCon{u5_17, WCon{u5_18, WCon{u5_19, WCon{u5_20, WCon{u5_21, WCon{u5_22, WCon{u5_23, WCon{u5_24, WCon{u5_25, WCon{u5_26, WCon{u5_27, WCon{u5_28, WCon{u5_29, WCon{u5_30, WCon{u5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u6_0, WCon{u6_1, WCon{u6_2, WCon{u6_3, WCon{u6_4, WCon{u6_5, WCon{u6_6, WCon{u6_7, WCon{u6_8, WCon{u6_9, WCon{u6_10, WCon{u6_11, WCon{u6_12, WCon{u6_13, WCon{u6_14, WCon{u6_15, WCon{u6_16, WCon{u6_17, WCon{u6_18, WCon{u6_19, WCon{u6_20, WCon{u6_21, WCon{u6_22, WCon{u6_23, WCon{u6_24, WCon{u6_25, WCon{u6_26, WCon{u6_27, WCon{u6_28, WCon{u6_29, WCon{u6_30, WCon{u6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u5_0, WCon{u5_1, WCon{u5_2, WCon{u5_3, WCon{u5_4, WCon{u5_5, WCon{u5_6, WCon{u5_7, WCon{u5_8, WCon{u5_9, WCon{u5_10, WCon{u5_11, WCon{u5_12, WCon{u5_13, WCon{u5_14, WCon{u5_15, WCon{u5_16, WCon{u5_17, WCon{u5_18, WCon{u5_19, WCon{u5_20, WCon{u5_21, WCon{u5_22, WCon{u5_23, WCon{u5_24, WCon{u5_25, WCon{u5_26, WCon{u5_27, WCon{u5_28, WCon{u5_29, WCon{u5_30, WCon{u5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u6_0, WCon{u6_1, WCon{u6_2, WCon{u6_3, WCon{u6_4, WCon{u6_5, WCon{u6_6, WCon{u6_7, WCon{u6_8, WCon{u6_9, WCon{u6_10, WCon{u6_11, WCon{u6_12, WCon{u6_13, WCon{u6_14, WCon{u6_15, WCon{u6_16, WCon{u6_17, WCon{u6_18, WCon{u6_19, WCon{u6_20, WCon{u6_21, WCon{u6_22, WCon{u6_23, WCon{u6_24, WCon{u6_25, WCon{u6_26, WCon{u6_27, WCon{u6_28, WCon{u6_29, WCon{u6_30, WCon{u6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verdef_drop(big: Bool, x: V.ElfVerdef, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerdef.size()), B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), r)) : List<&2, U32>}:
+  match x:
+    case V.ElfVerdef{f0, f1, f2, f3, f4, f5, f6}:
+      verdef_drop_bits(big, f0, f1, f2, f3, f4, f5, f6, r)
+
+def verdef_table_ref(+big: Bool, xs: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.table.list.ref(List.length(&2, V.ElfVerdef, xs), big, U32.to_nat(V.ElfVerdef.size()), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs))) == Done{V.ElfVerdef.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerdef.write(big, x), V.ElfVerdef.write_table.ref(big, xs))), B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs))), BL.octets_append_list(V.ElfVerdef.write(big, x), V.ElfVerdef.write_table.ref(big, xs))) : {V.ElfVerdef.table.list.ref(List.length(&2, V.ElfVerdef, Con{x, xs}), big, U32.to_nat(V.ElfVerdef.size()), _) == Done{V.ElfVerdef.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, V.ElfVerdef>, V.ElfVerdef.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs)))), Done{V.ElfVerdef.normal(x)}, verdef_list(big, x, B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs)))) : {F.elf_cons(V.ElfVerdef, _, V.ElfVerdef.table.list.ref(List.length(&2, V.ElfVerdef, xs), big, U32.to_nat(V.ElfVerdef.size()), B.drop(U32.to_nat(V.ElfVerdef.size()), B.append(B.Octets.to_list(V.ElfVerdef.write(big, x)), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs)))))) == Done{V.ElfVerdef.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+      %verdef_drop(big, x, B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs))) : {F.elf_cons(V.ElfVerdef, Done{V.ElfVerdef.normal(x)}, V.ElfVerdef.table.list.ref(List.length(&2, V.ElfVerdef, xs), big, U32.to_nat(V.ElfVerdef.size()), _)) == Done{V.ElfVerdef.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, V.ElfVerdef.table.list.ref(List.length(&2, V.ElfVerdef, xs), big, U32.to_nat(V.ElfVerdef.size()), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs))), Done{V.ElfVerdef.normal_table.ref(xs)}, verdef_table_ref(big, xs)) : {F.elf_cons(V.ElfVerdef, Done{V.ElfVerdef.normal(x)}, _) == Done{V.ElfVerdef.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def verdef_fin(rs: List<&2, V.ElfVerdef>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(V.ElfVerdef, rs, l)}
+
+def verdef_fin2(acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      verdef_fin(rs, m)
+
+def verdef_push(+r: Result<&2, &2, F.ElfError, V.ElfVerdef>, +rs: List<&2, V.ElfVerdef>, +m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>) -> {verdef_fin2(F.elf_push(V.ElfVerdef, r, rs), m) == verdef_fin(rs, F.elf_cons(V.ElfVerdef, r, m)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def verdef_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerdef.table.go(n, acc, big, step, ys) == verdef_fin2(acc, V.ElfVerdef.table.list.ref(n, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, V.ElfVerdef.table.go(p, F.elf_push(V.ElfVerdef, V.ElfVerdef.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verdef_fin2(F.elf_push(V.ElfVerdef, V.ElfVerdef.parse.list(big, ys), rs), V.ElfVerdef.table.list.ref(p, big, step, B.drop(step, ys))), verdef_fin(rs, F.elf_cons(V.ElfVerdef, V.ElfVerdef.parse.list(big, ys), V.ElfVerdef.table.list.ref(p, big, step, B.drop(step, ys)))), verdef_go(p, F.elf_push(V.ElfVerdef, V.ElfVerdef.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verdef_push(V.ElfVerdef.parse.list(big, ys), rs, V.ElfVerdef.table.list.ref(p, big, step, B.drop(step, ys))))
+
+def verdef_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>) -> {verdef_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def verdef_table_eq(+n: Nat, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerdef.table.list.ref(n, big, step, ys) == V.ElfVerdef.table.list(n, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, V.ElfVerdef.table.list(n, big, step, ys), V.ElfVerdef.table.list.ref(n, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>, V.ElfVerdef.table.go(n, Done{Nil{}}, big, step, ys), verdef_fin(Nil{}, V.ElfVerdef.table.list.ref(n, big, step, ys)), V.ElfVerdef.table.list.ref(n, big, step, ys), verdef_go(n, Done{Nil{}}, big, step, ys), verdef_fin_nil(V.ElfVerdef.table.list.ref(n, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def verdef_wgo(+big: Bool, +xs: List<&2, V.ElfVerdef>, +rs: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.write_table.go(big, F.elf_rev_onto(V.ElfVerdef, xs, rs), B.Octets.empty()) == V.ElfVerdef.write_table.go(big, rs, V.ElfVerdef.write_table.ref(big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verdef_wgo(big, t, Con{x, rs})
+
+def verdef_write_eq(+big: Bool, +xs: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.write_table.ref(big, xs) == V.ElfVerdef.write_table(big, xs) : B.Octets}:
+  Equal.sym(B.Octets, V.ElfVerdef.write_table(big, xs), V.ElfVerdef.write_table.ref(big, xs), verdef_wgo(big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def verdef_ngo(+xs: List<&2, V.ElfVerdef>, +acc: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.normal_table.go(xs, acc) == F.elf_rev_onto(V.ElfVerdef, acc, V.ElfVerdef.normal_table.ref(xs)) : List<&2, V.ElfVerdef>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verdef_ngo(t, Con{V.ElfVerdef.normal(x), acc})
+
+def verdef_normal_eq(+xs: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.normal_table.ref(xs) == V.ElfVerdef.normal_table(xs) : List<&2, V.ElfVerdef>}:
+  Equal.sym(List<&2, V.ElfVerdef>, V.ElfVerdef.normal_table(xs), V.ElfVerdef.normal_table.ref(xs), verdef_ngo(xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def verdef_table(+big: Bool, +xs: List<&2, V.ElfVerdef>) -> {V.ElfVerdef.read_table(big, List.length(&2, V.ElfVerdef, xs), U32.to_nat(V.ElfVerdef.size()), V.ElfVerdef.write_table(big, xs)) == Done{V.ElfVerdef.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}:
+  %verdef_write_eq(big, xs) : {V.ElfVerdef.read_table(big, List.length(&2, V.ElfVerdef, xs), U32.to_nat(V.ElfVerdef.size()), _) == Done{V.ElfVerdef.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+  %verdef_normal_eq(xs) : {V.ElfVerdef.read_table(big, List.length(&2, V.ElfVerdef, xs), U32.to_nat(V.ElfVerdef.size()), V.ElfVerdef.write_table.ref(big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+  %verdef_table_eq(List.length(&2, V.ElfVerdef, xs), big, U32.to_nat(V.ElfVerdef.size()), B.Octets.to_list(V.ElfVerdef.write_table.ref(big, xs))) : {_ == Done{V.ElfVerdef.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdef>>}
+  verdef_table_ref(big, xs)
+
+def Laws.verdef_table_round_trip(big, xs):
+  verdef_table(big, xs)
+
+# V.ElfVerdaux
+
+def verdaux_bits(big: Bool, u0: U32, u1: U32, r: List<&2, U32>) -> {V.ElfVerdaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdaux.write(big, V.ElfVerdaux{u0, u1})), r)) == Done{V.ElfVerdaux.normal(V.ElfVerdaux{u0, u1})} : Result<&2, &2, F.ElfError, V.ElfVerdaux>}:
+  match big u0 u1:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verdaux_list(big: Bool, x: V.ElfVerdaux, r: List<&2, U32>) -> {V.ElfVerdaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), r)) == Done{V.ElfVerdaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdaux>}:
+  match x:
+    case V.ElfVerdaux{f0, f1}:
+      verdaux_bits(big, f0, f1, r)
+
+def verdaux_rt(+big: Bool, +x: V.ElfVerdaux, +rest: B.Octets) -> {V.ElfVerdaux.parse(big, B.Octets.append(V.ElfVerdaux.write(big, x), rest)) == Done{V.ElfVerdaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdaux>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerdaux.write(big, x), rest)), B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), B.Octets.to_list(rest)), BL.octets_append_list(V.ElfVerdaux.write(big, x), rest)) : {V.ElfVerdaux.parse.list(big, _) == Done{V.ElfVerdaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerdaux>}
+  verdaux_list(big, x, B.Octets.to_list(rest))
+
+def Laws.verdaux_round_trip(big, x, rest):
+  verdaux_rt(big, x, rest)
+
+def verdaux_drop_bits(big: Bool, u0: U32, u1: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerdaux.size()), B.append(B.Octets.to_list(V.ElfVerdaux.write(big, V.ElfVerdaux{u0, u1})), r)) : List<&2, U32>}:
+  match big u0 u1:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verdaux_drop(big: Bool, x: V.ElfVerdaux, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerdaux.size()), B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), r)) : List<&2, U32>}:
+  match x:
+    case V.ElfVerdaux{f0, f1}:
+      verdaux_drop_bits(big, f0, f1, r)
+
+def verdaux_table_ref(+big: Bool, xs: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.table.list.ref(List.length(&2, V.ElfVerdaux, xs), big, U32.to_nat(V.ElfVerdaux.size()), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs))) == Done{V.ElfVerdaux.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerdaux.write(big, x), V.ElfVerdaux.write_table.ref(big, xs))), B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs))), BL.octets_append_list(V.ElfVerdaux.write(big, x), V.ElfVerdaux.write_table.ref(big, xs))) : {V.ElfVerdaux.table.list.ref(List.length(&2, V.ElfVerdaux, Con{x, xs}), big, U32.to_nat(V.ElfVerdaux.size()), _) == Done{V.ElfVerdaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, V.ElfVerdaux>, V.ElfVerdaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs)))), Done{V.ElfVerdaux.normal(x)}, verdaux_list(big, x, B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs)))) : {F.elf_cons(V.ElfVerdaux, _, V.ElfVerdaux.table.list.ref(List.length(&2, V.ElfVerdaux, xs), big, U32.to_nat(V.ElfVerdaux.size()), B.drop(U32.to_nat(V.ElfVerdaux.size()), B.append(B.Octets.to_list(V.ElfVerdaux.write(big, x)), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs)))))) == Done{V.ElfVerdaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+      %verdaux_drop(big, x, B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs))) : {F.elf_cons(V.ElfVerdaux, Done{V.ElfVerdaux.normal(x)}, V.ElfVerdaux.table.list.ref(List.length(&2, V.ElfVerdaux, xs), big, U32.to_nat(V.ElfVerdaux.size()), _)) == Done{V.ElfVerdaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, V.ElfVerdaux.table.list.ref(List.length(&2, V.ElfVerdaux, xs), big, U32.to_nat(V.ElfVerdaux.size()), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs))), Done{V.ElfVerdaux.normal_table.ref(xs)}, verdaux_table_ref(big, xs)) : {F.elf_cons(V.ElfVerdaux, Done{V.ElfVerdaux.normal(x)}, _) == Done{V.ElfVerdaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def verdaux_fin(rs: List<&2, V.ElfVerdaux>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(V.ElfVerdaux, rs, l)}
+
+def verdaux_fin2(acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      verdaux_fin(rs, m)
+
+def verdaux_push(+r: Result<&2, &2, F.ElfError, V.ElfVerdaux>, +rs: List<&2, V.ElfVerdaux>, +m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>) -> {verdaux_fin2(F.elf_push(V.ElfVerdaux, r, rs), m) == verdaux_fin(rs, F.elf_cons(V.ElfVerdaux, r, m)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def verdaux_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerdaux.table.go(n, acc, big, step, ys) == verdaux_fin2(acc, V.ElfVerdaux.table.list.ref(n, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, V.ElfVerdaux.table.go(p, F.elf_push(V.ElfVerdaux, V.ElfVerdaux.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verdaux_fin2(F.elf_push(V.ElfVerdaux, V.ElfVerdaux.parse.list(big, ys), rs), V.ElfVerdaux.table.list.ref(p, big, step, B.drop(step, ys))), verdaux_fin(rs, F.elf_cons(V.ElfVerdaux, V.ElfVerdaux.parse.list(big, ys), V.ElfVerdaux.table.list.ref(p, big, step, B.drop(step, ys)))), verdaux_go(p, F.elf_push(V.ElfVerdaux, V.ElfVerdaux.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verdaux_push(V.ElfVerdaux.parse.list(big, ys), rs, V.ElfVerdaux.table.list.ref(p, big, step, B.drop(step, ys))))
+
+def verdaux_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>) -> {verdaux_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def verdaux_table_eq(+n: Nat, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerdaux.table.list.ref(n, big, step, ys) == V.ElfVerdaux.table.list(n, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, V.ElfVerdaux.table.list(n, big, step, ys), V.ElfVerdaux.table.list.ref(n, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>, V.ElfVerdaux.table.go(n, Done{Nil{}}, big, step, ys), verdaux_fin(Nil{}, V.ElfVerdaux.table.list.ref(n, big, step, ys)), V.ElfVerdaux.table.list.ref(n, big, step, ys), verdaux_go(n, Done{Nil{}}, big, step, ys), verdaux_fin_nil(V.ElfVerdaux.table.list.ref(n, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def verdaux_wgo(+big: Bool, +xs: List<&2, V.ElfVerdaux>, +rs: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.write_table.go(big, F.elf_rev_onto(V.ElfVerdaux, xs, rs), B.Octets.empty()) == V.ElfVerdaux.write_table.go(big, rs, V.ElfVerdaux.write_table.ref(big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verdaux_wgo(big, t, Con{x, rs})
+
+def verdaux_write_eq(+big: Bool, +xs: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.write_table.ref(big, xs) == V.ElfVerdaux.write_table(big, xs) : B.Octets}:
+  Equal.sym(B.Octets, V.ElfVerdaux.write_table(big, xs), V.ElfVerdaux.write_table.ref(big, xs), verdaux_wgo(big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def verdaux_ngo(+xs: List<&2, V.ElfVerdaux>, +acc: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.normal_table.go(xs, acc) == F.elf_rev_onto(V.ElfVerdaux, acc, V.ElfVerdaux.normal_table.ref(xs)) : List<&2, V.ElfVerdaux>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verdaux_ngo(t, Con{V.ElfVerdaux.normal(x), acc})
+
+def verdaux_normal_eq(+xs: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.normal_table.ref(xs) == V.ElfVerdaux.normal_table(xs) : List<&2, V.ElfVerdaux>}:
+  Equal.sym(List<&2, V.ElfVerdaux>, V.ElfVerdaux.normal_table(xs), V.ElfVerdaux.normal_table.ref(xs), verdaux_ngo(xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def verdaux_table(+big: Bool, +xs: List<&2, V.ElfVerdaux>) -> {V.ElfVerdaux.read_table(big, List.length(&2, V.ElfVerdaux, xs), U32.to_nat(V.ElfVerdaux.size()), V.ElfVerdaux.write_table(big, xs)) == Done{V.ElfVerdaux.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}:
+  %verdaux_write_eq(big, xs) : {V.ElfVerdaux.read_table(big, List.length(&2, V.ElfVerdaux, xs), U32.to_nat(V.ElfVerdaux.size()), _) == Done{V.ElfVerdaux.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+  %verdaux_normal_eq(xs) : {V.ElfVerdaux.read_table(big, List.length(&2, V.ElfVerdaux, xs), U32.to_nat(V.ElfVerdaux.size()), V.ElfVerdaux.write_table.ref(big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+  %verdaux_table_eq(List.length(&2, V.ElfVerdaux, xs), big, U32.to_nat(V.ElfVerdaux.size()), B.Octets.to_list(V.ElfVerdaux.write_table.ref(big, xs))) : {_ == Done{V.ElfVerdaux.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerdaux>>}
+  verdaux_table_ref(big, xs)
+
+def Laws.verdaux_table_round_trip(big, xs):
+  verdaux_table(big, xs)
+
+# V.ElfVerneed
+
+def verneed_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, r: List<&2, U32>) -> {V.ElfVerneed.parse.list(big, B.append(B.Octets.to_list(V.ElfVerneed.write(big, V.ElfVerneed{u0, u1, u2, u3, u4})), r)) == Done{V.ElfVerneed.normal(V.ElfVerneed{u0, u1, u2, u3, u4})} : Result<&2, &2, F.ElfError, V.ElfVerneed>}:
+  match big u0 u1 u2 u3 u4:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verneed_list(big: Bool, x: V.ElfVerneed, r: List<&2, U32>) -> {V.ElfVerneed.parse.list(big, B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), r)) == Done{V.ElfVerneed.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerneed>}:
+  match x:
+    case V.ElfVerneed{f0, f1, f2, f3, f4}:
+      verneed_bits(big, f0, f1, f2, f3, f4, r)
+
+def verneed_rt(+big: Bool, +x: V.ElfVerneed, +rest: B.Octets) -> {V.ElfVerneed.parse(big, B.Octets.append(V.ElfVerneed.write(big, x), rest)) == Done{V.ElfVerneed.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerneed>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerneed.write(big, x), rest)), B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), B.Octets.to_list(rest)), BL.octets_append_list(V.ElfVerneed.write(big, x), rest)) : {V.ElfVerneed.parse.list(big, _) == Done{V.ElfVerneed.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVerneed>}
+  verneed_list(big, x, B.Octets.to_list(rest))
+
+def Laws.verneed_round_trip(big, x, rest):
+  verneed_rt(big, x, rest)
+
+def verneed_drop_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerneed.size()), B.append(B.Octets.to_list(V.ElfVerneed.write(big, V.ElfVerneed{u0, u1, u2, u3, u4})), r)) : List<&2, U32>}:
+  match big u0 u1 u2 u3 u4:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def verneed_drop(big: Bool, x: V.ElfVerneed, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVerneed.size()), B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), r)) : List<&2, U32>}:
+  match x:
+    case V.ElfVerneed{f0, f1, f2, f3, f4}:
+      verneed_drop_bits(big, f0, f1, f2, f3, f4, r)
+
+def verneed_table_ref(+big: Bool, xs: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.table.list.ref(List.length(&2, V.ElfVerneed, xs), big, U32.to_nat(V.ElfVerneed.size()), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs))) == Done{V.ElfVerneed.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVerneed.write(big, x), V.ElfVerneed.write_table.ref(big, xs))), B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs))), BL.octets_append_list(V.ElfVerneed.write(big, x), V.ElfVerneed.write_table.ref(big, xs))) : {V.ElfVerneed.table.list.ref(List.length(&2, V.ElfVerneed, Con{x, xs}), big, U32.to_nat(V.ElfVerneed.size()), _) == Done{V.ElfVerneed.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, V.ElfVerneed>, V.ElfVerneed.parse.list(big, B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs)))), Done{V.ElfVerneed.normal(x)}, verneed_list(big, x, B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs)))) : {F.elf_cons(V.ElfVerneed, _, V.ElfVerneed.table.list.ref(List.length(&2, V.ElfVerneed, xs), big, U32.to_nat(V.ElfVerneed.size()), B.drop(U32.to_nat(V.ElfVerneed.size()), B.append(B.Octets.to_list(V.ElfVerneed.write(big, x)), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs)))))) == Done{V.ElfVerneed.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+      %verneed_drop(big, x, B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs))) : {F.elf_cons(V.ElfVerneed, Done{V.ElfVerneed.normal(x)}, V.ElfVerneed.table.list.ref(List.length(&2, V.ElfVerneed, xs), big, U32.to_nat(V.ElfVerneed.size()), _)) == Done{V.ElfVerneed.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, V.ElfVerneed.table.list.ref(List.length(&2, V.ElfVerneed, xs), big, U32.to_nat(V.ElfVerneed.size()), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs))), Done{V.ElfVerneed.normal_table.ref(xs)}, verneed_table_ref(big, xs)) : {F.elf_cons(V.ElfVerneed, Done{V.ElfVerneed.normal(x)}, _) == Done{V.ElfVerneed.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def verneed_fin(rs: List<&2, V.ElfVerneed>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(V.ElfVerneed, rs, l)}
+
+def verneed_fin2(acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      verneed_fin(rs, m)
+
+def verneed_push(+r: Result<&2, &2, F.ElfError, V.ElfVerneed>, +rs: List<&2, V.ElfVerneed>, +m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>) -> {verneed_fin2(F.elf_push(V.ElfVerneed, r, rs), m) == verneed_fin(rs, F.elf_cons(V.ElfVerneed, r, m)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def verneed_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerneed.table.go(n, acc, big, step, ys) == verneed_fin2(acc, V.ElfVerneed.table.list.ref(n, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, V.ElfVerneed.table.go(p, F.elf_push(V.ElfVerneed, V.ElfVerneed.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verneed_fin2(F.elf_push(V.ElfVerneed, V.ElfVerneed.parse.list(big, ys), rs), V.ElfVerneed.table.list.ref(p, big, step, B.drop(step, ys))), verneed_fin(rs, F.elf_cons(V.ElfVerneed, V.ElfVerneed.parse.list(big, ys), V.ElfVerneed.table.list.ref(p, big, step, B.drop(step, ys)))), verneed_go(p, F.elf_push(V.ElfVerneed, V.ElfVerneed.parse.list(big, ys), rs), big, step, B.drop(step, ys)), verneed_push(V.ElfVerneed.parse.list(big, ys), rs, V.ElfVerneed.table.list.ref(p, big, step, B.drop(step, ys))))
+
+def verneed_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>) -> {verneed_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def verneed_table_eq(+n: Nat, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVerneed.table.list.ref(n, big, step, ys) == V.ElfVerneed.table.list(n, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, V.ElfVerneed.table.list(n, big, step, ys), V.ElfVerneed.table.list.ref(n, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>, V.ElfVerneed.table.go(n, Done{Nil{}}, big, step, ys), verneed_fin(Nil{}, V.ElfVerneed.table.list.ref(n, big, step, ys)), V.ElfVerneed.table.list.ref(n, big, step, ys), verneed_go(n, Done{Nil{}}, big, step, ys), verneed_fin_nil(V.ElfVerneed.table.list.ref(n, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def verneed_wgo(+big: Bool, +xs: List<&2, V.ElfVerneed>, +rs: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.write_table.go(big, F.elf_rev_onto(V.ElfVerneed, xs, rs), B.Octets.empty()) == V.ElfVerneed.write_table.go(big, rs, V.ElfVerneed.write_table.ref(big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verneed_wgo(big, t, Con{x, rs})
+
+def verneed_write_eq(+big: Bool, +xs: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.write_table.ref(big, xs) == V.ElfVerneed.write_table(big, xs) : B.Octets}:
+  Equal.sym(B.Octets, V.ElfVerneed.write_table(big, xs), V.ElfVerneed.write_table.ref(big, xs), verneed_wgo(big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def verneed_ngo(+xs: List<&2, V.ElfVerneed>, +acc: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.normal_table.go(xs, acc) == F.elf_rev_onto(V.ElfVerneed, acc, V.ElfVerneed.normal_table.ref(xs)) : List<&2, V.ElfVerneed>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      verneed_ngo(t, Con{V.ElfVerneed.normal(x), acc})
+
+def verneed_normal_eq(+xs: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.normal_table.ref(xs) == V.ElfVerneed.normal_table(xs) : List<&2, V.ElfVerneed>}:
+  Equal.sym(List<&2, V.ElfVerneed>, V.ElfVerneed.normal_table(xs), V.ElfVerneed.normal_table.ref(xs), verneed_ngo(xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def verneed_table(+big: Bool, +xs: List<&2, V.ElfVerneed>) -> {V.ElfVerneed.read_table(big, List.length(&2, V.ElfVerneed, xs), U32.to_nat(V.ElfVerneed.size()), V.ElfVerneed.write_table(big, xs)) == Done{V.ElfVerneed.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}:
+  %verneed_write_eq(big, xs) : {V.ElfVerneed.read_table(big, List.length(&2, V.ElfVerneed, xs), U32.to_nat(V.ElfVerneed.size()), _) == Done{V.ElfVerneed.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+  %verneed_normal_eq(xs) : {V.ElfVerneed.read_table(big, List.length(&2, V.ElfVerneed, xs), U32.to_nat(V.ElfVerneed.size()), V.ElfVerneed.write_table.ref(big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+  %verneed_table_eq(List.length(&2, V.ElfVerneed, xs), big, U32.to_nat(V.ElfVerneed.size()), B.Octets.to_list(V.ElfVerneed.write_table.ref(big, xs))) : {_ == Done{V.ElfVerneed.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVerneed>>}
+  verneed_table_ref(big, xs)
+
+def Laws.verneed_table_round_trip(big, xs):
+  verneed_table(big, xs)
+
+# V.ElfVernaux
+
+def vernaux_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, r: List<&2, U32>) -> {V.ElfVernaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVernaux.write(big, V.ElfVernaux{u0, u1, u2, u3, u4})), r)) == Done{V.ElfVernaux.normal(V.ElfVernaux{u0, u1, u2, u3, u4})} : Result<&2, &2, F.ElfError, V.ElfVernaux>}:
+  match big u0 u1 u2 u3 u4:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def vernaux_list(big: Bool, x: V.ElfVernaux, r: List<&2, U32>) -> {V.ElfVernaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), r)) == Done{V.ElfVernaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVernaux>}:
+  match x:
+    case V.ElfVernaux{f0, f1, f2, f3, f4}:
+      vernaux_bits(big, f0, f1, f2, f3, f4, r)
+
+def vernaux_rt(+big: Bool, +x: V.ElfVernaux, +rest: B.Octets) -> {V.ElfVernaux.parse(big, B.Octets.append(V.ElfVernaux.write(big, x), rest)) == Done{V.ElfVernaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVernaux>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVernaux.write(big, x), rest)), B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), B.Octets.to_list(rest)), BL.octets_append_list(V.ElfVernaux.write(big, x), rest)) : {V.ElfVernaux.parse.list(big, _) == Done{V.ElfVernaux.normal(x)} : Result<&2, &2, F.ElfError, V.ElfVernaux>}
+  vernaux_list(big, x, B.Octets.to_list(rest))
+
+def Laws.vernaux_round_trip(big, x, rest):
+  vernaux_rt(big, x, rest)
+
+def vernaux_drop_bits(big: Bool, u0: U32, u1: U32, u2: U32, u3: U32, u4: U32, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVernaux.size()), B.append(B.Octets.to_list(V.ElfVernaux.write(big, V.ElfVernaux{u0, u1, u2, u3, u4})), r)) : List<&2, U32>}:
+  match big u0 u1 u2 u3 u4:
+    case True{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{u0_0, WCon{u0_1, WCon{u0_2, WCon{u0_3, WCon{u0_4, WCon{u0_5, WCon{u0_6, WCon{u0_7, WCon{u0_8, WCon{u0_9, WCon{u0_10, WCon{u0_11, WCon{u0_12, WCon{u0_13, WCon{u0_14, WCon{u0_15, WCon{u0_16, WCon{u0_17, WCon{u0_18, WCon{u0_19, WCon{u0_20, WCon{u0_21, WCon{u0_22, WCon{u0_23, WCon{u0_24, WCon{u0_25, WCon{u0_26, WCon{u0_27, WCon{u0_28, WCon{u0_29, WCon{u0_30, WCon{u0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u1_0, WCon{u1_1, WCon{u1_2, WCon{u1_3, WCon{u1_4, WCon{u1_5, WCon{u1_6, WCon{u1_7, WCon{u1_8, WCon{u1_9, WCon{u1_10, WCon{u1_11, WCon{u1_12, WCon{u1_13, WCon{u1_14, WCon{u1_15, WCon{u1_16, WCon{u1_17, WCon{u1_18, WCon{u1_19, WCon{u1_20, WCon{u1_21, WCon{u1_22, WCon{u1_23, WCon{u1_24, WCon{u1_25, WCon{u1_26, WCon{u1_27, WCon{u1_28, WCon{u1_29, WCon{u1_30, WCon{u1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u2_0, WCon{u2_1, WCon{u2_2, WCon{u2_3, WCon{u2_4, WCon{u2_5, WCon{u2_6, WCon{u2_7, WCon{u2_8, WCon{u2_9, WCon{u2_10, WCon{u2_11, WCon{u2_12, WCon{u2_13, WCon{u2_14, WCon{u2_15, WCon{u2_16, WCon{u2_17, WCon{u2_18, WCon{u2_19, WCon{u2_20, WCon{u2_21, WCon{u2_22, WCon{u2_23, WCon{u2_24, WCon{u2_25, WCon{u2_26, WCon{u2_27, WCon{u2_28, WCon{u2_29, WCon{u2_30, WCon{u2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u3_0, WCon{u3_1, WCon{u3_2, WCon{u3_3, WCon{u3_4, WCon{u3_5, WCon{u3_6, WCon{u3_7, WCon{u3_8, WCon{u3_9, WCon{u3_10, WCon{u3_11, WCon{u3_12, WCon{u3_13, WCon{u3_14, WCon{u3_15, WCon{u3_16, WCon{u3_17, WCon{u3_18, WCon{u3_19, WCon{u3_20, WCon{u3_21, WCon{u3_22, WCon{u3_23, WCon{u3_24, WCon{u3_25, WCon{u3_26, WCon{u3_27, WCon{u3_28, WCon{u3_29, WCon{u3_30, WCon{u3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{u4_0, WCon{u4_1, WCon{u4_2, WCon{u4_3, WCon{u4_4, WCon{u4_5, WCon{u4_6, WCon{u4_7, WCon{u4_8, WCon{u4_9, WCon{u4_10, WCon{u4_11, WCon{u4_12, WCon{u4_13, WCon{u4_14, WCon{u4_15, WCon{u4_16, WCon{u4_17, WCon{u4_18, WCon{u4_19, WCon{u4_20, WCon{u4_21, WCon{u4_22, WCon{u4_23, WCon{u4_24, WCon{u4_25, WCon{u4_26, WCon{u4_27, WCon{u4_28, WCon{u4_29, WCon{u4_30, WCon{u4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def vernaux_drop(big: Bool, x: V.ElfVernaux, r: List<&2, U32>) -> {r == B.drop(U32.to_nat(V.ElfVernaux.size()), B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), r)) : List<&2, U32>}:
+  match x:
+    case V.ElfVernaux{f0, f1, f2, f3, f4}:
+      vernaux_drop_bits(big, f0, f1, f2, f3, f4, r)
+
+def vernaux_table_ref(+big: Bool, xs: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.table.list.ref(List.length(&2, V.ElfVernaux, xs), big, U32.to_nat(V.ElfVernaux.size()), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs))) == Done{V.ElfVernaux.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +xs}:
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(V.ElfVernaux.write(big, x), V.ElfVernaux.write_table.ref(big, xs))), B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs))), BL.octets_append_list(V.ElfVernaux.write(big, x), V.ElfVernaux.write_table.ref(big, xs))) : {V.ElfVernaux.table.list.ref(List.length(&2, V.ElfVernaux, Con{x, xs}), big, U32.to_nat(V.ElfVernaux.size()), _) == Done{V.ElfVernaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, V.ElfVernaux>, V.ElfVernaux.parse.list(big, B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs)))), Done{V.ElfVernaux.normal(x)}, vernaux_list(big, x, B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs)))) : {F.elf_cons(V.ElfVernaux, _, V.ElfVernaux.table.list.ref(List.length(&2, V.ElfVernaux, xs), big, U32.to_nat(V.ElfVernaux.size()), B.drop(U32.to_nat(V.ElfVernaux.size()), B.append(B.Octets.to_list(V.ElfVernaux.write(big, x)), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs)))))) == Done{V.ElfVernaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+      %vernaux_drop(big, x, B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs))) : {F.elf_cons(V.ElfVernaux, Done{V.ElfVernaux.normal(x)}, V.ElfVernaux.table.list.ref(List.length(&2, V.ElfVernaux, xs), big, U32.to_nat(V.ElfVernaux.size()), _)) == Done{V.ElfVernaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, V.ElfVernaux.table.list.ref(List.length(&2, V.ElfVernaux, xs), big, U32.to_nat(V.ElfVernaux.size()), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs))), Done{V.ElfVernaux.normal_table.ref(xs)}, vernaux_table_ref(big, xs)) : {F.elf_cons(V.ElfVernaux, Done{V.ElfVernaux.normal(x)}, _) == Done{V.ElfVernaux.normal_table.ref(Con{x, xs})} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+      {==}
+
+# The tail-recursive table reader is the structural one: the entries read so
+# far, reversed in acc, go back in front of the structural reader's answer.
+
+def vernaux_fin(rs: List<&2, V.ElfVernaux>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>:
+  match m:
+    case Fail{e}:
+      Fail{e}
+    case Done{l}:
+      Done{F.elf_rev_onto(V.ElfVernaux, rs, l)}
+
+def vernaux_fin2(acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, m: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>) -> Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>:
+  match acc:
+    case Fail{e}:
+      Fail{e}
+    case Done{rs}:
+      vernaux_fin(rs, m)
+
+def vernaux_push(+r: Result<&2, &2, F.ElfError, V.ElfVernaux>, +rs: List<&2, V.ElfVernaux>, +m: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>) -> {vernaux_fin2(F.elf_push(V.ElfVernaux, r, rs), m) == vernaux_fin(rs, F.elf_cons(V.ElfVernaux, r, m)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  match r:
+    case Done{x}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{e}:
+          {==}
+    case Fail{e}:
+      match m:
+        case Done{l}:
+          {==}
+        case Fail{f}:
+          {==}
+
+def vernaux_go(n: Nat, +acc: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVernaux.table.go(n, acc, big, step, ys) == vernaux_fin2(acc, V.ElfVernaux.table.list.ref(n, big, step, ys)) : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  match n:
+    case 0n:
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{rs}:
+          {==}
+    case 1n+(+p):
+      match acc:
+        case Fail{e}:
+          {==}
+        case Done{+rs}:
+          Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, V.ElfVernaux.table.go(p, F.elf_push(V.ElfVernaux, V.ElfVernaux.parse.list(big, ys), rs), big, step, B.drop(step, ys)), vernaux_fin2(F.elf_push(V.ElfVernaux, V.ElfVernaux.parse.list(big, ys), rs), V.ElfVernaux.table.list.ref(p, big, step, B.drop(step, ys))), vernaux_fin(rs, F.elf_cons(V.ElfVernaux, V.ElfVernaux.parse.list(big, ys), V.ElfVernaux.table.list.ref(p, big, step, B.drop(step, ys)))), vernaux_go(p, F.elf_push(V.ElfVernaux, V.ElfVernaux.parse.list(big, ys), rs), big, step, B.drop(step, ys)), vernaux_push(V.ElfVernaux.parse.list(big, ys), rs, V.ElfVernaux.table.list.ref(p, big, step, B.drop(step, ys))))
+
+def vernaux_fin_nil(+m: Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>) -> {vernaux_fin(Nil{}, m) == m : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  match m:
+    case Fail{e}:
+      {==}
+    case Done{l}:
+      {==}
+
+def vernaux_table_eq(+n: Nat, +big: Bool, +step: Nat, +ys: List<&2, U32>) -> {V.ElfVernaux.table.list.ref(n, big, step, ys) == V.ElfVernaux.table.list(n, big, step, ys) : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  Equal.sym(Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, V.ElfVernaux.table.list(n, big, step, ys), V.ElfVernaux.table.list.ref(n, big, step, ys), Equal.trans(Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>, V.ElfVernaux.table.go(n, Done{Nil{}}, big, step, ys), vernaux_fin(Nil{}, V.ElfVernaux.table.list.ref(n, big, step, ys)), V.ElfVernaux.table.list.ref(n, big, step, ys), vernaux_go(n, Done{Nil{}}, big, step, ys), vernaux_fin_nil(V.ElfVernaux.table.list.ref(n, big, step, ys))))
+
+# The tail-recursive writer is the structural one: writing the reversed
+# entries rs after xs reversed onto them is writing rs onto the structural
+# table of xs.
+
+def vernaux_wgo(+big: Bool, +xs: List<&2, V.ElfVernaux>, +rs: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.write_table.go(big, F.elf_rev_onto(V.ElfVernaux, xs, rs), B.Octets.empty()) == V.ElfVernaux.write_table.go(big, rs, V.ElfVernaux.write_table.ref(big, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      vernaux_wgo(big, t, Con{x, rs})
+
+def vernaux_write_eq(+big: Bool, +xs: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.write_table.ref(big, xs) == V.ElfVernaux.write_table(big, xs) : B.Octets}:
+  Equal.sym(B.Octets, V.ElfVernaux.write_table(big, xs), V.ElfVernaux.write_table.ref(big, xs), vernaux_wgo(big, xs, Nil{}))
+
+# The same for the normal forms: the entries done so far, reversed in acc
+
+def vernaux_ngo(+xs: List<&2, V.ElfVernaux>, +acc: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.normal_table.go(xs, acc) == F.elf_rev_onto(V.ElfVernaux, acc, V.ElfVernaux.normal_table.ref(xs)) : List<&2, V.ElfVernaux>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      vernaux_ngo(t, Con{V.ElfVernaux.normal(x), acc})
+
+def vernaux_normal_eq(+xs: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.normal_table.ref(xs) == V.ElfVernaux.normal_table(xs) : List<&2, V.ElfVernaux>}:
+  Equal.sym(List<&2, V.ElfVernaux>, V.ElfVernaux.normal_table(xs), V.ElfVernaux.normal_table.ref(xs), vernaux_ngo(xs, Nil{}))
+
+# the table law: the tail-recursive forms rewritten to the structural ones
+def vernaux_table(+big: Bool, +xs: List<&2, V.ElfVernaux>) -> {V.ElfVernaux.read_table(big, List.length(&2, V.ElfVernaux, xs), U32.to_nat(V.ElfVernaux.size()), V.ElfVernaux.write_table(big, xs)) == Done{V.ElfVernaux.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}:
+  %vernaux_write_eq(big, xs) : {V.ElfVernaux.read_table(big, List.length(&2, V.ElfVernaux, xs), U32.to_nat(V.ElfVernaux.size()), _) == Done{V.ElfVernaux.normal_table(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+  %vernaux_normal_eq(xs) : {V.ElfVernaux.read_table(big, List.length(&2, V.ElfVernaux, xs), U32.to_nat(V.ElfVernaux.size()), V.ElfVernaux.write_table.ref(big, xs)) == Done{_} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+  %vernaux_table_eq(List.length(&2, V.ElfVernaux, xs), big, U32.to_nat(V.ElfVernaux.size()), B.Octets.to_list(V.ElfVernaux.write_table.ref(big, xs))) : {_ == Done{V.ElfVernaux.normal_table.ref(xs)} : Result<&2, &2, F.ElfError, List<&2, V.ElfVernaux>>}
+  vernaux_table_ref(big, xs)
+
+def Laws.vernaux_table_round_trip(big, xs):
+  vernaux_table(big, xs)
 
 # Rejection
 
@@ -577,6 +1588,480 @@ def short_rt(+xs: List<&2, U32>, e: {Nat.is_lt(List.length(&2, U32, xs), 52n) ==
 
 def Laws.rejects_short(xs, e):
   short_rt(xs, e)
+
+# every named ElfDynTag's code names it
+def Laws.dyn_tag_code(k):
+  match k:
+    case D.ElfDtNull{}:
+      {==}
+    case D.ElfDtNeeded{}:
+      {==}
+    case D.ElfDtPltrelsz{}:
+      {==}
+    case D.ElfDtPltgot{}:
+      {==}
+    case D.ElfDtHash{}:
+      {==}
+    case D.ElfDtStrtab{}:
+      {==}
+    case D.ElfDtSymtab{}:
+      {==}
+    case D.ElfDtRela{}:
+      {==}
+    case D.ElfDtRelasz{}:
+      {==}
+    case D.ElfDtRelaent{}:
+      {==}
+    case D.ElfDtStrsz{}:
+      {==}
+    case D.ElfDtSyment{}:
+      {==}
+    case D.ElfDtInit{}:
+      {==}
+    case D.ElfDtFini{}:
+      {==}
+    case D.ElfDtSoname{}:
+      {==}
+    case D.ElfDtRpath{}:
+      {==}
+    case D.ElfDtSymbolic{}:
+      {==}
+    case D.ElfDtRel{}:
+      {==}
+    case D.ElfDtRelsz{}:
+      {==}
+    case D.ElfDtRelent{}:
+      {==}
+    case D.ElfDtPltrel{}:
+      {==}
+    case D.ElfDtDebug{}:
+      {==}
+    case D.ElfDtTextrel{}:
+      {==}
+    case D.ElfDtJmprel{}:
+      {==}
+    case D.ElfDtBindNow{}:
+      {==}
+    case D.ElfDtInitArray{}:
+      {==}
+    case D.ElfDtFiniArray{}:
+      {==}
+    case D.ElfDtInitArraysz{}:
+      {==}
+    case D.ElfDtFiniArraysz{}:
+      {==}
+    case D.ElfDtRunpath{}:
+      {==}
+    case D.ElfDtFlags{}:
+      {==}
+    case D.ElfDtPreinitArray{}:
+      {==}
+    case D.ElfDtPreinitArraysz{}:
+      {==}
+    case D.ElfDtSymtabShndx{}:
+      {==}
+    case D.ElfDtRelrsz{}:
+      {==}
+    case D.ElfDtRelr{}:
+      {==}
+    case D.ElfDtRelrent{}:
+      {==}
+    case D.ElfDtGnuHash{}:
+      {==}
+    case D.ElfDtVersym{}:
+      {==}
+    case D.ElfDtRelacount{}:
+      {==}
+    case D.ElfDtRelcount{}:
+      {==}
+    case D.ElfDtFlags1{}:
+      {==}
+    case D.ElfDtVerdef{}:
+      {==}
+    case D.ElfDtVerdefnum{}:
+      {==}
+    case D.ElfDtVerneed{}:
+      {==}
+    case D.ElfDtVerneednum{}:
+      {==}
+
+# Notes (notes.bend). The note proofs are written by gen/pnotes.py.
+
+def note_assoc(+x: List<&2, U32>, +y: List<&2, U32>, +z: List<&2, U32>) -> {B.append(B.append(x, y), z) == B.append(x, B.append(y, z)) : List<&2, U32>}:
+  match x:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      %note_assoc(t, y, z) : {Con{h, B.append(B.append(t, y), z)} == Con{h, _} : List<&2, U32>}
+      {==}
+
+def note_al(+a: List<&2, U32>, +r: List<&2, U32>) -> {True{} == F.elf_at_least(B.len(a), B.append(a, r)) : Bool}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      note_al(t, r)
+
+def note_take_app(+a: List<&2, U32>, +r: List<&2, U32>) -> {a == B.take(B.len(a), B.append(a, r)) : List<&2, U32>}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      %note_take_app(t, r) : {Con{h, t} == Con{h, _} : List<&2, U32>}
+      {==}
+
+def note_cut(+a: List<&2, U32>, +r: List<&2, U32>) -> {N.elf_note.cut(B.len(a), B.append(a, r)) == Done{a} : Result<&2, &2, F.ElfError, List<&2, U32>>}:
+  %note_al(a, r) : {N.elf_note.cut.go(_, B.len(a), B.append(a, r)) == Done{a} : Result<&2, &2, F.ElfError, List<&2, U32>>}
+  %BL.take_fast(B.len(a), B.append(a, r)) : {Done{_} == Done{a} : Result<&2, &2, F.ElfError, List<&2, U32>>}
+  %note_take_app(a, r) : {Done{_} == Done{a} : Result<&2, &2, F.ElfError, List<&2, U32>>}
+  {==}
+
+def note_drop_app(+a: List<&2, U32>, +r: List<&2, U32>) -> {r == B.drop(B.len(a), B.append(a, r)) : List<&2, U32>}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      note_drop_app(t, r)
+
+def note_drop_zeros(+n: Nat, +r: List<&2, U32>) -> {r == B.drop(n, B.append(B.zeros(n), r)) : List<&2, U32>}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+(+p):
+      note_drop_zeros(p, r)
+
+def note_len_app(+a: List<&2, U32>, +b: List<&2, U32>) -> {B.len(B.append(a, b)) == Nat.add(B.len(a), B.len(b)) : Nat}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      %note_len_app(t, b) : {1n+B.len(B.append(t, b)) == 1n+_ : Nat}
+      {==}
+
+def note_len_zeros(+n: Nat) -> {n == B.len(B.zeros(n)) : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+(+p):
+      %note_len_zeros(p) : {1n+p == 1n+_ : Nat}
+      {==}
+
+def note_flat7(+p1: List<&2, U32>, +p2: List<&2, U32>, +p3: List<&2, U32>, +p4: List<&2, U32>, +p5: List<&2, U32>, +p6: List<&2, U32>, +p7: List<&2, U32>, +R: List<&2, U32>) -> {B.append(B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))))), R) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}:
+  %Equal.sym(List<&2, U32>, B.append(B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))))), R), B.append(p1, B.append(B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))), R)), note_assoc(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))), R)) : {_ == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.append(B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))), R), B.append(p2, B.append(B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))), R)), note_assoc(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))), R)) : {B.append(p1, _) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.append(B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))), R), B.append(p3, B.append(B.append(p4, B.append(p5, B.append(p6, p7))), R)), note_assoc(p3, B.append(p4, B.append(p5, B.append(p6, p7))), R)) : {B.append(p1, B.append(p2, _)) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.append(B.append(p4, B.append(p5, B.append(p6, p7))), R), B.append(p4, B.append(B.append(p5, B.append(p6, p7)), R)), note_assoc(p4, B.append(p5, B.append(p6, p7)), R)) : {B.append(p1, B.append(p2, B.append(p3, _))) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.append(B.append(p5, B.append(p6, p7)), R), B.append(p5, B.append(B.append(p6, p7), R)), note_assoc(p5, B.append(p6, p7), R)) : {B.append(p1, B.append(p2, B.append(p3, B.append(p4, _)))) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.append(B.append(p6, p7), R), B.append(p6, B.append(p7, R)), note_assoc(p6, p7, R)) : {B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, _))))) == B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, B.append(p7, R))))))) : List<&2, U32>}
+  {==}
+
+def note_len7(+p1: List<&2, U32>, +p2: List<&2, U32>, +p3: List<&2, U32>, +p4: List<&2, U32>, +p5: List<&2, U32>, +p6: List<&2, U32>, +p7: List<&2, U32>) -> {B.len(B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))))) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}:
+  %Equal.sym(Nat, B.len(B.append(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))))), Nat.add(B.len(p1), B.len(B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))))), note_len_app(p1, B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))))) : {_ == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  %Equal.sym(Nat, B.len(B.append(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))))), Nat.add(B.len(p2), B.len(B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))))), note_len_app(p2, B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7)))))) : {Nat.add(B.len(p1), _) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  %Equal.sym(Nat, B.len(B.append(p3, B.append(p4, B.append(p5, B.append(p6, p7))))), Nat.add(B.len(p3), B.len(B.append(p4, B.append(p5, B.append(p6, p7))))), note_len_app(p3, B.append(p4, B.append(p5, B.append(p6, p7))))) : {Nat.add(B.len(p1), Nat.add(B.len(p2), _)) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  %Equal.sym(Nat, B.len(B.append(p4, B.append(p5, B.append(p6, p7)))), Nat.add(B.len(p4), B.len(B.append(p5, B.append(p6, p7)))), note_len_app(p4, B.append(p5, B.append(p6, p7)))) : {Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), _))) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  %Equal.sym(Nat, B.len(B.append(p5, B.append(p6, p7))), Nat.add(B.len(p5), B.len(B.append(p6, p7))), note_len_app(p5, B.append(p6, p7))) : {Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), _)))) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  %Equal.sym(Nat, B.len(B.append(p6, p7)), Nat.add(B.len(p6), B.len(p7)), note_len_app(p6, p7)) : {Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), _))))) == Nat.add(B.len(p1), Nat.add(B.len(p2), Nat.add(B.len(p3), Nat.add(B.len(p4), Nat.add(B.len(p5), Nat.add(B.len(p6), B.len(p7))))))) : Nat}
+  {==}
+
+def note_len4(big: Bool, v: U32) -> {4n == B.len(B.Octets.to_list(F.elf_w32(big, v))) : Nat}:
+  match big v:
+    case True{} U32{WCon{v_0, WCon{v_1, WCon{v_2, WCon{v_3, WCon{v_4, WCon{v_5, WCon{v_6, WCon{v_7, WCon{v_8, WCon{v_9, WCon{v_10, WCon{v_11, WCon{v_12, WCon{v_13, WCon{v_14, WCon{v_15, WCon{v_16, WCon{v_17, WCon{v_18, WCon{v_19, WCon{v_20, WCon{v_21, WCon{v_22, WCon{v_23, WCon{v_24, WCon{v_25, WCon{v_26, WCon{v_27, WCon{v_28, WCon{v_29, WCon{v_30, WCon{v_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{v_0, WCon{v_1, WCon{v_2, WCon{v_3, WCon{v_4, WCon{v_5, WCon{v_6, WCon{v_7, WCon{v_8, WCon{v_9, WCon{v_10, WCon{v_11, WCon{v_12, WCon{v_13, WCon{v_14, WCon{v_15, WCon{v_16, WCon{v_17, WCon{v_18, WCon{v_19, WCon{v_20, WCon{v_21, WCon{v_22, WCon{v_23, WCon{v_24, WCon{v_25, WCon{v_26, WCon{v_27, WCon{v_28, WCon{v_29, WCon{v_30, WCon{v_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def note_hdr_bits(big: Bool, nz: U32, dz: U32, t: U32, +al: N.ElfNoteAlign, +ys: List<&2, U32>) -> {N.ElfNote.parse.list(big, al, B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), ys)))) == N.elf_note.body(al, nz, dz, t, ys) : Result<&2, &2, F.ElfError, N.ElfNoteRead>}:
+  match big nz dz t:
+    case True{} U32{WCon{nz_0, WCon{nz_1, WCon{nz_2, WCon{nz_3, WCon{nz_4, WCon{nz_5, WCon{nz_6, WCon{nz_7, WCon{nz_8, WCon{nz_9, WCon{nz_10, WCon{nz_11, WCon{nz_12, WCon{nz_13, WCon{nz_14, WCon{nz_15, WCon{nz_16, WCon{nz_17, WCon{nz_18, WCon{nz_19, WCon{nz_20, WCon{nz_21, WCon{nz_22, WCon{nz_23, WCon{nz_24, WCon{nz_25, WCon{nz_26, WCon{nz_27, WCon{nz_28, WCon{nz_29, WCon{nz_30, WCon{nz_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{dz_0, WCon{dz_1, WCon{dz_2, WCon{dz_3, WCon{dz_4, WCon{dz_5, WCon{dz_6, WCon{dz_7, WCon{dz_8, WCon{dz_9, WCon{dz_10, WCon{dz_11, WCon{dz_12, WCon{dz_13, WCon{dz_14, WCon{dz_15, WCon{dz_16, WCon{dz_17, WCon{dz_18, WCon{dz_19, WCon{dz_20, WCon{dz_21, WCon{dz_22, WCon{dz_23, WCon{dz_24, WCon{dz_25, WCon{dz_26, WCon{dz_27, WCon{dz_28, WCon{dz_29, WCon{dz_30, WCon{dz_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{t_0, WCon{t_1, WCon{t_2, WCon{t_3, WCon{t_4, WCon{t_5, WCon{t_6, WCon{t_7, WCon{t_8, WCon{t_9, WCon{t_10, WCon{t_11, WCon{t_12, WCon{t_13, WCon{t_14, WCon{t_15, WCon{t_16, WCon{t_17, WCon{t_18, WCon{t_19, WCon{t_20, WCon{t_21, WCon{t_22, WCon{t_23, WCon{t_24, WCon{t_25, WCon{t_26, WCon{t_27, WCon{t_28, WCon{t_29, WCon{t_30, WCon{t_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+    case False{} U32{WCon{nz_0, WCon{nz_1, WCon{nz_2, WCon{nz_3, WCon{nz_4, WCon{nz_5, WCon{nz_6, WCon{nz_7, WCon{nz_8, WCon{nz_9, WCon{nz_10, WCon{nz_11, WCon{nz_12, WCon{nz_13, WCon{nz_14, WCon{nz_15, WCon{nz_16, WCon{nz_17, WCon{nz_18, WCon{nz_19, WCon{nz_20, WCon{nz_21, WCon{nz_22, WCon{nz_23, WCon{nz_24, WCon{nz_25, WCon{nz_26, WCon{nz_27, WCon{nz_28, WCon{nz_29, WCon{nz_30, WCon{nz_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{dz_0, WCon{dz_1, WCon{dz_2, WCon{dz_3, WCon{dz_4, WCon{dz_5, WCon{dz_6, WCon{dz_7, WCon{dz_8, WCon{dz_9, WCon{dz_10, WCon{dz_11, WCon{dz_12, WCon{dz_13, WCon{dz_14, WCon{dz_15, WCon{dz_16, WCon{dz_17, WCon{dz_18, WCon{dz_19, WCon{dz_20, WCon{dz_21, WCon{dz_22, WCon{dz_23, WCon{dz_24, WCon{dz_25, WCon{dz_26, WCon{dz_27, WCon{dz_28, WCon{dz_29, WCon{dz_30, WCon{dz_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{t_0, WCon{t_1, WCon{t_2, WCon{t_3, WCon{t_4, WCon{t_5, WCon{t_6, WCon{t_7, WCon{t_8, WCon{t_9, WCon{t_10, WCon{t_11, WCon{t_12, WCon{t_13, WCon{t_14, WCon{t_15, WCon{t_16, WCon{t_17, WCon{t_18, WCon{t_19, WCon{t_20, WCon{t_21, WCon{t_22, WCon{t_23, WCon{t_24, WCon{t_25, WCon{t_26, WCon{t_27, WCon{t_28, WCon{t_29, WCon{t_30, WCon{t_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def note_body(+al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +NL: List<&2, U32>, +DL: List<&2, U32>, +r: List<&2, U32>, e1: {B.len(NL) == U32.to_nat(nz) : Nat}, e2: {B.len(DL) == U32.to_nat(dz) : Nat}) -> {N.elf_note.body(al, nz, dz, t, B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}:
+  %e1 : {N.elf_note.body2(N.elf_note.cut(_, B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))), al, nz, dz, t, B.drop(N.elf_note.pad(al, U32.add(12, nz)), B.drop(_, B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))))) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  %Equal.sym(Result<&2, &2, F.ElfError, List<&2, U32>>, N.elf_note.cut(B.len(NL), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))), Done{NL}, note_cut(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))) : {N.elf_note.body2(_, al, nz, dz, t, B.drop(N.elf_note.pad(al, U32.add(12, nz)), B.drop(B.len(NL), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))))))) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  %note_drop_app(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r)))) : {N.elf_note.body2(Done{NL}, al, nz, dz, t, B.drop(N.elf_note.pad(al, U32.add(12, nz)), _)) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  %note_drop_zeros(N.elf_note.pad(al, U32.add(12, nz)), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))) : {N.elf_note.body2(Done{NL}, al, nz, dz, t, _) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  %e2 : {N.elf_note.body3(N.elf_note.cut(_, B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))), al, nz, dz, t, NL) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  %Equal.sym(Result<&2, &2, F.ElfError, List<&2, U32>>, N.elf_note.cut(B.len(DL), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))), Done{DL}, note_cut(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), r))) : {N.elf_note.body3(_, al, nz, dz, t, NL) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  {==}
+
+# a note's bytes followed by any bytes R
+def note_parse(+big: Bool, +al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +NL: List<&2, U32>, +DL: List<&2, U32>, +R: List<&2, U32>, e1: {B.len(NL) == U32.to_nat(nz) : Nat}, e2: {B.len(DL) == U32.to_nat(dz) : Nat}) -> {N.ElfNote.parse.list(big, al, B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.zeros(N.elf_note.pad(al, dz)))))))), R)) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}:
+  %Equal.sym(List<&2, U32>, B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.zeros(N.elf_note.pad(al, dz)))))))), R), B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), R))))))), note_flat7(B.Octets.to_list(F.elf_w32(big, nz)), B.Octets.to_list(F.elf_w32(big, dz)), B.Octets.to_list(F.elf_w32(big, t)), NL, B.zeros(N.elf_note.pad(al, U32.add(12, nz))), DL, B.zeros(N.elf_note.pad(al, dz)), R)) : {N.ElfNote.parse.list(big, al, _) == Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}} : Result<&2, &2, F.ElfError, N.ElfNoteRead>}
+  Equal.trans(Result<&2, &2, F.ElfError, N.ElfNoteRead>, N.ElfNote.parse.list(big, al, B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), R)))))))), N.elf_note.body(al, nz, dz, t, B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), R))))), Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(NL), B.Octets.of_list(DL)}, N.elf_note.size(al, nz, dz)}}, note_hdr_bits(big, nz, dz, t, al, B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.append(B.zeros(N.elf_note.pad(al, dz)), R))))), note_body(al, nz, dz, t, NL, DL, R, e1, e2))
+
+def note_bytes0(+big: Bool, +al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +name: B.Octets, +desc: B.Octets) -> {B.Octets.to_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc})) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(F.elf_w32(big, nz), B.Octets.append(F.elf_w32(big, dz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))))), B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.Octets.to_list(B.Octets.append(F.elf_w32(big, dz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))))), BL.octets_append_list(F.elf_w32(big, nz), B.Octets.append(F.elf_w32(big, dz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))))) : {_ == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(F.elf_w32(big, dz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))))), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.Octets.to_list(B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))))), BL.octets_append_list(F.elf_w32(big, dz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), _) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.Octets.to_list(B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))), BL.octets_append_list(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), _)) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))), B.append(B.Octets.to_list(name), B.Octets.to_list(B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))), BL.octets_append_list(name, B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), _))) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))), B.append(B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz)))), B.Octets.to_list(B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))), BL.octets_append_list(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz))))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), _)))) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))), B.append(B.Octets.to_list(desc), B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, dz)))), BL.octets_append_list(desc, B.Octets.zeros(N.elf_note.pad(al, dz)))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz)))), _))))) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, U32.add(12, nz)))), B.zeros(N.elf_note.pad(al, U32.add(12, nz))), BL.octets_zeros_list(N.elf_note.pad(al, U32.add(12, nz)))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(_, B.append(B.Octets.to_list(desc), B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, dz))))))))) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.zeros(N.elf_note.pad(al, dz))), B.zeros(N.elf_note.pad(al, dz)), BL.octets_zeros_list(N.elf_note.pad(al, dz))) : {B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), _)))))) == B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))) : List<&2, U32>}
+  {==}
+
+def note_rt(+big: Bool, +al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +name: B.Octets, +desc: B.Octets, +rest: B.Octets, e1: {B.Octets.len(name) == U32.to_nat(nz) : Nat}, e2: {B.Octets.len(desc) == U32.to_nat(dz) : Nat}) -> {N.ElfNote.parse(big, al, B.Octets.append(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc}), rest)) == Done{N.ElfNote{nz, dz, t, name, desc}} : Result<&2, &2, F.ElfError, N.ElfNote>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc}), rest)), B.append(B.Octets.to_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc})), B.Octets.to_list(rest)), BL.octets_append_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc}), rest)) : {N.elf_note.only(N.ElfNote.parse.list(big, al, _)) == Done{N.ElfNote{nz, dz, t, name, desc}} : Result<&2, &2, F.ElfError, N.ElfNote>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc})), B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), note_bytes0(big, al, nz, dz, t, name, desc)) : {N.elf_note.only(N.ElfNote.parse.list(big, al, B.append(_, B.Octets.to_list(rest)))) == Done{N.ElfNote{nz, dz, t, name, desc}} : Result<&2, &2, F.ElfError, N.ElfNote>}
+  %Equal.sym(Result<&2, &2, F.ElfError, N.ElfNoteRead>, N.ElfNote.parse.list(big, al, B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(rest))), Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(desc))}, N.elf_note.size(al, nz, dz)}}, note_parse(big, al, nz, dz, t, B.Octets.to_list(name), B.Octets.to_list(desc), B.Octets.to_list(rest), Equal.trans(Nat, B.len(B.Octets.to_list(name)), B.Octets.len(name), U32.to_nat(nz), Equal.sym(Nat, B.Octets.len(name), B.len(B.Octets.to_list(name)), BL.octets_len_list(name)), e1), Equal.trans(Nat, B.len(B.Octets.to_list(desc)), B.Octets.len(desc), U32.to_nat(dz), Equal.sym(Nat, B.Octets.len(desc), B.len(B.Octets.to_list(desc)), BL.octets_len_list(desc)), e2))) : {N.elf_note.only(_) == Done{N.ElfNote{nz, dz, t, name, desc}} : Result<&2, &2, F.ElfError, N.ElfNote>}
+  %BL.octets_of_to(name) : {Done{N.ElfNote{nz, dz, t, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(desc))}} == Done{N.ElfNote{nz, dz, t, _, desc}} : Result<&2, &2, F.ElfError, N.ElfNote>}
+  %BL.octets_of_to(desc) : {Done{N.ElfNote{nz, dz, t, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(desc))}} == Done{N.ElfNote{nz, dz, t, B.Octets.of_list(B.Octets.to_list(name)), _}} : Result<&2, &2, F.ElfError, N.ElfNote>}
+  {==}
+
+def Laws.note_round_trip(big, al, namesz, descsz, t, name, desc, rest, e1, e2):
+  note_rt(big, al, namesz, descsz, t, name, desc, rest, e1, e2)
+
+def note_sum(+big: Bool, +al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +NL: List<&2, U32>, +DL: List<&2, U32>, e1: {B.len(NL) == U32.to_nat(nz) : Nat}, e2: {B.len(DL) == U32.to_nat(dz) : Nat}) -> {Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, nz))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, dz))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, t))), Nat.add(B.len(NL), Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}:
+  %note_len4(big, nz) : {Nat.add(_, Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, dz))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, t))), Nat.add(B.len(NL), Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %note_len4(big, dz) : {Nat.add(4n, Nat.add(_, Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, t))), Nat.add(B.len(NL), Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %note_len4(big, t) : {Nat.add(4n, Nat.add(4n, Nat.add(_, Nat.add(B.len(NL), Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %Equal.sym(Nat, B.len(NL), U32.to_nat(nz), e1) : {Nat.add(4n, Nat.add(4n, Nat.add(4n, Nat.add(_, Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %note_len_zeros(N.elf_note.pad(al, U32.add(12, nz))) : {Nat.add(4n, Nat.add(4n, Nat.add(4n, Nat.add(U32.to_nat(nz), Nat.add(_, Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %Equal.sym(Nat, B.len(DL), U32.to_nat(dz), e2) : {Nat.add(4n, Nat.add(4n, Nat.add(4n, Nat.add(U32.to_nat(nz), Nat.add(N.elf_note.pad(al, U32.add(12, nz)), Nat.add(_, B.len(B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  %note_len_zeros(N.elf_note.pad(al, dz)) : {Nat.add(4n, Nat.add(4n, Nat.add(4n, Nat.add(U32.to_nat(nz), Nat.add(N.elf_note.pad(al, U32.add(12, nz)), Nat.add(U32.to_nat(dz), _)))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}
+  {==}
+
+def note_len(+big: Bool, +al: N.ElfNoteAlign, +nz: U32, +dz: U32, +t: U32, +NL: List<&2, U32>, +DL: List<&2, U32>, e1: {B.len(NL) == U32.to_nat(nz) : Nat}, e2: {B.len(DL) == U32.to_nat(dz) : Nat}) -> {B.len(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.zeros(N.elf_note.pad(al, dz))))))))) == 1n+N.elf_note.size(al, nz, dz) : Nat}:
+  Equal.trans(Nat, B.len(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(NL, B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(DL, B.zeros(N.elf_note.pad(al, dz))))))))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, nz))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, dz))), Nat.add(B.len(B.Octets.to_list(F.elf_w32(big, t))), Nat.add(B.len(NL), Nat.add(B.len(B.zeros(N.elf_note.pad(al, U32.add(12, nz)))), Nat.add(B.len(DL), B.len(B.zeros(N.elf_note.pad(al, dz))))))))), 1n+N.elf_note.size(al, nz, dz), note_len7(B.Octets.to_list(F.elf_w32(big, nz)), B.Octets.to_list(F.elf_w32(big, dz)), B.Octets.to_list(F.elf_w32(big, t)), NL, B.zeros(N.elf_note.pad(al, U32.add(12, nz))), DL, B.zeros(N.elf_note.pad(al, dz))), note_sum(big, al, nz, dz, t, NL, DL, e1, e2))
+
+def note_skip(+a: List<&2, U32>, +r: List<&2, U32>, +big: Bool, +al: N.ElfNoteAlign, +acc: List<&2, N.ElfNote>) -> {N.elf_note.go(B.append(a, r), N.elf_note.next(B.len(a), big, al, B.append(a, r)), big, al, acc) == N.elf_note.go(r, N.ElfNoteHere{N.ElfNote.parse.list(big, al, r)}, big, al, acc) : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      note_skip(t, r, big, al, acc)
+
+def note_pred(n: Nat) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+p:
+      p
+
+def note_succ_inj(+a: Nat, +b: Nat, e: {1n+a == 1n+b : Nat}) -> {a == b : Nat}:
+  %e : {a == note_pred(_) : Nat}
+  {==}
+
+def note_nat_disc(n: Nat) -> Type:
+  match n:
+    case 0n:
+      Unit
+    case 1n+p:
+      Empty
+
+def note_nat_absurd(+k: Nat, e: {0n == 1n+k : Nat}) -> Empty:
+  %e : note_nat_disc(_)
+  Unit{}
+
+def note_step(+a: List<&2, U32>, +r: List<&2, U32>, +big: Bool, +al: N.ElfNoteAlign, +n: N.ElfNote, +k: Nat, +acc: List<&2, N.ElfNote>, e: {B.len(a) == 1n+k : Nat}) -> {N.elf_note.go(B.append(a, r), N.ElfNoteHere{Done{N.ElfNoteRead{n, k}}}, big, al, acc) == N.elf_note.go(r, N.ElfNoteHere{N.ElfNote.parse.list(big, al, r)}, big, al, Con{n, acc}) : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}:
+  match a:
+    case Nil{}:
+      Empty.absurd({N.elf_note.go(B.append(Nil{}, r), N.ElfNoteHere{Done{N.ElfNoteRead{n, k}}}, big, al, acc) == N.elf_note.go(r, N.ElfNoteHere{N.ElfNote.parse.list(big, al, r)}, big, al, Con{n, acc}) : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}, note_nat_absurd(k, e))
+    case Con{+h, +t}:
+      %note_succ_inj(B.len(t), k, e) : {N.elf_note.go(B.append(t, r), N.elf_note.next(_, big, al, B.append(t, r)), big, al, Con{n, acc}) == N.elf_note.go(r, N.ElfNoteHere{N.ElfNote.parse.list(big, al, r)}, big, al, Con{n, acc}) : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      note_skip(t, r, big, al, Con{n, acc})
+
+# Bool.and and Nat.is_eq, when True
+
+def note_and_l(+a: Bool, +b: Bool, e: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
+  match a:
+    case True{}:
+      {==}
+    case False{}:
+      Empty.absurd({False{} == True{} : Bool}, bool_absurd(e))
+
+def note_and_r(+a: Bool, +b: Bool, e: {Bool.and(a, b) == True{} : Bool}) -> {b == True{} : Bool}:
+  match a:
+    case True{}:
+      e
+    case False{}:
+      Empty.absurd({b == True{} : Bool}, bool_absurd(e))
+
+def note_nat_eq(+a: Nat, +b: Nat, e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b : Nat}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({0n == 1n+q : Nat}, bool_absurd(e))
+    case 1n+p 0n:
+      Empty.absurd({1n+p == 0n : Nat}, bool_absurd(e))
+    case 1n+(+p) 1n+(+q):
+      %note_nat_eq(p, q, e) : {1n+p == 1n+_ : Nat}
+      {==}
+
+# The tail-recursive writer is the structural one (as for the tables)
+
+def note_wgo(+big: Bool, +al: N.ElfNoteAlign, +xs: List<&2, N.ElfNote>, +rs: List<&2, N.ElfNote>) -> {N.ElfNote.write_all.go(big, al, F.elf_rev_onto(N.ElfNote, xs, rs), B.Octets.empty()) == N.ElfNote.write_all.go(big, al, rs, N.ElfNote.write_all.ref(big, al, xs)) : B.Octets}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      note_wgo(big, al, t, Con{x, rs})
+
+def note_write_eq(+big: Bool, +al: N.ElfNoteAlign, +xs: List<&2, N.ElfNote>) -> {N.ElfNote.write_all.ref(big, al, xs) == N.ElfNote.write_all(big, al, xs) : B.Octets}:
+  Equal.sym(B.Octets, N.ElfNote.write_all(big, al, xs), N.ElfNote.write_all.ref(big, al, xs), note_wgo(big, al, xs, Nil{}))
+
+def note_list(+big: Bool, +al: N.ElfNoteAlign, +ns: List<&2, N.ElfNote>, +acc: List<&2, N.ElfNote>, +e: {N.ElfNote.all_sized(ns) == True{} : Bool}) -> {N.elf_note.go(B.Octets.to_list(N.ElfNote.write_all.ref(big, al, ns)), N.ElfNoteHere{N.ElfNote.parse.list(big, al, B.Octets.to_list(N.ElfNote.write_all.ref(big, al, ns)))}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, acc, ns)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}:
+  match ns:
+    case Nil{}:
+      {==}
+    case Con{N.ElfNote{+nz, +dz, +t, +name, +desc}, +r}:
+      +sz = note_and_l(N.ElfNote.sized(N.ElfNote{nz, dz, t, name, desc}), N.ElfNote.all_sized(r), e)
+      +e1 = note_nat_eq(B.Octets.len(name), U32.to_nat(nz), note_and_l(Nat.is_eq(B.Octets.len(name), U32.to_nat(nz)), Nat.is_eq(B.Octets.len(desc), U32.to_nat(dz)), sz))
+      +e2 = note_nat_eq(B.Octets.len(desc), U32.to_nat(dz), note_and_r(Nat.is_eq(B.Octets.len(name), U32.to_nat(nz)), Nat.is_eq(B.Octets.len(desc), U32.to_nat(dz)), sz))
+      +e1l = Equal.trans(Nat, B.len(B.Octets.to_list(name)), B.Octets.len(name), U32.to_nat(nz), Equal.sym(Nat, B.Octets.len(name), B.len(B.Octets.to_list(name)), BL.octets_len_list(name)), e1)
+      +e2l = Equal.trans(Nat, B.len(B.Octets.to_list(desc)), B.Octets.len(desc), U32.to_nat(dz), Equal.sym(Nat, B.Octets.len(desc), B.len(B.Octets.to_list(desc)), BL.octets_len_list(desc)), e2)
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc}), N.ElfNote.write_all.ref(big, al, r))), B.append(B.Octets.to_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc})), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), BL.octets_append_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc}), N.ElfNote.write_all.ref(big, al, r))) : {N.elf_note.go(_, N.ElfNoteHere{N.ElfNote.parse.list(big, al, _)}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      %Equal.sym(List<&2, U32>, B.Octets.to_list(N.ElfNote.write(big, al, N.ElfNote{nz, dz, t, name, desc})), B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), note_bytes0(big, al, nz, dz, t, name, desc)) : {N.elf_note.go(B.append(_, B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), N.ElfNoteHere{N.ElfNote.parse.list(big, al, B.append(_, B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))))}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      %Equal.sym(Result<&2, &2, F.ElfError, N.ElfNoteRead>, N.ElfNote.parse.list(big, al, B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r)))), Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, B.Octets.of_list(B.Octets.to_list(name)), B.Octets.of_list(B.Octets.to_list(desc))}, N.elf_note.size(al, nz, dz)}}, note_parse(big, al, nz, dz, t, B.Octets.to_list(name), B.Octets.to_list(desc), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r)), e1l, e2l)) : {N.elf_note.go(B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), N.ElfNoteHere{_}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      %Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(name)), name, BL.octets_of_to(name)) : {N.elf_note.go(B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), N.ElfNoteHere{Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, _, B.Octets.of_list(B.Octets.to_list(desc))}, N.elf_note.size(al, nz, dz)}}}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      %Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(desc)), desc, BL.octets_of_to(desc)) : {N.elf_note.go(B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), N.ElfNoteHere{Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, name, _}, N.elf_note.size(al, nz, dz)}}}, big, al, acc) == Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+      Equal.trans(Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>, N.elf_note.go(B.append(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r))), N.ElfNoteHere{Done{N.ElfNoteRead{N.ElfNote{nz, dz, t, name, desc}, N.elf_note.size(al, nz, dz)}}}, big, al, acc), N.elf_note.go(B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r)), N.ElfNoteHere{N.ElfNote.parse.list(big, al, B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r)))}, big, al, Con{N.ElfNote{nz, dz, t, name, desc}, acc}), Done{F.elf_rev_onto(N.ElfNote, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, r)}, note_step(B.append(B.Octets.to_list(F.elf_w32(big, nz)), B.append(B.Octets.to_list(F.elf_w32(big, dz)), B.append(B.Octets.to_list(F.elf_w32(big, t)), B.append(B.Octets.to_list(name), B.append(B.zeros(N.elf_note.pad(al, U32.add(12, nz))), B.append(B.Octets.to_list(desc), B.zeros(N.elf_note.pad(al, dz)))))))), B.Octets.to_list(N.ElfNote.write_all.ref(big, al, r)), big, al, N.ElfNote{nz, dz, t, name, desc}, N.elf_note.size(al, nz, dz), acc, note_len(big, al, nz, dz, t, B.Octets.to_list(name), B.Octets.to_list(desc), e1l, e2l)), note_list(big, al, r, Con{N.ElfNote{nz, dz, t, name, desc}, acc}, note_and_r(N.ElfNote.sized(N.ElfNote{nz, dz, t, name, desc}), N.ElfNote.all_sized(r), e)))
+
+def notes_rt(+big: Bool, +al: N.ElfNoteAlign, +ns: List<&2, N.ElfNote>, e: {N.ElfNote.all_sized(ns) == True{} : Bool}) -> {N.ElfNote.read_all(big, al, N.ElfNote.write_all(big, al, ns)) == Done{ns} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}:
+  %note_write_eq(big, al, ns) : {N.ElfNote.read_all(big, al, _) == Done{ns} : Result<&2, &2, F.ElfError, List<&2, N.ElfNote>>}
+  note_list(big, al, ns, Nil{}, e)
+
+def Laws.notes_round_trip(big, al, ns, e):
+  notes_rt(big, al, ns, e)
+
+# Relocations: ELF64_R_INFO's halves, by word64's laws hi_from_parts and
+# lo_from_parts
+
+def rel_info64(+sym: U32, +kind: U32) -> {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (sym, kind) : U32 & U32}:
+  %WL.hi_from_parts(sym, kind) : {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (_, kind) : U32 & U32}
+  %WL.lo_from_parts(sym, kind) : {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (W.W64.hi(W.W64.from_parts(sym, kind)), _) : U32 & U32}
+  {==}
+
+def Laws.rel_info64(sym, kind):
+  rel_info64(sym, kind)
+
+# String tables, indexed (strtab.bend): the trie's lookup is List.get on the
+# suffixes it was built from, and the suffix at offset n, cut at its NUL, is
+# the reference lookup's string. No bit patterns: induction on the trie's
+# depth, the suffixes and the offset.
+
+def strtab_sfx_go(xs: List<&2, U32>, +acc: List<&2, List<&2, U32>>) -> {T.elf_suffixes.go(xs, acc) == F.elf_rev_onto(List<&2, U32>, acc, T.elf_suffixes(xs)) : List<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      strtab_sfx_go(t, Con{Con{h, t}, acc})
+
+def strtab_sfx_eq(+xs: List<&2, U32>) -> {T.elf_suffixes(xs) == T.elf_suffixes.fast(xs) : List<&2, List<&2, U32>>}:
+  Equal.sym(List<&2, List<&2, U32>>, T.elf_suffixes.fast(xs), T.elf_suffixes(xs), strtab_sfx_go(xs, Nil{}))
+
+def strtab_alt_go(ys: List<&2, List<&2, U32>>, +keep: Bool, +acc: List<&2, List<&2, U32>>) -> {T.elf_alt.go(ys, keep, acc) == F.elf_rev_onto(List<&2, U32>, acc, T.elf_alt(ys, keep)) : List<&2, List<&2, U32>>}:
+  match ys:
+    case Nil{}:
+      {==}
+    case Con{+y, t}:
+      match keep:
+        case True{}:
+          strtab_alt_go(t, False{}, Con{y, acc})
+        case False{}:
+          strtab_alt_go(t, True{}, acc)
+
+def strtab_alt_eq(+ys: List<&2, List<&2, U32>>, +keep: Bool) -> {T.elf_alt(ys, keep) == T.elf_alt.fast(ys, keep) : List<&2, List<&2, U32>>}:
+  Equal.sym(List<&2, List<&2, U32>>, T.elf_alt.fast(ys, keep), T.elf_alt(ys, keep), strtab_alt_go(ys, keep, Nil{}))
+
+# where the m-th element of the even (keep) or odd half was
+def strtab_pos(keep: Bool, m: Nat) -> Nat:
+  match keep:
+    case True{}:
+      Nat.double(m)
+    case False{}:
+      1n+Nat.double(m)
+
+def strtab_alt_get(ys: List<&2, List<&2, U32>>, keep: Bool, m: Nat) -> {List.get(&2, List<&2, U32>, T.elf_alt(ys, keep), m) == List.get(&2, List<&2, U32>, ys, strtab_pos(keep, m)) : Maybe<&2, List<&2, U32>>}:
+  match ys:
+    case Nil{}:
+      {==}
+    case Con{y, t}:
+      match keep:
+        case True{}:
+          match m:
+            case 0n:
+              {==}
+            case 1n+(+q):
+              strtab_alt_get(t, False{}, q)
+        case False{}:
+          strtab_alt_get(t, True{}, m)
+
+# a one-element list doubled
+def strtab_dbl1(+s: List<&2, U32>, k: Nat) -> {List.get(&2, List<&2, U32>, [s], Nat.double(k)) == List.get(&2, List<&2, U32>, [s], k) : Maybe<&2, List<&2, U32>>}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+(+q):
+      {==}
+
+def strtab_zero(d: Nat, w: Word(d), +s: List<&2, U32>) -> {T.elf_trie.at0(T.elf_trie.zero(d, w), s) == List.get(&2, List<&2, U32>, [s], Word.to_nat(d, w)) : Maybe<&2, List<&2, U32>>}:
+  match d:
+    case 0n:
+      {==}
+    case 1n+(+p):
+      match w:
+        case WCon{False{}, +r}:
+          Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.at0(T.elf_trie.zero(p, r), s), List.get(&2, List<&2, U32>, [s], Word.to_nat(p, r)), List.get(&2, List<&2, U32>, [s], Nat.double(Word.to_nat(p, r))), strtab_zero(p, r, s), Equal.sym(Maybe<&2, List<&2, U32>>, List.get(&2, List<&2, U32>, [s], Nat.double(Word.to_nat(p, r))), List.get(&2, List<&2, U32>, [s], Word.to_nat(p, r)), strtab_dbl1(s, Word.to_nat(p, r))))
+        case WCon{True{}, r}:
+          {==}
+
+def strtab_find(d: Nat, +ys: List<&2, List<&2, U32>>, w: Word(d)) -> {T.elf_trie.find(d, T.elf_trie(d, ys), w) == List.get(&2, List<&2, U32>, ys, Word.to_nat(d, w)) : Maybe<&2, List<&2, U32>>}:
+  match d:
+    case 0n:
+      match ys:
+        case Nil{}:
+          {==}
+        case Con{y, t}:
+          {==}
+    case 1n+(+p):
+      match ys:
+        case Nil{}:
+          {==}
+        case Con{+a, +t}:
+          match t:
+            case Nil{}:
+              strtab_zero(1n+p, w, a)
+            case Con{+b, +r}:
+              match w:
+                case WCon{False{}, +q}:
+                  %strtab_alt_eq(Con{a, Con{b, r}}, True{}) : {T.elf_trie.find(p, T.elf_trie(p, _), q) == List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, Nat.double(Word.to_nat(p, q))) : Maybe<&2, List<&2, U32>>}
+                  Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.find(p, T.elf_trie(p, T.elf_alt(Con{a, Con{b, r}}, True{})), q), List.get(&2, List<&2, U32>, T.elf_alt(Con{a, Con{b, r}}, True{}), Word.to_nat(p, q)), List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, Nat.double(Word.to_nat(p, q))), strtab_find(p, T.elf_alt(Con{a, Con{b, r}}, True{}), q), strtab_alt_get(Con{a, Con{b, r}}, True{}, Word.to_nat(p, q)))
+                case WCon{True{}, +q}:
+                  %strtab_alt_eq(Con{a, Con{b, r}}, False{}) : {T.elf_trie.find(p, T.elf_trie(p, _), q) == List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, 1n+Nat.double(Word.to_nat(p, q))) : Maybe<&2, List<&2, U32>>}
+                  Equal.trans(Maybe<&2, List<&2, U32>>, T.elf_trie.find(p, T.elf_trie(p, T.elf_alt(Con{a, Con{b, r}}, False{})), q), List.get(&2, List<&2, U32>, T.elf_alt(Con{a, Con{b, r}}, False{}), Word.to_nat(p, q)), List.get(&2, List<&2, U32>, Con{a, Con{b, r}}, 1n+Nat.double(Word.to_nat(p, q))), strtab_find(p, T.elf_alt(Con{a, Con{b, r}}, False{}), q), strtab_alt_get(Con{a, Con{b, r}}, False{}, Word.to_nat(p, q)))
+
+def strtab_cut(xs: List<&2, U32>, n: Nat) -> {T.elf_strtab.cut(List.get(&2, List<&2, U32>, T.elf_suffixes(xs), n)) == F.elf_string.list(xs, n) : Maybe<&2, List<&2, U32>>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+h, +t}:
+      match n:
+        case 0n:
+          {==}
+        case 1n+(+p):
+          strtab_cut(t, p)
+
+def strtab_string(+strtab: B.Octets, i: U32) -> {T.ElfStrtab.string(T.ElfStrtab.of(strtab), i) == S.ElfShdr.string(strtab, i) : Result<&2, &2, F.ElfError, B.Octets>}:
+  match i:
+    case U32{+w}:
+      %strtab_sfx_eq(B.Octets.to_list(strtab)) : {F.elf_string.result(T.elf_strtab.cut(T.elf_trie.find(32n, T.elf_trie(32n, _), w))) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      %Equal.sym(Maybe<&2, List<&2, U32>>, T.elf_trie.find(32n, T.elf_trie(32n, T.elf_suffixes(B.Octets.to_list(strtab))), w), List.get(&2, List<&2, U32>, T.elf_suffixes(B.Octets.to_list(strtab)), Word.to_nat(32n, w)), strtab_find(32n, T.elf_suffixes(B.Octets.to_list(strtab)), w)) : {F.elf_string.result(T.elf_strtab.cut(_)) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      %Equal.sym(Maybe<&2, List<&2, U32>>, T.elf_strtab.cut(List.get(&2, List<&2, U32>, T.elf_suffixes(B.Octets.to_list(strtab)), Word.to_nat(32n, w))), F.elf_string.list(B.Octets.to_list(strtab), Word.to_nat(32n, w)), strtab_cut(B.Octets.to_list(strtab), Word.to_nat(32n, w))) : {F.elf_string.result(_) == S.ElfShdr.string(strtab, U32{w}) : Result<&2, &2, F.ElfError, B.Octets>}
+      {==}
+
+def Laws.strtab_string(strtab, i):
+  strtab_string(strtab, i)
+
+def Laws.sym_name_indexed(strtab, s):
+  strtab_string(strtab, Y.ElfSym.st_name(s))
+
+def Laws.shdr_name_indexed(names, s):
+  strtab_string(names, S.ElfShdr.sh_name(s))
 
 # Vectors: by computation
 
@@ -626,4 +2111,46 @@ def Laws.sym_bind_type():
   {==}
 
 def Laws.whole_file():
+  {==}
+
+def Laws.rejects_bad_magic_witness():
+  {==}
+
+def Laws.rejects_short_witness():
+  {==}
+
+def Laws.strtab_vector():
+  {==}
+
+def Laws.rel_info32():
+  {==}
+
+def Laws.rela32_negative_addend():
+  {==}
+
+def Laws.dyn_needed():
+  {==}
+
+def Laws.dyn_tag_unnamed():
+  {==}
+
+def Laws.verdef_chain():
+  {==}
+
+def Laws.verneed_chain():
+  {==}
+
+def Laws.versym_hidden():
+  {==}
+
+def Laws.note_round_trip_witness():
+  {==}
+
+def Laws.notes_round_trip_witness():
+  {==}
+
+def Laws.note_build_id():
+  {==}
+
+def Laws.note_align8():
   {==}

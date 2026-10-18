@@ -1,0 +1,291 @@
+# bend-osdev-elf, notes.bend: notes (gABI, "Note Section"; elf(5), "Notes
+# (Nhdr)"), the entries of a SHT_NOTE section or a PT_NOTE segment: each a
+# header of three 4-byte words (n_namesz, n_descsz, n_type), then the owner's
+# name (n_namesz bytes, with its NUL), padding, the descriptor (n_descsz
+# bytes) and padding. The GNU build ID (owner "GNU", type NT_GNU_BUILD_ID) is
+# a named case.
+#
+# Alignment: the gABI and elf(5) align the descriptor and the next note to 4
+# bytes. Some producers align to 8 in sections and segments aligned to 8
+# (GNU property notes, .note.gnu.property, in ELF64), and readelf reads those
+# with 8-byte padding; the alignment is a parameter (ElfNoteAlign), 4 by
+# default, and ElfNoteAlign.of chooses it from the section's or segment's own
+# alignment as readelf does. Padding is counted from the note's start (its
+# header is 12 bytes), so with 4-byte alignment it is the gABI's rule.
+import Base
+import ../word64/word64.bend as W
+import ../bytes/bytes.bend as B
+import ./fields.bend as F
+import ./header.bend as H
+import ./sections.bend as S
+import ./segments.bend as P
+
+# The alignment of a note's descriptor and of the next note
+type ElfNoteAlign is Data:
+  ElfAlign4{}
+  ElfAlign8{}
+
+# the gABI's: 4 bytes
+def ElfNoteAlign.default() -> ElfNoteAlign:
+  ElfAlign4{}
+
+def ElfNoteAlign.of.go(eight: Bool) -> ElfNoteAlign:
+  match eight:
+    case True{}:
+      ElfAlign8{}
+    case False{}:
+      ElfAlign4{}
+
+# the alignment for notes in a section or segment aligned to a bytes: 8 if a
+# is 8, else 4
+def ElfNoteAlign.of(+a: W.W64) -> ElfNoteAlign:
+  ElfNoteAlign.of.go(Bool.and(U32.is_eq(W.W64.hi(a), 0), U32.is_eq(W.W64.lo(a), 8)))
+
+def ElfNoteAlign.mask(al: ElfNoteAlign) -> U32:
+  match al:
+    case ElfAlign4{}:
+      3
+    case ElfAlign8{}:
+      7
+
+# A note: its header's fields, and the name and descriptor as they are stored
+# (name with its NUL, n_namesz bytes; desc, n_descsz bytes). ElfNote.make
+# builds one with consistent sizes.
+type ElfNote is Data:
+  ElfNote{n_namesz: U32, n_descsz: U32, n_type: U32, name: B.Octets, desc: B.Octets}
+
+#@ACCESSORS ElfNote
+
+# Internal: a note read from a list, and how many bytes it takes after its
+# first
+type ElfNoteRead is Data:
+  ElfNoteRead{note: ElfNote, rest: Nat}
+
+# the padding after k bytes, to the alignment
+def elf_note.pad(al: ElfNoteAlign, k: U32) -> Nat:
+  U32.to_nat(U32.and(ElfNoteAlign.mask(al), U32.sub(0, k)))
+
+# the bytes a note takes after its first: 11 more bytes of header, the name,
+# its padding, the descriptor and its padding
+def elf_note.size(+al: ElfNoteAlign, +namesz: U32, +descsz: U32) -> Nat:
+  Nat.add(11n, Nat.add(U32.to_nat(namesz), Nat.add(elf_note.pad(al, U32.add(12, namesz)), Nat.add(U32.to_nat(descsz), elf_note.pad(al, descsz)))))
+
+def elf_note.cut.go(ok: Bool, +n: Nat, xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, U32>>:
+  match ok:
+    case True{}:
+      Done{B.take.fast(n, xs)}
+    case False{}:
+      Fail{F.ElfTruncated{}}
+
+# exactly the first n bytes of xs (ElfTruncated if there are fewer)
+def elf_note.cut(+n: Nat, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, List<&2, U32>>:
+  elf_note.cut.go(F.elf_at_least(n, xs), n, xs)
+
+def elf_note.body3(rdesc: Result<&2, &2, F.ElfError, List<&2, U32>>, +al: ElfNoteAlign, +namesz: U32, +descsz: U32, t: U32, name: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfNoteRead>:
+  match rdesc:
+    case Fail{e}:
+      Fail{e}
+    case Done{desc}:
+      Done{ElfNoteRead{ElfNote{namesz, descsz, t, B.Octets.of_list(name), B.Octets.of_list(desc)}, elf_note.size(al, namesz, descsz)}}
+
+def elf_note.body2(rname: Result<&2, &2, F.ElfError, List<&2, U32>>, +al: ElfNoteAlign, +namesz: U32, +descsz: U32, t: U32, zs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfNoteRead>:
+  match rname:
+    case Fail{e}:
+      Fail{e}
+    case Done{name}:
+      elf_note.body3(elf_note.cut(U32.to_nat(descsz), zs), al, namesz, descsz, t, name)
+
+# the name, its padding and the descriptor, at the start of ys
+def elf_note.body(+al: ElfNoteAlign, +namesz: U32, +descsz: U32, t: U32, +ys: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfNoteRead>:
+  elf_note.body2(elf_note.cut(U32.to_nat(namesz), ys), al, namesz, descsz, t, B.drop(elf_note.pad(al, U32.add(12, namesz)), B.drop(U32.to_nat(namesz), ys)))
+
+def elf_note.fields(+al: ElfNoteAlign, rn: Result<&2, &2, F.ElfError, U32>, rd: Result<&2, &2, F.ElfError, U32>, rt: Result<&2, &2, F.ElfError, U32>, ys: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfNoteRead>:
+  match rn rd rt:
+    case Done{namesz} Done{descsz} Done{t}:
+      elf_note.body(al, namesz, descsz, t, ys)
+    case Fail{e} _ _:
+      Fail{e}
+    case Done{namesz} Fail{e} _:
+      Fail{e}
+    case Done{namesz} Done{descsz} Fail{e}:
+      Fail{e}
+
+# the note at the start of xs
+def ElfNote.parse.list(+big: Bool, +al: ElfNoteAlign, +xs: List<&2, U32>) -> Result<&2, &2, F.ElfError, ElfNoteRead>:
+  elf_note.fields(al, F.elf_r32(big, xs, 0n), F.elf_r32(big, xs, 4n), F.elf_r32(big, xs, 8n), B.drop(12n, xs))
+
+def elf_note.only(r: Result<&2, &2, F.ElfError, ElfNoteRead>) -> Result<&2, &2, F.ElfError, ElfNote>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{ElfNoteRead{n, k}}:
+      Done{n}
+
+# Public: one note
+
+# the note at the start of o, in byte order big, aligned to al: ElfTruncated
+# if o ends inside its header, name or descriptor (the padding after the
+# descriptor may be missing at the end of o)
+def ElfNote.parse(big: Bool, al: ElfNoteAlign, o: B.Octets) -> Result<&2, &2, F.ElfError, ElfNote>:
+  elf_note.only(ElfNote.parse.list(big, al, B.Octets.to_list(o)))
+
+# the note's bytes: its header, name, padding, descriptor and padding (the
+# sizes written are n_namesz and n_descsz as they are)
+def ElfNote.write(+big: Bool, +al: ElfNoteAlign, n: ElfNote) -> B.Octets:
+  match n:
+    case ElfNote{+namesz, +descsz, t, name, desc}:
+      B.Octets.append(F.elf_w32(big, namesz), B.Octets.append(F.elf_w32(big, descsz), B.Octets.append(F.elf_w32(big, t), B.Octets.append(name, B.Octets.append(B.Octets.zeros(elf_note.pad(al, U32.add(12, namesz))), B.Octets.append(desc, B.Octets.zeros(elf_note.pad(al, descsz))))))))
+
+# whether the sizes are the name's and descriptor's lengths
+def ElfNote.sized(n: ElfNote) -> Bool:
+  match n:
+    case ElfNote{namesz, descsz, t, name, desc}:
+      Bool.and(Nat.is_eq(B.Octets.len(name), U32.to_nat(namesz)), Nat.is_eq(B.Octets.len(desc), U32.to_nat(descsz)))
+
+# A note of type t from the owner's name (without its NUL; the empty name is
+# no name, n_namesz 0) and a descriptor
+def ElfNote.make.name.go(none: Bool, owner: B.Octets) -> B.Octets:
+  match none:
+    case True{}:
+      B.Octets.empty()
+    case False{}:
+      B.Octets.append(owner, B.Octets.zeros(1n))
+
+def ElfNote.make.name(+owner: B.Octets) -> B.Octets:
+  ElfNote.make.name.go(B.Octets.is_eq(owner, B.Octets.empty()), owner)
+
+def ElfNote.make(t: U32, owner: B.Octets, +desc: B.Octets) -> ElfNote:
+  +name = ElfNote.make.name(owner)
+  ElfNote{U32.from_nat(B.Octets.len(name)), U32.from_nat(B.Octets.len(desc)), t, name, desc}
+
+# the owner's name: the name up to its first NUL
+def ElfNote.owner.go(m: Maybe<&2, List<&2, U32>>, +name: B.Octets) -> B.Octets:
+  match m:
+    case Some{s}:
+      B.Octets.of_list(s)
+    case None{}:
+      name
+
+def ElfNote.owner(n: ElfNote) -> B.Octets:
+  +name = ElfNote.name(n)
+  ElfNote.owner.go(F.elf_cstr(B.Octets.to_list(name)), name)
+
+# the GNU build ID (owner "GNU", n_type NT_GNU_BUILD_ID, 3): its descriptor
+def ElfNote.build_id.go(hit: Bool, desc: B.Octets) -> Maybe<&2, B.Octets>:
+  match hit:
+    case True{}:
+      Some{desc}
+    case False{}:
+      None{}
+
+def ElfNote.build_id(+n: ElfNote) -> Maybe<&2, B.Octets>:
+  ElfNote.build_id.go(Bool.and(U32.is_eq(ElfNote.n_type(n), 3), B.Octets.is_eq(ElfNote.owner(n), B.Octets.of_string("GNU"))), ElfNote.desc(n))
+
+def ElfNote.find_build_id.go(ns: List<&2, ElfNote>, found: Maybe<&2, B.Octets>) -> Maybe<&2, B.Octets>:
+  match ns:
+    case Nil{}:
+      found
+    case Con{n, r}:
+      match found:
+        case Some{b}:
+          Some{b}
+        case None{}:
+          ElfNote.find_build_id.go(r, ElfNote.build_id(n))
+
+# the first GNU build ID among some notes
+def ElfNote.find_build_id(ns: List<&2, ElfNote>) -> Maybe<&2, B.Octets>:
+  ElfNote.find_build_id.go(ns, None{})
+
+# Internal: every note of a list of bytes, a byte at a time (so that the walk
+# is structural in the bytes, of any length)
+
+type ElfNoteAt is Data:
+  # this byte and k more belong to the note before
+  ElfNoteSkip{k: Nat}
+  # a note starts here, read as r
+  ElfNoteHere{r: Result<&2, &2, F.ElfError, ElfNoteRead>}
+
+# what follows k more bytes of a note, xs being the bytes after this one
+def elf_note.next(k: Nat, +big: Bool, +al: ElfNoteAlign, +xs: List<&2, U32>) -> ElfNoteAt:
+  match k:
+    case 0n:
+      ElfNoteHere{ElfNote.parse.list(big, al, xs)}
+    case 1n+j:
+      ElfNoteSkip{j}
+
+def elf_note.go(xs: List<&2, U32>, st: ElfNoteAt, +big: Bool, +al: ElfNoteAlign, acc: List<&2, ElfNote>) -> Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+  match xs st:
+    case Nil{} _:
+      Done{F.elf_rev_onto(ElfNote, acc, Nil{})}
+    case Con{h, +t} ElfNoteSkip{k}:
+      elf_note.go(t, elf_note.next(k, big, al, t), big, al, acc)
+    case Con{h, t} ElfNoteHere{Fail{e}}:
+      Fail{e}
+    case Con{h, +t} ElfNoteHere{Done{ElfNoteRead{n, k}}}:
+      elf_note.go(t, elf_note.next(k, big, al, t), big, al, Con{n, acc})
+
+# Public: every note
+
+# the notes filling o, one after another
+def ElfNote.read_all(+big: Bool, +al: ElfNoteAlign, o: B.Octets) -> Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+  +xs = B.Octets.to_list(o)
+  elf_note.go(xs, ElfNoteHere{ElfNote.parse.list(big, al, xs)}, big, al, Nil{})
+
+# notes one after another (structural)
+def ElfNote.write_all.ref(+big: Bool, +al: ElfNoteAlign, ns: List<&2, ElfNote>) -> B.Octets:
+  match ns:
+    case Nil{}:
+      B.Octets.empty()
+    case Con{n, r}:
+      B.Octets.append(ElfNote.write(big, al, n), ElfNote.write_all.ref(big, al, r))
+
+def ElfNote.write_all.go(+big: Bool, +al: ElfNoteAlign, rs: List<&2, ElfNote>, acc: B.Octets) -> B.Octets:
+  match rs:
+    case Nil{}:
+      acc
+    case Con{n, r}:
+      ElfNote.write_all.go(big, al, r, B.Octets.append(ElfNote.write(big, al, n), acc))
+
+# notes one after another, tail-recursively (write_all.ref is the structural
+# form; PROOF.bend: note_write_eq)
+def ElfNote.write_all(+big: Bool, +al: ElfNoteAlign, ns: List<&2, ElfNote>) -> B.Octets:
+  ElfNote.write_all.go(big, al, F.elf_rev_onto(ElfNote, ns, Nil{}), B.Octets.empty())
+
+# whether every note's sizes are its name's and descriptor's lengths
+def ElfNote.all_sized(ns: List<&2, ElfNote>) -> Bool:
+  match ns:
+    case Nil{}:
+      True{}
+    case Con{n, r}:
+      Bool.and(ElfNote.sized(n), ElfNote.all_sized(r))
+
+# Public: the notes of a section or segment
+
+# whether section s holds notes (SHT_NOTE, 7)
+def ElfNote.is_section(s: S.ElfShdr) -> Bool:
+  U32.is_eq(S.ElfShdr.sh_type(s), 7)
+
+# the notes of section s of the file o, whose header is h, aligned as the
+# section is (ElfNoteAlign.of(sh_addralign)); ElfBadSectionType unless s is
+# SHT_NOTE
+def ElfNote.all(o: B.Octets, +h: H.ElfHeader, +s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+    ok : Unit <- F.elf_check(ElfNote.is_section(s), F.ElfBadSectionType{})
+    d : B.Octets <- S.ElfShdr.bytes(o, s)
+    ns : List<&2, ElfNote> <- ElfNote.read_all(H.ElfHeader.big(h), ElfNoteAlign.of(S.ElfShdr.sh_addralign(s)), d)
+    return ns
+
+# whether program header p is a note segment (PT_NOTE, 4)
+def ElfNote.is_segment(p: P.ElfPhdr) -> Bool:
+  U32.is_eq(P.ElfPhdr.p_type(p), 4)
+
+# the notes of segment p: p_filesz bytes at p_offset, aligned as the segment
+# is (ElfNoteAlign.of(p_align)); ElfBadSectionType unless p is PT_NOTE
+def ElfNote.segment(+o: B.Octets, +h: H.ElfHeader, +p: P.ElfPhdr) -> Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+  do Result<&2, &2, F.ElfError, List<&2, ElfNote>>:
+    ok : Unit <- F.elf_check(ElfNote.is_segment(p), F.ElfBadSectionType{})
+    n : U32 <- F.elf_small(P.ElfPhdr.p_filesz(p))
+    r : B.Octets <- F.elf_seek.oct(o, P.ElfPhdr.p_offset(p))
+    d : B.Octets <- F.elf_need(B.Octets, F.elf_take.oct(U32.to_nat(n), r), F.ElfOffsetOutOfRange{})
+    ns : List<&2, ElfNote> <- ElfNote.read_all(H.ElfHeader.big(h), ElfNoteAlign.of(P.ElfPhdr.p_align(p)), d)
+    return ns

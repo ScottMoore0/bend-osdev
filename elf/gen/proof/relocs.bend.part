@@ -1,0 +1,10 @@
+# Relocations: ELF64_R_INFO's halves, by word64's laws hi_from_parts and
+# lo_from_parts
+
+def rel_info64(+sym: U32, +kind: U32) -> {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (sym, kind) : U32 & U32}:
+  %WL.hi_from_parts(sym, kind) : {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (_, kind) : U32 & U32}
+  %WL.lo_from_parts(sym, kind) : {(R.ElfReloc.sym(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()}), R.ElfReloc.type(True{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(True{}, sym, kind), W.W64.zero()})) == (W.W64.hi(W.W64.from_parts(sym, kind)), _) : U32 & U32}
+  {==}
+
+def Laws.rel_info64(sym, kind):
+  rel_info64(sym, kind)

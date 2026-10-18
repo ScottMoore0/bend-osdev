@@ -6,8 +6,9 @@
 # This file is the main concern: a whole file at once (its header, program
 # headers, section headers and section names), finding a section by name, and
 # a section's symbols. The parts live beside it: fields.bend (the error type),
-# header.bend, segments.bend, sections.bend and symbols.bend, each usable on
-# its own.
+# header.bend, segments.bend, sections.bend, symbols.bend, strtab.bend (string
+# tables indexed by offset), relocs.bend, dynamic.bend, notes.bend and
+# versions.bend, each usable on its own.
 #
 # Every 64-bit field is a W64 (bend-osdev-word64); an ELF32 file's 32-bit
 # addresses, offsets and sizes are widened, so one record type serves both
@@ -22,6 +23,7 @@ import ./header.bend as H
 import ./sections.bend as S
 import ./segments.bend as P
 import ./symbols.bend as Y
+import ./strtab.bend as T
 
 # A file's tables: its header, its program headers, its section headers, and
 # the bytes of its section-name string table (empty if it has none)
@@ -95,7 +97,7 @@ def ElfFile.find.pick(hit: Bool, s: S.ElfShdr) -> Maybe<&2, S.ElfShdr>:
 
 # the first of ss named name, unless found holds one already; tail-recursive,
 # so a file can have any number of sections
-def ElfFile.find.go(ss: List<&2, S.ElfShdr>, found: Maybe<&2, S.ElfShdr>, +names: B.Octets, +name: B.Octets) -> Maybe<&2, S.ElfShdr>:
+def ElfFile.find.go(ss: List<&2, S.ElfShdr>, found: Maybe<&2, S.ElfShdr>, +names: T.ElfStrtab, +name: B.Octets) -> Maybe<&2, S.ElfShdr>:
   match ss:
     case Nil{}:
       found
@@ -104,11 +106,17 @@ def ElfFile.find.go(ss: List<&2, S.ElfShdr>, found: Maybe<&2, S.ElfShdr>, +names
         case Some{f}:
           Some{f}
         case None{}:
-          ElfFile.find.go(t, ElfFile.find.pick(ElfFile.name_is(S.ElfShdr.name(names, s), name), s), names, name)
+          ElfFile.find.go(t, ElfFile.find.pick(ElfFile.name_is(S.ElfShdr.name_in(names, s), name), s), names, name)
 
-# the first section named name (".symtab", ".dynsym", ".text", ...)
+# the section-name string table, indexed (strtab.bend), for naming many
+# sections: S.ElfShdr.name_in(ElfFile.section_names(f), s)
+def ElfFile.section_names(f: ElfFile) -> T.ElfStrtab:
+  T.ElfStrtab.of(ElfFile.shstrtab(f))
+
+# the first section named name (".symtab", ".dynsym", ".text", ...); the
+# names are looked up through an index, built once
 def ElfFile.find_section(+f: ElfFile, name: B.Octets) -> Maybe<&2, S.ElfShdr>:
-  ElfFile.find.go(ElfFile.sections(f), None{}, ElfFile.shstrtab(f), name)
+  ElfFile.find.go(ElfFile.sections(f), None{}, ElfFile.section_names(f), name)
 
 # the symbols of section s of the file o, read as f
 def ElfFile.symbols(o: B.Octets, f: ElfFile, s: S.ElfShdr) -> Result<&2, &2, F.ElfError, List<&2, Y.ElfSym>>:
