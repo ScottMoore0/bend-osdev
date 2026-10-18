@@ -84,6 +84,27 @@ until Base has a native `U64`; the table matters most there.
 The fast path builds its table once per call (an `Array`, threaded through
 the loop), so it pays off on inputs longer than a few hundred bytes.
 
+## Sizes
+
+Every engine, bitwise and table-driven, is a tail-recursive loop over the
+bytes, so there is no length limit beyond memory. Measured on Bend 2.0.37
+(native build, WSL2) over 1 MB of pseudo-random bytes, each run including
+building the input (all seven results checked against `ref/gen.py`'s model,
+zlib and xz):
+
+| Run, 1 MB | Time | Peak RAM |
+|---|---|---|
+| `crc32c`, bitwise | 3.0 s | 1.30 GB |
+| `crc32c`, table-driven | 3.7 s | 1.30 GB |
+| `crc64_ecma`, bitwise | 17.7 s | 1.36 GB |
+| `crc64_ecma`, table-driven | 10.0 s | 1.36 GB |
+| all seven named CRCs, bitwise | 60 s | 1.74 GB |
+| all seven named CRCs, table-driven | 35 s | 1.79 GB |
+
+Most of the memory is the 1 MB `Octets` (about 940 bytes per byte today)
+and its list form. `check.bend` runs CRC32C both ways and CRC-64/XZ
+table-driven over 100 KB as a regression test.
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
