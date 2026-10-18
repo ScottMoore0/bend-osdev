@@ -33,6 +33,7 @@ GPL source was read.
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
 | [blockdev](blockdev/) | The block-device interfaces (pure, and owned with writes), a balanced in-memory device, and a proved `Array<U32>` image device |
+| [iodev](iodev/) | Block devices in `IO`: the interface and its helpers, adapters for blockdev's devices, a disk image file read on demand, and a write overlay |
 | [crc](crc/) | CRCs in the Rocksoft parameter model (CRC-32C, CRC-32, CRC-16, CRC-T10DIF, three CRC-64s), bitwise and table-driven |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
 | [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |
