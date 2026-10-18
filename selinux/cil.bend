@@ -1069,12 +1069,51 @@ def SeCil.cons.names(attr: K.SeCattr, side: K.SeCside, eq: Bool, r: Result<&2, &
     case Done{set}:
       Done{K.SeCSet{attr, side, eq, set}}
 
-def SeCil.cons.pair.go(pair: Bool, +attr: K.SeCattr, side: K.SeCside, eq: Bool, y: SeSexp, +env: SeEnv) -> Result<&2, &2, P.SeError, K.SeCexpr>:
+# The operand words of a constraint expression (the CIL reference,
+# "Constraint Statements"): u1 r1 t1 (and l1 h1) name the source context,
+# u2 r2 t2 (l2 h2) the target, and u3 r3 t3 the process (validatetrans
+# only). In an expression they are always these operands, never a user,
+# role or type of that name; so a right operand that is one of them must
+# be the left operand's partner (u2 for u1, r2 for r1, t2 for t1), and any
+# other (t1 on the right, t2 after t2, u3 ...) is refused, as secilc does.
+def SeCil.cons.words() -> List<&2, String>:
+  ["u1", "u2", "u3", "r1", "r2", "r3", "t1", "t2", "t3", "l1", "l2", "h1", "h2"]
+
+def SeCil.cons.word.go(xs: List<&2, String>, +n: String) -> Bool:
+  match xs:
+    case Nil{}:
+      False{}
+    case Con{w, t}:
+      Bool.or(String.eq(w, n), SeCil.cons.word.go(t, n))
+
+def SeCil.cons.word.pick(b: Bool, n: String) -> Maybe<&2, String>:
+  match b:
+    case True{}:
+      Some{n}
+    case False{}:
+      None{}
+
+# the right operand, when it is one of the operand words
+def SeCil.cons.word(y: SeSexp) -> Maybe<&2, String>:
+  match y:
+    case SeAtom{+n}:
+      SeCil.cons.word.pick(SeCil.cons.word.go(SeCil.cons.words(), n), n)
+    case SeList{ys}:
+      None{}
+
+def SeCil.cons.named(w: Maybe<&2, String>, +attr: K.SeCattr, side: K.SeCside, eq: Bool, y: SeSexp, +env: SeEnv) -> Result<&2, &2, P.SeError, K.SeCexpr>:
+  match w:
+    case Some{n}:
+      Fail{SeCil.bad("constraint operand " ++ n)}
+    case None{}:
+      SeCil.cons.names(attr, side, eq, SeCil.set.eval(y, SeCattr.kind(attr), env))
+
+def SeCil.cons.pair.go(pair: Bool, +attr: K.SeCattr, side: K.SeCside, eq: Bool, +y: SeSexp, +env: SeEnv) -> Result<&2, &2, P.SeError, K.SeCexpr>:
   match pair:
     case True{}:
       Done{K.SeCPair{attr, eq}}
     case False{}:
-      SeCil.cons.names(attr, side, eq, SeCil.set.eval(y, SeCattr.kind(attr), env))
+      SeCil.cons.named(SeCil.cons.word(y), attr, side, eq, y, env)
 
 def SeCil.cons.attr(eq: Maybe<&2, Bool>, +attr: K.SeCattr, +side: K.SeCside, +y: SeSexp, +env: SeEnv, o: String) -> Result<&2, &2, P.SeError, K.SeCexpr>:
   match eq:
@@ -1384,6 +1423,23 @@ def SeCil.br.ty(r: Result<&2, &2, P.SeError, P.SeTyRule>, acc: SeBr) -> Result<&
         case SeBr{av, ty}:
           Done{SeBr{av, Con{x, ty}}}
 
+# a typetransition rule with an object name (a name transition) is not
+# allowed inside a booleanif (the CIL reference, "typetransition": name
+# transitions are not allowed inside conditionals)
+def SeCil.br.unnamed.go(n: Maybe<&2, String>, r: P.SeTyRule) -> Result<&2, &2, P.SeError, P.SeTyRule>:
+  match n:
+    case None{}:
+      Done{r}
+    case Some{x}:
+      Fail{SeCil.bad("booleanif: typetransition with an object name")}
+
+def SeCil.br.unnamed(r: Result<&2, &2, P.SeError, P.SeTyRule>) -> Result<&2, &2, P.SeError, P.SeTyRule>:
+  match r:
+    case Fail{e}:
+      Fail{e}
+    case Done{+x}:
+      SeCil.br.unnamed.go(P.SeTyRule.name(x), x)
+
 # a statement of a branch: an access vector rule or a type rule
 def SeCil.br.stmt(k: SeKw, +s: SeStmt, +env: SeEnv, acc: SeBr) -> Result<&2, &2, P.SeError, SeBr>:
   match k:
@@ -1394,7 +1450,7 @@ def SeCil.br.stmt(k: SeKw, +s: SeStmt, +env: SeEnv, acc: SeBr) -> Result<&2, &2,
     case SeKDontAudit{}:
       SeCil.br.av(SeCil.avrule(P.SeDontaudit{}, s, env), acc)
     case SeKTypeTransition{}:
-      SeCil.br.ty(SeCil.tyrule(P.SeTyTransition{}, s, env), acc)
+      SeCil.br.ty(SeCil.br.unnamed(SeCil.tyrule(P.SeTyTransition{}, s, env)), acc)
     case SeKTypeChange{}:
       SeCil.br.ty(SeCil.tyrule(P.SeTyChange{}, s, env), acc)
     case SeKTypeMember{}:

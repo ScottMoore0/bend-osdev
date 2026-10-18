@@ -1,8 +1,8 @@
 # bend-osdev-selinux: SELinux policy loading and evaluation, as a pure model.
 #
-# The entry file: load a CIL policy (SeCil.load, then the neverallow check),
-# read and show security contexts as text, and ask the security server's
-# questions by name. The model itself is in the other files: policy.bend
+# The entry file: load a CIL policy (SeCil.load, then the neverallow and
+# transition checks), read and show security contexts as text, and ask the
+# security server's questions by name. The model itself is in the other files: policy.bend
 # (the policy), te.bend (type enforcement and roles), constraints.bend,
 # mls.bend, contexts.bend, avc.bend (decisions and new contexts) and
 # cil.bend (the CIL subset).
@@ -28,16 +28,37 @@ def Selinux.validate.fail(m: Maybe<&2, P.SeConflict>) -> Result<&2, &2, P.SeErro
         case P.SeConflict{n, a}:
           Fail{P.SeErrNeverallow{n, a}}
 
-def Selinux.validate.go(ok: Bool, +p: P.SePolicy) -> Result<&2, &2, P.SeError, P.SePolicy>:
+def Selinux.validate.trans_fail(m: Maybe<&2, T.SeTransConflict>) -> Result<&2, &2, P.SeError, P.SePolicy>:
+  match m:
+    case None{}:
+      Fail{P.SeErrSyntax{"transition conflict"}}
+    case Some{c}:
+      match c:
+        case T.SeTyClash{a, b}:
+          Fail{P.SeErrTypeConflict{a, b}}
+        case T.SeRoleClash{a, b}:
+          Fail{P.SeErrRoleTransConflict{a, b}}
+
+def Selinux.validate.trans(ok: Bool, +p: P.SePolicy) -> Result<&2, &2, P.SeError, P.SePolicy>:
   match ok:
     case True{}:
       Done{p}
     case False{}:
+      Selinux.validate.trans_fail(T.SeTe.first_trans_conflict(p))
+
+def Selinux.validate.go(ok: Bool, +p: P.SePolicy) -> Result<&2, &2, P.SeError, P.SePolicy>:
+  match ok:
+    case True{}:
+      Selinux.validate.trans(T.SeTe.transitions_ok(p), p)
+    case False{}:
       Selinux.validate.fail(T.SeTe.first_conflict(p))
 
-# the load-time check: a policy one of whose allow rules (unconditional, or
+# the load-time checks: a policy one of whose allow rules (unconditional, or
 # in either branch of a booleanif) grants something a neverallow rule
-# forbids is refused, with the first such pair of rules
+# forbids is refused, with the first such pair of rules; then a policy two
+# of whose type rules, or two of whose roletransition rules, give different
+# answers to the same question (T.SeTe.transitions_ok) is refused, with the
+# first such pair
 def Selinux.validate(+p: P.SePolicy) -> Result<&2, &2, P.SeError, P.SePolicy>:
   Selinux.validate.go(T.SeTe.neverallow_ok(p), p)
 
@@ -277,3 +298,7 @@ def SeError.show(e: P.SeError) -> String:
       "bad context: " ++ t
     case P.SeErrNeverallow{n, a}:
       "neverallow violated"
+    case P.SeErrTypeConflict{a, b}:
+      "type rule conflict"
+    case P.SeErrRoleTransConflict{a, b}:
+      "role transition conflict"

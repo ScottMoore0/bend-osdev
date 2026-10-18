@@ -62,6 +62,21 @@ def Laws.witness_never_covers():
 def Laws.witness_neverallow_violated():
   {==}
 
+def Laws.witness_transitions_conflict():
+  {==}
+
+def Laws.load_refuses_operand_word():
+  {==}
+
+def Laws.load_refuses_name_transition_in_booleanif():
+  {==}
+
+def Laws.load_refuses_conflicting_transitions():
+  {==}
+
+def Laws.load_branch_transitions():
+  (Result.default(&2, &2, P.SeError, P.SePolicy, S.Selinux.load(B.Octets.of_string("(class file (read)) (type a_t) (type b_t) (boolean b true) (booleanif b (true (typetransition a_t b_t file a_t)) (false (typetransition a_t b_t file b_t)))")), X.SeExample.policy()), {==})
+
 def Laws.witness_load():
   (Result.default(&2, &2, P.SeError, P.SePolicy, S.Selinux.load(B.Octets.of_string("(class file (read)) (type a_t) (allow a_t a_t (file (read)))")), X.SeExample.policy()), {==})
 
@@ -1135,10 +1150,38 @@ def SePf.vfail(+m: Maybe<&2, P.SeConflict>, -p: P.SePolicy, +h: {S.Selinux.valid
         case P.SeConflict{n, a}:
           SePf.fail_done(P.SeErrNeverallow{n, a}, p, h)
 
+def SePf.tfail(+m: Maybe<&2, T.SeTransConflict>, -p: P.SePolicy, +h: {S.Selinux.validate.trans_fail(m) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> Empty:
+  match m:
+    case None{}:
+      SePf.fail_done(P.SeErrSyntax{"transition conflict"}, p, h)
+    case Some{c}:
+      match c:
+        case T.SeTyClash{a, b}:
+          SePf.fail_done(P.SeErrTypeConflict{a, b}, p, h)
+        case T.SeRoleClash{a, b}:
+          SePf.fail_done(P.SeErrRoleTransConflict{a, b}, p, h)
+
+# the transition check answers the policy it was given, or fails
+def SePf.tsame(+q: P.SePolicy, +p: P.SePolicy, +x: Bool, +h: {S.Selinux.validate.trans(x, q) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> {q == p : P.SePolicy}:
+  match x:
+    case True{}:
+      Equal.cong(Result<&2, &2, P.SeError, P.SePolicy>, P.SePolicy, r => Result.default(&2, &2, P.SeError, P.SePolicy, r, q), Done{q}, Done{p}, h)
+    case False{}:
+      Empty.absurd({q == p : P.SePolicy}, SePf.tfail(T.SeTe.first_trans_conflict(q), p, h))
+
+def SePf.tok(+q: P.SePolicy, +p: P.SePolicy, +x: Bool, +e: {T.SeTe.transitions_ok(q) == x : Bool}, +h: {S.Selinux.validate.trans(x, q) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> {T.SeTe.transitions_ok(p) == True{} : Bool}:
+  match x:
+    case True{}:
+      +eq = SePf.tsame(q, p, True{}, h)
+      %eq : {T.SeTe.transitions_ok(_) == True{} : Bool}
+      e
+    case False{}:
+      Empty.absurd({T.SeTe.transitions_ok(p) == True{} : Bool}, SePf.tfail(T.SeTe.first_trans_conflict(q), p, h))
+
 def SePf.vgo(+q: P.SePolicy, +p: P.SePolicy, +x: Bool, +e: {T.SeTe.neverallow_ok(q) == x : Bool}, +h: {S.Selinux.validate.go(x, q) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> {T.SeTe.neverallow_ok(p) == True{} : Bool}:
   match x:
     case True{}:
-      +eq = Equal.cong(Result<&2, &2, P.SeError, P.SePolicy>, P.SePolicy, r => Result.default(&2, &2, P.SeError, P.SePolicy, r, q), Done{q}, Done{p}, h)
+      +eq = SePf.tsame(q, p, T.SeTe.transitions_ok(q), h)
       %eq : {T.SeTe.neverallow_ok(_) == True{} : Bool}
       e
     case False{}:
@@ -1154,6 +1197,23 @@ def SePf.validated(+r: Result<&2, &2, P.SeError, P.SePolicy>, +p: P.SePolicy, +h
 def Laws.load_checks_neverallow(o, p, h):
   SePf.validated(L.SeCil.load(o), p, h)
 
+def SePf.vgo_t(+q: P.SePolicy, +p: P.SePolicy, +x: Bool, +h: {S.Selinux.validate.go(x, q) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> {T.SeTe.transitions_ok(p) == True{} : Bool}:
+  match x:
+    case True{}:
+      SePf.tok(q, p, T.SeTe.transitions_ok(q), {==}, h)
+    case False{}:
+      Empty.absurd({T.SeTe.transitions_ok(p) == True{} : Bool}, SePf.vfail(T.SeTe.first_conflict(q), p, h))
+
+def SePf.validated_t(+r: Result<&2, &2, P.SeError, P.SePolicy>, +p: P.SePolicy, +h: {S.Selinux.validated(r) == Done{p} : Result<&2, &2, P.SeError, P.SePolicy>}) -> {T.SeTe.transitions_ok(p) == True{} : Bool}:
+  match r:
+    case Fail{e}:
+      Empty.absurd({T.SeTe.transitions_ok(p) == True{} : Bool}, SePf.fail_done(e, p, h))
+    case Done{q}:
+      SePf.vgo_t(q, p, T.SeTe.neverallow_ok(q), h)
+
+def Laws.load_checks_transitions(o, p, h):
+  SePf.validated_t(L.SeCil.load(o), p, h)
+
 def SePf.vfail_is(+m: Maybe<&2, P.SeConflict>) -> {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.validate.fail(m)) == True{} : Bool}:
   match m:
     case None{}:
@@ -1166,6 +1226,28 @@ def SePf.vfail_is(+m: Maybe<&2, P.SeConflict>) -> {Result.is_fail(&2, &2, P.SeEr
 def Laws.validate_refuses(p, h):
   %Equal.sym(Bool, T.SeTe.neverallow_ok(p), False{}, h) : {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.validate.go(_, p)) == True{} : Bool}
   SePf.vfail_is(T.SeTe.first_conflict(p))
+
+def SePf.tfail_is(+m: Maybe<&2, T.SeTransConflict>) -> {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.validate.trans_fail(m)) == True{} : Bool}:
+  match m:
+    case None{}:
+      {==}
+    case Some{c}:
+      match c:
+        case T.SeTyClash{a, b}:
+          {==}
+        case T.SeRoleClash{a, b}:
+          {==}
+
+def SePf.vgo_fails_t(+p: P.SePolicy, +x: Bool, +h: {T.SeTe.transitions_ok(p) == False{} : Bool}) -> {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.validate.go(x, p)) == True{} : Bool}:
+  match x:
+    case True{}:
+      %Equal.sym(Bool, T.SeTe.transitions_ok(p), False{}, h) : {Result.is_fail(&2, &2, P.SeError, P.SePolicy, S.Selinux.validate.trans(_, p)) == True{} : Bool}
+      SePf.tfail_is(T.SeTe.first_trans_conflict(p))
+    case False{}:
+      SePf.vfail_is(T.SeTe.first_conflict(p))
+
+def Laws.validate_refuses_transitions(p, h):
+  SePf.vgo_fails_t(p, T.SeTe.neverallow_ok(p), h)
 
 # Transitions
 
