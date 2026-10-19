@@ -56,6 +56,7 @@ import ./inst_ccm.bend as CC
 import ./inst_cmac.bend as CMI
 import ./inst_crc.bend as CR
 import ./inst_sha2.bend as SH
+import ./inst_sha3.bend as S3
 import ../hashes/hashes.bend as Hs
 import ../hashes/md4.bend as HM4
 import ../hashes/md5.bend as HM5
@@ -69,6 +70,7 @@ import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha.bend as F256
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha512.bend as F512
+import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha3.bend as F202
 
 # Stream ciphers from keystream generators (stream.bend): for every keystream
 # generator, CrXor satisfies the stream-cipher laws
@@ -427,6 +429,32 @@ law sha512_hash_length:
   for +o: B.Octets
   {B.Octets.len(SH.CrSha2.sha512(o)) == 64n : Nat}
 
+# SHA3-256 as a hash (inst_sha3.bend), from bend-collections-laws-crypto's
+# laws, as for SHA-2: the one-shot digest is FIPS 202's executable
+# specification (that package's spec/crypto/sha3.bend), the streaming
+# digest of any split into two or three pieces is the one-shot digest, and
+# a digest is 32 bytes. As for SHA-2, the streaming law for every state is
+# tested, not proved.
+
+law sha3_256_spec:
+  for +o: B.Octets
+  {S3.CrSha3.sha3_256(o) == B.Octets.of_list(F202.sha3_256(B.Octets.to_list(o))) : B.Octets}
+
+law sha3_256_hash_split:
+  for +a: B.Octets
+  for +b: B.Octets
+  {S3.CrSha3.final(S3.CrSha3.update(S3.CrSha3.update(S3.CrSha3.init(), a), b)) == S3.CrSha3.sha3_256(B.Octets.append(a, b)) : B.Octets}
+
+law sha3_256_hash_split3:
+  for +a: B.Octets
+  for +b: B.Octets
+  for +c: B.Octets
+  {S3.CrSha3.final(S3.CrSha3.update(S3.CrSha3.update(S3.CrSha3.update(S3.CrSha3.init(), a), b), c)) == S3.CrSha3.sha3_256(B.Octets.append(a, B.Octets.append(b, c))) : B.Octets}
+
+law sha3_256_hash_length:
+  for +o: B.Octets
+  {B.Octets.len(S3.CrSha3.sha3_256(o)) == 32n : Nat}
+
 # HKDF over SHA-256 refuses more than 255 digests (8160 bytes)
 law hkdf_sha256_too_long:
   {Result.map(&2, &2, Cr.CrError, B.Octets, Unit, o => Unit{}, Hk.CrHkdf.derive(~64n, ~32n, ~SH.CrSha2.sha256, B.Octets.of_string("ikm"), B.Octets.empty(), B.Octets.empty(), 8161n)) == Fail{Cr.CrBadOutputLength{8161n}} : Result<&2, &2, Cr.CrError, Unit>}
@@ -435,6 +463,11 @@ law hkdf_sha256_too_long:
 # interface
 law sha256_abc:
   {SH.CrSha2.sha256(B.Octets.of_string("abc")) == B.Octets.of_list([186, 120, 22, 191, 143, 1, 207, 234, 65, 65, 64, 222, 93, 174, 34, 35, 176, 3, 97, 163, 150, 23, 122, 156, 180, 16, 255, 97, 242, 0, 21, 173]) : B.Octets}
+
+# FIPS 202's SHA3-256 of "abc" (NIST's SHA-3 examples), through the hash
+# interface
+law sha3_256_abc:
+  {S3.CrSha3.sha3_256(B.Octets.of_string("abc")) == B.Octets.of_list([58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110, 62, 157, 82, 91, 70, 191, 226, 69, 17, 67, 21, 50]) : B.Octets}
 
 # RFC 4231 test case 2: HMAC-SHA-256 with the key "Jefe"
 law hmac_sha256_rfc4231_2:
@@ -1102,6 +1135,13 @@ law hmac_sha512_split:
   for +a: B.Octets
   for +b: B.Octets
   {Hm.CrHmac.finish(~SH.CrSha2State, ~SH.CrSha2.init512(), ~SH.CrSha2.update, ~SH.CrSha2.final, Hm.CrHmac.update(~SH.CrSha2State, ~SH.CrSha2.update, Hm.CrHmac.update(~SH.CrSha2State, ~SH.CrSha2.update, Hm.CrHmac.start(~SH.CrSha2State, ~SH.CrSha2.init512(), ~SH.CrSha2.update, kk), a), b)) == Hm.CrHmac.mac(~SH.CrSha2.sha512, kk, B.Octets.append(a, b)) : B.Octets}
+
+# HMAC over SHA3-256 (bend-collections): the tag in pieces is the tag in one call, for every split
+law hmac_sha3_256_split:
+  for +kk: Hm.CrHmacKey
+  for +a: B.Octets
+  for +b: B.Octets
+  {Hm.CrHmac.finish(~S3.CrSha3State, ~S3.CrSha3.init(), ~S3.CrSha3.update, ~S3.CrSha3.final, Hm.CrHmac.update(~S3.CrSha3State, ~S3.CrSha3.update, Hm.CrHmac.update(~S3.CrSha3State, ~S3.CrSha3.update, Hm.CrHmac.start(~S3.CrSha3State, ~S3.CrSha3.init(), ~S3.CrSha3.update, kk), a), b)) == Hm.CrHmac.mac(~S3.CrSha3.sha3_256, kk, B.Octets.append(a, b)) : B.Octets}
 
 # MD4 (hashes): update over a ++ b is update over a, then b, for every state
 law md4_hash_streaming:

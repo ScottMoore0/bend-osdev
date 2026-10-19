@@ -40,6 +40,7 @@ GPL source was read.
 | [gf](gf/) | Finite fields: GF(2^8) with any polynomial (ring laws proved for every polynomial), log/exp tables, GF(2^128) in GCM, CMAC/LRW and XTS bit orders, GF(2^m) for BCH |
 | [kmath](kmath/) | Integer helpers: gcd/lcm (divides-both proved), powers, integer square roots (bounds proved), 64-bit division, reciprocal division, best rational approximation, CORDIC, primes |
 | [khash](khash/) | Non-cryptographic hashes: Jenkins' lookup3 (jhash, jhash2, the word forms) and golden-ratio hash_32/hash_64 |
+| [rhash](rhash/) | A resizable hash table with incremental resizing (rhashtable): every key found at every step of a migration, proved for every hash and key encoding |
 | [kstr](kstr/) | Text conversions: kstrtox-style strict parsing, a vsprintf number subset, hex_dump_to_buffer lines, match_token option parsing (hex round trip proved) |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
 | [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |
@@ -82,8 +83,10 @@ GPL source was read.
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
 | [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
-| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF and PBKDF2, ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256 and SHA-512 (from bend-collections), as instances |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF and PBKDF2, ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
 | [aead](aead/) | AEGIS-128, encrypt-then-MAC over any cipher and MAC (the kernel's authenc), and the IV generators ESSIV, seqiv and echainiv over any AEAD, as instances of crypto's AEAD interface |
+| [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, SHA3-256 conditioning through crypto's hash interface |
+| [jitterclock](jitterclock/) | A monotonic nanosecond clock as a library effect (C and JavaScript sides), timing a hash loop to feed jitter |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 | [xorblocks](xorblocks/) | XOR of byte blocks (xor_blocks): two blocks under a length policy, many into one, laws of XOR proved |

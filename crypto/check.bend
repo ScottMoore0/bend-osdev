@@ -7,13 +7,16 @@
 # ref/gen.py also checks), long messages both ways, the refusals; then
 # SHA-256 and SHA-512 (FIPS 180-4's examples, whole and in pieces),
 # HMAC-SHA-256 and HMAC-SHA-512 (RFC 4231 test cases 1 to 7) and
-# HKDF-SHA-256 (RFC 5869 A.1 to A.3); then the newer instances (ARIA,
-# CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt) on their specifications'
-# vectors both ways (TEA and XTEA on legacy-ciphers' model values: their
-# papers give none), PCBC (the FCrypt specification's PCBC vector), LRW-AES
-# (the IEEE P1619 draft's Annex B), CBC-CS3 (RFC 3962's AES vectors, both
-# ways, and a refused short message), AES-XCBC-MAC (RFC 3566's seven) and
-# VMAC-AES (draft-krovetz-vmac-01's, 64- and 128-bit tags).
+# HKDF-SHA-256 (RFC 5869 A.1 to A.3); SHA3-256 (FIPS 202: NIST's examples
+# for "abc", the empty message and 200 bytes of a3, whole and in pieces)
+# and HMAC-SHA3-256 (the value of Python's hmac over hashlib); then the
+# newer instances (ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt)
+# on their specifications' vectors both ways (TEA and XTEA on
+# legacy-ciphers' model values: their papers give none), PCBC (the FCrypt
+# specification's PCBC vector), LRW-AES (the IEEE P1619 draft's Annex B),
+# CBC-CS3 (RFC 3962's AES vectors, both ways, and a refused short message),
+# AES-XCBC-MAC (RFC 3566's seven) and VMAC-AES (draft-krovetz-vmac-01's,
+# 64- and 128-bit tags).
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
@@ -45,6 +48,7 @@ import ./inst_ccm.bend as CC
 import ./inst_cmac.bend as CMI
 import ./inst_crc.bend as CR
 import ./inst_sha2.bend as SH
+import ./inst_sha3.bend as S3
 import ./pcbc.bend as Pc
 import ./lrw.bend as Lw
 import ./cts.bend as Ct
@@ -430,6 +434,11 @@ def main() -> IO(Unit):
     IO.print(sha(~SH.CrSha2.sha512, B.Octets.of_string("abc")))
     IO.print(sha_pieces3(~SH.CrSha2.init256(), B.Octets.of_string("abcdbcdecdefdefgefgh"), B.Octets.empty(), B.Octets.of_string("fghighijhijkijkljklmklmnlmnomnopnopq")))
     IO.print(sha_pieces3(~SH.CrSha2.init512(), B.Octets.of_string("a"), B.Octets.of_string("b"), B.Octets.of_string("c")))
+    IO.print(sha(~S3.CrSha3.sha3_256, B.Octets.of_string("abc")))
+    IO.print(sha(~S3.CrSha3.sha3_256, B.Octets.empty()))
+    IO.print(sha(~S3.CrSha3.sha3_256, hx("a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3")))
+    IO.print(B.Octets.hex(H.CrHash.of_pieces(~S3.CrSha3State, ~S3.CrSha3.init(), ~S3.CrSha3.update, ~S3.CrSha3.final, [hx("a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"), B.Octets.empty(), hx("a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3")])))
+    IO.print(B.Octets.hex(hmac_sha(~136n, ~S3.CrSha3.sha3_256, hx("4a656665"), hx("7768617420646f2079612077616e7420666f72206e6f7468696e673f"))))
     IO.print(B.Octets.hex(hmac_sha(~64n, ~SH.CrSha2.sha256, hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), hx("4869205468657265"))))
     IO.print(B.Octets.hex(hmac_sha(~128n, ~SH.CrSha2.sha512, hx("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), hx("4869205468657265"))))
     IO.print(B.Octets.hex(hmac_sha(~64n, ~SH.CrSha2.sha256, hx("4a656665"), hx("7768617420646f2079612077616e7420666f72206e6f7468696e673f"))))
@@ -556,6 +565,11 @@ def main() -> IO(Unit):
 #|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f
 #|248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
 #|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f
+#|3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532
+#|a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a
+#|79f38adec5c20307a98ef76e8324afbfd46cfd81b22e3973c65fa1bd9de31787
+#|79f38adec5c20307a98ef76e8324afbfd46cfd81b22e3973c65fa1bd9de31787
+#|c7d4072e788877ae3596bbb0da73b887c9171f93095b294ae857fbe2645e1ba5
 #|b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7
 #|87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854
 #|5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843

@@ -10,10 +10,10 @@ over any block cipher); and the existing algorithms (cipher-modes' AES,
 CMAC and CCM; legacy-ciphers' DES, 3DES, SM4, Camellia, Serpent, Twofish,
 ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4; crc's CRCs;
 the hashes package's MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256 and
-Streebog-512, and its Michael as a MAC) and bend-collections' SHA-256 and
-SHA-512 as instances, with their interface laws proved or tested; and
-HMAC-SHA-256, HMAC-SHA-512, HKDF-SHA-256, PBKDF2-HMAC-SHA-256 and
-PBKDF2-HMAC-SHA-1 over those.
+Streebog-512, and its Michael as a MAC) and bend-collections' SHA-256,
+SHA-512 and SHA3-256 as instances, with their interface laws proved or
+tested; and HMAC-SHA-256, HMAC-SHA-512, HMAC-SHA3-256, HKDF-SHA-256,
+PBKDF2-HMAC-SHA-256 and PBKDF2-HMAC-SHA-1 over those.
 
 The directory is `crypto` and the entry file `crypto/crypto.bend`; the hub
 name is `bend-osdev-crypto`.
@@ -51,6 +51,10 @@ Written from the public specifications only:
   4231, *Identifiers and Test Vectors for HMAC-SHA-224, HMAC-SHA-256,
   HMAC-SHA-384, and HMAC-SHA-512* (2005), test cases 1 to 7, and RFC 5869's
   Appendix A.1 to A.3.
+* **SHA3-256:** FIPS 202, *SHA-3 Standard: Permutation-Based Hash and
+  Extendable-Output Functions* (2015), as bend-collections implements it;
+  vectors from NIST's SHA-3 examples (the empty message, "abc", 200 bytes
+  of a3).
 * **PBKDF2:** RFC 8018, K. Moriarty, B. Kaliski and A. Rusch, *PKCS #5:
   Password-Based Cryptography Specification Version 2.1* (2017), section
   5.2; vectors from RFC 6070, S. Josefsson, *PKCS #5: Password-Based Key
@@ -109,7 +113,8 @@ Written from the public specifications only:
 | `inst_lc.bend` | the adapter for legacy-ciphers: `LcError` onto `CrError`, its key schedules as `~key`, the XOR of its 64-bit block |
 | `inst_rc4.bend` | RC4 and RC4-drop[n] as stream ciphers |
 | `inst_crc.bend` | CRC-32 and CRC-64 of any parameter set as hashes |
-| `inst_sha2.bend` | SHA-256 and SHA-512 as hashes: the adapter for bend-collections (the only file importing it), its state wrapped in `CrSha2State` and its bytes converted to and from Octets |
+| `inst_sha2.bend` | SHA-256 and SHA-512 as hashes: the adapter for bend-collections' SHA-2, its state wrapped in `CrSha2State` and its bytes converted to and from Octets |
+| `inst_sha3.bend` | SHA3-256 as a hash: the adapter for bend-collections' SHA-3, its state wrapped in `CrSha3State` (block size 136, the SHA3-256 rate) |
 | `pbkdf2.bend` | PBKDF2 over any MAC (RFC 8018): the checked derivation, the KDF interface's `~derive`, and the unchecked stream |
 | `inst_pbkdf2.bend` | PBKDF2-HMAC-SHA-256 and PBKDF2-HMAC-SHA-1 |
 | `inst_michael.bend` | Michael (hashes/michael.bend) as a MAC: its key error mapped onto `CrError` |
@@ -303,8 +308,9 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | CRC-32 of any parameter set (CRC-32, CRC-32C, ...) | hash | streaming, split (for every parameter set), length; check values | vs binascii.crc32 and a Rocksoft-model CRC-32C, in pieces |
 | CRC-64 of any parameter set (CRC-64/XZ, ...) | hash | streaming, split; check value | length; vs a Rocksoft-model CRC-64/XZ, in pieces |
 | SHA-256, SHA-512 (bend-collections; `CrSha2State`) | hash | the one-shot digest is FIPS 180-4's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA-256 of "abc" | streaming for every state (bend-collections proves pieces only from the start); FIPS 180-4's examples whole and in pieces; vs hashlib, in pieces |
-| HMAC over each hash above | MAC | accepts, agrees (for every hash); split (in pieces equals one call) over CRC-32, CRC-64, SHA-256 and SHA-512; streaming of HMAC's state over CRC-32 and CRC-64; RFC 4231 test case 2 for HMAC-SHA-256; one HMAC-CRC-32 vector | RFC 4231 test cases 1 to 7 for HMAC-SHA-256 and HMAC-SHA-512; vs Python's hmac over hashlib's SHA-256 and SHA-512 and over CRC-32, CRC-32C and CRC-64/XZ, keys from 0 to 200 bytes |
-| HKDF over each hash above (HKDF-SHA-256 the named one) | KDF | the refusal of more than 255 digests (over CRC-32 and SHA-256) | RFC 5869 A.1 to A.3; length; vs cryptography's HKDF over SHA-256 and SHA-512, and RFC 5869 on Python's hmac over the CRCs |
+| SHA3-256 (bend-collections; `CrSha3State`) | hash | the one-shot digest is FIPS 202's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA3-256 of "abc" | streaming for every state (as for SHA-2); NIST's examples whole and in pieces; vs hashlib, in pieces |
+| HMAC over each hash above | MAC | accepts, agrees (for every hash); split (in pieces equals one call) over CRC-32, CRC-64, SHA-256, SHA-512 and SHA3-256; streaming of HMAC's state over CRC-32 and CRC-64; RFC 4231 test case 2 for HMAC-SHA-256; one HMAC-CRC-32 vector | RFC 4231 test cases 1 to 7 for HMAC-SHA-256 and HMAC-SHA-512; vs Python's hmac over hashlib's SHA-256, SHA-512 and SHA3-256 and over CRC-32, CRC-32C and CRC-64/XZ, keys from 0 to 200 bytes |
+| HKDF over each hash above (HKDF-SHA-256 the named one) | KDF | the refusal of more than 255 digests (over CRC-32 and SHA-256) | RFC 5869 A.1 to A.3; length; vs cryptography's HKDF over SHA-256, SHA-512 and SHA3-256, and RFC 5869 on Python's hmac over the CRCs |
 | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256, Streebog-512 (hashes; `Hs.HsMdState<C>`) | hash | streaming for every state, split, split3, length for every state (from hashes' laws, `gen/instances.py`'s `hs_row`s); their vectors in hashes | the specifications' vectors in hashes; one-shot and in pieces through the interface (check.bend); vs hashlib (MD5, SHA-1, RIPEMD-160, SM3) and hashes' models (MD4, Streebog) |
 | HMAC over each of those | MAC | accepts, agrees; streaming of HMAC's state and split (in pieces equals one call), for each | RFC 2202 test cases 1 and 2 for HMAC-MD5 and HMAC-SHA-1, in pieces with verify; HMAC over the others vs Python's hmac (over hashlib or hashes' models), keys of 0 to 100 bytes |
 | Michael (hashes; `Hs.HsW2`, `CrMichael.key`) | MAC | accepts (for every key and message), agrees (the named default verify), the refusal of a 16-byte key; the sixth vector through `CrMac.compute_with` (the vectors are unverified against a published copy of 802.11i: hashes/README.md) | the six vectors through the interface, verify accepting and refusing a changed tag, a 7-byte key refused; vs hashes' model |
@@ -326,13 +332,14 @@ schemas until one plugs in. bend-collections also has Ed25519, X25519 and
 ChaCha20-Poly1305, which would plug in through adapters like
 `inst_sha2.bend` (not done in this version).
 
-**Where SHA-2 comes from.** The code is bend-collections@1.0.0.0's
+**Where SHA-2 and SHA-3 come from.** The code is bend-collections@1.0.0.0's
 `src/crypto/hash.bend` and the `sha`, `sha512`, `sha3` and `keccak` files
 it imports. `inst_sha2.bend` imports it from
 bend-collections-laws-crypto@1.0.0.0, which ships the same files (checked
 file by file; it lacks only keccak's unused `hex.bend`) together with their
 proofs (`Split.sha256`, `Incremental.sha256`, `Sha256.length`,
-`Sha256.value`, and the same for SHA-512). Bend names a def by the package
+`Sha256.value`, and the same for SHA-512 and SHA3-256). `inst_sha3.bend`
+imports the same file for SHA3-256. Bend names a def by the package
 it comes from, so those laws hold of that package's copy and not of
 bend-collections@1.0.0.0's: importing the copy they are about is what lets
 `LAWS.bend` cite them.
@@ -379,6 +386,7 @@ only bytes.
 | `inst_rc4.bend` | `CrRc4.start`, `CrRc4.start_drop` |
 | `inst_crc.bend` | `CrCrc32.init`, `.update`, `.final`, `.digest`; `CrCrc64.init`, `.update`, `.final`, `.digest` (each with `~spec`) |
 | `inst_sha2.bend` | `CrSha2State` (opaque), `CrSha2.init256`, `CrSha2.init512`, `CrSha2.update`, `CrSha2.final`, `CrSha2.sha256`, `CrSha2.sha512` |
+| `inst_sha3.bend` | `CrSha3State` (opaque), `CrSha3.init`, `CrSha3.update`, `CrSha3.final`, `CrSha3.sha3_256` |
 | `pbkdf2.bend` | `CrPbkdf2.pbkdf2` (password, salt, iteration count as a `U32`, length; `CrTooShort{0}` for 0 iterations, `CrBadOutputLength{n}` past (2^32 - 1) hLen bytes or for hLen 0, and the MAC's own refusal of the password), `CrPbkdf2.derive` (the KDF interface's `~derive`, with `~c`), `CrPbkdf2.stream` (the first n bytes from a prepared key, unchecked) |
 | `inst_pbkdf2.bend` | `CrPbkdf2.hmac_sha256`, `CrPbkdf2.hmac_sha1` |
 | `inst_michael.bend` | `CrMichael.err`, `CrMichael.key`, `CrMichael.verify` |
@@ -422,7 +430,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-`LAWS.bend` has 195 laws.
+`LAWS.bend` has 201 laws.
 
 **Generic, for every input and every algorithm of the shape:**
 `xor_involution`, `xor_streaming_data`, `xor_streaming_state` (CrXor, every
@@ -435,7 +443,8 @@ cipher), `vmac_accepts` (every block cipher and nonce length); `crc32_hash_strea
 `crc32_hash_split`, `crc32_hash_split3`, `crc32_hash_length`,
 `crc64_hash_streaming`, `crc64_hash_split`, `crc64_hash_split3` (every
 parameter set); `sha256_spec`, `sha256_hash_split`, `sha256_hash_split3`,
-`sha256_hash_length` and the same for SHA-512 (every message), from
+`sha256_hash_length` and the same for SHA-512 and SHA3-256 (every
+message), from
 bend-collections-laws-crypto's laws; `michael_accepts` (every key and
 message); `pbkdf2_length` (every MAC, password, salt, iteration count and
 length: a derivation that succeeds has the length asked for),
@@ -458,7 +467,7 @@ the 128-bit ones among them (sm4, camellia, serpent, twofish, aria, cast6);
 `rc4_stream_streaming_data`, `rc4_stream_streaming_state`;
 `hmac_crc32_streaming`, `hmac_crc32_split`, `hmac_crc64_streaming`,
 `hmac_crc64_split` (every parameter set), `hmac_sha256_split`,
-`hmac_sha512_split` (the hash rows in `gen/instances.py`: HMAC in pieces
+`hmac_sha512_split`, `hmac_sha3_256_split` (the hash rows in `gen/instances.py`: HMAC in pieces
 follows from the hash's split laws, and HMAC's state in pieces from its
 streaming law where it has one); for h = md4, md5, sha1, ripemd160, sm3,
 streebog256 and streebog512 (the `hs_row`s), the hash interface's laws
@@ -468,6 +477,7 @@ streebog256 and streebog512 (the `hs_row`s), the hash interface's laws
 
 **Vectors** (proved by computation): the CRC-32, CRC-32C and CRC-64/XZ
 check values through the hash interface; SHA-256 of "abc" (FIPS 180-4);
+SHA3-256 of "abc" (FIPS 202, NIST's examples);
 HMAC-SHA-256 on RFC 4231's test case 2; HMAC over CRC-32 (Python's hmac's
 value); Michael's sixth vector through the MAC interface and its refusal
 of a 16-byte key; PBKDF2-HMAC-SHA1 on RFC 6070's test cases 1 and 2, the
@@ -497,7 +507,7 @@ an AEAD's and a MAC's refusal of changed input (a forgery succeeds with probabil
 2^-8tlen, so it is no law for every input; tested on every instance); the
 KDF laws for HKDF (its length needs arithmetic on ceilings not done here;
 PBKDF2's are proved, above); CRC-64's
-digest length; SHA-2's streaming law for every state (bend-collections
+digest length; SHA-2's and SHA3-256's streaming law for every state (bend-collections
 proves the pieces from the start state only, which is what the split laws
 and HMAC need); the byte layer of ECB and CBC (`CrModes.blocks_of` and
 `octets_of` for every block size); the CTR counter's increment (the stream
@@ -532,7 +542,9 @@ cryptography).
   script that wrote them first checked against the RFCs' published values;
   the new hashes' are the specifications' and hashlib's, the PBKDF2 and
   RFC 2202 values the RFCs' (which the script that wrote them checked
-  against hashlib.pbkdf2_hmac and hmac). Then the newer ciphers: ARIA (RFC
+  against hashlib.pbkdf2_hmac and hmac); SHA3-256 on NIST's examples (the
+  empty message, "abc", 200 bytes of a3, whole and in three pieces) and
+  HMAC-SHA3-256 (Python's hmac's value). Then the newer ciphers: ARIA (RFC
   5794 A.1), CAST-256 (RFC 2612's 128-bit vector), Blowfish (a vector of
   the set Schneier publishes), CAST-128 (RFC 2144 B.1), TEA and XTEA (the
   model's values), FCrypt (its specification's) both ways; PCBC over FCrypt
@@ -542,12 +554,12 @@ cryptography).
   RFC 3566's seven test cases; VMAC-AES on draft-krovetz-vmac-01's four
   messages with 64- and 128-bit tags.
 * `ref/run.sh` compares every instance through its interface with
-  implementations outside this package (462 cases: 176 against Python's
+  implementations outside this package (475 cases: 179 against Python's
   cryptography, directly or through `ref/gen.py`'s modes over its block
   ciphers, and its PBKDF2HMAC; 22 against the openssl command's ARIA; 9
   against the Linux kernel's lrw(aes) and cts(cbc(aes)) through AF_ALG; 123
   against legacy-ciphers' `ref/model.py`, for Serpent, Twofish, CAST-256,
-  TEA, XTEA, FCrypt, and RC4 at the key sizes cryptography lacks; 102
+  TEA, XTEA, FCrypt, and RC4 at the key sizes cryptography lacks; 112
   against Python's `hashlib`, `hmac`, `binascii` and `gen.py`'s
   Rocksoft-model CRCs, and the refusals; 30 against hashes' `ref/model.py`,
   for MD4, Streebog and Michael, which Python lacks here): one block both
@@ -557,9 +569,9 @@ cryptography).
   pieces for keys of 1 to 256 bytes;
   CMAC over five ciphers with verify; CCM over five ciphers with every tag
   length, changed tag, ciphertext and associated data refused; SHA-256,
-  SHA-512 and the three CRC hashes in pieces; HMAC over all five (keys of 0
-  to 200 bytes, in pieces, verify); HKDF over SHA-256 and SHA-512 (against
-  cryptography's HKDF) and over CRC-32 and CRC-64/XZ; the hashes package's
+  SHA-512, SHA3-256 and the three CRC hashes in pieces; HMAC over all six
+  (keys of 0 to 200 bytes, in pieces, verify); HKDF over SHA-256, SHA-512
+  and SHA3-256 (against cryptography's HKDF) and over CRC-32 and CRC-64/XZ; the hashes package's
   seven hashes in pieces and HMAC over them (keys of 0 to 100 bytes);
   Michael with verify accepting its tag and refusing it changed; PBKDF2
   over HMAC over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3 (1 to 40
@@ -623,15 +635,16 @@ CMAC, CCM and the `CmBlock` type, for the instances), `legacy-ciphers` (its
 ciphers and RC4, and their laws), `crc` (its CRCs and their laws), `hashes`
 (its hashes and Michael, and their laws, for the instances; only the
 `inst_*` files, `check.bend` and the laws and proofs import it), and the
-hub package `bend-collections-laws-crypto@1.0.0.0` (SHA-256 and SHA-512 and
-their laws, above; MIT). The interface and generic files (`crypto.bend` to
-`hkdf.bend`, and `pbkdf2.bend`) import only `bytes`; only `inst_sha2.bend`
-(and `PROOF.bend`) import bend-collections-laws-crypto, and only
+hub package `bend-collections-laws-crypto@1.0.0.0` (SHA-256, SHA-512 and
+SHA3-256 and their laws, above; MIT). The interface and generic files
+(`crypto.bend` to `hkdf.bend`, and `pbkdf2.bend`) import only `bytes`; only
+`inst_sha2.bend`, `inst_sha3.bend` (and `PROOF.bend`) import
+bend-collections-laws-crypto, and only
 `inst_aes.bend` reaches bend-collections, through cipher-modes' `aes.bend`.
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 4 min, the hashes
-package's proofs included), `--verdict` ALL PROOFS CHECK (about 6 min, 2.15
-GB peak), `check.bend` passes, `ref/run.sh` 462 cases match, `scripts/deps.sh`
+package's proofs included), `--verdict` ALL PROOFS CHECK (about 3 to 6 min, 2.29
+GB peak), `check.bend` passes, `ref/run.sh` 475 cases match, `scripts/deps.sh`
 passes.

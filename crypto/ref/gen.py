@@ -32,13 +32,14 @@ from Python, in the same order):
   * HMAC over CRC-32, CRC-32C and CRC-64/XZ against Python's hmac module
     (with each CRC as its digestmod), one-shot, in pieces, and verify, with
     keys shorter and longer than the block size;
-  * SHA-256 and SHA-512 (bend-collections, through inst_sha2.bend), one-shot
-    and in pieces, against hashlib; HMAC over them (keys of 0 to 200 bytes,
-    across both block sizes) against hmac with hashlib;
-  * HKDF over SHA-256 and SHA-512 against cryptography's HKDF, and over
-    CRC-32 and CRC-64/XZ against this file's RFC 5869 HKDF on Python's
-    hmac, which is first checked against cryptography's HKDF with SHA-256
-    on RFC 5869's test case 1;
+  * SHA-256 and SHA-512 (bend-collections, through inst_sha2.bend) and
+    SHA3-256 (bend-collections, through inst_sha3.bend), one-shot and in
+    pieces, against hashlib; HMAC over them (keys of 0 to 200 bytes,
+    across the block sizes) against hmac with hashlib;
+  * HKDF over SHA-256, SHA-512 and SHA3-256 against cryptography's HKDF,
+    and over CRC-32 and CRC-64/XZ against this file's RFC 5869 HKDF on
+    Python's hmac, which is first checked against cryptography's HKDF with
+    SHA-256 on RFC 5869's test case 1;
   * the newer block ciphers, one block both ways and through ECB, CBC and
     CTR: Blowfish and CAST-128 through cryptography, ARIA through the
     openssl command (legacy-ciphers' model when it is missing), CAST-256,
@@ -455,8 +456,9 @@ HASHES = {
     "crc64xz": (Crc64xz, "~W.W64, ~64n, ~8n, ~CR.CrCrc64.init(~C.crc64_xz.spec()), ~CR.CrCrc64.update(~C.crc64_xz.spec()), ~CR.CrCrc64.final(~C.crc64_xz.spec()), ~CR.CrCrc64.digest(~C.crc64_xz.spec())"),
     "sha256": (hashlib.sha256, "~SH.CrSha2State, ~64n, ~32n, ~SH.CrSha2.init256(), ~SH.CrSha2.update, ~SH.CrSha2.final, ~SH.CrSha2.sha256"),
     "sha512": (hashlib.sha512, "~SH.CrSha2State, ~128n, ~64n, ~SH.CrSha2.init512(), ~SH.CrSha2.update, ~SH.CrSha2.final, ~SH.CrSha2.sha512"),
+    "sha3_256": (hashlib.sha3_256, "~S3.CrSha3State, ~136n, ~32n, ~S3.CrSha3.init(), ~S3.CrSha3.update, ~S3.CrSha3.final, ~S3.CrSha3.sha3_256"),
 }
-SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512}
+SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512, "sha3_256": hashes.SHA3_256}
 
 
 def whole(fn, dsize, name):
@@ -615,6 +617,7 @@ import ../inst_ccm.bend as CC
 import ../inst_cmac.bend as CMI
 import ../inst_crc.bend as CR
 import ../inst_sha2.bend as SH
+import ../inst_sha3.bend as S3
 import ../pcbc.bend as Pc
 import ../lrw.bend as Lw
 import ../cts.bend as Ct
