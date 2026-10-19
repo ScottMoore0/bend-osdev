@@ -89,6 +89,7 @@ GPL source was read.
 | [rsa](rsa/) | RSA (RFC 8017): the primitives with the CRT, RSASSA-PKCS1-v1_5 and RSASSA-PSS, RSAES-OAEP and RSAES-PKCS1-v1_5, MGF1 over any hash, key generation, a raw key form (encoding round trips proved) |
 | [dh](dh/) | Finite-field Diffie-Hellman (SP 800-56A): key pairs, full, partial and Legendre-symbol validation, the primitive; RFC 7919's ffdhe and RFC 3526's MODP groups, computed from their formulas |
 | [ecc](ecc/) | Elliptic curves over prime fields, generic over the domain parameters: Jacobian arithmetic, validation (soundness proved), SEC 1 points; NIST P-192 to P-521, SM2's and the GOST CryptoPro curves; ECDH, and ECDSA with RFC 6979's deterministic k |
+| [sm2](sm2/) | SM2 digital signatures (draft-shen-sm2-ecdsa-02): Z_A, signing and verification over any curve and hash, SM3 by default |
 | [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, SHA3-256 conditioning through crypto's hash interface |
 | [jitterclock](jitterclock/) | A monotonic nanosecond clock as a library effect (C and JavaScript sides), timing a hash loop to feed jitter |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
