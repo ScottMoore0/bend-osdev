@@ -92,6 +92,7 @@ GPL source was read.
 | [bch](bch/) | Binary BCH codes: encoding, Berlekamp-Massey and Chien decoding on bits and on NAND sectors with their ECC bytes |
 | [asn1](asn1/) | ASN.1 BER and DER (X.690): decoding with every DER rule a parameter, encoding, typed values, and schemas as Bend values; decode after encode, DER's uniqueness and reading within the buffer proved for every input; checked against openssl asn1parse |
 | [oid](oid/) | Object identifiers: DER through asn1, dotted text (X.680 32.3) with leading zeros a parameter, and a registry of 127 names from RFC 5280, PKCS #1, the ECC and CMS RFCs and NIST CSOR; DER and text round trips and DER canonicity proved for every input; checked against OpenSSL and Python cryptography |
+| [x509](x509/) | X.509 v3 certificates (RFC 5280): every field read with the signed tbsCertificate octets kept, each profile check a rule, names compared per RFC 5280 7.1 or binary, and signature checking through crypto's interface; parsed certificates conform and the signature check covers exactly the signed octets, proved for every input; checked against Python cryptography and OpenSSL |
 
 Each package's README lists its files, public interface, extension points,
 laws, tests, limits and status.
