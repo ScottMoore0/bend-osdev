@@ -68,6 +68,8 @@ import ../hashes/michael.bend as HMI
 import ./inst_michael.bend as MIC
 import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
+import ./kbkdf.bend as Kb
+import ./inst_kbkdf.bend as KbI
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha.bend as F256
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha512.bend as F512
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha3.bend as F202
@@ -276,12 +278,12 @@ law ccm_round_trip_if:
   for h: {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p), c => MC.Ccm.decrypt(~K, ~enc, k, tlen, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p)) : Result<&2, &2, M.CmError, B.Octets>}
   {Result.bind(&2, &2, Cr.CrError, B.Octets, B.Octets, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p), c => CC.CrCcm.open(~K, ~enc, ~tlen, k, nonce, aad, c)) == Result.map(&2, &2, Cr.CrError, B.Octets, B.Octets, c => p, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p)) : Result<&2, &2, Cr.CrError, B.Octets>}
 
-# Signatures and key agreement (sign.bend, kex.bend): no algorithm of
-# bend-osdev is one yet, so their interface laws (README.md) have no
-# instance; what is proved here is that the generic helpers keep them. A
-# signature checked from the public key's bytes is accepted, for every
-# scheme, secret key and message, when the scheme's pk_format and accepts
-# laws hold there (hf, ha)
+# Signatures and key agreement (sign.bend, kex.bend): the generic helpers
+# keep the interface laws (README.md); the instances (RSA, DH, ECDSA, ECDH,
+# SM2, EC-RDSA) and their laws are in bend-osdev-pubkey. A signature
+# checked from the public key's bytes is accepted, for every scheme, secret
+# key and message, when the scheme's pk_format and accepts laws hold there
+# (hf, ha)
 law sign_verify_bytes_if:
   for ~SK: Data
   for ~PK: Data
@@ -542,6 +544,88 @@ law pbkdf2_hmac_sha1_rfc6070_2:
 # --verdict's kernel fuel, and check.bend computes them)
 law pbkdf2_hmac_sha256_rfc7914_1:
   {PbI.CrPbkdf2.hmac_sha256(B.Octets.of_string("passwd"), B.Octets.of_string("salt"), 1, 32n) == Done{B.Octets.of_list([85, 172, 4, 110, 86, 227, 8, 159, 236, 22, 145, 194, 37, 68, 182, 5, 249, 65, 133, 33, 109, 222, 4, 101, 230, 139, 157, 87, 194, 13, 172, 188])} : Result<&2, &2, Cr.CrError, B.Octets>}
+
+# SP 800-108 KDFs over any MAC (kbkdf.bend), for every MAC, key, fixed
+# input data and length: each stream has the length asked for, a shorter
+# stream is a prefix of a longer one with the same fixed input (and IV), and
+# a derivation that succeeds has the length asked for. (The interface's
+# prefix law holds of the streams: a derivation binds its length L into
+# the fixed input, so derivations of two lengths differ.)
+law kbkdf_counter_stream_length:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~rlen: Nat
+  for +k: K
+  for +fixed: B.Octets
+  for +n: Nat
+  {B.Octets.len(Kb.CrKbkdf.counter_stream(~K, ~compute, ~rlen, k, fixed, n)) == n : Nat}
+
+law kbkdf_counter_stream_prefix:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~rlen: Nat
+  for +k: K
+  for +fixed: B.Octets
+  for +n: Nat
+  for +j: Nat
+  {B.Octets.take(n, Kb.CrKbkdf.counter_stream(~K, ~compute, ~rlen, k, fixed, Nat.add(n, j))) == Kb.CrKbkdf.counter_stream(~K, ~compute, ~rlen, k, fixed, n) : B.Octets}
+
+law kbkdf_feedback_stream_length:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~rlen: Nat
+  for +k: K
+  for +iv: B.Octets
+  for +fixed: B.Octets
+  for +n: Nat
+  {B.Octets.len(Kb.CrKbkdf.feedback_stream(~K, ~compute, ~rlen, k, iv, fixed, n)) == n : Nat}
+
+law kbkdf_feedback_stream_prefix:
+  for ~K: Data
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~rlen: Nat
+  for +k: K
+  for +iv: B.Octets
+  for +fixed: B.Octets
+  for +n: Nat
+  for +j: Nat
+  {B.Octets.take(n, Kb.CrKbkdf.feedback_stream(~K, ~compute, ~rlen, k, iv, fixed, Nat.add(n, j))) == Kb.CrKbkdf.feedback_stream(~K, ~compute, ~rlen, k, iv, fixed, n) : B.Octets}
+
+law kbkdf_counter_length:
+  for ~K: Data
+  for ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~hlen: Nat
+  for ~rlen: Nat
+  for ~llen: Nat
+  for +ki: B.Octets
+  for +label: B.Octets
+  for +context: B.Octets
+  for +n: Nat
+  {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.CrKbkdf.counter_kdf(~K, ~key, ~compute, ~hlen, ~rlen, ~llen, ki, label, context, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.CrKbkdf.counter_kdf(~K, ~key, ~compute, ~hlen, ~rlen, ~llen, ki, label, context, n)) : Result<&2, &2, Cr.CrError, Nat>}
+
+law kbkdf_feedback_length:
+  for ~K: Data
+  for ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>
+  for ~compute: K -> B.Octets -> B.Octets
+  for ~hlen: Nat
+  for ~rlen: Nat
+  for ~llen: Nat
+  for +ki: B.Octets
+  for +iv: B.Octets
+  for +label: B.Octets
+  for +context: B.Octets
+  for +n: Nat
+  {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.CrKbkdf.feedback_kdf(~K, ~key, ~compute, ~hlen, ~rlen, ~llen, ki, iv, label, context, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.CrKbkdf.feedback_kdf(~K, ~key, ~compute, ~hlen, ~rlen, ~llen, ki, iv, label, context, n)) : Result<&2, &2, Cr.CrError, Nat>}
+
+# KBKDF in counter mode over HMAC-SHA-256 (32-bit counter and [L]_2), the
+# key "secret key bytes", Label "label", Context "context", 32 bytes:
+# Python's cryptography's KBKDFHMAC gives this value. Stated on the stream
+# (what CrKbkdf.counter_kdf returns once its length checks pass): those
+# checks compare with 2^32, which --verdict's kernel cannot compute in time;
+# check.bend runs the checked derivation
+law kbkdf_hmac_sha256_vector:
+  {Kb.CrKbkdf.counter_stream(~Hm.CrHmacKey, ~Hm.CrHmac.mac(~SH.CrSha2.sha256), ~4n, Hm.CrHmac.key(~64n, ~SH.CrSha2.sha256, B.Octets.of_string("secret key bytes")), Kb.CrKbkdf.fixed(~4n, B.Octets.of_string("label"), B.Octets.of_string("context"), 32n), 32n) == B.Octets.of_list([36, 187, 186, 187, 150, 131, 248, 143, 109, 68, 1, 79, 191, 147, 235, 99, 232, 125, 99, 110, 60, 243, 238, 232, 217, 114, 189, 30, 217, 156, 9, 202]) : B.Octets}
 
 # Per-instance laws, from the law schemas (gen/instances.py)
 
