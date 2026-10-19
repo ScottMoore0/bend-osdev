@@ -3,4 +3,6 @@ word64
 cipher-modes
 legacy-ciphers
 crc
+gf
+hashes
 bend-collections-laws-crypto@1.0.0.0

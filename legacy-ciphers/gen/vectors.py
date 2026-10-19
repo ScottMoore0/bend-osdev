@@ -64,6 +64,28 @@ def vectors_region():
     refusal("tdes_bad_key_length", "a TDEA key bundle of 8 bytes is refused (keying option 3 is not allowed)", "T.LcTdesKey", "T.LcTdes.key", 8)
     refusal("camellia_bad_key_length", "a Camellia key of 20 bytes is refused", "C.LcCamelliaKey", "C.LcCamellia.key", 20)
     refusal("serpent_bad_key_length", "a Serpent key longer than 256 bits is refused", "P.LcSerpentKey", "P.LcSerpent.key", 33)
+    def blk64(b):
+        return "L.LcBlock64{%d, %d}" % (int.from_bytes(b[:4], "big"), int.from_bytes(b[4:], "big"))
+
+    def v64(name, comment, mod, key_t, keyfn, key, pt, ct):
+        law(name, comment, "{Result.map(&2, &2, L.LcError, %s, L.LcBlock64, k => %s.encrypt(k, %s), %s(%s)) == Done{%s} : Result<&2, &2, L.LcError, L.LcBlock64>}" % (key_t, mod, blk64(pt), keyfn, lst(key), blk64(ct)))
+
+    k = h("000102030405060708090a0b0c0d0e0f")
+    p = h("00112233445566778899aabbccddeeff")
+    v128("aria_rfc5794", "RFC 5794, Appendix A.1: ARIA-128, key 000102030405060708090A0B0C0D0E0F,\n# plaintext 00112233445566778899AABBCCDDEEFF, ciphertext\n# D718FBD6AB644C739DA95F3BE6451778", "A.LcAria", "A.LcAriaKey", "A.LcAria.key", k, p, m.aria_encrypt(k, p))
+    k = h("0123456712345678234567893456789A")
+    p = h("0123456789ABCDEF")
+    v64("cast5_rfc2144", "RFC 2144, Appendix B.1: CAST-128 with the 128-bit key\n# 0123456712345678234567893456789A, plaintext 0123456789ABCDEF, ciphertext\n# 238B4FE5847E44B2", "C5.LcCast5", "C5.LcCast5Key", "C5.LcCast5.key", k, p, m.cast5_encrypt(k, p))
+    k = h("114477AADD003366")
+    p = h("123456789ABCDEF0")
+    v64("fcrypt_spec", "the FCrypt specification's second vector: key 114477AADD003366,\n# plaintext 123456789ABCDEF0, ciphertext D8ED787477EC0680", "FC.LcFcrypt", "FC.LcFcryptKey", "FC.LcFcrypt.key", k, p, m.fcrypt_encrypt(k, p))
+    refusal("aria_bad_key_length", "an ARIA key of 20 bytes is refused", "A.LcAriaKey", "A.LcAria.key", 20)
+    refusal("cast6_bad_key_length", "a CAST-256 key of 18 bytes is refused", "C6.LcCast6Key", "C6.LcCast6.key", 18)
+    refusal("blowfish_bad_key_length", "a Blowfish key of 3 bytes is refused (32 bits at least)", "BF.LcBlowfishKey", "BF.LcBlowfish.key", 3)
+    refusal("cast5_bad_key_length", "a CAST-128 key of 4 bytes is refused (40 bits at least)", "C5.LcCast5Key", "C5.LcCast5.key", 4)
+    refusal("tea_bad_key_length", "a TEA key of 15 bytes is refused", "TE.LcTeaKey", "TE.LcTea.key", 15)
+    refusal("xtea_bad_key_length", "an XTEA key of 17 bytes is refused", "XT.LcXteaKey", "XT.LcXtea.key", 17)
+    refusal("fcrypt_bad_key_length", "an FCrypt key of 7 bytes is refused", "FC.LcFcryptKey", "FC.LcFcrypt.key", 7)
     law("rc4_empty_key", "an empty RC4 key is refused", "{R.LcRc4.crypt(B.Octets.empty(), B.Octets.zeros(4n)) == Fail{L.LcBadKeyLength{0n}} : Result<&2, &2, L.LcError, B.Octets>}")
     law("modes64_not_whole_blocks", "the 64-bit modes refuse a message that is not whole blocks", "{Result.map(&2, &2, L.LcError, List<&2, L.LcBlock64>, Unit, bs => Unit{}, X.Lc64.blocks_of(B.Octets.zeros(12n))) == Fail{L.LcNotBlockMultiple{12n}} : Result<&2, &2, L.LcError, Unit>}")
     return "\n".join(out) + "\n"
@@ -123,6 +145,38 @@ def check_region():
         out("%s_cbc(%s, %dn)" % (name, lst(k), n), "%s ok" % c[-16:].hex())
     c = cbc(m.tdes_encrypt, h("0123456789ABCDEF23456789ABCDEF01456789ABCDEF0123"), bytes(8), big[:16384], 8)
     out("tdes_cbc_big(%s)" % lst(h("0123456789ABCDEF23456789ABCDEF01456789ABCDEF0123")), "%s ok" % c[-8:].hex())
+    # the newer ciphers: the specifications' vectors, both ways
+    pa = h("00112233445566778899aabbccddeeff")
+    for key in ["000102030405060708090a0b0c0d0e0f", "000102030405060708090a0b0c0d0e0f1011121314151617",
+                "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"]:
+        out("aria(%s, %s)" % (lst(h(key)), lst(pa)), "%s %s" % (m.aria_encrypt(h(key), pa).hex(), pa.hex()))
+    for key in ["2342bb9efa38542c0af75647f29f615d", "2342bb9efa38542cbed0ac83940ac298bac77a7717942863",
+                "2342bb9efa38542cbed0ac83940ac2988d7c47ce264908461cc1b5137ae6b604"]:
+        out("cast6(%s, %s)" % (lst(h(key)), lst(bytes(16))), "%s %s" % (m.cast6_encrypt(h(key), bytes(16)).hex(), bytes(16).hex()))
+    for key, pt in [("0000000000000000", "0000000000000000"), ("FFFFFFFFFFFFFFFF", "FFFFFFFFFFFFFFFF"),
+                    ("FEDCBA9876543210", "0123456789ABCDEF"), ("F0", "FEDCBA9876543210"), ("F0E1D2", "FEDCBA9876543210"),
+                    ("F0E1D2C3B4A5968778695A4B3C2D1E0F0011223344556677", "FEDCBA9876543210")]:
+        out("blowfish(%s, %s)" % (lst(h(key)), lst(h(pt))), "%s %s" % (m.blowfish_encrypt(h(key), h(pt)).hex(), pt.lower()))
+    for key in ["0123456712345678234567893456789A", "01234567123456782345", "0123456712"]:
+        out("cast5(%s, %s)" % (lst(h(key)), lst(h("0123456789ABCDEF"))), "%s %s" % (m.cast5_encrypt(h(key), h("0123456789ABCDEF")).hex(), "0123456789abcdef"))
+    for key, pt in [("0000000000000000", "0000000000000000"), ("114477AADD003366", "123456789ABCDEF0")]:
+        out("fcrypt(%s, %s)" % (lst(h(key)), lst(h(pt))), "%s %s" % (m.fcrypt_encrypt(h(key), h(pt)).hex(), pt.lower()))
+    kt, bt = bytes(range(16)), bytes(range(8))
+    for be, order in (("False{}", "little"), ("True{}", "big")):
+        out("tea(%s, %s, %s)" % (be, lst(kt), lst(bt)), "%s %s" % (m.tea_encrypt(kt, bt, order).hex(), bt.hex()))
+        out("xtea(%s, %s, %s)" % (be, lst(kt), lst(bt)), "%s %s" % (m.xtea_encrypt(kt, bt, order).hex(), bt.hex()))
+    # the newer 128-bit ciphers in cipher-modes' CBC over 32 KB, the 64-bit
+    # ones in modes64.bend's CBC over 16 KB, both ways
+    for name, enc in [("aria", m.aria_encrypt), ("cast6", m.cast6_encrypt)]:
+        c = cbc(enc, k, iv16, big[:32768], 16)
+        out("%s_cbc(%s, 32768n)" % (name, lst(k)), "%s ok" % c[-16:].hex())
+    k8 = h("0123456789ABCDEF")
+    for name, enc in [("blowfish", m.blowfish_encrypt), ("cast5", lambda a, b: m.cast5_encrypt(a, b)),
+                      ("tea", lambda a, b: m.tea_encrypt(a, b, "little")), ("xtea", lambda a, b: m.xtea_encrypt(a, b, "little")),
+                      ("fcrypt", m.fcrypt_encrypt)]:
+        key = k if name in ("cast5", "tea", "xtea") else k8
+        c = cbc(enc, key, bytes(8), big[:16384], 8)
+        out("%s_cbc(%s, 16384n)" % (name, lst(key)), "%s ok" % c[-8:].hex())
     # refusals
     out('show(X.Lc64.cbc_encrypt(~D.LcDesKey, ~D.LcDes.encrypt, des_key(%s), B.Octets.zeros(7n), B.Octets.zeros(8n)))' % lst(h("0101010101010101")), "bad iv 7")
     out('show(X.Lc64.ecb_encrypt(~D.LcDesKey, ~D.LcDes.encrypt, des_key(%s), B.Octets.zeros(9n)))' % lst(h("0101010101010101")), "not whole blocks 9")

@@ -11,7 +11,8 @@
 #   prefix  a shorter derivation is a prefix of a longer one with the same
 #           inputs (tested)
 #
-# The instances: HKDF over any hash (hkdf.bend).
+# The instances: HKDF over any hash (hkdf.bend), PBKDF2 over any MAC
+# (pbkdf2.bend).
 import Base
 import ../bytes/bytes.bend as B
 import ./crypto.bend as Cr

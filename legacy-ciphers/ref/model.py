@@ -597,3 +597,403 @@ def camellia_decrypt(key, block):
             j = i // 3 - 1
             d1, d2 = cam_flinv(d1, ke[2 * j]), cam_fl(d2, ke[2 * j + 1])
     return (((d1 ^ kw[0]) << 64) | (d2 ^ kw[1])).to_bytes(16, "big")
+
+
+# ---------------------------------------------------------------- tables
+# The newer ciphers' constant tables are transcribed (or computed) once, in
+# gen/tables.py, which both the Bend code's generator and these models use;
+# the published vectors, and Python's cryptography (CAST5, Blowfish) and
+# OpenSSL (ARIA), check them in ref/gen.py.
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "gen"))
+import tables as _t  # noqa: E402
+
+
+# ---------------------------------------------------------------- TEA, XTEA
+# D. Wheeler, R. Needham, "TEA, a Tiny Encryption Algorithm" (FSE 1994), and
+# R. Needham, D. Wheeler, "Tea extensions" (1997). The papers work on 32-bit
+# words; the byte order of a block and a key is a choice ("little" is the
+# Linux kernel's).
+
+TEA_DELTA = 0x9E3779B9
+
+
+def _words(b, order):
+    return [int.from_bytes(b[4 * i:4 * i + 4], order) for i in range(len(b) // 4)]
+
+
+def _tea_g(x, s, a, b):
+    return ((((x << 4) & M32) + a) ^ ((x + s) & M32) ^ ((x >> 5) + b)) & M32
+
+
+def tea_encrypt(key, block, order="little", cycles=32):
+    k = _words(key, order)
+    y, z = _words(block, order)
+    s = 0
+    for _ in range(cycles):
+        s = (s + TEA_DELTA) & M32
+        y = (y + _tea_g(z, s, k[0], k[1])) & M32
+        z = (z + _tea_g(y, s, k[2], k[3])) & M32
+    return y.to_bytes(4, order) + z.to_bytes(4, order)
+
+
+def tea_decrypt(key, block, order="little", cycles=32):
+    k = _words(key, order)
+    y, z = _words(block, order)
+    s = (TEA_DELTA * cycles) & M32
+    for _ in range(cycles):
+        z = (z - _tea_g(y, s, k[2], k[3])) & M32
+        y = (y - _tea_g(z, s, k[0], k[1])) & M32
+        s = (s - TEA_DELTA) & M32
+    return y.to_bytes(4, order) + z.to_bytes(4, order)
+
+
+def _xtea_g(x):
+    return ((((x << 4) & M32) ^ (x >> 5)) + x) & M32
+
+
+def xtea_encrypt(key, block, order="little", cycles=32):
+    k = _words(key, order)
+    y, z = _words(block, order)
+    s = 0
+    for _ in range(cycles):
+        y = (y + (_xtea_g(z) ^ ((s + k[s & 3]) & M32))) & M32
+        s = (s + TEA_DELTA) & M32
+        z = (z + (_xtea_g(y) ^ ((s + k[(s >> 11) & 3]) & M32))) & M32
+    return y.to_bytes(4, order) + z.to_bytes(4, order)
+
+
+def xtea_decrypt(key, block, order="little", cycles=32):
+    k = _words(key, order)
+    y, z = _words(block, order)
+    s = (TEA_DELTA * cycles) & M32
+    for _ in range(cycles):
+        z = (z - (_xtea_g(y) ^ ((s + k[(s >> 11) & 3]) & M32))) & M32
+        s = (s - TEA_DELTA) & M32
+        y = (y - (_xtea_g(z) ^ ((s + k[s & 3]) & M32))) & M32
+    return y.to_bytes(4, order) + z.to_bytes(4, order)
+
+
+# ---------------------------------------------------------------- Blowfish
+# B. Schneier, "Description of a New Variable-Length Key, 64-Bit Block
+# Cipher (Blowfish)", Fast Software Encryption 1993. Big-endian words.
+
+def _bf_f(S, x):
+    return ((((S[0][x >> 24] + S[1][(x >> 16) & 255]) & M32) ^ S[2][(x >> 8) & 255]) + S[3][x & 255]) & M32
+
+
+def _bf_block(P, S, L, R):
+    for i in range(16):
+        L ^= P[i]
+        R ^= _bf_f(S, L)
+        L, R = R, L
+    L, R = R, L
+    R ^= P[16]
+    L ^= P[17]
+    return L, R
+
+
+def bf_keys(key):
+    P = list(_t.PI[:18])
+    S = [list(_t.PI[18 + 256 * i:18 + 256 * (i + 1)]) for i in range(4)]
+    j = 0
+    for i in range(18):
+        w = 0
+        for _ in range(4):
+            w = (w << 8) | key[j % len(key)]
+            j += 1
+        P[i] ^= w
+    L = R = 0
+    for i in range(0, 18, 2):
+        L, R = _bf_block(P, S, L, R)
+        P[i], P[i + 1] = L, R
+    for s in range(4):
+        for i in range(0, 256, 2):
+            L, R = _bf_block(P, S, L, R)
+            S[s][i], S[s][i + 1] = L, R
+    return P, S
+
+
+def blowfish_encrypt(key, block):
+    P, S = bf_keys(key)
+    L, R = _bf_block(P, S, int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big"))
+    return L.to_bytes(4, "big") + R.to_bytes(4, "big")
+
+
+def blowfish_decrypt(key, block):
+    # decryption is encryption with the P-array reversed
+    P, S = bf_keys(key)
+    L, R = _bf_block(list(reversed(P)), S, int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big"))
+    return L.to_bytes(4, "big") + R.to_bytes(4, "big")
+
+
+# ---------------------------------------------------------------- CAST-128
+# RFC 2144, The CAST-128 Encryption Algorithm (CAST5).
+
+def _cast_f(ty, d, km, kr):
+    S1, S2, S3, S4 = _t.CAST_S[:4]
+    if ty == 1:
+        i = rol((km + d) & M32, kr)
+    elif ty == 2:
+        i = rol(km ^ d, kr)
+    else:
+        i = rol((km - d) & M32, kr)
+    a, b, c, e = i >> 24, (i >> 16) & 255, (i >> 8) & 255, i & 255
+    if ty == 1:
+        return ((((S1[a] ^ S2[b]) - S3[c]) & M32) + S4[e]) & M32
+    if ty == 2:
+        return ((((S1[a] - S2[b]) & M32) + S3[c]) & M32) ^ S4[e]
+    return ((((S1[a] + S2[b]) & M32) ^ S3[c]) - S4[e]) & M32
+
+
+# The key schedule's four sets of subkey formulas (RFC 2144, 2.4.1): each
+# subkey is S5[a] ^ S6[b] ^ S7[c] ^ S8[d] ^ Sj[e], on the bytes of z (the
+# first and third sets) or of x (the second and fourth)
+CAST_KSETS = [
+    [(8, 9, 7, 6, 5, 2), (10, 11, 5, 4, 6, 6), (12, 13, 3, 2, 7, 9), (14, 15, 1, 0, 8, 12)],
+    [(3, 2, 12, 13, 5, 8), (1, 0, 14, 15, 6, 13), (7, 6, 8, 9, 7, 3), (5, 4, 10, 11, 8, 7)],
+    [(3, 2, 12, 13, 5, 9), (1, 0, 14, 15, 6, 12), (7, 6, 8, 9, 7, 2), (5, 4, 10, 11, 8, 6)],
+    [(8, 9, 7, 6, 5, 3), (10, 11, 5, 4, 6, 7), (12, 13, 3, 2, 7, 8), (14, 15, 1, 0, 8, 13)],
+]
+
+
+def cast5_subkeys(key):
+    """the 32 subkey words K1 .. K32 of a key of 5 to 16 bytes (zero-padded)"""
+    S5, S6, S7, S8 = _t.CAST_S[4:]
+    S = {5: S5, 6: S6, 7: S7, 8: S8}
+    x = list(key + bytes(16 - len(key)))
+    z = [0] * 16
+
+    def w(a, i):
+        return (a[i] << 24) | (a[i + 1] << 16) | (a[i + 2] << 8) | a[i + 3]
+
+    def put(a, i, v):
+        a[i:i + 4] = [(v >> 24) & 255, (v >> 16) & 255, (v >> 8) & 255, v & 255]
+
+    def ks(a, kset):
+        return [S5[a[p]] ^ S6[a[q]] ^ S7[a[r]] ^ S8[a[s]] ^ S[j][a[e]] for p, q, r, s, j, e in kset]
+
+    K = []
+    for _ in range(2):
+        for zset, xset in ((0, 1), (2, 3)):
+            put(z, 0, w(x, 0) ^ S5[x[13]] ^ S6[x[15]] ^ S7[x[12]] ^ S8[x[14]] ^ S7[x[8]])
+            put(z, 4, w(x, 8) ^ S5[z[0]] ^ S6[z[2]] ^ S7[z[1]] ^ S8[z[3]] ^ S8[x[10]])
+            put(z, 8, w(x, 12) ^ S5[z[7]] ^ S6[z[6]] ^ S7[z[5]] ^ S8[z[4]] ^ S5[x[9]])
+            put(z, 12, w(x, 4) ^ S5[z[10]] ^ S6[z[9]] ^ S7[z[11]] ^ S8[z[8]] ^ S6[x[11]])
+            K += ks(z, CAST_KSETS[zset])
+            put(x, 0, w(z, 8) ^ S5[z[5]] ^ S6[z[7]] ^ S7[z[4]] ^ S8[z[6]] ^ S7[z[0]])
+            put(x, 4, w(z, 0) ^ S5[x[0]] ^ S6[x[2]] ^ S7[x[1]] ^ S8[x[3]] ^ S8[z[2]])
+            put(x, 8, w(z, 4) ^ S5[x[7]] ^ S6[x[6]] ^ S7[x[5]] ^ S8[x[4]] ^ S5[z[1]])
+            put(x, 12, w(z, 12) ^ S5[x[10]] ^ S6[x[9]] ^ S7[x[11]] ^ S8[x[8]] ^ S6[z[3]])
+            K += ks(x, CAST_KSETS[xset])
+    return K
+
+
+def _cast5_rounds(key):
+    K = cast5_subkeys(key)
+    n = 12 if len(key) <= 10 else 16
+    return [((i % 3) + 1, K[i], K[16 + i] & 31) for i in range(n)]
+
+
+def cast5_encrypt(key, block):
+    L, R = int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big")
+    for ty, km, kr in _cast5_rounds(key):
+        L, R = R, L ^ _cast_f(ty, R, km, kr)
+    return R.to_bytes(4, "big") + L.to_bytes(4, "big")
+
+
+def cast5_decrypt(key, block):
+    R, L = int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big")
+    for ty, km, kr in reversed(_cast5_rounds(key)):
+        L, R = R ^ _cast_f(ty, L, km, kr), L
+    return L.to_bytes(4, "big") + R.to_bytes(4, "big")
+
+
+# ---------------------------------------------------------------- CAST-256
+# RFC 2612, The CAST-256 Encryption Algorithm (CAST6): CAST-128's f1, f2, f3
+# and S1 .. S4, the quad-rounds Q and QBAR, and the key schedule's octaves W.
+
+def cast6_keys(key):
+    """the twelve key sets (Km0..Km3, Kr0..Kr3) of a key of 16, 20, 24, 28 or 32 bytes"""
+    k = _words(key + bytes(32 - len(key)), "big")
+    cm, mm, cr, mr = 0x5A827999, 0x6ED9EBA1, 19, 17
+    tm, tr = [], []
+    for i in range(24):
+        tm.append([])
+        tr.append([])
+        for _ in range(8):
+            tm[i].append(cm)
+            cm = (cm + mm) & M32
+            tr[i].append(cr)
+            cr = (cr + mr) & 31
+    A, B, C, D, E, F, G, H = range(8)
+
+    def octave(i):
+        def f(ty, d, j):
+            return _cast_f(ty, d, tm[i][j], tr[i][j])
+        k[G] ^= f(1, k[H], 0)
+        k[F] ^= f(2, k[G], 1)
+        k[E] ^= f(3, k[F], 2)
+        k[D] ^= f(1, k[E], 3)
+        k[C] ^= f(2, k[D], 4)
+        k[B] ^= f(3, k[C], 5)
+        k[A] ^= f(1, k[B], 6)
+        k[H] ^= f(2, k[A], 7)
+
+    sets = []
+    for i in range(12):
+        octave(2 * i)
+        octave(2 * i + 1)
+        sets.append(([k[H], k[F], k[D], k[B]], [k[A] & 31, k[C] & 31, k[E] & 31, k[G] & 31]))
+    return sets
+
+
+def _cast6_q(s, km, kr):
+    a, b, c, d = s
+    c ^= _cast_f(1, d, km[0], kr[0])
+    b ^= _cast_f(2, c, km[1], kr[1])
+    a ^= _cast_f(3, b, km[2], kr[2])
+    d ^= _cast_f(1, a, km[3], kr[3])
+    return [a, b, c, d]
+
+
+def _cast6_qbar(s, km, kr):
+    a, b, c, d = s
+    d ^= _cast_f(1, a, km[3], kr[3])
+    a ^= _cast_f(3, b, km[2], kr[2])
+    b ^= _cast_f(2, c, km[1], kr[1])
+    c ^= _cast_f(1, d, km[0], kr[0])
+    return [a, b, c, d]
+
+
+def cast6_encrypt(key, block):
+    s = _words(block, "big")
+    for i, (km, kr) in enumerate(cast6_keys(key)):
+        s = _cast6_q(s, km, kr) if i < 6 else _cast6_qbar(s, km, kr)
+    return b"".join(w.to_bytes(4, "big") for w in s)
+
+
+def cast6_decrypt(key, block):
+    s = _words(block, "big")
+    for i, (km, kr) in reversed(list(enumerate(cast6_keys(key)))):
+        s = _cast6_qbar(s, km, kr) if i < 6 else _cast6_q(s, km, kr)
+    return b"".join(w.to_bytes(4, "big") for w in s)
+
+
+# ---------------------------------------------------------------- FCrypt
+# T. Anderson, "Specification of FCrypt: Encryption for AFS Remote Procedure
+# Calls" (2000): DES's Feistel structure with its own S-boxes, F and key
+# schedule.
+
+def fcrypt_keys(key):
+    v = 0
+    for b in key:
+        v = (v << 7) | (b >> 1)
+    ws = []
+    for _ in range(16):
+        ws.append(v & M32)
+        v = ((v >> 11) | (v << 45)) & ((1 << 56) - 1)
+    return ws
+
+
+def _fc_f(r, k):
+    S = _t.FCRYPT_S
+    t = r ^ k
+    u = (S[0][t & 255] << 24) | (S[1][(t >> 8) & 255] << 16) | (S[3][t >> 24] << 8) | S[2][(t >> 16) & 255]
+    return ror(u, 5)
+
+
+def fcrypt_encrypt(key, block):
+    L, R = int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big")
+    for w in fcrypt_keys(key):
+        L, R = R, L ^ _fc_f(R, w)
+    return L.to_bytes(4, "big") + R.to_bytes(4, "big")
+
+
+def fcrypt_decrypt(key, block):
+    L, R = int.from_bytes(block[:4], "big"), int.from_bytes(block[4:], "big")
+    for w in reversed(fcrypt_keys(key)):
+        L, R = R ^ _fc_f(L, w), L
+    return L.to_bytes(4, "big") + R.to_bytes(4, "big")
+
+
+# ---------------------------------------------------------------- ARIA
+# RFC 5794, A Description of the ARIA Encryption Algorithm.
+
+ARIA_C = [0x517CC1B727220A94FE13ABE8FA9A6EE0, 0x6DB14ACC9E21C820FF28B1D5EF5DE2B0,
+          0xDB92371D2126E9700324977504E8C90E]
+ARIA_A = [[3, 4, 6, 8, 9, 13, 14], [2, 5, 7, 8, 9, 12, 15], [1, 4, 6, 10, 11, 12, 15], [0, 5, 7, 10, 11, 13, 14],
+          [0, 2, 5, 8, 11, 14, 15], [1, 3, 4, 9, 10, 14, 15], [0, 2, 7, 9, 10, 12, 13], [1, 3, 6, 8, 11, 12, 13],
+          [0, 1, 4, 7, 10, 13, 15], [0, 1, 5, 6, 11, 12, 14], [2, 3, 5, 6, 8, 13, 15], [2, 3, 4, 7, 9, 12, 14],
+          [1, 2, 6, 7, 9, 11, 12], [0, 3, 6, 7, 8, 10, 13], [0, 3, 4, 5, 9, 11, 14], [1, 2, 4, 5, 8, 10, 15]]
+M128 = (1 << 128) - 1
+
+
+def _aria_sl(x, which):
+    sb = [_t.ARIA_SB1, _t.ARIA_SB2, _t.ARIA_SB3, _t.ARIA_SB4]
+    order = [0, 1, 2, 3] if which == 1 else [2, 3, 0, 1]
+    b = x.to_bytes(16, "big")
+    return int.from_bytes(bytes(sb[order[i % 4]][v] for i, v in enumerate(b)), "big")
+
+
+def aria_diffuse(x):
+    b = x.to_bytes(16, "big")
+    out = []
+    for row in ARIA_A:
+        v = 0
+        for j in row:
+            v ^= b[j]
+        out.append(v)
+    return int.from_bytes(bytes(out), "big")
+
+
+def _aria_fo(d, rk):
+    return aria_diffuse(_aria_sl(d ^ rk, 1))
+
+
+def _aria_fe(d, rk):
+    return aria_diffuse(_aria_sl(d ^ rk, 2))
+
+
+def _rot128(x, n):
+    """x rotated right by n bits (left for negative n)"""
+    n %= 128
+    return ((x >> n) | (x << (128 - n))) & M128
+
+
+def aria_keys(key):
+    n = len(key)
+    ck = {16: [0, 1, 2], 24: [1, 2, 0], 32: [2, 0, 1]}[n]
+    kk = int.from_bytes(key + bytes(32 - n), "big")
+    kl, kr = kk >> 128, kk & M128
+    w0 = kl
+    w1 = _aria_fo(w0, ARIA_C[ck[0]]) ^ kr
+    w2 = _aria_fe(w1, ARIA_C[ck[1]]) ^ w0
+    w3 = _aria_fo(w2, ARIA_C[ck[2]]) ^ w1
+    ek = []
+    for r in (19, 31, -61, -31):
+        ek += [w0 ^ _rot128(w1, r), w1 ^ _rot128(w2, r), w2 ^ _rot128(w3, r), _rot128(w0, r) ^ w3]
+    ek.append(w0 ^ _rot128(w1, -19))
+    rounds = {16: 12, 24: 14, 32: 16}[n]
+    return ek[:rounds + 1]
+
+
+def aria_encrypt(key, block):
+    ek = aria_keys(key)
+    n = len(ek) - 1
+    p = int.from_bytes(block, "big")
+    for i in range(n - 1):
+        p = _aria_fo(p, ek[i]) if i % 2 == 0 else _aria_fe(p, ek[i])
+    return (_aria_sl(p ^ ek[n - 1], 2) ^ ek[n]).to_bytes(16, "big")
+
+
+def aria_decrypt(key, block):
+    ek = aria_keys(key)
+    n = len(ek) - 1
+    dk = [ek[n]] + [aria_diffuse(ek[n - i]) for i in range(1, n)] + [ek[0]]
+    p = int.from_bytes(block, "big")
+    for i in range(n - 1):
+        p = _aria_fo(p, dk[i]) if i % 2 == 0 else _aria_fe(p, dk[i])
+    return (_aria_sl(p ^ dk[n - 1], 2) ^ dk[n]).to_bytes(16, "big")
