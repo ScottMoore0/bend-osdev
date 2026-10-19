@@ -2,7 +2,9 @@
 #
 # Properties, for every input: each block cipher's decryption undoes its
 # encryption, and its encryption undoes its decryption, for every key and
-# every block (so each is a permutation of the blocks); the 64-bit modes undo
+# every block (so each is a permutation of the blocks), for the 128-bit
+# ciphers (SM4, Camellia, Serpent, Twofish, ARIA, CAST-256) and the 64-bit
+# ones (DES, 3DES, Blowfish, CAST-128, TEA, XTEA, FCrypt); the 64-bit modes undo
 # themselves for DES and 3DES; RC4 applied twice from one state gives the
 # data back, and RC4 in pieces is RC4 of the whole; 64-bit blocks survive
 # their byte form.
@@ -21,6 +23,13 @@ import ./serpent.bend as P
 import ./twofish.bend as F
 import ./rc4.bend as R
 import ./modes64.bend as X
+import ./aria.bend as A
+import ./cast6.bend as C6
+import ./blowfish.bend as BF
+import ./cast5.bend as C5
+import ./tea.bend as TE
+import ./xtea.bend as XT
+import ./fcrypt.bend as FC
 
 # DES (FIPS 46-3)
 
@@ -93,6 +102,90 @@ law twofish_round_trip_dual:
   for k: F.LcTwofishKey
   for +b: M.CmBlock
   {F.LcTwofish.encrypt(k, F.LcTwofish.decrypt(k, b)) == b : M.CmBlock}
+
+# ARIA (RFC 5794), every key size
+
+law aria_round_trip:
+  for k: A.LcAriaKey
+  for +b: M.CmBlock
+  {A.LcAria.decrypt(k, A.LcAria.encrypt(k, b)) == b : M.CmBlock}
+
+law aria_round_trip_dual:
+  for k: A.LcAriaKey
+  for +b: M.CmBlock
+  {A.LcAria.encrypt(k, A.LcAria.decrypt(k, b)) == b : M.CmBlock}
+
+# CAST-256 (RFC 2612), every key size
+
+law cast6_round_trip:
+  for k: C6.LcCast6Key
+  for +b: M.CmBlock
+  {C6.LcCast6.decrypt(k, C6.LcCast6.encrypt(k, b)) == b : M.CmBlock}
+
+law cast6_round_trip_dual:
+  for k: C6.LcCast6Key
+  for +b: M.CmBlock
+  {C6.LcCast6.encrypt(k, C6.LcCast6.decrypt(k, b)) == b : M.CmBlock}
+
+# Blowfish (Schneier), every key
+
+law blowfish_round_trip:
+  for k: BF.LcBlowfishKey
+  for +b: L.LcBlock64
+  {BF.LcBlowfish.decrypt(k, BF.LcBlowfish.encrypt(k, b)) == b : L.LcBlock64}
+
+law blowfish_round_trip_dual:
+  for k: BF.LcBlowfishKey
+  for +b: L.LcBlock64
+  {BF.LcBlowfish.encrypt(k, BF.LcBlowfish.decrypt(k, b)) == b : L.LcBlock64}
+
+# CAST-128 (RFC 2144), every key size
+
+law cast5_round_trip:
+  for k: C5.LcCast5Key
+  for +b: L.LcBlock64
+  {C5.LcCast5.decrypt(k, C5.LcCast5.encrypt(k, b)) == b : L.LcBlock64}
+
+law cast5_round_trip_dual:
+  for k: C5.LcCast5Key
+  for +b: L.LcBlock64
+  {C5.LcCast5.encrypt(k, C5.LcCast5.decrypt(k, b)) == b : L.LcBlock64}
+
+# TEA (Wheeler and Needham), every key, byte order and number of cycles
+
+law tea_round_trip:
+  for k: TE.LcTeaKey
+  for +b: L.LcBlock64
+  {TE.LcTea.decrypt(k, TE.LcTea.encrypt(k, b)) == b : L.LcBlock64}
+
+law tea_round_trip_dual:
+  for k: TE.LcTeaKey
+  for +b: L.LcBlock64
+  {TE.LcTea.encrypt(k, TE.LcTea.decrypt(k, b)) == b : L.LcBlock64}
+
+# XTEA (Needham and Wheeler), every key, byte order and number of cycles
+
+law xtea_round_trip:
+  for k: XT.LcXteaKey
+  for +b: L.LcBlock64
+  {XT.LcXtea.decrypt(k, XT.LcXtea.encrypt(k, b)) == b : L.LcBlock64}
+
+law xtea_round_trip_dual:
+  for k: XT.LcXteaKey
+  for +b: L.LcBlock64
+  {XT.LcXtea.encrypt(k, XT.LcXtea.decrypt(k, b)) == b : L.LcBlock64}
+
+# FCrypt (the AFS specification), every key
+
+law fcrypt_round_trip:
+  for k: FC.LcFcryptKey
+  for +b: L.LcBlock64
+  {FC.LcFcrypt.decrypt(k, FC.LcFcrypt.encrypt(k, b)) == b : L.LcBlock64}
+
+law fcrypt_round_trip_dual:
+  for k: FC.LcFcryptKey
+  for +b: L.LcBlock64
+  {FC.LcFcrypt.encrypt(k, FC.LcFcrypt.decrypt(k, b)) == b : L.LcBlock64}
 
 # RC4 (RFC 6229), for every state (so for every key) and all data
 
@@ -213,6 +306,51 @@ law camellia_bad_key_length:
 # a Serpent key longer than 256 bits is refused
 law serpent_bad_key_length:
   {Result.map(&2, &2, L.LcError, P.LcSerpentKey, Unit, k => Unit{}, P.LcSerpent.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{33n}} : Result<&2, &2, L.LcError, Unit>}
+
+# RFC 5794, Appendix A.1: ARIA-128, key 000102030405060708090A0B0C0D0E0F,
+# plaintext 00112233445566778899AABBCCDDEEFF, ciphertext
+# D718FBD6AB644C739DA95F3BE6451778
+law aria_rfc5794:
+  {Result.map(&2, &2, L.LcError, A.LcAriaKey, M.CmBlock, k => A.LcAria.encrypt(k, M.CmBlock{1122867, 1146447479, 2291772091, 3437096703}), A.LcAria.key(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]))) == Done{M.CmBlock{3608738774, 2875477107, 2645122875, 3863287672}} : Result<&2, &2, L.LcError, M.CmBlock>}
+
+# RFC 2144, Appendix B.1: CAST-128 with the 128-bit key
+# 0123456712345678234567893456789A, plaintext 0123456789ABCDEF, ciphertext
+# 238B4FE5847E44B2
+law cast5_rfc2144:
+  {Result.map(&2, &2, L.LcError, C5.LcCast5Key, L.LcBlock64, k => C5.LcCast5.encrypt(k, L.LcBlock64{19088743, 2309737967}), C5.LcCast5.key(B.Octets.of_list([1, 35, 69, 103, 18, 52, 86, 120, 35, 69, 103, 137, 52, 86, 120, 154]))) == Done{L.LcBlock64{596332517, 2222867634}} : Result<&2, &2, L.LcError, L.LcBlock64>}
+
+# the FCrypt specification's second vector: key 114477AADD003366,
+# plaintext 123456789ABCDEF0, ciphertext D8ED787477EC0680
+law fcrypt_spec:
+  {Result.map(&2, &2, L.LcError, FC.LcFcryptKey, L.LcBlock64, k => FC.LcFcrypt.encrypt(k, L.LcBlock64{305419896, 2596069104}), FC.LcFcrypt.key(B.Octets.of_list([17, 68, 119, 170, 221, 0, 51, 102]))) == Done{L.LcBlock64{3639441524, 2011956864}} : Result<&2, &2, L.LcError, L.LcBlock64>}
+
+# an ARIA key of 20 bytes is refused
+law aria_bad_key_length:
+  {Result.map(&2, &2, L.LcError, A.LcAriaKey, Unit, k => Unit{}, A.LcAria.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{20n}} : Result<&2, &2, L.LcError, Unit>}
+
+# a CAST-256 key of 18 bytes is refused
+law cast6_bad_key_length:
+  {Result.map(&2, &2, L.LcError, C6.LcCast6Key, Unit, k => Unit{}, C6.LcCast6.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{18n}} : Result<&2, &2, L.LcError, Unit>}
+
+# a Blowfish key of 3 bytes is refused (32 bits at least)
+law blowfish_bad_key_length:
+  {Result.map(&2, &2, L.LcError, BF.LcBlowfishKey, Unit, k => Unit{}, BF.LcBlowfish.key(B.Octets.of_list([0, 0, 0]))) == Fail{L.LcBadKeyLength{3n}} : Result<&2, &2, L.LcError, Unit>}
+
+# a CAST-128 key of 4 bytes is refused (40 bits at least)
+law cast5_bad_key_length:
+  {Result.map(&2, &2, L.LcError, C5.LcCast5Key, Unit, k => Unit{}, C5.LcCast5.key(B.Octets.of_list([0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{4n}} : Result<&2, &2, L.LcError, Unit>}
+
+# a TEA key of 15 bytes is refused
+law tea_bad_key_length:
+  {Result.map(&2, &2, L.LcError, TE.LcTeaKey, Unit, k => Unit{}, TE.LcTea.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{15n}} : Result<&2, &2, L.LcError, Unit>}
+
+# an XTEA key of 17 bytes is refused
+law xtea_bad_key_length:
+  {Result.map(&2, &2, L.LcError, XT.LcXteaKey, Unit, k => Unit{}, XT.LcXtea.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{17n}} : Result<&2, &2, L.LcError, Unit>}
+
+# an FCrypt key of 7 bytes is refused
+law fcrypt_bad_key_length:
+  {Result.map(&2, &2, L.LcError, FC.LcFcryptKey, Unit, k => Unit{}, FC.LcFcrypt.key(B.Octets.of_list([0, 0, 0, 0, 0, 0, 0]))) == Fail{L.LcBadKeyLength{7n}} : Result<&2, &2, L.LcError, Unit>}
 
 # an empty RC4 key is refused
 law rc4_empty_key:

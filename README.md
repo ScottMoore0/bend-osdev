@@ -80,9 +80,10 @@ GPL source was read.
 | [ext2](ext2/) | ext2, ext3 and ext4 (extents, checksums), read and write: mkfs, files, directories, links, rename, write and truncate, fsck |
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
-| [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
+| [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
 | [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
-| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF and PBKDF2, ECB, CBC and CTR over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256 and SHA-512 (from bend-collections), as instances |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF and PBKDF2, ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256 and SHA-512 (from bend-collections), as instances |
+| [aead](aead/) | AEGIS-128, encrypt-then-MAC over any cipher and MAC (the kernel's authenc), and the IV generators ESSIV, seqiv and echainiv over any AEAD, as instances of crypto's AEAD interface |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |
 

@@ -70,6 +70,20 @@ BLOCK = [
           F128, "LL.serpent_round_trip", "LL.serpent_round_trip_dual", 33),
     block("twofish", "Twofish (legacy-ciphers)", "Tf.LcTwofishKey", lc_key("Tf.LcTwofishKey", "Tf.LcTwofish.key"), "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt",
           F128, "LL.twofish_round_trip", "LL.twofish_round_trip_dual", 20),
+    block("aria", "ARIA (legacy-ciphers)", "Ar.LcAriaKey", lc_key("Ar.LcAriaKey", "Ar.LcAria.key"), "Ar.LcAria.encrypt", "Ar.LcAria.decrypt",
+          F128, "LL.aria_round_trip", "LL.aria_round_trip_dual", 20),
+    block("cast6", "CAST-256 (legacy-ciphers)", "C6.LcCast6Key", lc_key("C6.LcCast6Key", "C6.LcCast6.key"), "C6.LcCast6.encrypt", "C6.LcCast6.decrypt",
+          F128, "LL.cast6_round_trip", "LL.cast6_round_trip_dual", 18),
+    block("blowfish", "Blowfish (legacy-ciphers)", "Bf.LcBlowfishKey", lc_key("Bf.LcBlowfishKey", "Bf.LcBlowfish.key"), "Bf.LcBlowfish.encrypt", "Bf.LcBlowfish.decrypt",
+          F64, "LL.blowfish_round_trip", "LL.blowfish_round_trip_dual", 3),
+    block("cast5", "CAST-128 (legacy-ciphers)", "C5.LcCast5Key", lc_key("C5.LcCast5Key", "C5.LcCast5.key"), "C5.LcCast5.encrypt", "C5.LcCast5.decrypt",
+          F64, "LL.cast5_round_trip", "LL.cast5_round_trip_dual", 4),
+    block("tea", "TEA, little-endian words (legacy-ciphers)", "Te.LcTeaKey", lc_key("Te.LcTeaKey", "Te.LcTea.key"), "Te.LcTea.encrypt", "Te.LcTea.decrypt",
+          F64, "LL.tea_round_trip", "LL.tea_round_trip_dual", 15),
+    block("xtea", "XTEA, little-endian words (legacy-ciphers)", "Xt.LcXteaKey", lc_key("Xt.LcXteaKey", "Xt.LcXtea.key"), "Xt.LcXtea.encrypt", "Xt.LcXtea.decrypt",
+          F64, "LL.xtea_round_trip", "LL.xtea_round_trip_dual", 17),
+    block("fcrypt", "FCrypt (legacy-ciphers)", "Fc.LcFcryptKey", lc_key("Fc.LcFcryptKey", "Fc.LcFcrypt.key"), "Fc.LcFcrypt.encrypt", "Fc.LcFcrypt.decrypt",
+          F64, "LL.fcrypt_round_trip", "LL.fcrypt_round_trip_dual", 7),
     # cipher-modes tests AES decryption but proves no law about it
     block("aes", "AES-128 and AES-256 (cipher-modes)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
           F128, None, None, 24),
@@ -207,6 +221,65 @@ def Laws.{n}_cbc_round_trip(k, iv, bs):
   %Equal.sym({L}, Md.cr.cbc.enc.go(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, bs, iv, Nil{{}}), {E}, cbc_enc_pub(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, bs, iv)) : {{Md.cr.cbc.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, _, iv, Nil{{}}) == bs : {L}}}
   %Equal.sym({L}, Md.cr.cbc.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, {E}, iv, Nil{{}}), {DE}, cbc_dec_pub(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, {E}, iv)) : {{_ == bs : {L}}}
   Equal.sym({L}, bs, {DE}, cbc_rt.{n}(k, bs, iv))
+""", T))
+
+    # PCBC, on blocks
+    law("%s_pcbc_round_trip" % n, "%s in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks" % c["title"],
+        ["+k: %s" % K, "+iv: %s" % Blk, "+bs: %s" % L],
+        "{Pc.CrPcbc.decrypt_blocks(~%s, ~%s, ~%s, ~%s, k, iv, Pc.CrPcbc.encrypt_blocks(~%s, ~%s, ~%s, ~%s, k, iv, bs)) == bs : %s}"
+        % (K, Blk, dec, c["bxor"], K, Blk, enc, c["bxor"], L))
+    T["PE"] = "Pc.cr.pcbc.enc(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, bs, iv)".format(**T)
+    T["PDE"] = "Pc.cr.pcbc.dec(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, {PE}, iv)".format(**T)
+    T["PREST"] = "Pc.cr.pcbc.dec(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, Pc.cr.pcbc.enc(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, t, {bxor}(p, {C}))".format(**T)
+    proof(fill("""def pcbc_rt.{n}(+k: {K}, bs: {L}, +iv: {Blk}) -> {{bs == {PDE} : {L}}}:
+  match bs:
+    case Nil{{}}:
+      {{==}}
+    case Con{{+p, t}}:
+      %Equal.sym({Blk}, {dec}(k, {C}), {bxor}(p, iv), {rt}(k, {bxor}(p, iv))) : {{Con{{p, t}} == Con{{{bxor}(_, iv), {PREST}, {bxor}({bxor}(_, iv), {C}))}} : {L}}}
+      %{xx}(p, iv) : {{Con{{p, t}} == Con{{_, {PREST}, {bxor}(_, {C}))}} : {L}}}
+      %pcbc_rt.{n}(k, t, {bxor}(p, {C})) : {{Con{{p, t}} == Con{{p, _}} : {L}}}
+      {{==}}
+
+def Laws.{n}_pcbc_round_trip(k, iv, bs):
+  %Equal.sym({L}, Pc.cr.pcbc.enc.go(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, bs, iv, Nil{{}}), {PE}, pcbc_enc_pub(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, bs, iv)) : {{Pc.cr.pcbc.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, _, iv, Nil{{}}) == bs : {L}}}
+  %Equal.sym({L}, Pc.cr.pcbc.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, {PE}, iv, Nil{{}}), {PDE}, pcbc_dec_pub(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, {PE}, iv)) : {{_ == bs : {L}}}
+  Equal.sym({L}, bs, {PDE}, pcbc_rt.{n}(k, bs, iv))
+""", T))
+
+    if c["bsize"] != 16:
+        return
+    # LRW, on blocks (128-bit ciphers)
+    T["BO"] = c["blk_of"]
+    law("%s_lrw_round_trip" % n, "%s in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks" % c["title"],
+        ["+k: %s" % K, "+k2: G.Gf128", "+i: G.Gf128", "+bs: %s" % L],
+        "{Lw.CrLrw.decrypt_blocks(~%s, ~%s, ~%s, ~%s, ~%s, k, k2, i, Lw.CrLrw.encrypt_blocks(~%s, ~%s, ~%s, ~%s, ~%s, k, k2, i, bs)) == bs : %s}"
+        % (K, Blk, dec, c["bxor"], c["blk_of"], K, Blk, enc, c["bxor"], c["blk_of"], L))
+    T["LE"] = "Lw.cr.lrw.enc(~{K}, ~{Blk}, ~{enc}, ~{bxor}, ~{BO}, k, k2, bs, i)".format(**T)
+    T["LDE"] = "Lw.cr.lrw.dec(~{K}, ~{Blk}, ~{dec}, ~{bxor}, ~{BO}, k, k2, {LE}, i)".format(**T)
+    T["LREST"] = "Lw.cr.lrw.dec(~{K}, ~{Blk}, ~{dec}, ~{bxor}, ~{BO}, k, k2, Lw.cr.lrw.enc(~{K}, ~{Blk}, ~{enc}, ~{bxor}, ~{BO}, k, k2, t, Lw.cr.lrw.inc(i)), Lw.cr.lrw.inc(i))".format(**T)
+    proof(fill("""def lrw_b.{n}(+k: {K}, t: Maybe<&2, {Blk}>, +p: {Blk}) -> {{p == Lw.cr.lrw.bdec(~{K}, ~{Blk}, ~{dec}, ~{bxor}, k, t, Lw.cr.lrw.benc(~{K}, ~{Blk}, ~{enc}, ~{bxor}, k, t, p)) : {Blk}}}:
+  match t:
+    case None{{}}:
+      Equal.sym({Blk}, {dec}(k, {enc}(k, p)), p, {rt}(k, p))
+    case Some{{+x}}:
+      %{xx}({enc}(k, {bxor}(p, x)), x) : {{p == {bxor}({dec}(k, _), x) : {Blk}}}
+      %Equal.sym({Blk}, {dec}(k, {enc}(k, {bxor}(p, x))), {bxor}(p, x), {rt}(k, {bxor}(p, x))) : {{p == {bxor}(_, x) : {Blk}}}
+      {xx}(p, x)
+
+def lrw_rt.{n}(+k: {K}, +k2: G.Gf128, bs: {L}, +i: G.Gf128) -> {{bs == {LDE} : {L}}}:
+  match bs:
+    case Nil{{}}:
+      {{==}}
+    case Con{{+p, t}}:
+      %lrw_b.{n}(k, Lw.cr.lrw.tweak(~{Blk}, ~{BO}, k2, i), p) : {{Con{{p, t}} == Con{{_, {LREST}}} : {L}}}
+      %lrw_rt.{n}(k, k2, t, Lw.cr.lrw.inc(i)) : {{Con{{p, t}} == Con{{p, _}} : {L}}}
+      {{==}}
+
+def Laws.{n}_lrw_round_trip(k, k2, i, bs):
+  %Equal.sym({L}, Lw.cr.lrw.enc.go(~{K}, ~{Blk}, ~{enc}, ~{bxor}, ~{BO}, k, k2, bs, i, Nil{{}}), {LE}, lrw_enc_pub(~{K}, ~{Blk}, ~{enc}, ~{bxor}, ~{BO}, k, k2, bs, i)) : {{Lw.cr.lrw.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, ~{BO}, k, k2, _, i, Nil{{}}) == bs : {L}}}
+  %Equal.sym({L}, Lw.cr.lrw.dec.go(~{K}, ~{Blk}, ~{dec}, ~{bxor}, ~{BO}, k, k2, {LE}, i, Nil{{}}), {LDE}, lrw_dec_pub(~{K}, ~{Blk}, ~{dec}, ~{bxor}, ~{BO}, k, k2, {LE}, i)) : {{_ == bs : {L}}}
+  Equal.sym({L}, bs, {LDE}, lrw_rt.{n}(k, k2, bs, i))
 """, T))
 
 

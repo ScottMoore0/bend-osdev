@@ -6,11 +6,18 @@
                                  and "# END GENERATED: <name>"
   python3 gen/proof.py --check   only check that they are up to date
 
-Three regions:
+Five regions:
   "bits"     the lemmas proved by splitting words into their 32 bits (each
              a deep pattern then {==}): rotations and byte swaps undone,
              DES's IP and IP^-1, the low byte of a XOR, a 64-bit block's
              bytes;
+  "adc"      a subtraction undoes an addition, and an addition a
+             subtraction, for every word (TEA and XTEA), by induction over
+             the bits with the carry and the borrow;
+  "aria"     ARIA's S-boxes and their inverses on all 256 bytes (each a
+             decision tree on the bits), the substitution layers, the round
+             key XOR, every elementary step of the diffusion layer and the
+             chain of them undone, and a block's bytes read back;
   "serpent"  each S-box and its inverse on all 16 inputs, the S-box layer
              lifted one bit position at a time, and the linear
              transformation undone step by step;
@@ -184,6 +191,135 @@ def serpent_region():
     return serpent_nib() + serpent_layer() + serpent_lt()
 
 
+# ---------------------------------------------------------------- adc
+
+def adc_region():
+    """Word.adc(n, Word.adc(n, a, b, F, c), b, T, not c) == a (a subtraction
+    undoes an addition) and the dual, by induction on the bits: in each of
+    the eight cases of a's and b's low bits and the carry, the low bit comes
+    back and the carry and the borrow stay complementary"""
+    def t(v):
+        return "True{}" if v else "False{}"
+    out = []
+    for name, f_in, f_out, flip in (("adc_add_sub", "False{}", "True{}", False), ("adc_sub_add", "True{}", "False{}", True)):
+        out.append("def %s(n: Nat, a: Word(n), b: Word(n), c: Bool) -> {a == Word.adc(n, Word.adc(n, a, b, %s, c), b, %s, Bool.not(c)) : Word(n)}:" % (name, f_in, f_out))
+        out.append("  match n:\n    case 0n:\n      match a:\n        case WNil{}:\n          {==}\n    case 1n+p:\n      match a b c:")
+        for ah in (True, False):
+            for bh in (True, False):
+                for c in (True, False):
+                    b2 = (not bh) if flip else bh
+                    k = (ah and b2) or (ah and c) or (b2 and c)
+                    out.append("        case WCon{%s, at} WCon{%s, bt} %s:" % (t(ah), t(bh), t(c)))
+                    out.append("          %%%s(p, at, bt, %s) : {WCon{%s, at} == WCon{%s, _} : Word(1n+p)}" % (name, t(k), t(ah), t(ah)))
+                    out.append("          {==}")
+        out.append("")
+    out.append("def u32_add_sub(a: U32, b: U32) -> {a == U32.sub(U32.add(a, b), b) : U32}:\n  match a b:\n    case U32{x} U32{y}:\n      %adc_add_sub(32n, x, y, False{}) : {U32{x} == U32{_} : U32}\n      {==}\n")
+    out.append("def u32_sub_add(a: U32, b: U32) -> {a == U32.add(U32.sub(a, b), b) : U32}:\n  match a b:\n    case U32{x} U32{y}:\n      %adc_sub_add(32n, x, y, True{}) : {U32{x} == U32{_} : U32}\n      {==}\n")
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------- aria
+
+sys.path.insert(0, HERE)
+import tables as TB  # noqa: E402
+
+
+def aria_byte_lemma(name, outer, inner):
+    """{x == outer(inner(x))} for every byte, by a decision tree on its bits"""
+    def tree(d, ind):
+        if d == 8:
+            return [ind + "match w8:", ind + "  case WNil{}:", ind + "    {==}"]
+        out = [ind + "match w%d:" % d]
+        for cons in ("False{}", "True{}"):
+            out.append(ind + "  case WCon{%s, w%d}:" % (cons, d + 1))
+            out += tree(d + 1, ind + "    ")
+        return out
+    return "def %s(w0: Word(8n)) -> {w0 == A.%s(A.%s(w0)) : Word(8n)}:\n%s\n" % (name, outer, inner, "\n".join(tree(0, "  ")))
+
+
+def st(fields):
+    return "A.LcAriaSt{%s}" % ", ".join(fields)
+
+
+def rewrite_fields(lemmas, start, lhs):
+    """the rewrites turning the fields start back into lhs, one field at a
+    time: lemmas[i] (a lemma and its arguments) rewrites field i"""
+    out = []
+    cur = list(start)
+    for i, (lem, arg) in enumerate(lemmas):
+        motive = list(cur)
+        motive[i] = "_"
+        out.append("      %%%s(%s) : {%s == %s : A.LcAriaSt}" % (lem, arg, st(lhs), st(motive)))
+        cur[i] = lhs[i]
+    return out
+
+
+def aria_region():
+    out = ["# each S-box and its inverse undo each other on every byte"]
+    for name, outer, inner in (("aria_sb31", "aria.sb3", "aria.sb1"), ("aria_sb13", "aria.sb1", "aria.sb3"),
+                               ("aria_sb42", "aria.sb4", "aria.sb2"), ("aria_sb24", "aria.sb2", "aria.sb4")):
+        out.append(aria_byte_lemma(name, outer, inner))
+    xs = ["x%d" % i for i in range(16)]
+    pat = st(["+" + x for x in xs])
+    # SL2 undoes SL1, and SL1 undoes SL2
+    sl1 = ["aria.sb1", "aria.sb2", "aria.sb3", "aria.sb4"]
+    sl2 = ["aria.sb3", "aria.sb4", "aria.sb1", "aria.sb2"]
+    names = {("aria.sb3", "aria.sb1"): "aria_sb31", ("aria.sb1", "aria.sb3"): "aria_sb13",
+             ("aria.sb4", "aria.sb2"): "aria_sb42", ("aria.sb2", "aria.sb4"): "aria_sb24"}
+    out.append("# SL2 undoes SL1, and SL1 undoes SL2, a byte at a time")
+    for lname, outer, inner, on, inn in (("aria_sl21", sl2, sl1, "sl2", "sl1"), ("aria_sl12", sl1, sl2, "sl1", "sl2")):
+        body = ["def %s(s: A.LcAriaSt) -> {s == A.aria.%s(A.aria.%s(s)) : A.LcAriaSt}:" % (lname, on, inn),
+                "  match s:", "    case %s:" % pat]
+        start = ["A.%s(A.%s(x%d))" % (outer[i % 4], inner[i % 4], i) for i in range(16)]
+        lemmas = [(names[(outer[i % 4], inner[i % 4])], "x%d" % i) for i in range(16)]
+        body += rewrite_fields(lemmas, start, xs)
+        body.append("      {==}\n")
+        out.append("\n".join(body))
+    # the round key XOR undone
+    ks = ["k%d" % i for i in range(16)]
+    out.append("# a round key XORed twice")
+    kq = "M.CmBlock{U32{+k0}, U32{+k1}, U32{+k2}, U32{+k3}}"
+    kb = ["A.aria.byte%d(k%d)" % (i % 4, i // 4) for i in range(16)]
+    body = ["def aria_xor2(s: A.LcAriaSt, k: M.CmBlock) -> {s == A.aria.xor(A.aria.xor(s, k), k) : A.LcAriaSt}:",
+            "  match s k:", "    case %s %s:" % (pat, kq)]
+    start = ["Word.xor(8n, Word.xor(8n, x%d, %s), %s)" % (i, kb[i], kb[i]) for i in range(16)]
+    body += rewrite_fields([("word_xx", "8n, x%d, %s" % (i, kb[i])) for i in range(16)], start, xs)
+    body.append("      {==}\n")
+    out.append("\n".join(body))
+    # each elementary step of A undone by itself
+    out.append("# each elementary step of the diffusion layer is undone by itself")
+    for j, (b, ts) in enumerate(TB.ARIA_STEPS):
+        body = ["def aria_e%d(s: A.LcAriaSt) -> {s == A.aria.e%d(A.aria.e%d(s)) : A.LcAriaSt}:" % (j, j, j),
+                "  match s:", "    case %s:" % pat]
+        cur = ["Word.xor(8n, Word.xor(8n, x%d, x%d), x%d)" % (i, b, b) if i in ts else xs[i] for i in range(16)]
+        for t in ts:
+            motive = list(cur)
+            motive[t] = "_"
+            body.append("      %%word_xx(8n, x%d, x%d) : {%s == %s : A.LcAriaSt}" % (t, b, st(xs), st(motive)))
+            cur[t] = xs[t]
+        body.append("      {==}\n")
+        out.append("\n".join(body))
+    # the chain undone, both ways
+    out.append("# the first j steps undone, last first, and the reverse")
+    out.append("def aria_d0(s: A.LcAriaSt) -> {s == A.aria.u0(A.aria.d0(s)) : A.LcAriaSt}:\n  {==}\n")
+    out.append("def aria_dd0(s: A.LcAriaSt) -> {s == A.aria.d0(A.aria.u0(s)) : A.LcAriaSt}:\n  {==}\n")
+    for j in range(len(TB.ARIA_STEPS)):
+        out.append("def aria_d%d(+s: A.LcAriaSt) -> {s == A.aria.u%d(A.aria.d%d(s)) : A.LcAriaSt}:\n"
+                   "  %%aria_e%d(A.aria.d%d(s)) : {s == A.aria.u%d(_) : A.LcAriaSt}\n  aria_d%d(s)\n" % (j + 1, j + 1, j + 1, j, j, j, j))
+        out.append("def aria_dd%d(+s: A.LcAriaSt) -> {s == A.aria.d%d(A.aria.u%d(s)) : A.LcAriaSt}:\n"
+                   "  %%aria_dd%d(A.aria.e%d(s)) : {s == A.aria.e%d(_) : A.LcAriaSt}\n  aria_e%d(s)\n" % (j + 1, j + 1, j + 1, j, j, j, j))
+    n = len(TB.ARIA_STEPS)
+    out.append("def aria_diff(s: A.LcAriaSt) -> {s == A.aria.undiffuse(A.aria.diffuse(s)) : A.LcAriaSt}:\n  aria_d%d(s)\n" % n)
+    out.append("def aria_diffd(s: A.LcAriaSt) -> {s == A.aria.diffuse(A.aria.undiffuse(s)) : A.LcAriaSt}:\n  aria_dd%d(s)\n" % n)
+    # a block read back from its bytes, and the bytes from their block
+    blk = "M.CmBlock{%s}" % ", ".join("U32{%s}" % word("a%d_" % w) for w in range(4))
+    out.append("# a block read back from its bytes, and the bytes from their block, on the bits\n"
+               "def aria_blk(b: M.CmBlock) -> {b == A.aria.to_block(A.aria.of_block(b)) : M.CmBlock}:\n  match b:\n    case %s:\n      {==}\n" % blk)
+    sts = st([word("b%d_" % i, 8) for i in range(16)])
+    out.append("def aria_st(s: A.LcAriaSt) -> {s == A.aria.of_block(A.aria.to_block(s)) : A.LcAriaSt}:\n  match s:\n    case %s:\n      {==}\n" % sts)
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------- vectors
 
 def vectors_region():
@@ -193,7 +329,8 @@ def vectors_region():
     return "".join("\ndef Laws.%s():\n  {==}\n" % n for n in names)
 
 
-REGIONS = {"bits": bits_region, "serpent": serpent_region, "vectors": vectors_region}
+REGIONS = {"bits": bits_region, "serpent": serpent_region, "adc": adc_region, "aria": aria_region,
+           "vectors": vectors_region}
 
 
 def main():

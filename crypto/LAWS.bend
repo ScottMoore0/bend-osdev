@@ -23,11 +23,25 @@ import ../legacy-ciphers/camellia.bend as Ca
 import ../legacy-ciphers/serpent.bend as Sp
 import ../legacy-ciphers/twofish.bend as Tf
 import ../legacy-ciphers/rc4.bend as R
+import ../legacy-ciphers/aria.bend as Ar
+import ../legacy-ciphers/cast6.bend as C6
+import ../legacy-ciphers/blowfish.bend as Bf
+import ../legacy-ciphers/cast5.bend as C5
+import ../legacy-ciphers/tea.bend as Te
+import ../legacy-ciphers/xtea.bend as Xt
+import ../legacy-ciphers/fcrypt.bend as Fc
 import ../crc/crc.bend as C
 import ./crypto.bend as Cr
 import ./stream.bend as St
 import ./block.bend as Bk
 import ./modes.bend as Md
+import ./pcbc.bend as Pc
+import ./lrw.bend as Lw
+import ./xcbc.bend as Xc
+import ./vmac.bend as Vm
+import ./cts.bend as Ct
+import ./octets.bend as Oc
+import ../gf/gf128.bend as G
 import ./hash.bend as H
 import ./mac.bend as Mc
 import ./hmac.bend as Hm
@@ -173,6 +187,32 @@ law cmac_accepts:
   for +k: K
   for +m: B.Octets
   {CMI.CrCmac.verify(~K, ~enc, k, m, CMI.CrCmac.mac(~K, ~enc, k, m)) == True{} : Bool}
+
+# XCBC-MAC over every block cipher (xcbc.bend) accepts what it computes
+law xcbc_accepts:
+  for ~K: Data
+  for ~Blk: Data
+  for ~bsize: Nat
+  for ~enc: K -> Blk -> Blk
+  for ~blk_of: B.Octets -> Maybe<&2, Blk>
+  for ~blk_to: Blk -> B.Octets
+  for +kk: Xc.CrXcbcKey<K>
+  for +m: B.Octets
+  {Xc.CrXcbc.verify(~K, ~Blk, ~bsize, ~enc, ~blk_of, ~blk_to, kk, m, Xc.CrXcbc.mac(~K, ~Blk, ~bsize, ~enc, ~blk_of, ~blk_to, kk, m)) == True{} : Bool}
+
+# VMAC over every block cipher and nonce length (vmac.bend) accepts what it
+# computes
+law vmac_accepts:
+  for ~K: Data
+  for ~Blk: Data
+  for ~bsize: Nat
+  for ~enc: K -> Blk -> Blk
+  for ~blk_of: B.Octets -> Maybe<&2, Blk>
+  for ~blk_to: Blk -> B.Octets
+  for ~nlen: Nat
+  for +kk: Vm.CrVmacKey<K>
+  for +m: B.Octets
+  {Vm.CrVmac.verify(~K, ~Blk, ~bsize, ~enc, ~blk_of, ~blk_to, ~nlen, kk, m, Vm.CrVmac.mac(~K, ~Blk, ~bsize, ~enc, ~blk_of, ~blk_to, ~nlen, kk, m)) == True{} : Bool}
 
 # CRCs as hashes (inst_crc.bend), for every parameter set: the register in
 # pieces is the register of the whole, and so the streaming digest of any
@@ -502,6 +542,13 @@ law des_cbc_round_trip:
   for +bs: List<&2, L.LcBlock64>
   {Md.CrCbc.decrypt_blocks(~D.LcDesKey, ~L.LcBlock64, ~D.LcDes.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~D.LcDesKey, ~L.LcBlock64, ~D.LcDes.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
 
+# DES (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law des_pcbc_round_trip:
+  for +k: D.LcDesKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~D.LcDesKey, ~L.LcBlock64, ~D.LcDes.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~D.LcDesKey, ~L.LcBlock64, ~D.LcDes.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
 # Triple DES (legacy-ciphers): decryption undoes encryption, for every key and block
 law tdes_block_round_trip:
   for k: T.LcTdesKey
@@ -530,6 +577,13 @@ law tdes_cbc_round_trip:
   for +iv: L.LcBlock64
   for +bs: List<&2, L.LcBlock64>
   {Md.CrCbc.decrypt_blocks(~T.LcTdesKey, ~L.LcBlock64, ~T.LcTdes.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~T.LcTdesKey, ~L.LcBlock64, ~T.LcTdes.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# Triple DES (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law tdes_pcbc_round_trip:
+  for +k: T.LcTdesKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~T.LcTdesKey, ~L.LcBlock64, ~T.LcTdes.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~T.LcTdesKey, ~L.LcBlock64, ~T.LcTdes.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
 
 # SM4 (legacy-ciphers): decryption undoes encryption, for every key and block
 law sm4_block_round_trip:
@@ -560,6 +614,21 @@ law sm4_cbc_round_trip:
   for +bs: List<&2, M.CmBlock>
   {Md.CrCbc.decrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
 
+# SM4 (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law sm4_pcbc_round_trip:
+  for +k: S.LcSm4Key
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# SM4 (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law sm4_lrw_round_trip:
+  for +k: S.LcSm4Key
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~S.LcSm4Key, ~M.CmBlock, ~S.LcSm4.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
+
 # Camellia (legacy-ciphers): decryption undoes encryption, for every key and block
 law camellia_block_round_trip:
   for k: Ca.LcCamelliaKey
@@ -588,6 +657,21 @@ law camellia_cbc_round_trip:
   for +iv: M.CmBlock
   for +bs: List<&2, M.CmBlock>
   {Md.CrCbc.decrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# Camellia (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law camellia_pcbc_round_trip:
+  for +k: Ca.LcCamelliaKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# Camellia (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law camellia_lrw_round_trip:
+  for +k: Ca.LcCamelliaKey
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~Ca.LcCamelliaKey, ~M.CmBlock, ~Ca.LcCamellia.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
 
 # Serpent (legacy-ciphers): decryption undoes encryption, for every key and block
 law serpent_block_round_trip:
@@ -618,6 +702,21 @@ law serpent_cbc_round_trip:
   for +bs: List<&2, M.CmBlock>
   {Md.CrCbc.decrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
 
+# Serpent (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law serpent_pcbc_round_trip:
+  for +k: Sp.LcSerpentKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# Serpent (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law serpent_lrw_round_trip:
+  for +k: Sp.LcSerpentKey
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~Sp.LcSerpentKey, ~M.CmBlock, ~Sp.LcSerpent.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
+
 # Twofish (legacy-ciphers): decryption undoes encryption, for every key and block
 law twofish_block_round_trip:
   for k: Tf.LcTwofishKey
@@ -646,6 +745,289 @@ law twofish_cbc_round_trip:
   for +iv: M.CmBlock
   for +bs: List<&2, M.CmBlock>
   {Md.CrCbc.decrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# Twofish (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law twofish_pcbc_round_trip:
+  for +k: Tf.LcTwofishKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# Twofish (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law twofish_lrw_round_trip:
+  for +k: Tf.LcTwofishKey
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~Tf.LcTwofishKey, ~M.CmBlock, ~Tf.LcTwofish.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
+
+# ARIA (legacy-ciphers): decryption undoes encryption, for every key and block
+law aria_block_round_trip:
+  for k: Ar.LcAriaKey
+  for +b: M.CmBlock
+  {Ar.LcAria.decrypt(k, Ar.LcAria.encrypt(k, b)) == b : M.CmBlock}
+
+# ARIA (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law aria_block_round_trip_dual:
+  for k: Ar.LcAriaKey
+  for +b: M.CmBlock
+  {Ar.LcAria.encrypt(k, Ar.LcAria.decrypt(k, b)) == b : M.CmBlock}
+
+# ARIA (legacy-ciphers): a key of 20 bytes is refused
+law aria_key_length:
+  {Result.map(&2, &2, Cr.CrError, Ar.LcAriaKey, Unit, k => Unit{}, LC.CrLc.key(~Ar.LcAriaKey, ~Ar.LcAria.key, B.Octets.zeros(20n))) == Fail{Cr.CrBadKeyLength{20n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# ARIA (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law aria_ecb_round_trip:
+  for +k: Ar.LcAriaKey
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrEcb.decrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.decrypt, k, Md.CrEcb.encrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.encrypt, k, bs)) == bs : List<&2, M.CmBlock>}
+
+# ARIA (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law aria_cbc_round_trip:
+  for +k: Ar.LcAriaKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrCbc.decrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# ARIA (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law aria_pcbc_round_trip:
+  for +k: Ar.LcAriaKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# ARIA (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law aria_lrw_round_trip:
+  for +k: Ar.LcAriaKey
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~Ar.LcAriaKey, ~M.CmBlock, ~Ar.LcAria.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
+
+# CAST-256 (legacy-ciphers): decryption undoes encryption, for every key and block
+law cast6_block_round_trip:
+  for k: C6.LcCast6Key
+  for +b: M.CmBlock
+  {C6.LcCast6.decrypt(k, C6.LcCast6.encrypt(k, b)) == b : M.CmBlock}
+
+# CAST-256 (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law cast6_block_round_trip_dual:
+  for k: C6.LcCast6Key
+  for +b: M.CmBlock
+  {C6.LcCast6.encrypt(k, C6.LcCast6.decrypt(k, b)) == b : M.CmBlock}
+
+# CAST-256 (legacy-ciphers): a key of 18 bytes is refused
+law cast6_key_length:
+  {Result.map(&2, &2, Cr.CrError, C6.LcCast6Key, Unit, k => Unit{}, LC.CrLc.key(~C6.LcCast6Key, ~C6.LcCast6.key, B.Octets.zeros(18n))) == Fail{Cr.CrBadKeyLength{18n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# CAST-256 (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law cast6_ecb_round_trip:
+  for +k: C6.LcCast6Key
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrEcb.decrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.decrypt, k, Md.CrEcb.encrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.encrypt, k, bs)) == bs : List<&2, M.CmBlock>}
+
+# CAST-256 (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law cast6_cbc_round_trip:
+  for +k: C6.LcCast6Key
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrCbc.decrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# CAST-256 (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law cast6_pcbc_round_trip:
+  for +k: C6.LcCast6Key
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# CAST-256 (legacy-ciphers) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law cast6_lrw_round_trip:
+  for +k: C6.LcCast6Key
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~C6.LcCast6Key, ~M.CmBlock, ~C6.LcCast6.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
+
+# Blowfish (legacy-ciphers): decryption undoes encryption, for every key and block
+law blowfish_block_round_trip:
+  for k: Bf.LcBlowfishKey
+  for +b: L.LcBlock64
+  {Bf.LcBlowfish.decrypt(k, Bf.LcBlowfish.encrypt(k, b)) == b : L.LcBlock64}
+
+# Blowfish (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law blowfish_block_round_trip_dual:
+  for k: Bf.LcBlowfishKey
+  for +b: L.LcBlock64
+  {Bf.LcBlowfish.encrypt(k, Bf.LcBlowfish.decrypt(k, b)) == b : L.LcBlock64}
+
+# Blowfish (legacy-ciphers): a key of 3 bytes is refused
+law blowfish_key_length:
+  {Result.map(&2, &2, Cr.CrError, Bf.LcBlowfishKey, Unit, k => Unit{}, LC.CrLc.key(~Bf.LcBlowfishKey, ~Bf.LcBlowfish.key, B.Octets.zeros(3n))) == Fail{Cr.CrBadKeyLength{3n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# Blowfish (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law blowfish_ecb_round_trip:
+  for +k: Bf.LcBlowfishKey
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrEcb.decrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.decrypt, k, Md.CrEcb.encrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.encrypt, k, bs)) == bs : List<&2, L.LcBlock64>}
+
+# Blowfish (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law blowfish_cbc_round_trip:
+  for +k: Bf.LcBlowfishKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrCbc.decrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# Blowfish (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law blowfish_pcbc_round_trip:
+  for +k: Bf.LcBlowfishKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Bf.LcBlowfishKey, ~L.LcBlock64, ~Bf.LcBlowfish.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# CAST-128 (legacy-ciphers): decryption undoes encryption, for every key and block
+law cast5_block_round_trip:
+  for k: C5.LcCast5Key
+  for +b: L.LcBlock64
+  {C5.LcCast5.decrypt(k, C5.LcCast5.encrypt(k, b)) == b : L.LcBlock64}
+
+# CAST-128 (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law cast5_block_round_trip_dual:
+  for k: C5.LcCast5Key
+  for +b: L.LcBlock64
+  {C5.LcCast5.encrypt(k, C5.LcCast5.decrypt(k, b)) == b : L.LcBlock64}
+
+# CAST-128 (legacy-ciphers): a key of 4 bytes is refused
+law cast5_key_length:
+  {Result.map(&2, &2, Cr.CrError, C5.LcCast5Key, Unit, k => Unit{}, LC.CrLc.key(~C5.LcCast5Key, ~C5.LcCast5.key, B.Octets.zeros(4n))) == Fail{Cr.CrBadKeyLength{4n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# CAST-128 (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law cast5_ecb_round_trip:
+  for +k: C5.LcCast5Key
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrEcb.decrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.decrypt, k, Md.CrEcb.encrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.encrypt, k, bs)) == bs : List<&2, L.LcBlock64>}
+
+# CAST-128 (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law cast5_cbc_round_trip:
+  for +k: C5.LcCast5Key
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrCbc.decrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# CAST-128 (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law cast5_pcbc_round_trip:
+  for +k: C5.LcCast5Key
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~C5.LcCast5Key, ~L.LcBlock64, ~C5.LcCast5.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# TEA, little-endian words (legacy-ciphers): decryption undoes encryption, for every key and block
+law tea_block_round_trip:
+  for k: Te.LcTeaKey
+  for +b: L.LcBlock64
+  {Te.LcTea.decrypt(k, Te.LcTea.encrypt(k, b)) == b : L.LcBlock64}
+
+# TEA, little-endian words (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law tea_block_round_trip_dual:
+  for k: Te.LcTeaKey
+  for +b: L.LcBlock64
+  {Te.LcTea.encrypt(k, Te.LcTea.decrypt(k, b)) == b : L.LcBlock64}
+
+# TEA, little-endian words (legacy-ciphers): a key of 15 bytes is refused
+law tea_key_length:
+  {Result.map(&2, &2, Cr.CrError, Te.LcTeaKey, Unit, k => Unit{}, LC.CrLc.key(~Te.LcTeaKey, ~Te.LcTea.key, B.Octets.zeros(15n))) == Fail{Cr.CrBadKeyLength{15n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# TEA, little-endian words (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law tea_ecb_round_trip:
+  for +k: Te.LcTeaKey
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrEcb.decrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.decrypt, k, Md.CrEcb.encrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.encrypt, k, bs)) == bs : List<&2, L.LcBlock64>}
+
+# TEA, little-endian words (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law tea_cbc_round_trip:
+  for +k: Te.LcTeaKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrCbc.decrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# TEA, little-endian words (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law tea_pcbc_round_trip:
+  for +k: Te.LcTeaKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Te.LcTeaKey, ~L.LcBlock64, ~Te.LcTea.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# XTEA, little-endian words (legacy-ciphers): decryption undoes encryption, for every key and block
+law xtea_block_round_trip:
+  for k: Xt.LcXteaKey
+  for +b: L.LcBlock64
+  {Xt.LcXtea.decrypt(k, Xt.LcXtea.encrypt(k, b)) == b : L.LcBlock64}
+
+# XTEA, little-endian words (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law xtea_block_round_trip_dual:
+  for k: Xt.LcXteaKey
+  for +b: L.LcBlock64
+  {Xt.LcXtea.encrypt(k, Xt.LcXtea.decrypt(k, b)) == b : L.LcBlock64}
+
+# XTEA, little-endian words (legacy-ciphers): a key of 17 bytes is refused
+law xtea_key_length:
+  {Result.map(&2, &2, Cr.CrError, Xt.LcXteaKey, Unit, k => Unit{}, LC.CrLc.key(~Xt.LcXteaKey, ~Xt.LcXtea.key, B.Octets.zeros(17n))) == Fail{Cr.CrBadKeyLength{17n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# XTEA, little-endian words (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law xtea_ecb_round_trip:
+  for +k: Xt.LcXteaKey
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrEcb.decrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.decrypt, k, Md.CrEcb.encrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.encrypt, k, bs)) == bs : List<&2, L.LcBlock64>}
+
+# XTEA, little-endian words (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law xtea_cbc_round_trip:
+  for +k: Xt.LcXteaKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrCbc.decrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# XTEA, little-endian words (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law xtea_pcbc_round_trip:
+  for +k: Xt.LcXteaKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Xt.LcXteaKey, ~L.LcBlock64, ~Xt.LcXtea.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# FCrypt (legacy-ciphers): decryption undoes encryption, for every key and block
+law fcrypt_block_round_trip:
+  for k: Fc.LcFcryptKey
+  for +b: L.LcBlock64
+  {Fc.LcFcrypt.decrypt(k, Fc.LcFcrypt.encrypt(k, b)) == b : L.LcBlock64}
+
+# FCrypt (legacy-ciphers): encryption undoes decryption (a permutation of the blocks)
+law fcrypt_block_round_trip_dual:
+  for k: Fc.LcFcryptKey
+  for +b: L.LcBlock64
+  {Fc.LcFcrypt.encrypt(k, Fc.LcFcrypt.decrypt(k, b)) == b : L.LcBlock64}
+
+# FCrypt (legacy-ciphers): a key of 7 bytes is refused
+law fcrypt_key_length:
+  {Result.map(&2, &2, Cr.CrError, Fc.LcFcryptKey, Unit, k => Unit{}, LC.CrLc.key(~Fc.LcFcryptKey, ~Fc.LcFcrypt.key, B.Octets.zeros(7n))) == Fail{Cr.CrBadKeyLength{7n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# FCrypt (legacy-ciphers) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law fcrypt_ecb_round_trip:
+  for +k: Fc.LcFcryptKey
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrEcb.decrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, k, Md.CrEcb.encrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, k, bs)) == bs : List<&2, L.LcBlock64>}
+
+# FCrypt (legacy-ciphers) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law fcrypt_cbc_round_trip:
+  for +k: Fc.LcFcryptKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Md.CrCbc.decrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, iv, Md.CrCbc.encrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
+
+# FCrypt (legacy-ciphers) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law fcrypt_pcbc_round_trip:
+  for +k: Fc.LcFcryptKey
+  for +iv: L.LcBlock64
+  for +bs: List<&2, L.LcBlock64>
+  {Pc.CrPcbc.decrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
 
 # AES-128 and AES-256 (cipher-modes): a key of 24 bytes is refused
 law aes_key_length:

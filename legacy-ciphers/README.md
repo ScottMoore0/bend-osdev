@@ -1,10 +1,13 @@
 # bend-osdev-legacy-ciphers
 
 The older block and stream ciphers a kernel's crypto layer still carries:
-DES, Triple DES, SM4, Camellia, Serpent, Twofish and RC4, one file per
-cipher. The 128-bit block ciphers plug into
-[cipher-modes](../cipher-modes/) as its template arguments; DES and 3DES
-have 64-bit blocks and come with their own ECB and CBC (`modes64.bend`).
+DES, Triple DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish,
+CAST-128, TEA, XTEA, FCrypt and RC4, one file per cipher. The 128-bit block
+ciphers plug into [cipher-modes](../cipher-modes/) as its template
+arguments; the 64-bit ones (DES, 3DES, Blowfish, CAST-128, TEA, XTEA,
+FCrypt) come with their own ECB and CBC (`modes64.bend`). All of them are
+block-cipher instances of [crypto](../crypto/)'s interface, where every mode
+there (CBC, CTR, PCBC, CBC-CS3, LRW, XCBC, VMAC, ...) runs over them.
 
 The directory is `legacy-ciphers` and the entry file
 `legacy-ciphers/legacy-ciphers.bend`; the hub name is
@@ -15,8 +18,11 @@ old formats, disks and protocols already hold. DES's 56-bit key is broken by
 exhaustive search; Triple DES is deprecated (NIST SP 800-131A Rev. 2 disallows
 it for encryption after 2023, and SP 800-67 Rev. 2 limits a key bundle to
 2^20 blocks); **RC4 is broken and RFC 7465 forbids it in TLS**: use it only
-to interoperate with what already uses it. None of the code here is
-constant-time (see Side channels).
+to interoperate with what already uses it. Blowfish, CAST-128, TEA, XTEA
+and FCrypt have 64-bit blocks (birthday bounds at 2^32 blocks), TEA has
+equivalent keys and related-key weaknesses, and FCrypt's key is 56 bits:
+they too are for compatibility (old disks, AFS's rxkad, kernel formats).
+None of the code here is constant-time (see Side channels).
 
 ## Specifications
 
@@ -60,11 +66,45 @@ read.
   vectors for the key 0x0102030405 at every offset it lists; RFC 4345 for
   RC4-drop[n]. RFC 7465, *Prohibiting RC4 Cipher Suites* (2015), forbids it
   in TLS.
+* **ARIA:** RFC 5794, *A Description of the ARIA Encryption Algorithm*
+  (2010): SB1 to SB4, SL1, SL2, the diffusion layer A, the round functions
+  FO and FE and the key schedule (CK1 to CK3, the rotations); 12, 14 or 16
+  rounds for 128-, 192- and 256-bit keys. Test vectors: RFC 5794, Appendix
+  A.1 to A.3.
+* **CAST-256 (CAST6):** RFC 2612, *The CAST-256 Encryption Algorithm*
+  (1999): the quad-rounds Q and QBAR, f1, f2, f3 over CAST-128's S1 to S4,
+  and the key schedule (the octave W, Tm and Tr); keys of 128 to 256 bits in
+  32-bit steps. Test vectors: RFC 2612, Appendix A (128-, 192- and 256-bit
+  keys).
+* **Blowfish:** B. Schneier, *Description of a New Variable-Length Key,
+  64-Bit Block Cipher (Blowfish)*, Fast Software Encryption (1993): F, the
+  sixteen rounds, and the key schedule from the hexadecimal digits of pi
+  (computed by `gen/tables.py`, not copied). Test vectors: the set Schneier
+  publishes for Blowfish (Eric Young's), including the variable-length keys.
+* **CAST-128 (CAST5):** RFC 2144, *The CAST-128 Encryption Algorithm*
+  (1997): the three round function types, S1 to S8 (Appendix A), the key
+  schedule, and 12 rounds for keys of up to 80 bits. Test vectors: RFC 2144,
+  Appendix B.1 (128-, 80- and 40-bit keys).
+* **TEA:** D. Wheeler, R. Needham, *TEA, a Tiny Encryption Algorithm*, Fast
+  Software Encryption (1994). **XTEA:** R. Needham, D. Wheeler, *Tea
+  extensions* (Cambridge Computer Laboratory, 1997), the routine "tean".
+  Neither paper gives test vectors or a byte order for the words: the order
+  is a parameter (little-endian words by default, as the Linux kernel's tea
+  and xtea take them; big-endian with `key_be`), and so is the number of
+  cycles (32 by default).
+* **FCrypt:** T. Anderson, *Specification of FCrypt: Encryption for AFS
+  Remote Procedure Calls* (openafs-devel mailing list, December 2000): the
+  round function, the S-boxes S0 to S3, the key schedule (the 56-bit value
+  rotated by 11), and PCBC. Test vectors: the two in the specification.
 * **ECB and CBC** (64-bit): NIST SP 800-38A, sections 6.1 and 6.2.
 
-The test vectors were checked against the independent models in
-`ref/model.py` and, where it has the cipher, Python's `cryptography`, before
-they became laws or `check.bend` lines.
+The test vectors were checked against the models in `ref/model.py` and,
+where they have the cipher, Python's `cryptography` (Blowfish, CAST-128) and
+the `openssl` command (ARIA), before they became laws or `check.bend` lines.
+The S-box tables (CAST's S1 to S8, FCrypt's S0 to S3, ARIA's SB2) were
+transcribed from the specifications into `gen/tables.py` and are checked
+by the vectors; Blowfish's pi digits and the AES-based SB1, SB3 and SB4 are
+computed there from their definitions.
 
 ## Files
 
@@ -77,15 +117,24 @@ they became laws or `check.bend` lines.
 | `camellia.bend` | Camellia-128, -192, -256 |
 | `serpent.bend` | Serpent |
 | `twofish.bend` | Twofish |
+| `aria.bend` | ARIA-128, -192, -256 |
+| `cast6.bend` | CAST-256 |
+| `blowfish.bend` | Blowfish |
+| `cast5.bend` | CAST-128, and the S-boxes and round functions CAST-256 shares |
+| `tea.bend` | TEA, and the steps TEA and XTEA share |
+| `xtea.bend` | XTEA |
+| `fcrypt.bend` | FCrypt |
 | `rc4.bend` | RC4, streaming |
 | `modes64.bend` | ECB and CBC for any 64-bit block cipher |
 | `gen/proof.py` | the generator of `PROOF.bend`'s generated regions: the lemmas proved on a word's 32 bits (rotations, byte swaps, DES's IP and IP^-1, a block's bytes), Serpent's S-box and linear-transformation lemmas, and one proof per vector law. `python3 gen/proof.py` rewrites them, `--check` checks they are up to date |
 | `gen/vectors.py` | the generator of the vector laws in `LAWS.bend` and of `check.bend`'s `main` and expected `#|` lines, from `ref/model.py`; the same two modes |
+| `gen/tables.py` | the generator of the S-box tables (Blowfish's pi words, CAST-128's S1 to S8, FCrypt's S0 to S3) and of ARIA's S-box decision trees and diffusion steps (A as 22 grouped XOR steps, found by Gaussian elimination); the same two modes |
 
 The generated regions lie between `# BEGIN GENERATED by gen/<script>.py:
 <name>` and `# END GENERATED: <name>` lines; everything outside them (the
-rest of `PROOF.bend`: the XOR lemmas, the Feistel, Camellia, Twofish, RC4
-and mode proofs, Serpent's step lemmas and laws; the rest of `LAWS.bend`;
+rest of `PROOF.bend`: the XOR lemmas, the Feistel, Camellia, Twofish,
+Blowfish, CAST, TEA, ARIA, RC4 and mode proofs, Serpent's step lemmas and
+laws; the rest of `LAWS.bend`;
 `check.bend`'s helpers) is written by hand. After changing the vector laws,
 run `gen/vectors.py`, then `gen/proof.py`.
 
@@ -118,6 +167,14 @@ key, used only through the cipher's defs. Every fallible function answers
 | `LcTdes.key3(o)`, `LcTdes.key2(o)` | exactly option 1, exactly option 2 |
 | `LcTdes.of_des(k1, k2, k3)` | the bundle of three DES keys (any keying, option 3 included) |
 | `LcTdes.encrypt(k, b)`, `LcTdes.decrypt(k, b)` | one block |
+| `LcBlowfishKey`, `LcBlowfish.key(o)` | 4 to 56 bytes (32 to 448 bits, as the paper says) |
+| `LcBlowfish.key_any(o)` | 1 to 72 bytes (the key schedule takes up to 18 words; some test sets use shorter keys) |
+| `LcCast5Key`, `LcCast5.key(o)` | 5 to 16 bytes (40 to 128 bits; up to 10 bytes, 12 rounds) |
+| `LcTeaKey`, `LcTea.key(o)`, `LcTea.key_be(o)` | 16 bytes, words little-endian (the named default) or big-endian, 32 cycles |
+| `LcTea.key_with(le, n, o)` | the byte order and the number of cycles as parameters |
+| `LcXteaKey`, `LcXtea.key(o)`, `LcXtea.key_be(o)`, `LcXtea.key_with(le, n, o)` | the same for XTEA |
+| `LcFcryptKey`, `LcFcrypt.key(o)` | an 8-byte key (the parity bits are ignored) |
+| `X.encrypt(k, b)`, `X.decrypt(k, b)` for `X` = `LcBlowfish`, `LcCast5`, `LcTea`, `LcXtea`, `LcFcrypt` | one block |
 
 **The 128-bit block ciphers** (blocks are cipher-modes' `CmBlock`)
 
@@ -129,7 +186,9 @@ key, used only through the cipher's defs. Every fallible function answers
 | `LcSerpentKey`, `LcSerpent.key(o)` | 0 to 32 bytes (16, 24 and 32 are the usual sizes) |
 | `LcTwofishKey`, `LcTwofish.key(o)` | 16, 24 or 32 bytes |
 | `LcTwofish.key_padded(o)` | 1 to 32 bytes, zero-padded to the next size as the paper says |
-| `X.encrypt(k, b)`, `X.decrypt(k, b)` for `X` = `LcSm4`, `LcCamellia`, `LcSerpent`, `LcTwofish` | one block |
+| `LcAriaKey`, `LcAria.key(o)` | 16, 24 or 32 bytes (ARIA-128, -192, -256 by length) |
+| `LcCast6Key`, `LcCast6.key(o)` | 16, 20, 24, 28 or 32 bytes |
+| `X.encrypt(k, b)`, `X.decrypt(k, b)` for `X` = `LcSm4`, `LcCamellia`, `LcSerpent`, `LcTwofish`, `LcAria`, `LcCast6` | one block |
 
 **`rc4.bend`**
 
@@ -155,9 +214,12 @@ as in cipher-modes)
 | `Lc64.cbc_encrypt(~K, ~enc, +k, iv, m)`, `Lc64.cbc_decrypt(~K, ~dec, +k, iv, c)` | CBC on bytes, an 8-byte IV (`LcBadIvLength`) |
 
 Everything else (`lc.*`, `des.*`, `tdes.*`, `sm4.*`, `cam.*`, `sp.*`, `tf.*`,
-`rc4.*`, `m64.*`, and the types `LcTab`, `LcDesHalves`, `LcDesRk`, `LcDesSp`,
-`LcCamOp`, `LcCamTabs`, `LcSpBox`, `LcSpNib`, `LcSpQ`, `LcSpOp`, `LcTfOp`,
-`LcTfTabs`, `LcRc4Step`, `LcRc4Run`) is internal.
+`rc4.*`, `m64.*`, `aria.*`, `c6.*`, `bf.*`, `cast.*`, `cast5.*`, `tea.*`,
+`xtea.*`, `fc.*`, and the types `LcTab`, `LcDesHalves`, `LcDesRk`,
+`LcDesSp`, `LcCamOp`, `LcCamTabs`, `LcSpBox`, `LcSpNib`, `LcSpQ`, `LcSpOp`,
+`LcTfOp`, `LcTfTabs`, `LcRc4Step`, `LcRc4Run`, and the new ciphers' state,
+step and table types `LcAria*`, `LcCast6Ks`, `LcCast6Op`, `LcCast6Kst`,
+`LcBf*`, `LcCast*`, `LcTeaOp`, `LcFc*` other than the key types) is internal.
 
 ## With cipher-modes
 
@@ -176,27 +238,32 @@ XT.Xts.decrypt(~C.LcCamelliaKey, ~C.LcCamellia.encrypt, ~C.LcCamellia.decrypt, k
 
 and likewise CCM and CMAC. cipher-modes' round-trip laws take the cipher's
 inversion as a hypothesis (`~inv: @k -> @b -> {dec(k, enc(k, b)) == b}`);
-this package's `sm4_round_trip`, `camellia_round_trip`, `serpent_round_trip`
-and `twofish_round_trip` are exactly that statement, proved for every key and
+this package's `sm4_round_trip`, `camellia_round_trip`, `serpent_round_trip`,
+`twofish_round_trip`, `aria_round_trip` and `cast6_round_trip` are exactly
+that statement, proved for every key and
 block, so those mode laws hold for these ciphers. `check.bend` runs every
 128-bit cipher through cipher-modes' CBC over 32 KB both ways, and the
-differential test compares CBC with `cryptography` (SM4, Camellia) and the
-models (Serpent, Twofish).
+differential test compares CBC with `cryptography` (SM4, Camellia), the
+`openssl` command (ARIA) and the models (Serpent, Twofish, CAST-256).
 
 **64-bit blocks.** cipher-modes' modes are written for 128-bit blocks
 (XTS's GF(2^128) multiplication, CMAC's subkeys and CCM's B_0 are 128-bit
-by definition), so DES and 3DES cannot use them. `modes64.bend` has ECB and
-CBC on `LcBlock64` instead, in cipher-modes' style (the cipher as template
-arguments), with laws that they undo themselves for DES and 3DES on blocks and
-on bytes. For padding, cipher-modes' `Pkcs7.pad(8n, m)` and
+by definition), so the 64-bit ciphers cannot use them. `modes64.bend` has
+ECB and CBC on `LcBlock64` instead, in cipher-modes' style (the cipher as
+template arguments), with laws that they undo themselves for DES and 3DES on
+blocks and on bytes; crypto's ECB, CBC, CTR, PCBC and CBC-CS3 run over every
+64-bit cipher here (crypto proves the ECB, CBC and PCBC round trips over
+each). For padding, cipher-modes' `Pkcs7.pad(8n, m)` and
 `Pkcs7.unpad(8n, m)` take an 8-byte block size. Other 64-bit modes (CFB, OFB,
 CTR, CBC-MAC) can be added to `modes64.bend` the same way.
 
 ## Errors
 
 `LcBadKeyLength{got}` for a key of a length the cipher does not take (DES: 8;
-3DES: 16 or 24; SM4: 16; Camellia and Twofish: 16, 24 or 32; Serpent: up to
-32; RC4: 1 to 256), `LcBadIvLength{got}` for a 64-bit mode's IV that is not 8
+3DES: 16 or 24; SM4: 16; Camellia, Twofish and ARIA: 16, 24 or 32; Serpent:
+up to 32; CAST-256: 16 to 32 in steps of 4; Blowfish: 4 to 56, or 1 to 72
+with `key_any`; CAST-128: 5 to 16; TEA and XTEA: 16; FCrypt: 8; RC4: 1 to
+256), `LcBadIvLength{got}` for a 64-bit mode's IV that is not 8
 bytes, and `LcNotBlockMultiple{len}` for a message that is not whole 64-bit
 blocks. The 128-bit modes report cipher-modes' own `CmError`.
 
@@ -226,6 +293,8 @@ blocks. The 128-bit modes report cipher-modes' own `CmError`.
   in reverse order; a faster implementation (bit-sliced S-boxes, combined
   tables, hardware instructions) can go behind the same defs, tied to these by
   the vectors and the differential test.
+* **Byte order and rounds where the specification leaves them open:** TEA's
+  and XTEA's word order and number of cycles (`key_with`).
 * **Not here yet:** DES weak-key detection (FIPS 74's weak and semi-weak keys,
   which the kernel can refuse), XTS or other wide modes for 64-bit ciphers,
   and RC4's variants beyond drop[n].
@@ -241,8 +310,13 @@ blocks. The 128-bit modes report cipher-modes' own `CmError`.
 * `tdes_round_trip`, `tdes_round_trip_dual`: the same for every 3DES key bundle
   (any three DES keys), from DES's two laws;
 * `sm4_round_trip`, `camellia_round_trip`, `serpent_round_trip`,
-  `twofish_round_trip`, and their `_dual` forms: the same for every key (every
-  key size) and every 128-bit block;
+  `twofish_round_trip`, `aria_round_trip`, `cast6_round_trip`, and their
+  `_dual` forms: the same for every key (every key size) and every 128-bit
+  block;
+* `blowfish_round_trip`, `cast5_round_trip`, `tea_round_trip`,
+  `xtea_round_trip`, `fcrypt_round_trip`, and their `_dual` forms: the same
+  for every key (every length, byte order and number of cycles) and every
+  64-bit block;
 * `rc4_involution`: from any state, the cipher applied twice gives the data
   back, for all data;
 * `rc4_streaming_data`, `rc4_streaming_state`: RC4 over `a ++ b` is RC4 over
@@ -260,28 +334,42 @@ blocks. The 128-bit modes report cipher-modes' own `CmError`.
 
 How the round trips are proved: each cipher is a list of steps, each undone
 by its inverse whatever its round function or key is, so none of these
-proofs evaluates a cipher. A Feistel round (DES, SM4, Camellia, Twofish) is
-undone by XOR (`a == (a xor b) xor b`, proved for every word); DES's IP and
+proofs evaluates a cipher. A Feistel round (DES, SM4, Camellia, Twofish,
+Blowfish, CAST-128, FCrypt, and CAST-256's quad-round steps) is undone by
+XOR (`a == (a xor b) xor b`, proved for every word), with
+`legacy-ciphers.bend`'s generic Feistel lemmas shared by the newer ciphers;
+TEA's and XTEA's steps by subtraction (`(a + b) - b == a` for every word,
+by induction on the bits with the carry); ARIA's S-boxes and their inverses
+are checked on all 256 bytes (as decision trees on a byte's bits), its
+round keys undone by XOR, and its diffusion layer A step by step; DES's IP and
 IP^-1, the byte swaps and the 1-bit and Serpent rotations undo each other on
 symbolic bits; Camellia's FL and FL^-1 undo each other; each Serpent S-box
 and its inverse are checked on all 16 inputs and lifted to a whole layer, one
 bit position at a time; the linear transformation is undone step by step.
 
 **Vectors** (proved by computation): GB/T 32907-2016's example 1 (SM4), RFC
-3713's Camellia-128 vector, NESSIE's zero key and block (Serpent), and the
-refusals (bad key lengths for DES, 3DES, Camellia, Serpent and RC4; a message
-that is not whole blocks). The other vectors run compiled in `check.bend`
+3713's Camellia-128 vector, NESSIE's zero key and block (Serpent), RFC 5794
+A.1 (ARIA-128), RFC 2144 B.1's 128-bit vector (CAST-128), the FCrypt
+specification's second vector, and the refusals (bad key lengths for DES,
+3DES, Camellia, Serpent, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA,
+FCrypt and RC4; a message that is not whole blocks). The other vectors run compiled in `check.bend`
 (below) instead of being laws: the Twofish paper's, because one Twofish key
 schedule takes more than 2.5 GB in the checker, near a check process's limit;
 and SP 800-17's (DES), SP 800-67's (3DES) and RFC 6229's (RC4), because,
 although the checker proves them (in seconds each), they run past the
 `--verdict` kernel's evaluation budget (RC4's 256-step key schedule does; 128
 steps do not), and a package whose proofs pass `--verdict` is worth more than
-three vectors that `check.bend` runs anyway.
+three vectors that `check.bend` runs anyway. The same holds for CAST-256's
+and Blowfish's vectors (Blowfish's key schedule runs 521 encryptions), and
+TEA's and XTEA's values, which no specification publishes.
 
 The proofs need nothing from another package beyond its public interface and
 laws: bytes' `octets_to_of`, `octets_of_to`, `octets_of_list_idempotent`,
 `octets_append_list`, and the bit slicing of word64's `W64.bits`.
+
+**Not proved, and tested:** the newer ciphers' values beyond the vector
+laws above (in `check.bend` and `ref/`), and TEA's and XTEA's values at all
+except against the model (their papers publish none).
 
 ## Tests
 
@@ -292,17 +380,26 @@ laws: bytes' `octets_to_of`, `octets_of_to`, `octets_of_list_idempotent`,
   Twofish paper's three, RFC 6229's eighteen offsets for its 40-bit key, RC4
   in three pieces and RC4-drop[1536]; and every 128-bit cipher through
   cipher-modes' CBC over 32 KB both ways (Serpent 4 KB), 3DES CBC over 16 KB
-  both ways, and two refusals.
+  both ways, and two refusals; then RFC 5794 A.1 to A.3 (ARIA), RFC 2612's
+  three (CAST-256), six Blowfish vectors (keys of 8, 1, 3 and 24 bytes), RFC
+  2144 B.1's three (CAST-128), the FCrypt specification's two, TEA and XTEA
+  in both byte orders (the model's values), ARIA and CAST-256 CBC over 32 KB
+  both ways, and Blowfish, CAST-128, TEA, XTEA and FCrypt CBC over 16 KB
+  both ways.
 * `ref/run.sh` compares every cipher, both ways and in CBC, on random keys,
-  blocks and messages (89 cases, each a block both ways and a CBC message both
-  ways): DES, 3DES (both keying options), SM4, Camellia (all key sizes) and RC4
-  (key lengths 1 to 256, data in two pieces, and drop[n]) against Python's
-  `cryptography` (OpenSSL; DES as TripleDES with three equal keys; RC4 only at
-  the key sizes it accepts), and every cipher against `ref/model.py`.
-  **`ref/model.py` is an independent implementation written here from the
-  specifications, by the same author as this package**; Serpent and Twofish
-  are compared with it alone (`cryptography` has neither), and it is first
-  checked against the specifications' published vectors. When `cryptography`
+  blocks and messages (162 cases, each a block both ways and a CBC message
+  both ways): DES, 3DES (both keying options), SM4, Camellia (all key
+  sizes), Blowfish, CAST-128 and RC4 (key lengths 1 to 256, data in two
+  pieces, and drop[n]) against Python's `cryptography` (OpenSSL; DES as
+  TripleDES with three equal keys; RC4 only at the key sizes it accepts),
+  ARIA against the `openssl` command, and every cipher against
+  `ref/model.py`; `gen.py` also compares the model's CAST-128 with
+  `cryptography` on 1500 random keys and blocks of every key length.
+  **`ref/model.py` was written here from the specifications, by the same
+  author as this package**; Serpent, Twofish, CAST-256, TEA, XTEA and
+  FCrypt are compared with it alone (neither `cryptography` nor `openssl`
+  has them), and it is first checked against the specifications' published
+  vectors (TEA and XTEA have none). When `cryptography`
   is missing, `run.sh` compares with `model.py` alone and says so; it exits
   77 only when `python3` is missing.
 
@@ -332,9 +429,21 @@ decrypts it back and compares; every last ciphertext block checked against
 | Serpent-128, the same over 256 KB | 14.4 s | 58 MB |
 | 3DES, CBC through modes64.bend, 1 MB both ways | 43.3 s | 224 MB |
 | RC4, 1 MB of keystream | 1.0 s | 100 MB |
+| ARIA-128, CBC through cipher-modes, 256 KB both ways | 20 s | 60 MB |
+| CAST-256 (128-bit key), the same | 1.8 s | 58 MB |
+| Blowfish (8-byte key), CBC through modes64.bend, 256 KB both ways | 1.5 s | 58 MB |
+| CAST-128 (128-bit key), the same | 1.4 s | 58 MB |
+| TEA, the same | 2.7 s | 58 MB |
+| XTEA, the same | 2.6 s | 58 MB |
+| FCrypt, the same | 1.4 s | 58 MB |
 
-`check.bend` takes about 2 s; `ref/run.sh` (89 cases) about a minute, most
-of it building the case file.
+(the newer ciphers' runs time the built binary, the key schedule
+included, the build not.) ARIA is the
+slow one: its state is sixteen bytes of eight bits each, so that each
+S-box is a decision tree its proofs can check on all 256 inputs.
+
+`check.bend` takes about 50 s with its build; `ref/run.sh` (162 cases)
+a few minutes, most of it building the case file.
 
 Each cipher builds its lookup tables when its key is made and keeps them in
 the key (Bend 2.0.37 recomputes a table def at every call, which made the
@@ -361,7 +470,7 @@ the same defs (Extension points).
 ## Side channels
 
 The S-boxes are table lookups (trees walked by the bits of a secret index),
-Serpent's S-box layer branches on secret bits, and RC4's state is read and
+Serpent's and ARIA's S-box layers branch on secret bits, and RC4's state is read and
 written at secret indices. None of this is constant-time, and Bend's runtime
 promises nothing about running time anyway. Do not use this package where
 timing attacks matter.
@@ -376,6 +485,7 @@ AES, so they do not pull in bend-collections.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 8 s), `--verdict` ALL
-PROOFS CHECK (about 30 s), `check.bend` passes, `ref/run.sh` 89 cases match
-(104 of their results also from `cryptography`), `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 12 s), `--verdict` ALL
+PROOFS CHECK (about 41 s), `check.bend` passes, `ref/run.sh` 162 cases
+match (1662 results also from `cryptography` or `openssl`, the 1500 CAST-128
+comparisons among them), `scripts/deps.sh` passes.

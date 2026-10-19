@@ -2,8 +2,10 @@
 """Differential test cases for bend-osdev-crypto: every instance through its
 interface, against implementations outside this package.
 
-Writes ref/cases.bend (a Bend program printing each case through the
-interfaces) and ref/expected.txt (the same values from Python):
+Writes ref/cases00.bend, cases01.bend, ... (Bend programs printing the
+cases through the interfaces, CHUNK cases each, so that each one builds or
+runs within a check process's memory) and ref/expected.txt (the same values
+from Python, in the same order):
   * block ciphers, one block both ways: AES, DES, 3DES, SM4, Camellia through
     Python's cryptography (OpenSSL; DES as TripleDES with three equal keys);
     Serpent and Twofish through legacy-ciphers' ref/model.py (written from
@@ -37,6 +39,24 @@ interfaces) and ref/expected.txt (the same values from Python):
     CRC-32 and CRC-64/XZ against this file's RFC 5869 HKDF on Python's
     hmac, which is first checked against cryptography's HKDF with SHA-256
     on RFC 5869's test case 1;
+  * the newer block ciphers, one block both ways and through ECB, CBC and
+    CTR: Blowfish and CAST-128 through cryptography, ARIA through the
+    openssl command (legacy-ciphers' model when it is missing), CAST-256,
+    TEA, XTEA and FCrypt through legacy-ciphers' model;
+  * PCBC over every cipher, through this file's PCBC over the cipher's block
+    function (checked first on the FCrypt specification's PCBC vector);
+  * LRW over every 16-byte-block cipher: for AES the Linux kernel's
+    lrw(aes) through AF_ALG, and this file's LRW (IEEE P1619 draft, checked
+    against Annex B's vectors and against the kernel) for the others, or for
+    AES when AF_ALG is missing;
+  * CBC-CS3 ciphertext stealing over every cipher: for AES the kernel's
+    cts(cbc(aes)), this file's CS3 (checked against RFC 3962's vectors and
+    the kernel) for the others; a message shorter than a block refused;
+  * XCBC-MAC over the 16-byte-key ciphers and VMAC (64- and 128-bit tags,
+    nonces of 1 to 15 bytes) over the 128-bit ones, through the MAC
+    interface, against this file's XCBC (checked on RFC 3566's vectors) and
+    VMAC (checked on draft-krovetz-vmac-01's) over the cipher's block
+    function, with verify accepting the tag and refusing it changed.
   * the hashes package's hashes through the hash interface, one-shot and in
     pieces, and HMAC over them: MD5, SHA-1, RIPEMD-160 and SM3 against
     hashlib and hmac; MD4 and Streebog against hashes/ref/model.py (Python
@@ -48,8 +68,12 @@ interfaces) and ref/expected.txt (the same values from Python):
     hashlib.pbkdf2_hmac, and over SHA-1 and SHA-256 against cryptography's
     PBKDF2HMAC too, with iteration counts of 1 to 40 and outputs of 1 to
     three blocks and more.
+This file's PCBC, LRW, CS3, XCBC and VMAC were written from the
+specifications by the author of this package's: where they are the only
+reference (no outside implementation has the mode or the cipher), they
+share that author, and the specifications' own vectors are the outside check.
 """
-import binascii, hashlib, hmac, os, random, sys, warnings
+import binascii, hashlib, hmac, os, random, socket, subprocess, sys, warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
@@ -107,9 +131,51 @@ CIPHERS = {
     "twofish": (16, lambda k, b: lcm.twofish_encrypt(k, b),
                 "~Tf.LcTwofishKey, ~M.CmBlock, ~16n, ~LC.CrLc.key(~Tf.LcTwofishKey, ~Tf.LcTwofish.key), ~Tf.LcTwofish.encrypt, ~Tf.LcTwofish.decrypt, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets, ~CM.CrBlk128.xor"),
 }
+
+
+def openssl_aria(key, data, enc=True):
+    """the openssl command's ARIA in ECB, no padding (None when missing)"""
+    cmd = ["openssl", "enc", "-aria-%d-ecb" % (8 * len(key)), "-K", key.hex(), "-nopad"] + ([] if enc else ["-d"])
+    try:
+        return subprocess.run(cmd, input=data, capture_output=True, check=True).stdout
+    except Exception:
+        return None
+
+
+OPENSSL_ARIA = openssl_aria(bytes(range(16)), bytes.fromhex("00112233445566778899aabbccddeeff")) == bytes.fromhex("d718fbd6ab644c739da95f3be6451778")
+
+
+def lc128(mod, ty):
+    return "~%s.Lc%sKey, ~M.CmBlock, ~16n, ~LC.CrLc.key(~%s.Lc%sKey, ~%s.Lc%s.key), ~%s.Lc%s.encrypt, ~%s.Lc%s.decrypt, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets, ~CM.CrBlk128.xor" % ((mod, ty) * 5)
+
+
+def lc64(mod, ty):
+    return "~%s.Lc%sKey, ~L.LcBlock64, ~8n, ~LC.CrLc.key(~%s.Lc%sKey, ~%s.Lc%s.key), ~%s.Lc%s.encrypt, ~%s.Lc%s.decrypt, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, ~LC.CrBlk64.xor" % ((mod, ty) * 5)
+
+
+CIPHERS.update({
+    "aria": (16, (lambda k, b: openssl_aria(k, b)) if OPENSSL_ARIA else lcm.aria_encrypt, lc128("Ar", "Aria")),
+    "cast6": (16, lcm.cast6_encrypt, lc128("C6", "Cast6")),
+    "blowfish": (8, lcm.blowfish_encrypt, lc64("Bf", "Blowfish")),
+    "cast5": (8, lcm.cast5_encrypt, lc64("C5", "Cast5")),
+    "tea": (8, lcm.tea_encrypt, lc64("Te", "Tea")),
+    "xtea": (8, lcm.xtea_encrypt, lc64("Xt", "Xtea")),
+    "fcrypt": (8, lcm.fcrypt_encrypt, lc64("Fc", "Fcrypt")),
+})
 KEYS = {"aes": [16, 32], "des": [8], "tdes": [16, 24], "sm4": [16], "camellia": [16, 24, 32],
-        "serpent": [16, 24, 32], "twofish": [16, 24, 32]}
-LIB = {"aes", "des", "tdes", "sm4", "camellia"}  # the ciphers cryptography has
+        "serpent": [16, 24, 32], "twofish": [16, 24, 32], "aria": [16, 24, 32], "cast6": [16, 24, 32],
+        "blowfish": [16, 4, 56], "cast5": [5, 10, 16], "tea": [16], "xtea": [16], "fcrypt": [8]}
+# the ciphers cryptography has, as its algorithms
+ALG = {"aes": algorithms.AES, "des": tdes, "tdes": tdes, "sm4": algorithms.SM4, "camellia": algorithms.Camellia}
+for _n, _a in [("blowfish", "Blowfish"), ("cast5", "CAST5")]:
+    if getattr(algorithms, _a, None) is not None:
+        ALG[_n] = getattr(algorithms, _a)
+        CIPHERS[_n] = (8, (lambda k, b, a=ALG[_n]: lib_ecb(a, k, b)), CIPHERS[_n][2])
+LIB = set(ALG)
+SRC = {n: "cryptography" if n in LIB else ("openssl" if n == "aria" and OPENSSL_ARIA else "model") for n in CIPHERS}
+DEC = {n: (lambda k, b, a=ALG[n]: lib_ecb(a, k, b, False)) if n in LIB else getattr(lcm, n + "_decrypt") for n in CIPHERS}
+if OPENSSL_ARIA:
+    DEC["aria"] = lambda k, b: openssl_aria(k, b, False)
 
 
 def tmpl(name, keep):
@@ -145,6 +211,143 @@ def cbc(enc, key, iv, m, bs):
         prev = enc(key, xor(m[i:i + bs], prev))
         out += prev
     return out
+
+
+def cbc_dec(dec, key, iv, c, bs):
+    out, prev = b"", iv
+    for i in range(0, len(c), bs):
+        out += xor(dec(key, c[i:i + bs]), prev)
+        prev = c[i:i + bs]
+    return out
+
+
+def pcbc(f, key, iv, m, bs, enc=True):
+    """PCBC: C_i = E(P_i xor V), V = P_i xor C_i (decryption with f = D)"""
+    out, v = b"", iv
+    for i in range(0, len(m), bs):
+        x = m[i:i + bs]
+        y = f(key, xor(x, v)) if enc else xor(f(key, x), v)
+        out += y
+        v = xor(x, y)
+    return out
+
+
+def gfmul(a, b):
+    """GF(2^128) as IEEE P1619's LRW takes it: big-endian blocks as numbers,
+    the coefficient of x^i bit i, modulo x^128 + x^7 + x^2 + x + 1"""
+    r = 0
+    for i in range(128):
+        if (b >> i) & 1:
+            r ^= a << i
+    for i in range(254, 127, -1):
+        if (r >> i) & 1:
+            r ^= 0x87 << (i - 128) | 1 << i
+    return r
+
+
+def lrw(f, key, iv, m):
+    """LRW (IEEE P1619 draft): the cipher key then a 16-byte tweak key; the IV
+    the first block's index; C_j = E(P_j xor T_j) xor T_j, T_j = K2 (I + j)"""
+    ck, t, i0 = key[:-16], int.from_bytes(key[-16:], "big"), int.from_bytes(iv, "big")
+    out = b""
+    for j in range(0, len(m), 16):
+        tw = gfmul(t, (i0 + j // 16) % (1 << 128)).to_bytes(16, "big")
+        out += xor(f(ck, xor(m[j:j + 16], tw)), tw)
+    return out
+
+
+def cts_enc(enc, key, iv, m, bs):
+    """CBC-CS3 (SP 800-38A Addendum)"""
+    if len(m) == bs:
+        return enc(key, xor(m, iv))
+    n = (len(m) + bs - 1) // bs
+    d = len(m) - (n - 1) * bs
+    cs = cbc(enc, key, iv, m[:(n - 1) * bs], bs)
+    cn = enc(key, xor(m[(n - 1) * bs:] + bytes(bs - d), cs[-bs:]))
+    return cs[:-bs] + cn + cs[-bs:][:d]
+
+
+def cts_dec(dec, key, iv, c, bs):
+    if len(c) == bs:
+        return xor(dec(key, c), iv)
+    n = (len(c) + bs - 1) // bs
+    d = len(c) - (n - 1) * bs
+    head, cn, cstar = c[:(n - 2) * bs], c[(n - 2) * bs:(n - 1) * bs], c[(n - 1) * bs:]
+    z = dec(key, cn)
+    cn1 = cstar + z[d:]
+    prev = head[-bs:] if head else iv
+    return cbc_dec(dec, key, iv, head, bs) + xor(dec(key, cn1), prev) + xor(z[:d], cstar)
+
+
+def xcbc(enc, key, m, bs=16):
+    """XCBC-MAC (RFC 3566) over a cipher whose keys are one block"""
+    k1, k2, k3 = enc(key, b"\x01" * bs), enc(key, b"\x02" * bs), enc(key, b"\x03" * bs)
+    n = max(1, (len(m) + bs - 1) // bs)
+    last = m[(n - 1) * bs:]
+    last = xor(last, k2) if len(last) == bs else xor(last + b"\x80" + bytes(bs - 1 - len(last)), k3)
+    e = bytes(bs)
+    for i in range(n - 1):
+        e = enc(k1, xor(m[i * bs:(i + 1) * bs], e))
+    return enc(k1, xor(last, e))
+
+
+M64, P127, P64 = (1 << 64) - 1, (1 << 127) - 1, (1 << 64) - 257
+
+
+def vmac(enc, k, nonce, m, words):
+    """VMAC (draft-krovetz-vmac-01) over a 128-bit block cipher, a tag of
+    64 words bits"""
+    def kdf(index, nbytes):
+        out, i = b"", 0
+        while len(out) < nbytes:
+            out += enc(k, bytes([index]) + i.to_bytes(15, "big"))
+            i += 1
+        return out[:nbytes]
+
+    def nh(kw, msg):
+        y, w = 0, [int.from_bytes(msg[j:j + 8], "little") for j in range(0, len(msg), 8)]
+        for i in range(0, len(w), 2):
+            y += ((w[i] + kw[i]) & M64) * ((w[i + 1] + kw[i + 1]) & M64)
+        return y & ((1 << 126) - 1)
+
+    def word(it):
+        nhk = kdf(128, 128 + 16 * it)[16 * it:16 * it + 128]
+        kw = [int.from_bytes(nhk[j:j + 8], "big") for j in range(0, 128, 8)]
+        pk = int.from_bytes(kdf(192, 16 * (it + 1))[16 * it:], "big") & 0x1FFFFFFF1FFFFFFF1FFFFFFF1FFFFFFF
+        segs = [m[i:i + 128] for i in range(0, len(m), 128)]
+        y = pk if not segs else 1
+        for sg in segs:
+            y = (y * pk + nh(kw, sg + bytes(-len(sg) % 16))) % P127
+        y = (y + ((len(m) * 8) % 1024) * (1 << 64)) % P127
+        i, found = 0, -1
+        while found < it:
+            c = kdf(224, 16 * (i + 1))[16 * i:]
+            k1, k2 = int.from_bytes(c[:8], "big"), int.from_bytes(c[8:], "big")
+            i += 1
+            if k1 < P64 and k2 < P64:
+                found += 1
+        m1, m2 = divmod(y, (1 << 64) - (1 << 32))
+        return ((m1 + k1) * (m2 + k2)) % P64
+
+    nv = int.from_bytes(nonce, "big")
+    t = enc(k, ((nv & ~1) if words == 1 else nv).to_bytes(16, "big"))
+    pad = t[8 * (nv & 1):8 * (nv & 1) + 8] if words == 1 else t
+    return b"".join(((int.from_bytes(pad[8 * w:8 * w + 8], "big") + word(w)) & M64).to_bytes(8, "big") for w in range(words))
+
+
+def afalg(name, key, iv, data, enc=True):
+    """the Linux kernel's skcipher name through AF_ALG (None when missing)"""
+    try:
+        sk = socket.socket(socket.AF_ALG, socket.SOCK_SEQPACKET, 0)
+        sk.bind(("skcipher", name))
+        sk.setsockopt(socket.SOL_ALG, socket.ALG_SET_KEY, key)
+        op, _ = sk.accept()
+        op.sendmsg_afalg([data], op=socket.ALG_OP_ENCRYPT if enc else socket.ALG_OP_DECRYPT, iv=iv)
+        out = op.recv(len(data))
+        op.close(); sk.close()
+        return out
+    except Exception:
+        return None
 
 
 def ctr(enc, key, iv, m, bs):
@@ -307,7 +510,7 @@ def hkdf(H, ikm, salt, info, n):
     return out[:n]
 
 
-def self_checks():
+def self_checks(rng, rb):
     """this file's references against outside implementations and published
     values, before they judge the package"""
     hsm.check_vectors()
@@ -320,8 +523,6 @@ def self_checks():
     want = HKDF(hashes.SHA256(), 42, salt, info).derive(ikm)
     assert want.hex().startswith("3cb25f25faacd57a90434f64d0362f2a")
     assert hkdf(hashlib.sha256, ikm, salt, info, 42) == want
-    rng = random.Random(1)
-    rb = lambda n: bytes(rng.randrange(256) for _ in range(n))
     for _ in range(8):
         key, iv, m = rb(16), rb(16), rb(rng.randrange(0, 80))
         c = Cipher(algorithms.AES(key), modes.CTR(iv)).encryptor()
@@ -335,7 +536,52 @@ def self_checks():
     for name, (key, pt, ct) in {"serpent": (bytes(16), bytes(16), "3620b17ae6a993d09618b8768266bae9"),
                                 "twofish": (bytes(16), bytes(16), "9f589f5cf6122c32b6bfec2f2ae8c35a")}.items():
         assert CIPHERS[name][1](key, pt).hex() == ct
+    aes = CIPHERS["aes"][1]
+    # PCBC: the FCrypt specification's vector
+    assert pcbc(lcm.fcrypt_encrypt, h("3141592653589793"), h("2718281828459045"), b"this is a test\0\0", 8).hex() == "ad5130bd809dc84f08d66ecb10244654"
+    # LRW: IEEE P1619 draft Annex B, vectors 1 and 4
+    assert lrw(aes, h("4562ac25f828176d4c268414b5680185258e2a05e73e9d03ee5a830ccc094c87"), h("00000000000000000000000000000001"), b"0123456789ABCDEF").hex() == "f1b273cd65a3df5fe95d489254634eb8"
+    assert lrw(aes, h("f8d476ffd646ee6c2384cb1c77d6195dfef1a9f37bbc8d21a79c21f8cb900289a845348ec8c5b5f126f50e76fefd1b1e"), h("00000000000000000000000000000001"), b"0123456789ABCDEF").hex() == "bd06b8e1db98899ec498e491cf1c702b"
+    # CBC-CS3: RFC 3962 Appendix B (AES-128, IV zero)
+    ck, cm = h("636869636b656e207465726979616b69"), b"I would like the General Gau's Chicken, please, and wonton soup."
+    for n, want in [(17, "c6353568f2bf8cb4d8a580362da7ff7f97"), (31, "fc00783e0efdb2c1d445d4c8eff7ed2297687268d6ecccc0c07b25e25ecfe5"),
+                    (32, "39312523a78662d5be7fcbcc98ebf5a897687268d6ecccc0c07b25e25ecfe584"),
+                    (64, "97687268d6ecccc0c07b25e25ecfe58439312523a78662d5be7fcbcc98ebf5a84807efe836ee89a526730dbc2f7bc8409dad8bbb96c4cdc03bc103e1a194bbd8")]:
+        assert cts_enc(aes, ck, bytes(16), cm[:n], 16).hex() == want
+        assert cts_dec(lambda k, b: lib_ecb(algorithms.AES, k, b, False), ck, bytes(16), h(want), 16) == cm[:n]
+    # XCBC: RFC 3566 test cases 1 and 7
+    xk = h("000102030405060708090a0b0c0d0e0f")
+    assert xcbc(aes, xk, b"").hex() == "75f0251d528ac01c4573dfd584d79f29"
+    assert xcbc(aes, xk, bytes(range(34))).hex() == "becbb3bccdb518a30677d5481fb6b4d8"
+    assert xcbc(aes, xk, bytes(1000)).hex() == "f0dafee895db30253761103b5d84528f"
+    # VMAC: draft-krovetz-vmac-01's vectors
+    for m, t64, t128 in [(b"", "2576be1c56d8b81b", "472766c70f74ed23481d6d7de4e80dac"),
+                         (b"abc", "2d376cf5b1813ce5", "4ee815a06a1d71edd36fc75d51188a42"),
+                         (b"abc" * 16, "e8421f61d573d298", "09f2c80c8e1007a0c12fae19fe4504ae"),
+                         (b"abc" * 100, "4492df6c5cac1bbe", "66438817154850c61d8a412164803bcb")]:
+        assert vmac(aes, b"abcdefghijklmnop", b"bcdefghi", m, 1).hex() == t64
+        assert vmac(aes, b"abcdefghijklmnop", b"bcdefghi", m, 2).hex() == t128
+    # this file's LRW and CS3 against the kernel's, when AF_ALG has them
+    for _ in range(6):
+        key, iv = rb(rng.choice([32, 48])), rb(16)
+        m = rb(16 * rng.randrange(1, 6))
+        got = afalg("lrw(aes)", key, iv, m)
+        if got is not None:
+            KERNEL.add("lrw")
+            assert got == lrw(aes, key, iv, m)
+        m = rb(rng.randrange(16, 90))
+        got = afalg("cts(cbc(aes))", key[:16], iv, m)
+        if got is not None:
+            KERNEL.add("cts")
+            assert got == cts_enc(aes, key[:16], iv, m, 16)
 
+
+KERNEL = set()  # the modes the kernel had (filled by self_checks)
+
+# cases per program: one program of every case outgrows a check process's
+# memory (its native build is killed, and the JavaScript lane then runs out
+# near 3 GB)
+CHUNK = 80
 
 HEADER = '''# Generated by ref/gen.py; do not edit. Every instance through its interface.
 import Base
@@ -369,6 +615,18 @@ import ../inst_ccm.bend as CC
 import ../inst_cmac.bend as CMI
 import ../inst_crc.bend as CR
 import ../inst_sha2.bend as SH
+import ../pcbc.bend as Pc
+import ../lrw.bend as Lw
+import ../cts.bend as Ct
+import ../xcbc.bend as Xc
+import ../vmac.bend as Vm
+import ../../legacy-ciphers/aria.bend as Ar
+import ../../legacy-ciphers/cast6.bend as C6
+import ../../legacy-ciphers/blowfish.bend as Bf
+import ../../legacy-ciphers/cast5.bend as C5
+import ../../legacy-ciphers/tea.bend as Te
+import ../../legacy-ciphers/xtea.bend as Xt
+import ../../legacy-ciphers/fcrypt.bend as Fc
 import ../inst_michael.bend as MIC
 import ../pbkdf2.bend as Pb
 import ../../hashes/hashes.bend as Hs
@@ -408,6 +666,18 @@ def ecb(~K: Data, ~Blk: Data, ~bsize: Nat, ~key: B.Octets -> Result<&2, &2, Cr.C
 def cbc(~K: Data, ~Blk: Data, ~bsize: Nat, ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>, ~enc: K -> Blk -> Blk, ~dec: K -> Blk -> Blk, ~blk_of: B.Octets -> Maybe<&2, Blk>, ~blk_to: Blk -> B.Octets, ~bxor: Blk -> Blk -> Blk, +k: B.Octets, +iv: B.Octets, +p: B.Octets, +c: B.Octets) -> String:
   +r = key(k)
   two(res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Md.CrCbc.encrypt(~K, ~Blk, ~bsize, ~enc, ~bxor, ~blk_of, ~blk_to, kk, iv, p))), res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Md.CrCbc.decrypt(~K, ~Blk, ~bsize, ~dec, ~bxor, ~blk_of, ~blk_to, kk, iv, c))))
+
+def pcbc(~K: Data, ~Blk: Data, ~bsize: Nat, ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>, ~enc: K -> Blk -> Blk, ~dec: K -> Blk -> Blk, ~blk_of: B.Octets -> Maybe<&2, Blk>, ~blk_to: Blk -> B.Octets, ~bxor: Blk -> Blk -> Blk, +k: B.Octets, +iv: B.Octets, +p: B.Octets, +c: B.Octets) -> String:
+  +r = key(k)
+  two(res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Pc.CrPcbc.encrypt(~K, ~Blk, ~bsize, ~enc, ~bxor, ~blk_of, ~blk_to, kk, iv, p))), res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Pc.CrPcbc.decrypt(~K, ~Blk, ~bsize, ~dec, ~bxor, ~blk_of, ~blk_to, kk, iv, c))))
+
+def lrw(~K: Data, ~Blk: Data, ~bsize: Nat, ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>, ~enc: K -> Blk -> Blk, ~dec: K -> Blk -> Blk, ~blk_of: B.Octets -> Maybe<&2, Blk>, ~blk_to: Blk -> B.Octets, ~bxor: Blk -> Blk -> Blk, +k: B.Octets, +iv: B.Octets, +p: B.Octets, +c: B.Octets) -> String:
+  +r = Lw.CrLrw.key(~K, ~key, k)
+  two(res(Result.bind(&2, &2, Cr.CrError, Lw.CrLrwKey<K>, B.Octets, r, kk => Lw.CrLrw.encrypt(~K, ~Blk, ~bsize, ~enc, ~bxor, ~blk_of, ~blk_to, kk, iv, p))), res(Result.bind(&2, &2, Cr.CrError, Lw.CrLrwKey<K>, B.Octets, r, kk => Lw.CrLrw.decrypt(~K, ~Blk, ~bsize, ~dec, ~bxor, ~blk_of, ~blk_to, kk, iv, c))))
+
+def cts(~K: Data, ~Blk: Data, ~bsize: Nat, ~key: B.Octets -> Result<&2, &2, Cr.CrError, K>, ~enc: K -> Blk -> Blk, ~dec: K -> Blk -> Blk, ~blk_of: B.Octets -> Maybe<&2, Blk>, ~blk_to: Blk -> B.Octets, +k: B.Octets, +iv: B.Octets, +p: B.Octets, +c: B.Octets) -> String:
+  +r = key(k)
+  two(res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Ct.CrCts.encrypt(~K, ~Blk, ~bsize, ~enc, ~blk_of, ~blk_to, kk, iv, p))), res(Result.bind(&2, &2, Cr.CrError, K, B.Octets, r, kk => Ct.CrCts.decrypt(~K, ~Blk, ~bsize, ~dec, ~blk_of, ~blk_to, kk, iv, c))))
 
 def ctr.two(~S: Data, ~update: S -> B.Octets -> St.CrXorOut<S>, o: St.CrXorOut<S>, b: B.Octets) -> B.Octets:
   match o:
@@ -461,10 +731,10 @@ def pbkdf2(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets 
 
 
 def main():
-    self_checks()
     rng = random.Random(int(sys.argv[1]) if len(sys.argv) > 1 else 2026)
     rb = lambda n: bytes(rng.randrange(256) for _ in range(n))
-    lines, expect, counts = [], [], {"cryptography": 0, "model": 0, "python": 0, "hsmodel": 0}
+    self_checks(rng, rb)
+    lines, expect, counts = [], [], {"cryptography": 0, "model": 0, "python": 0, "openssl": 0, "kernel": 0, "hsmodel": 0}
 
     def case(name, k, call, want, src):
         lines.append('    IO.print("%s %d " ++ %s)' % (name, k, call))
@@ -472,30 +742,23 @@ def main():
         counts[src] += 1
 
     for name, (bs, enc, _) in CIPHERS.items():
-        src = "cryptography" if name in LIB else "model"
-        dec = (lambda kk, cc, n=name: lib_ecb(tdes if n in ("des", "tdes") else {"aes": algorithms.AES, "sm4": algorithms.SM4, "camellia": algorithms.Camellia}[n], kk, cc, False)) if name in LIB else None
+        src, dec = SRC[name], DEC[name]
         for i, kl in enumerate(KEYS[name] * (2 if len(KEYS[name]) < 3 else 1)):
             key, p, c2 = rb(kl), rb(bs), rb(bs)
-            want_p = dec(key, c2).hex() if dec else (lcm.serpent_decrypt if name == "serpent" else lcm.twofish_decrypt)(key, c2).hex()
             case("%s_block" % name, i, "blk(%s, %s, %s, %s)" % (tmpl(name, [0, 1, 3, 4, 5, 6, 7]), o(key), o(p), o(c2)),
-                 "%s %s" % (enc(key, p).hex(), want_p), src)
+                 "%s %s" % (enc(key, p).hex(), dec(key, c2).hex()), src)
         for i in range(3):  # ECB and CBC, whole blocks (0 to 5, and 20)
             key, iv = rb(KEYS[name][i % len(KEYS[name])]), rb(bs)
             nb = [0, rng.randrange(1, 6), 20][i]
             p, c2 = rb(bs * nb), rb(bs * nb)
-            dec_ecb = (lambda kk, cc: ecb(lambda k3, b3: (lcm.serpent_decrypt if name == "serpent" else lcm.twofish_decrypt)(k3, b3), kk, cc, bs)) if name not in LIB else None
             if name in LIB:
-                alg = tdes if name in ("des", "tdes") else {"aes": algorithms.AES, "sm4": algorithms.SM4, "camellia": algorithms.Camellia}[name]
+                alg = ALG[name]
                 we, wd = lib_ecb(alg, key, p), lib_ecb(alg, key, c2, False)
                 cc = Cipher(alg(key), modes.CBC(iv)); e = cc.encryptor(); wce = e.update(p) + e.finalize()
                 d = cc.decryptor(); wcd = d.update(c2) + d.finalize()
             else:
-                we, wd = ecb(enc, key, p, bs), dec_ecb(key, c2)
-                wce = cbc(enc, key, iv, p, bs)
-                dfn = lcm.serpent_decrypt if name == "serpent" else lcm.twofish_decrypt
-                wcd, prev = b"", iv
-                for j in range(0, len(c2), bs):
-                    wcd += xor(dfn(key, c2[j:j + bs]), prev); prev = c2[j:j + bs]
+                we, wd = ecb(enc, key, p, bs), ecb(dec, key, c2, bs)
+                wce, wcd = cbc(enc, key, iv, p, bs), cbc_dec(dec, key, iv, c2, bs)
             case("%s_ecb" % name, i, "ecb(%s, %s, %s, %s)" % (tmpl(name, [0, 1, 2, 3, 4, 5, 6, 7]), o(key), o(p), o(c2)), "%s %s" % (we.hex(), wd.hex()), src)
             case("%s_cbc" % name, i, "cbc(%s, %s, %s, %s, %s)" % (CIPHERS[name][2], o(key), o(iv), o(p), o(c2)), "%s %s" % (wce.hex(), wcd.hex()), src)
         for i in range(3):  # CTR, any length, in two pieces; a counter near its wrap
@@ -505,6 +768,57 @@ def main():
             cut = rng.randrange(0, len(m) + 1)
             case("%s_ctr" % name, i, "ctr(%s, %s, %s, %s, %s)" % (tmpl(name, [0, 1, 2, 3, 4, 6, 7]), o(key), o(iv), o(m[:cut]), o(m[cut:])),
                  ctr(enc, key, iv, m, bs).hex(), src)
+        for i in range(2):  # PCBC
+            key, iv = rb(KEYS[name][i % len(KEYS[name])]), rb(bs)
+            nb = [rng.randrange(1, 6), 9][i]
+            p, c2 = rb(bs * nb), rb(bs * nb)
+            case("%s_pcbc" % name, i, "pcbc(%s, %s, %s, %s, %s)" % (CIPHERS[name][2], o(key), o(iv), o(p), o(c2)),
+                 "%s %s" % (pcbc(enc, key, iv, p, bs).hex(), pcbc(dec, key, iv, c2, bs, False).hex()), src)
+        for i in range(6 if name == "aes" else 2):  # CBC-CS3, 1 to 5 blocks and a bit
+            key, iv = rb(KEYS[name][i % len(KEYS[name])]), rb(bs)
+            n = [bs, bs + 1, 2 * bs - 1, 2 * bs, rng.randrange(2 * bs + 1, 5 * bs), 5 * bs][i if name == "aes" else i + 1]
+            p, c2 = rb(n), rb(n)
+            we, wd, msrc = cts_enc(enc, key, iv, p, bs), cts_dec(dec, key, iv, c2, bs), src
+            if name == "aes" and "cts" in KERNEL:
+                we, wd, msrc = afalg("cts(cbc(aes))", key, iv, p), afalg("cts(cbc(aes))", key, iv, c2, False), "kernel"
+            case("%s_cts" % name, i, "cts(%s, %s, %s, %s, %s)" % (tmpl(name, [0, 1, 2, 3, 4, 5, 6, 7]), o(key), o(iv), o(p), o(c2)),
+                 "%s %s" % (we.hex(), wd.hex()), msrc)
+        if bs != 16:
+            continue
+        for i in range(4 if name == "aes" else 2):  # LRW, the cipher key then the tweak key
+            key = rb(KEYS[name][i % len(KEYS[name])] + 16)
+            iv = rb(16) if i % 2 == 0 else b"\xff" * 15 + b"\xfe"
+            nb = rng.randrange(1, 6) if i < 2 else 0 if i == 2 else 7
+            p, c2 = rb(16 * nb), rb(16 * nb)
+            we, wd, msrc = lrw(enc, key, iv, p), lrw(dec, key, iv, c2), src
+            if name == "aes" and "lrw" in KERNEL and nb:
+                we, wd, msrc = afalg("lrw(aes)", key, iv, p), afalg("lrw(aes)", key, iv, c2, False), "kernel"
+            case("%s_lrw" % name, i, "lrw(%s, %s, %s, %s, %s)" % (CIPHERS[name][2], o(key), o(iv), o(p), o(c2)),
+                 "%s %s" % (we.hex(), wd.hex()), msrc)
+        K0 = tmpl(name, [0])[1:]
+        if 16 in KEYS[name]:
+            for i in range(6 if name == "aes" else 2):  # XCBC
+                key = rb(16)
+                m = rb([0, 16, rng.randrange(1, 16), 17, 48, rng.randrange(49, 120)][i if name == "aes" else 4 * i + 1])
+                t = xcbc(enc, key, m)
+                bad = t[:-1] + bytes([t[-1] ^ 1])
+                mt = "~Xc.CrXcbcKey<%s>, ~Xc.CrXcbc.key(%s), ~Xc.CrXcbc.mac(%s), ~Xc.CrXcbc.verify(%s)" % (
+                    K0, tmpl(name, [0, 1, 2, 3, 4, 6, 7]), tmpl(name, [0, 1, 2, 4, 6, 7]), tmpl(name, [0, 1, 2, 4, 6, 7]))
+                case("%s_xcbc" % name, i, "mac(%s, %s, %s, %s)" % (mt, o(key), o(m), o(bad)), "%s yes no" % t.hex(), src)
+        for i in range(8 if name == "aes" else 2):  # VMAC, the nonce before the message
+            key = rb(KEYS[name][i % len(KEYS[name])])
+            words, nlen = 1 + i % 2, [8, 15, 1, 8, 12, 15, 3, 8][i]
+            nonce = rb(nlen)
+            m = rb([0, 3, 127, 128, 129, 256, 300, 1000][i] if name == "aes" else rng.randrange(1, 300))
+            t = vmac(enc, key, nonce, m, words)
+            bad = bytes([t[0] ^ 128]) + t[1:]
+            mt = "~Vm.CrVmacKey<%s>, ~Vm.CrVmac.key(%s, ~%dn), ~Vm.CrVmac.mac(%s, ~%dn), ~Vm.CrVmac.verify(%s, ~%dn)" % (
+                K0, tmpl(name, [0, 1, 2, 3, 4, 6, 7]), words, tmpl(name, [0, 1, 2, 4, 6, 7]), nlen, tmpl(name, [0, 1, 2, 4, 6, 7]), nlen)
+            case("%s_vmac" % name, i, "mac(%s, %s, %s, %s)" % (mt, o(key), o(nonce + m), o(bad)), "%s yes no" % t.hex(), src)
+
+    for i in range(2):  # CBC-CS3 refuses a message shorter than a block
+        key, iv, m = rb(16), rb(16), rb([0, 15][i])
+        case("aes_cts_short", i, "cts(%s, %s, %s, %s, %s)" % (tmpl("aes", [0, 1, 2, 3, 4, 5, 6, 7]), o(key), o(iv), o(m), o(m)), "fail fail", "python")
 
     for i in range(10):  # RC4, keys of 1 to 256 bytes
         kl = [5, 7, 8, 10, 16, 20, 24, 32, 1, 256][i]
@@ -601,12 +915,16 @@ def main():
                 src = "cryptography"
             case("%s_pbkdf2" % name, i, "pbkdf2(%s, %s, %s, %d, %dn)" % (ht, o(pw), o(salt), c, n), want.hex(), src)
 
-    with open(os.path.join(HERE, "cases.bend"), "w", newline="\n") as f:
-        f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines) + "\n")
+    for old in os.listdir(HERE):
+        if old.startswith("cases") and old.endswith(".bend"):
+            os.remove(os.path.join(HERE, old))
+    for j in range(0, len(lines), CHUNK):
+        with open(os.path.join(HERE, "cases%02d.bend" % (j // CHUNK)), "w", newline="\n") as f:
+            f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines[j:j + CHUNK]) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
-          % (len(lines), counts["cryptography"], counts["model"], counts["python"], counts["hsmodel"]))
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
+          % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"], counts["hsmodel"]))
 
 
 if __name__ == "__main__":
