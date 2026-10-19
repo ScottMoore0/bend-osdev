@@ -63,6 +63,8 @@ import ../hashes/michael.bend as HMI
 import ./inst_michael.bend as MIC
 import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
+import ./kbkdf.bend as Kb
+import ./inst_kbkdf.bend as KbI
 import ../hashes/LAWS.bend as HSL
 import ../hashes/PROOF.bend as HSP
 import bend-collections-laws-crypto@1.0.0.0/spec/crypto/sha.bend as F256
@@ -637,6 +639,124 @@ def Laws.pbkdf2_hmac_sha1_rfc6070_2():
   {==}
 
 def Laws.pbkdf2_hmac_sha256_rfc7914_1():
+  {==}
+
+# SP 800-108: the output generators give n bytes, whatever the MAC, and
+# their first n bytes are the same whatever comes after
+
+def kb_ctr_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, cur: List<&2, U32>, +k: K, +rlen: Nat, +fixed: B.Octets, +i: U32) -> {B.len(Kb.cr.kb.ctr(~K, ~compute, n, cur, k, rlen, fixed, i)) == n : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %kb_ctr_len(~K, ~compute, p, t, k, rlen, fixed, i) : {B.len(Kb.cr.kb.ctr(~K, ~compute, 1n+p, Con{h, t}, k, rlen, fixed, i)) == 1n+_ : Nat}
+          {==}
+        case Nil{}:
+          %kb_ctr_len(~K, ~compute, p, Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed)))), k, rlen, fixed, U32.add(i, 1)) : {B.len(Kb.cr.kb.ctr(~K, ~compute, 1n+p, Nil{}, k, rlen, fixed, i)) == 1n+_ : Nat}
+          {==}
+
+def kb_ctr_prefix(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, +j: Nat, cur: List<&2, U32>, +k: K, +rlen: Nat, +fixed: B.Octets, +i: U32) -> {B.take(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), cur, k, rlen, fixed, i)) == Kb.cr.kb.ctr(~K, ~compute, n, cur, k, rlen, fixed, i) : List<&2, U32>}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %kb_ctr_prefix(~K, ~compute, p, j, t, k, rlen, fixed, i) : {Con{h, B.take(p, Kb.cr.kb.ctr(~K, ~compute, Nat.add(p, j), t, k, rlen, fixed, i))} == Con{h, _} : List<&2, U32>}
+          {==}
+        case Nil{}:
+          %kb_ctr_prefix(~K, ~compute, p, j, Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed)))), k, rlen, fixed, U32.add(i, 1)) : {Con{Kb.cr.kb.head(B.Octets.to_list(compute(k, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed)))), B.take(p, Kb.cr.kb.ctr(~K, ~compute, Nat.add(p, j), Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed)))), k, rlen, fixed, U32.add(i, 1)))} == Con{Kb.cr.kb.head(B.Octets.to_list(compute(k, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed)))), _} : List<&2, U32>}
+          {==}
+
+def kb_fb_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, cur: List<&2, U32>, +k: K, +rlen: Nat, +fixed: B.Octets, +prev: B.Octets, +i: U32) -> {B.len(Kb.cr.kb.fb(~K, ~compute, n, cur, k, rlen, fixed, prev, i)) == n : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %kb_fb_len(~K, ~compute, p, t, k, rlen, fixed, prev, i) : {B.len(Kb.cr.kb.fb(~K, ~compute, 1n+p, Con{h, t}, k, rlen, fixed, prev, i)) == 1n+_ : Nat}
+          {==}
+        case Nil{}:
+          %kb_fb_len(~K, ~compute, p, Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))))), k, rlen, fixed, compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))), U32.add(i, 1)) : {B.len(Kb.cr.kb.fb(~K, ~compute, 1n+p, Nil{}, k, rlen, fixed, prev, i)) == 1n+_ : Nat}
+          {==}
+
+def kb_fb_prefix(~K: Data, ~compute: K -> B.Octets -> B.Octets, n: Nat, +j: Nat, cur: List<&2, U32>, +k: K, +rlen: Nat, +fixed: B.Octets, +prev: B.Octets, +i: U32) -> {B.take(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), cur, k, rlen, fixed, prev, i)) == Kb.cr.kb.fb(~K, ~compute, n, cur, k, rlen, fixed, prev, i) : List<&2, U32>}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match cur:
+        case Con{h, t}:
+          %kb_fb_prefix(~K, ~compute, p, j, t, k, rlen, fixed, prev, i) : {Con{h, B.take(p, Kb.cr.kb.fb(~K, ~compute, Nat.add(p, j), t, k, rlen, fixed, prev, i))} == Con{h, _} : List<&2, U32>}
+          {==}
+        case Nil{}:
+          %kb_fb_prefix(~K, ~compute, p, j, Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))))), k, rlen, fixed, compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))), U32.add(i, 1)) : {Con{Kb.cr.kb.head(B.Octets.to_list(compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))))), B.take(p, Kb.cr.kb.fb(~K, ~compute, Nat.add(p, j), Kb.cr.kb.tail(B.Octets.to_list(compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))))), k, rlen, fixed, compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))), U32.add(i, 1)))} == Con{Kb.cr.kb.head(B.Octets.to_list(compute(k, B.Octets.append(prev, B.Octets.append(Kb.CrKbkdf.counter(rlen, U32.add(i, 1)), fixed))))), _} : List<&2, U32>}
+          {==}
+
+def Laws.kbkdf_counter_stream_length(K, compute, rlen, k, fixed, n):
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0))), B.len(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)), octets_len_of(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0))) : {_ == n : Nat}
+  kb_ctr_len(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)
+
+def Laws.kbkdf_counter_stream_prefix(K, compute, rlen, k, fixed, n, j):
+  %BL.take_drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0)) : {B.Octets.take(n, B.Octets.of_list(_)) == B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.take(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0)), Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0), kb_ctr_prefix(~K, ~compute, n, j, Nil{}, k, rlen, fixed, 0)) : {B.Octets.take(n, B.Octets.of_list(B.append(_, B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0))))) == B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.of_list(B.append(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0), B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0)))), B.Octets.append(B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0)))), octets_of_append(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0), B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0)))) : {B.Octets.take(n, _) == B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : B.Octets}
+  %kb_ctr_len(~K, ~compute, n, Nil{}, k, rlen, fixed, 0) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0))))) == B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : B.Octets}
+  %octets_len_of(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0))))) == B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)) : B.Octets}
+  BL.octets_take_append(B.Octets.of_list(Kb.cr.kb.ctr(~K, ~compute, n, Nil{}, k, rlen, fixed, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.ctr(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, 0))))
+
+def Laws.kbkdf_feedback_stream_length(K, compute, rlen, k, iv, fixed, n):
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0))), B.len(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)), octets_len_of(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0))) : {_ == n : Nat}
+  kb_fb_len(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)
+
+def Laws.kbkdf_feedback_stream_prefix(K, compute, rlen, k, iv, fixed, n, j):
+  %BL.take_drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0)) : {B.Octets.take(n, B.Octets.of_list(_)) == B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.take(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0)), Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0), kb_fb_prefix(~K, ~compute, n, j, Nil{}, k, rlen, fixed, iv, 0)) : {B.Octets.take(n, B.Octets.of_list(B.append(_, B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0))))) == B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.of_list(B.append(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0), B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0)))), B.Octets.append(B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0)))), octets_of_append(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0), B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0)))) : {B.Octets.take(n, _) == B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : B.Octets}
+  %kb_fb_len(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0))))) == B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : B.Octets}
+  %octets_len_of(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : {B.Octets.take(_, B.Octets.append(B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0))))) == B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)) : B.Octets}
+  BL.octets_take_append(B.Octets.of_list(Kb.cr.kb.fb(~K, ~compute, n, Nil{}, k, rlen, fixed, iv, 0)), B.Octets.of_list(B.drop(n, Kb.cr.kb.fb(~K, ~compute, Nat.add(n, j), Nil{}, k, rlen, fixed, iv, 0))))
+
+def kb_key_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, ~rlen: Nat, kr: Result<&2, &2, Cr.CrError, K>, +fixed: B.Octets, +n: Nat) -> {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.cr.kb.key(~K, ~compute, ~rlen, kr, fixed, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.cr.kb.key(~K, ~compute, ~rlen, kr, fixed, n)) : Result<&2, &2, Cr.CrError, Nat>}:
+  match kr:
+    case Fail{e}:
+      {==}
+    case Done{+k}:
+      %Laws.kbkdf_counter_stream_length(~K, ~compute, ~rlen, k, fixed, n) : {Done{B.Octets.len(Kb.CrKbkdf.counter_stream(~K, ~compute, ~rlen, k, fixed, n))} == Done{_} : Result<&2, &2, Cr.CrError, Nat>}
+      {==}
+
+def kb_checked_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, ~rlen: Nat, fits: Bool, kr: Result<&2, &2, Cr.CrError, K>, +fixed: B.Octets, +n: Nat) -> {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.cr.kb.checked(~K, ~compute, ~rlen, fits, kr, fixed, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.cr.kb.checked(~K, ~compute, ~rlen, fits, kr, fixed, n)) : Result<&2, &2, Cr.CrError, Nat>}:
+  match fits:
+    case False{}:
+      {==}
+    case True{}:
+      kb_key_len(~K, ~compute, ~rlen, kr, fixed, n)
+
+def Laws.kbkdf_counter_length(K, key, compute, hlen, rlen, llen, ki, label, context, n):
+  kb_checked_len(~K, ~compute, ~rlen, Kb.cr.kb.fits(hlen, llen, n, Nat.sub(Nat.pow(2n, Nat.mul(8n, rlen)), 1n)), key(ki), Kb.CrKbkdf.fixed(~llen, label, context, n), n)
+
+def kb_fkey_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, ~rlen: Nat, kr: Result<&2, &2, Cr.CrError, K>, +iv: B.Octets, +fixed: B.Octets, +n: Nat) -> {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.cr.kb.fkey(~K, ~compute, ~rlen, kr, iv, fixed, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.cr.kb.fkey(~K, ~compute, ~rlen, kr, iv, fixed, n)) : Result<&2, &2, Cr.CrError, Nat>}:
+  match kr:
+    case Fail{e}:
+      {==}
+    case Done{+k}:
+      %Laws.kbkdf_feedback_stream_length(~K, ~compute, ~rlen, k, iv, fixed, n) : {Done{B.Octets.len(Kb.CrKbkdf.feedback_stream(~K, ~compute, ~rlen, k, iv, fixed, n))} == Done{_} : Result<&2, &2, Cr.CrError, Nat>}
+      {==}
+
+def kb_fchecked_len(~K: Data, ~compute: K -> B.Octets -> B.Octets, ~rlen: Nat, fits: Bool, kr: Result<&2, &2, Cr.CrError, K>, +iv: B.Octets, +fixed: B.Octets, +n: Nat) -> {Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => B.Octets.len(o), Kb.cr.kb.fchecked(~K, ~compute, ~rlen, fits, kr, iv, fixed, n)) == Result.map(&2, &2, Cr.CrError, B.Octets, Nat, o => n, Kb.cr.kb.fchecked(~K, ~compute, ~rlen, fits, kr, iv, fixed, n)) : Result<&2, &2, Cr.CrError, Nat>}:
+  match fits:
+    case False{}:
+      {==}
+    case True{}:
+      kb_fkey_len(~K, ~compute, ~rlen, kr, iv, fixed, n)
+
+def Laws.kbkdf_feedback_length(K, key, compute, hlen, rlen, llen, ki, iv, label, context, n):
+  kb_fchecked_len(~K, ~compute, ~rlen, Kb.cr.kb.fits(hlen, llen, n, 4294967295n), key(ki), iv, Kb.CrKbkdf.fixed(~llen, label, context, n), n)
+
+def Laws.kbkdf_hmac_sha256_vector():
   {==}
 
 # Per-instance proofs (gen/instances.py)

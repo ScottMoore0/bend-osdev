@@ -64,6 +64,8 @@ import ../legacy-ciphers/fcrypt.bend as Fc
 import ./inst_michael.bend as MIC
 import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
+import ./kbkdf.bend as Kb
+import ./inst_kbkdf.bend as KbI
 import ../hashes/hashes.bend as Hs
 import ../hashes/md4.bend as HM4
 import ../hashes/md5.bend as HM5
@@ -383,6 +385,18 @@ def pbkdf2_sha256(+p: B.Octets, +s: B.Octets, c: U32, n: Nat) -> String:
 def pbkdf2_md5_kdf(+p: B.Octets, +s: B.Octets, n: Nat) -> String:
   show(Pb.CrPbkdf2.derive(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~64n, ~HM5.HsMd5.digest), ~Hm.CrHmac.mac(~HM5.HsMd5.digest), ~16n, ~1000, p, s, B.Octets.of_string("ignored"), n))
 
+# SP 800-108 over HMAC-SHA-256: counter mode (cryptography's KBKDFHMAC
+# gives the value), feedback mode (ref/gen.py's SP 800-108), and an output
+# too long for a one-byte counter refused
+def kbkdf_counter(n: Nat) -> String:
+  show(KbI.CrKbkdf.hmac_sha256_counter(B.Octets.of_string("secret key bytes"), B.Octets.of_string("label"), B.Octets.of_string("context"), n))
+
+def kbkdf_feedback(n: Nat) -> String:
+  show(KbI.CrKbkdf.hmac_sha256_feedback(B.Octets.of_string("secret key bytes"), B.Octets.of_string("an iv"), B.Octets.of_string("label"), B.Octets.of_string("context"), n))
+
+def kbkdf_short_counter(n: Nat) -> String:
+  show(Kb.CrKbkdf.counter_kdf(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~64n, ~SH.CrSha2.sha256), ~Hm.CrHmac.mac(~SH.CrSha2.sha256), ~32n, ~1n, ~4n, B.Octets.of_string("k"), B.Octets.empty(), B.Octets.empty(), n))
+
 def main() -> IO(Unit):
   +k16 = hx("0123456789abcdeffedcba9876543210")
   +z16 = B.Octets.zeros(16n)
@@ -522,6 +536,9 @@ def main() -> IO(Unit):
     IO.print(pbkdf2_sha256(B.Octets.of_string("Password"), B.Octets.of_string("NaCl"), 80000, 64n))
     IO.print(pbkdf2_sha1(B.Octets.of_string("password"), B.Octets.of_string("salt"), 0, 20n))
     IO.print(pbkdf2_md5_kdf(B.Octets.of_string("secret"), B.Octets.of_string("NaCl"), 40n))
+    IO.print(kbkdf_counter(42n))
+    IO.print(kbkdf_feedback(42n))
+    IO.print(kbkdf_short_counter(8161n))
 #|69c4e0d86a7b0430d8cdb78070b4c55a 00112233445566778899aabbccddeeff
 #|8ea2b7ca516745bfeafc49904b496089 00112233445566778899aabbccddeeff
 #|95f8a5e5dd31d900 8000000000000000
@@ -653,3 +670,6 @@ def main() -> IO(Unit):
 #|4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d
 #|too short 0
 #|da3ca5acd6e25d1847064b1c7724b2e1dfb7cf1f6d13a180a8654e6f0ab45d9027de54dfb40426ce
+#|3748e2da7405337c57e05e37f5da94b21b7cfd8404e6b9b5d8a08abfe82c4abad5089119ffc50b8920ca
+#|607e0f6e9d30f9a79287a0fb12554994d92c3739a360dfdae3255c18b18bf3fcb417fecb5457dde6ef46
+#|bad output length 8161

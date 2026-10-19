@@ -68,8 +68,15 @@ from Python, in the same order):
   * PBKDF2 over HMAC over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3 against
     hashlib.pbkdf2_hmac, and over SHA-1 and SHA-256 against cryptography's
     PBKDF2HMAC too, with iteration counts of 1 to 40 and outputs of 1 to
+    three blocks and more;
+  * SP 800-108 KDFs over HMAC over SHA-1, SHA-256 and SM3: counter mode
+    against cryptography's KBKDFHMAC (counter before the fixed input, the
+    counter and L fields of 1, 2 and 4 bytes) for SHA-1 and SHA-256, and
+    against this file's SP 800-108 (checked first against KBKDFHMAC) for
+    SM3; feedback mode, with and without the counter, against this file's
+    SP 800-108 (cryptography has no feedback mode), outputs of 1 byte to
     three blocks and more.
-This file's PCBC, LRW, CS3, XCBC and VMAC were written from the
+This file's PCBC, LRW, CS3, XCBC, VMAC and SP 800-108 were written from the
 specifications by the author of this package's: where they are the only
 reference (no outside implementation has the mode or the cipher), they
 share that author, and the specifications' own vectors are the outside check.
@@ -91,6 +98,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESCCM  # noqa: E402
 from cryptography.hazmat.primitives import cmac as ccmac, hashes  # noqa: E402
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF  # noqa: E402
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
+from cryptography.hazmat.primitives.kdf.kbkdf import KBKDFHMAC, Mode, CounterLocation  # noqa: E402
 
 h = bytes.fromhex
 
@@ -632,6 +640,7 @@ import ../../legacy-ciphers/xtea.bend as Xt
 import ../../legacy-ciphers/fcrypt.bend as Fc
 import ../inst_michael.bend as MIC
 import ../pbkdf2.bend as Pb
+import ../kbkdf.bend as Kb
 import ../../hashes/hashes.bend as Hs
 import ../../hashes/md4.bend as HM4
 import ../../hashes/md5.bend as HM5
@@ -730,7 +739,27 @@ def hkdf(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets ->
 # PBKDF2 over HMAC over a hash
 def pbkdf2(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +p: B.Octets, +salt: B.Octets, c: U32, n: Nat) -> String:
   res(Pb.CrPbkdf2.pbkdf2(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~bsize, ~digest), ~Hm.CrHmac.mac(~digest), ~dsize, p, salt, c, n))
+
+def kbc(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, ~rlen: Nat, ~llen: Nat, ki: B.Octets, label: B.Octets, context: B.Octets, +n: Nat) -> String:
+  res(Kb.CrKbkdf.counter_kdf(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~bsize, ~digest), ~Hm.CrHmac.mac(~digest), ~dsize, ~rlen, ~llen, ki, label, context, n))
+
+def kbf(~H: Data, ~bsize: Nat, ~dsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, ~rlen: Nat, ~llen: Nat, ki: B.Octets, iv: B.Octets, label: B.Octets, context: B.Octets, +n: Nat) -> String:
+  res(Kb.CrKbkdf.feedback_kdf(~Hm.CrHmacKey, ~Hm.CrHmac.key_of(~bsize, ~digest), ~Hm.CrHmac.mac(~digest), ~dsize, ~rlen, ~llen, ki, iv, label, context, n))
 '''
+
+
+# SP 800-108r1-upd1, sections 4.1 (counter) and 4.2 (feedback): fixed input
+# Label || 0x00 || Context || [L]_2, the counter r bits (rlen bytes; 0 in
+# feedback mode leaves it out), L in llen bytes
+def kbkdf(name, ki, label, context, n, rlen, llen, iv=None):
+    fixed = label + b"\0" + context + (8 * n).to_bytes(llen, "big")
+    out, prev, i = b"", iv, 1
+    while len(out) < n:
+        ctr = i.to_bytes(rlen, "big") if rlen else b""
+        prev = hmac.new(ki, (ctr + fixed) if iv is None else (prev + ctr + fixed), name).digest()
+        out += prev
+        i += 1
+    return out[:n]
 
 
 def main():
@@ -917,6 +946,24 @@ def main():
                 assert PBKDF2HMAC({"sha1": hashes.SHA1, "sha256": hashes.SHA256}[name](), n, salt, c).derive(pw) == want
                 src = "cryptography"
             case("%s_pbkdf2" % name, i, "pbkdf2(%s, %s, %s, %d, %dn)" % (ht, o(pw), o(salt), c, n), want.hex(), src)
+    for name in ["sha1", "sha256", "sm3"]:  # SP 800-108
+        ht = HASHES["sha256"][1] if name == "sha256" else HS[name][2]
+        dsize = 32 if name == "sm3" else hashlib.new(name).digest_size
+        hn = HS["sm3"][0] if name == "sm3" else name
+        for i in range(4):
+            ki, label, context = rb(rng.randrange(1, 70)), rb(rng.randrange(0, 20)), rb(rng.randrange(0, 20))
+            n = [1, dsize, dsize + 1, rng.randrange(2 * dsize, 3 * dsize + 5)][i]
+            rlen, llen = [(4, 4), (1, 2), (2, 4), (4, 1 if 8 * n < 256 else 2)][i]
+            want = kbkdf(hn, ki, label, context, n, rlen, llen)
+            src = HS["sm3"][1] if name == "sm3" else "cryptography"
+            if name != "sm3":
+                h = {"sha1": hashes.SHA1, "sha256": hashes.SHA256}[name]()
+                assert KBKDFHMAC(h, Mode.CounterMode, n, rlen, llen, CounterLocation.BeforeFixed, label, context, None).derive(ki) == want
+            case("%s_kbkdf_counter" % name, i, "kbc(%s, ~%dn, ~%dn, %s, %s, %s, %dn)" % (ht, rlen, llen, o(ki), o(label), o(context), n), want.hex(), src)
+            iv = rb([0, dsize, dsize, 5][i])
+            frlen = [4, 0, 1, 4][i]
+            want = kbkdf(hn, ki, label, context, n, frlen, llen, iv)
+            case("%s_kbkdf_feedback" % name, i, "kbf(%s, ~%dn, ~%dn, %s, %s, %s, %s, %dn)" % (ht, frlen, llen, o(ki), o(iv), o(label), o(context), n), want.hex(), "python" if name != "sm3" else HS["sm3"][1])
 
     for old in os.listdir(HERE):
         if old.startswith("cases") and old.endswith(".bend"):
