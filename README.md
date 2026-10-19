@@ -90,6 +90,7 @@ GPL source was read.
 | [raid6](raid6/) | RAID-6 P and Q syndromes and the recovery of any one or two lost blocks (Anvin's paper), recovery proved for every stripe |
 | [rs](rs/) | Reed-Solomon codes over GF(2^m) with every parameter open: systematic encoding, decoding of errors and erasures (Berlekamp-Massey, Chien, Forney) |
 | [bch](bch/) | Binary BCH codes: encoding, Berlekamp-Massey and Chien decoding on bits and on NAND sectors with their ECC bytes |
+| [asn1](asn1/) | ASN.1 BER and DER (X.690): decoding with every DER rule a parameter, encoding, typed values, and schemas as Bend values; decode after encode, DER's uniqueness and reading within the buffer proved for every input; checked against openssl asn1parse |
 
 Each package's README lists its files, public interface, extension points,
 laws, tests, limits and status.
