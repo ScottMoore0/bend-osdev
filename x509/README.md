@@ -90,7 +90,7 @@ Recommendations; no kernel source was read.
 | `extval.bend` | the six extensions read here |
 | `gname.bend` | GeneralName |
 | `verify.bend` | the signature check and name links (extension points) |
-| `LAWS.bend`, `PROOF.bend`, `proof_x509.bend` | the laws, their proofs, lemmas |
+| `LAWS.bend`, `PROOF.bend`, `proof_x509.bend`, `proof_octets.bend` | the laws, their proofs, lemmas (`proof_octets.bend`: the octets a parse keeps) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh`, `ref/show.bend.in` | the differential test (`ref/.gitignore` lists what it generates) |
 
@@ -158,15 +158,46 @@ Defs named `x5.*` are internal.
   octets are the same;
 * `find_ext_id`: `X509.find_ext` answers only an extension with the
   identifier asked for;
+* `cert_split`, `cert_whole`: the certificate's octets
+  (`X509Cert.raw`) are the input's first octets, and all of them when the
+  rules' asn1 rules refuse octets after the certificate (as
+  `X509.rules()`'s DER does);
+* `tbs_slice`, `tbs_within`: the tbsCertificate's octets
+  (`X509Cert.tbs_raw`), which `X509.verify_with` checks the signature
+  over, are a slice of the input, inside the certificate's octets: the
+  signature is checked over exactly octets that were in the input;
+* `sig_alg_within`: the outer signatureAlgorithm's octets are a slice of
+  the certificate's; `issuer_within`, `subject_within`, `spki_within`,
+  `tbs_alg_within`, `ext_within`: the issuer's and subject's octets (which
+  binary name comparison and name chaining use), the
+  SubjectPublicKeyInfo's, the inner signature algorithm's and each
+  extension's octets are slices of the tbsCertificate's octets, so are
+  covered by the signature;
 * vector: "Example  Org" as a PrintableString matches "example org" as a
   UTF8String under RFC 5280 7.1's comparison and not under binary.
 
-**Not stated as laws** (tested only): that the fields read are the
-certificate's (`ref/run.sh` compares every one with Python cryptography's
-and OpenSSL's reading), that the tbsCertificate octets are a slice of the
-input (bend-osdev-asn1 states no law about the octets it keeps per
-element, so there is nothing to build this on yet), and the extension
-decoders.
+**How the octets laws are proved** (`proof_octets.bend`): `X509.parse`
+matches the input against `x5.s.cert()` with bend-osdev-asn1's matcher
+and reads each field from a field's match; following each step of the
+readers' Result chains (`xq.then`) shows that the octets kept for the
+certificate, the tbsCertificate, the names, the algorithm identifiers, the
+key and each extension are the octets of the matches at those fields.
+asn1's laws `match_split`, `match_whole`, `match_within` and `match_input`
+then make them slices, one inside another as the certificate's ASN.1
+nests them.
+
+**Not stated as laws** (tested only): that the values read from the fields
+are the certificate's (the version, serial number, validity times, unique
+identifiers, the names' attribute values, the key and signature BIT
+STRINGs, and the extension decoders): these go through bend-osdev-asn1's
+typed readers (INTEGER, BIT STRING, OCTET STRING, BOOLEAN, times,
+strings), which have no laws yet (asn1's typed-reader round trips), so
+only the octets the parse keeps are proved here, not the values decoded
+from them. `ref/run.sh` compares every field with Python cryptography's
+and OpenSSL's reading. That the tbsCertificate's octets are its DER
+encoding (beyond being a slice of the input that a DER certificate holds)
+is not stated: asn1's `read_der` covers the element read, not the
+elements inside it.
 
 ## Tests
 
