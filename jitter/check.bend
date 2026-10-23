@@ -1,8 +1,10 @@
 # The jitter core on small examples: the default parameters and those for
 # osr 1, the stuck test, the two health tests at their cutoffs, bytes from
 # a pseudo-random source (the values are ref/model.py's too), a read in two
-# parts, a constant source refused, and too few deltas. ref/ compares the
-# package with the model on recorded deltas.
+# parts, a constant source refused, and too few deltas; then the XDRBG
+# conditioner: SHAKE256 of "abc" (hashlib's value), and the same reads with
+# XDRBG-256 (ref/model_xdrbg.py's values). ref/ compares the package with
+# the models on recorded deltas.
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
@@ -11,6 +13,9 @@ import ./stuck.bend as Sk
 import ./health.bend as Ht
 import ./jitter.bend as J
 import ./sha3.bend as JS
+import ./shake.bend as S
+import ./xdrbg.bend as X
+import ./xdrbg256.bend as JX
 
 def why(e: J.JitError) -> String:
   match e:
@@ -59,6 +64,24 @@ def again(+p: J.JitParams, r: Result<&2, &2, J.JitError, J.JitOut<S3.CrSha3State
         case J.JitOut{out, st, rest}:
           B.Octets.hex(out) ++ " then " ++ show(JS.JitSha3.read(p, st, rest, 16n))
 
+def xshow(r: Result<&2, &2, J.JitError, J.JitOut<X.JitXdrbgPool<S.JitShakeState>>>) -> String:
+  match r:
+    case Fail{e}:
+      why(e)
+    case Done{o}:
+      match o:
+        case J.JitOut{out, st, rest}:
+          B.Octets.hex(out) ++ " (" ++ Nat.show(List.length(&2, W.W64, rest)) ++ " deltas left)"
+
+def xagain(+p: J.JitParams, r: Result<&2, &2, J.JitError, J.JitOut<X.JitXdrbgPool<S.JitShakeState>>>) -> String:
+  match r:
+    case Fail{e}:
+      why(e)
+    case Done{o}:
+      match o:
+        case J.JitOut{out, st, rest}:
+          B.Octets.hex(out) ++ " then " ++ xshow(JX.JitXdrbg256.read(p, st, rest, 16n))
+
 def main() -> IO(Unit):
   +p = J.JitParams.default()
   +s57 = Sk.JitStuck.next(Sk.JitStuck.next(Sk.JitStuck.new(), w(5)), w(7))
@@ -75,6 +98,10 @@ def main() -> IO(Unit):
     IO.print("50 equal deltas: " ++ Nat.show(J.Jitter.count(~S3.CrSha3State, cst)) ++ " counted, a block can be taken: " ++ Bool.show(J.Jitter.can_block(~S3.CrSha3State, p, cst)))
     IO.print("a constant source: " ++ show(JS.JitSha3.generate(p, List.replicate(W.W64, 2000n, w(1000)), 32n)))
     IO.print("500 deltas: " ++ show(JS.JitSha3.generate(p, lcg(500n, 1), 32n)))
+    IO.print("SHAKE256 of abc, 32 bytes: " ++ B.Octets.hex(S.JitShake.shake256(B.Octets.of_string("abc"), 32n)))
+    IO.print("XDRBG, 32 bytes from 2000 LCG deltas: " ++ xshow(JX.JitXdrbg256.generate(p, ds, 32n)))
+    IO.print("XDRBG, 16 bytes, then 16 more: " ++ xagain(p, JX.JitXdrbg256.generate(p, lcg(3000n, 7), 16n)))
+    IO.print("XDRBG, a constant source: " ++ xshow(JX.JitXdrbg256.generate(p, List.replicate(W.W64, 2000n, w(1000)), 32n)))
 
 #|default: osr 3, safety 65, RCT cutoff 91, APT cutoff 459 of 512, domain 2, discard 1; 963 counted deltas per block
 #|osr 1: osr 1, safety 65, RCT cutoff 31, APT cutoff 325 of 512, domain 2, discard 1
@@ -86,3 +113,7 @@ def main() -> IO(Unit):
 #|50 equal deltas: 1 counted, a block can be taken: False
 #|a constant source: RCT failure
 #|500 deltas: need more deltas (0 bytes so far)
+#|SHAKE256 of abc, 32 bytes: 483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739
+#|XDRBG, 32 bytes from 2000 LCG deltas: 02ba2795d2708aba9c7190e33674835bf0d1a900998eb674d72484b02b35f023 (21 deltas left)
+#|XDRBG, 16 bytes, then 16 more: 02ba2795d2708aba9c7190e33674835b then 3dd7c4ed02ca0c35a11484fc00950a7d (34 deltas left)
+#|XDRBG, a constant source: RCT failure

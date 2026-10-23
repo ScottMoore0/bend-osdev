@@ -17,12 +17,14 @@
 # 3.1.4: the pool's previous contents are reused). Bytes are blocks
 # concatenated, the last cut (section 3.2).
 #
-# The conditioning is a hash through the crypto package's hash interface
-# (template arguments ~H, ~bsize, ~init, ~update, ~final, ~digest), SHA3-256
-# (crypto's inst_sha3.bend) by default: the 2022 design's conditioner
-# (jitterentropy 3.0 to 3.6). The 2026 design replaces it with an XDRBG
-# over SHAKE-256 (section 3.1.1); see README.md for what this means for
-# compatibility.
+# The conditioner is a template parameter: the pool's state ~H, the buffer
+# size ~bsize, the pool update ~update, and the block step ~take (JitCore.*,
+# for any conditioner); ~digest is the auxiliary data's digest. The named
+# default is SHA3-256 through crypto's hash interface (Jitter.* take a hash's
+# ~init, ~update, ~final; sha3.bend fills in crypto's inst_sha3.bend): the
+# 2022 design's conditioner (jitterentropy 3.0 to 3.6). The other option is
+# the 2026 design's XDRBG over SHAKE-256 (section 3.1.1; xdrbg.bend,
+# shake.bend, xdrbg256.bend); see README.md for what matches what.
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
@@ -242,25 +244,62 @@ def jit.absorb_all(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: 
 def Jitter.absorb_all(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, +p: JitParams, st: JitState<H>, ds: List<&2, W.W64>) -> JitState<H>:
   jit.absorb_all(~H, ~bsize, ~update, ~digest, ds, p, st)
 
+# ---------------------------------------------------------------- conditioners
+
+# A conditioner's block step (template argument ~take: H -> JitTaken<H>):
+# from the pool, the block's bytes and the pool the next block starts from.
+# The core absorbs deltas with ~update and takes blocks with ~take, and
+# needs nothing else of the conditioner.
+type JitTaken<-H: Data> is Data:
+  JitTaken{out: B.Octets, pool: H}
+
+def JitTaken.out(~H: Data, t: JitTaken<H>) -> B.Octets:
+  match t:
+    case JitTaken{o, h}:
+      o
+
+def JitTaken.pool(~H: Data, t: JitTaken<H>) -> H:
+  match t:
+    case JitTaken{o, h}:
+      h
+
+# A hash as the conditioner (jitterentropy 3.0 to 3.6, SHA3-256): the block
+# is the pool's digest, and the next pool is a new hash state that has
+# absorbed the block (Müller, section 3.1.4: the pool's previous contents
+# are reused). The ~take of a hash of crypto's interface is
+# ~JitCond.hash(~H, ~init, ~update, ~final).
+def JitCond.hash(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, pool: H) -> JitTaken<H>:
+  +out = final(pool)
+  JitTaken{out, update(init, out)}
+
 # ---------------------------------------------------------------- blocks
 
-# the block, and the state after it: the pool starts again from the block
-def jit.take(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, st: JitState<H>) -> JitBlock<H>:
+def jit.take.go(~H: Data, t: JitTaken<H>, s: Sk.JitStuckState, r: Ht.JitRct, a: Ht.JitApt, dis: Nat) -> JitBlock<H>:
+  match t:
+    case JitTaken{out, pool}:
+      JitBlock{out, JitState{pool, s, r, a, 0n, dis}}
+
+# the block, and the state after it: the pool the conditioner gives, no
+# deltas counted
+def jit.take(~H: Data, ~take: H -> JitTaken<H>, st: JitState<H>) -> JitBlock<H>:
   match st:
     case JitState{pool, s, r, a, c, dis}:
-      +out = final(pool)
-      JitBlock{out, JitState{update(init, out), s, r, a, 0n, dis}}
+      jit.take.go(~H, take(pool), s, r, a, dis)
 
-def jit.block.go(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ok: Bool, +p: JitParams, st: JitState<H>) -> Result<&2, &2, JitError, JitBlock<H>>:
+def jit.block.go(~H: Data, ~take: H -> JitTaken<H>, ok: Bool, +p: JitParams, st: JitState<H>) -> Result<&2, &2, JitError, JitBlock<H>>:
   match ok:
     case True{}:
-      Done{jit.take(~H, ~init, ~update, ~final, st)}
+      Done{jit.take(~H, ~take, st)}
     case False{}:
       Fail{Jitter.why(~H, p, st)}
 
-# a block, if one can be taken
+# a block, if one can be taken, for any conditioner
+def JitCore.block(~H: Data, ~take: H -> JitTaken<H>, +p: JitParams, +st: JitState<H>) -> Result<&2, &2, JitError, JitBlock<H>>:
+  jit.block.go(~H, ~take, Jitter.can_block(~H, p, st), p, st)
+
+# a block, if one can be taken, with a hash as the conditioner
 def Jitter.block(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, +p: JitParams, +st: JitState<H>) -> Result<&2, &2, JitError, JitBlock<H>>:
-  jit.block.go(~H, ~init, ~update, ~final, Jitter.can_block(~H, p, st), p, st)
+  JitCore.block(~H, ~JitCond.hash(~H, ~init, ~update, ~final), p, st)
 
 # ---------------------------------------------------------------- reading bytes
 
@@ -305,10 +344,10 @@ def jit.keep(~H: Data, b: JitBlock<H>, acc: B.Octets) -> JitAcc<H>:
               JitAcc{JitState{pool, s, r, a, c, k}, acc}
 
 # after a delta: a block when one can be taken, kept or discarded
-def jit.emit(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ready: Bool, st: JitState<H>, acc: B.Octets) -> JitAcc<H>:
+def jit.emit(~H: Data, ~take: H -> JitTaken<H>, ready: Bool, st: JitState<H>, acc: B.Octets) -> JitAcc<H>:
   match ready:
     case True{}:
-      jit.keep(~H, jit.take(~H, ~init, ~update, ~final, st), acc)
+      jit.keep(~H, jit.take(~H, ~take, st), acc)
     case False{}:
       JitAcc{st, acc}
 
@@ -323,7 +362,7 @@ def jit.end(~H: Data, done: Bool, failed: Bool, +p: JitParams, st: JitState<H>, 
         case False{}:
           Fail{JitNeedMore{B.Octets.len(acc)}}
 
-def jit.go(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, ds: List<&2, W.W64>, done: Bool, failed: Bool, +p: JitParams, st: JitState<H>, acc: B.Octets, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
+def jit.go(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> JitTaken<H>, ds: List<&2, W.W64>, done: Bool, failed: Bool, +p: JitParams, st: JitState<H>, acc: B.Octets, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
   match ds:
     case Nil{}:
       jit.end(~H, done, failed, p, st, acc, n)
@@ -337,17 +376,25 @@ def jit.go(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final:
               Fail{Jitter.why(~H, p, st)}
             case False{}:
               +st1 = Jitter.absorb(~H, ~bsize, ~update, ~digest, p, st, d)
-              +r = jit.emit(~H, ~init, ~update, ~final, Jitter.can_block(~H, p, st1), st1, acc)
-              jit.go(~H, ~bsize, ~init, ~update, ~final, ~digest, rest, Nat.is_le(n, B.Octets.len(JitAcc.acc(~H, r))), Jitter.failed(~H, JitAcc.state(~H, r)), p, JitAcc.state(~H, r), JitAcc.acc(~H, r), n)
+              +r = jit.emit(~H, ~take, Jitter.can_block(~H, p, st1), st1, acc)
+              jit.go(~H, ~bsize, ~update, ~digest, ~take, rest, Nat.is_le(n, B.Octets.len(JitAcc.acc(~H, r))), Jitter.failed(~H, JitAcc.state(~H, r)), p, JitAcc.state(~H, r), JitAcc.acc(~H, r), n)
 
-# n bytes from the deltas: blocks are taken as the deltas allow (the first
-# p.prime of them discarded), and the bytes are their concatenation, cut to
-# n; answers the bytes, the state, and the deltas left over. Fails with
-# JitRctFailure or JitAptFailure when a health test fails, and with
-# JitNeedMore when the deltas run out first.
+# n bytes from the deltas, for any conditioner: blocks are taken as the
+# deltas allow (the first p.prime of them discarded), and the bytes are
+# their concatenation, cut to n; answers the bytes, the state, and the
+# deltas left over. Fails with JitRctFailure or JitAptFailure when a health
+# test fails, and with JitNeedMore when the deltas run out first.
+def JitCore.read(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> JitTaken<H>, +p: JitParams, +st: JitState<H>, ds: List<&2, W.W64>, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
+  jit.go(~H, ~bsize, ~update, ~digest, ~take, ds, Nat.is_le(n, 0n), Jitter.failed(~H, st), p, st, B.Octets.empty(), n)
+
+# n bytes from a new state, for any conditioner
+def JitCore.generate(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> JitTaken<H>, +p: JitParams, ds: List<&2, W.W64>, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
+  JitCore.read(~H, ~bsize, ~update, ~digest, ~take, p, Jitter.init(~H, ~init, p), ds, n)
+
+# n bytes from the deltas, with a hash as the conditioner
 def Jitter.read(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +p: JitParams, +st: JitState<H>, ds: List<&2, W.W64>, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
-  jit.go(~H, ~bsize, ~init, ~update, ~final, ~digest, ds, Nat.is_le(n, 0n), Jitter.failed(~H, st), p, st, B.Octets.empty(), n)
+  JitCore.read(~H, ~bsize, ~update, ~digest, ~JitCond.hash(~H, ~init, ~update, ~final), p, st, ds, n)
 
-# n bytes from a new state
+# n bytes from a new state, with a hash as the conditioner
 def Jitter.generate(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +p: JitParams, ds: List<&2, W.W64>, +n: Nat) -> Result<&2, &2, JitError, JitOut<H>>:
   Jitter.read(~H, ~bsize, ~init, ~update, ~final, ~digest, p, Jitter.init(~H, ~init, p), ds, n)
