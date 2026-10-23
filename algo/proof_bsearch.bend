@@ -14,6 +14,9 @@ import ./bsearch.bend as S
 import ../array/array.bend as A
 import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
+import ../u32/u32.bend as UN
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 import ./proof_u32.bend as U
 
 # Shorthands (they unfold to the defs they name)
@@ -40,7 +43,7 @@ def bq.s(+lo: U32, +hi: U32) -> Nat:
   Nat.sub(U32.to_nat(hi), U32.to_nat(lo))
 
 def bq.m(+lo: U32, +hi: U32) -> Nat:
-  Nat.add(U32.to_nat(lo), U.uq.half(Nat.sub(U32.to_nat(hi), U32.to_nat(lo))))
+  Nat.add(U32.to_nat(lo), UN.U32Nat.half(Nat.sub(U32.to_nat(hi), U32.to_nat(lo))))
 
 # The search on Data: one halving of [lo, hi), as bsearch.array.advance
 
@@ -336,7 +339,7 @@ def bq.sub_step(q: Nat, k: Nat) -> {Nat.is_le(Nat.sub(q, k), 1n+Nat.sub(q, 1n+k)
 
 # Halving
 
-def bq.half_le(q: Nat) -> {Nat.is_le(U.uq.half(q), q) == True{} : Bool}:
+def bq.half_le(q: Nat) -> {Nat.is_le(UN.U32Nat.half(q), q) == True{} : Bool}:
   match q:
     case 0n:
       {==}
@@ -345,9 +348,9 @@ def bq.half_le(q: Nat) -> {Nat.is_le(U.uq.half(q), q) == True{} : Bool}:
         case 0n:
           {==}
         case 1n+ +r:
-          bq.le_succ_r(U.uq.half(r), r, bq.half_le(r))
+          bq.le_succ_r(UN.U32Nat.half(r), r, bq.half_le(r))
 
-def bq.half_lt(s: Nat, h: {Nat.is_lt(0n, s) == True{} : Bool}) -> {Nat.is_lt(U.uq.half(s), s) == True{} : Bool}:
+def bq.half_lt(s: Nat, h: {Nat.is_lt(0n, s) == True{} : Bool}) -> {Nat.is_lt(UN.U32Nat.half(s), s) == True{} : Bool}:
   match s:
     case 0n:
       Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, bq.ft(h))
@@ -356,10 +359,10 @@ def bq.half_lt(s: Nat, h: {Nat.is_lt(0n, s) == True{} : Bool}) -> {Nat.is_lt(U.u
         case 0n:
           {==}
         case 1n+ +q:
-          bq.lt_succ_le(U.uq.half(q), q, bq.half_le(q))
+          bq.lt_succ_le(UN.U32Nat.half(q), q, bq.half_le(q))
 
 # s < 2p: s / 2 < p
-def bq.half_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool}) -> {Nat.is_lt(U.uq.half(s), p) == True{} : Bool}:
+def bq.half_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool}) -> {Nat.is_lt(UN.U32Nat.half(s), p) == True{} : Bool}:
   match s:
     case 0n:
       match p:
@@ -378,12 +381,12 @@ def bq.half_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bo
         case 1n+q:
           match p:
             case 0n:
-              Empty.absurd({Nat.is_lt(1n+U.uq.half(q), 0n) == True{} : Bool}, bq.ft(h))
+              Empty.absurd({Nat.is_lt(1n+UN.U32Nat.half(q), 0n) == True{} : Bool}, bq.ft(h))
             case 1n+pp:
               bq.half_lt_pw(q, pp, h)
 
 # s < 2p: s - (1 + s / 2) < p
-def bq.hr_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool}) -> {Nat.is_lt(Nat.sub(s, 1n+U.uq.half(s)), p) == True{} : Bool}:
+def bq.hr_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool}) -> {Nat.is_lt(Nat.sub(s, 1n+UN.U32Nat.half(s)), p) == True{} : Bool}:
   match s:
     case 0n:
       match p:
@@ -402,9 +405,9 @@ def bq.hr_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool
         case 1n+ +q:
           match p:
             case 0n:
-              Empty.absurd({Nat.is_lt(Nat.sub(q, U.uq.half(q)), 0n) == True{} : Bool}, bq.ft(h))
+              Empty.absurd({Nat.is_lt(Nat.sub(q, UN.U32Nat.half(q)), 0n) == True{} : Bool}, bq.ft(h))
             case 1n+ +pp:
-              U.uq.le_lt_trans(Nat.sub(q, U.uq.half(q)), 1n+Nat.sub(q, 1n+U.uq.half(q)), 1n+pp, bq.sub_step(q, U.uq.half(q)), bq.hr_lt_pw(q, pp, h))
+              U.uq.le_lt_trans(Nat.sub(q, UN.U32Nat.half(q)), 1n+Nat.sub(q, 1n+UN.U32Nat.half(q)), 1n+pp, bq.sub_step(q, UN.U32Nat.half(q)), bq.hr_lt_pw(q, pp, h))
 
 # Lists
 

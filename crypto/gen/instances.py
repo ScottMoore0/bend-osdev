@@ -84,9 +84,10 @@ BLOCK = [
           F64, "LL.xtea_round_trip", "LL.xtea_round_trip_dual", 17),
     block("fcrypt", "FCrypt (legacy-ciphers)", "Fc.LcFcryptKey", lc_key("Fc.LcFcryptKey", "Fc.LcFcrypt.key"), "Fc.LcFcrypt.encrypt", "Fc.LcFcrypt.decrypt",
           F64, "LL.fcrypt_round_trip", "LL.fcrypt_round_trip_dual", 7),
-    # cipher-modes tests AES decryption but proves no law about it
+    # cipher-modes proves decryption undoes encryption for every key
+    # (aes_round_trip); the reverse it does not prove
     block("aes", "AES-128 and AES-256 (cipher-modes)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
-          F128, None, None, 24),
+          F128, "CML.aes_round_trip", None, 24),
     block("aes_enc", "AES, encryption key schedule only (cipher-modes)", "X.CmAesKey", "A.CrAes.key_enc", "X.CmAes.encrypt", "X.CmAes.decrypt",
           F128, None, None, 20),
 ]

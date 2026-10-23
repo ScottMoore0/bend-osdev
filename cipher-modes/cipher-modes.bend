@@ -45,6 +45,16 @@ def CmBlock.xor(a: CmBlock, b: CmBlock) -> CmBlock:
     case CmBlock{a0, a1, a2, a3} CmBlock{b0, b1, b2, b3}:
       CmBlock{U32.xor(a0, b0), U32.xor(a1, b1), U32.xor(a2, b2), U32.xor(a3, b3)}
 
+# Each block of xs encrypted under k and decrypted again: xs itself for
+# every list exactly where decryption undoes encryption at k, which is how
+# the round-trip laws (LAWS.bend) take that property of the cipher
+def CmBlock.dec_enc(~K: Data, ~enc: K -> CmBlock -> CmBlock, ~dec: K -> CmBlock -> CmBlock, +k: K, xs: List<&2, CmBlock>) -> List<&2, CmBlock>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, t}:
+      Con{dec(k, enc(k, x)), CmBlock.dec_enc(~K, ~enc, ~dec, k, t)}
+
 # Bytes and words (internal). Words are split into bytes and joined back by
 # bit slicing (bend-osdev-word64's W64.bits), not by shifts and masks, so that
 # the round trips can be proved for every word.

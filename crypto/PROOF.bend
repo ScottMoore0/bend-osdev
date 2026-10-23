@@ -6,6 +6,8 @@ import ../word64/word64.bend as W
 import ../cipher-modes/cipher-modes.bend as M
 import ../cipher-modes/aes.bend as X
 import ../cipher-modes/ccm.bend as MC
+import ../cipher-modes/LAWS.bend as CML
+import ../cipher-modes/PROOF.bend as CMP
 import ../legacy-ciphers/legacy-ciphers.bend as L
 import ../legacy-ciphers/des.bend as D
 import ../legacy-ciphers/tdes.bend as T
@@ -402,6 +404,10 @@ def Laws.lift_round_trip(E, f, d, r, p, h):
 
 def Laws.ccm_round_trip_if(K, enc, tlen, k, nonce, aad, p, h):
   Laws.lift_round_trip(~M.CmError, ~CM.CrCm.err, c => MC.Ccm.decrypt(~K, ~enc, k, tlen, nonce, aad, c), MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p), p, h)
+
+# cipher-modes' ccm_round_trip is the hypothesis, at the same arguments
+def Laws.ccm_aead_round_trip(K, enc, tlen, k, nonce, aad, p):
+  Laws.ccm_round_trip_if(~K, ~enc, ~tlen, k, nonce, aad, p, CML.ccm_round_trip(~K, ~enc, k, tlen, nonce, aad, p))
 
 # Signatures and key agreement
 
@@ -1589,8 +1595,78 @@ def Laws.fcrypt_pcbc_round_trip(k, iv, bs):
   %Equal.sym(List<&2, L.LcBlock64>, Pc.cr.pcbc.dec.go(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, Pc.cr.pcbc.enc(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, bs, iv), iv, Nil{}), Pc.cr.pcbc.dec(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, Pc.cr.pcbc.enc(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, bs, iv), iv), pcbc_dec_pub(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, Pc.cr.pcbc.enc(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, bs, iv), iv)) : {_ == bs : List<&2, L.LcBlock64>}
   Equal.sym(List<&2, L.LcBlock64>, bs, Pc.cr.pcbc.dec(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, Pc.cr.pcbc.enc(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, bs, iv), iv), pcbc_rt.fcrypt(k, bs, iv))
 
+def Laws.aes_block_round_trip(k, b):
+  CML.aes_round_trip(k, b)
+
 def Laws.aes_key_length():
   {==}
+
+def ecb_rt.aes(+k: X.CmAesKey, bs: List<&2, M.CmBlock>) -> {bs == Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs)) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{b, t}:
+      %Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, b)), b, CML.aes_round_trip(k, b)) : {Con{b, t} == Con{_, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, t))} : List<&2, M.CmBlock>}
+      %ecb_rt.aes(k, t) : {Con{b, t} == Con{b, _} : List<&2, M.CmBlock>}
+      {==}
+
+def Laws.aes_ecb_round_trip(k, bs):
+  %Equal.sym(List<&2, M.CmBlock>, Md.cr.ecb.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs, Nil{}), Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs), ecb_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs)) : {Md.cr.ecb.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, _, Nil{}) == bs : List<&2, M.CmBlock>}
+  %Equal.sym(List<&2, M.CmBlock>, Md.cr.ecb.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs), Nil{}), Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs)), ecb_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs))) : {_ == bs : List<&2, M.CmBlock>}
+  Equal.sym(List<&2, M.CmBlock>, bs, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.cr.ecb(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs)), ecb_rt.aes(k, bs))
+
+def cbc_rt.aes(+k: X.CmAesKey, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {bs == Md.cr.cbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+p, t}:
+      %Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))), CM.CrBlk128.xor(p, iv), CML.aes_round_trip(k, CM.CrBlk128.xor(p, iv))) : {Con{p, t} == Con{CM.CrBlk128.xor(_, iv), Md.cr.cbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, t, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))), X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv)))} : List<&2, M.CmBlock>}
+      %cmblock_xx(p, iv) : {Con{p, t} == Con{_, Md.cr.cbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, t, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))), X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv)))} : List<&2, M.CmBlock>}
+      %cbc_rt.aes(k, t, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))) : {Con{p, t} == Con{p, _} : List<&2, M.CmBlock>}
+      {==}
+
+def Laws.aes_cbc_round_trip(k, iv, bs):
+  %Equal.sym(List<&2, M.CmBlock>, Md.cr.cbc.enc.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv, Nil{}), Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), cbc_enc_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv)) : {Md.cr.cbc.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, _, iv, Nil{}) == bs : List<&2, M.CmBlock>}
+  %Equal.sym(List<&2, M.CmBlock>, Md.cr.cbc.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv, Nil{}), Md.cr.cbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv), cbc_dec_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv)) : {_ == bs : List<&2, M.CmBlock>}
+  Equal.sym(List<&2, M.CmBlock>, bs, Md.cr.cbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Md.cr.cbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv), cbc_rt.aes(k, bs, iv))
+
+def pcbc_rt.aes(+k: X.CmAesKey, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {bs == Pc.cr.pcbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+p, t}:
+      %Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))), CM.CrBlk128.xor(p, iv), CML.aes_round_trip(k, CM.CrBlk128.xor(p, iv))) : {Con{p, t} == Con{CM.CrBlk128.xor(_, iv), Pc.cr.pcbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, t, CM.CrBlk128.xor(p, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv)))), CM.CrBlk128.xor(CM.CrBlk128.xor(_, iv), X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))))} : List<&2, M.CmBlock>}
+      %cmblock_xx(p, iv) : {Con{p, t} == Con{_, Pc.cr.pcbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, t, CM.CrBlk128.xor(p, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv)))), CM.CrBlk128.xor(_, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv))))} : List<&2, M.CmBlock>}
+      %pcbc_rt.aes(k, t, CM.CrBlk128.xor(p, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, iv)))) : {Con{p, t} == Con{p, _} : List<&2, M.CmBlock>}
+      {==}
+
+def Laws.aes_pcbc_round_trip(k, iv, bs):
+  %Equal.sym(List<&2, M.CmBlock>, Pc.cr.pcbc.enc.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv, Nil{}), Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), pcbc_enc_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv)) : {Pc.cr.pcbc.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, _, iv, Nil{}) == bs : List<&2, M.CmBlock>}
+  %Equal.sym(List<&2, M.CmBlock>, Pc.cr.pcbc.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv, Nil{}), Pc.cr.pcbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv), pcbc_dec_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv)) : {_ == bs : List<&2, M.CmBlock>}
+  Equal.sym(List<&2, M.CmBlock>, bs, Pc.cr.pcbc.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, Pc.cr.pcbc.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, bs, iv), iv), pcbc_rt.aes(k, bs, iv))
+
+def lrw_b.aes(+k: X.CmAesKey, t: Maybe<&2, M.CmBlock>, +p: M.CmBlock) -> {p == Lw.cr.lrw.bdec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, t, Lw.cr.lrw.benc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, t, p)) : M.CmBlock}:
+  match t:
+    case None{}:
+      Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, p)), p, CML.aes_round_trip(k, p))
+    case Some{+x}:
+      %cmblock_xx(X.CmAes.encrypt(k, CM.CrBlk128.xor(p, x)), x) : {p == CM.CrBlk128.xor(X.CmAes.decrypt(k, _), x) : M.CmBlock}
+      %Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, CM.CrBlk128.xor(p, x))), CM.CrBlk128.xor(p, x), CML.aes_round_trip(k, CM.CrBlk128.xor(p, x))) : {p == CM.CrBlk128.xor(_, x) : M.CmBlock}
+      cmblock_xx(p, x)
+
+def lrw_rt.aes(+k: X.CmAesKey, +k2: G.Gf128, bs: List<&2, M.CmBlock>, +i: G.Gf128) -> {bs == Lw.cr.lrw.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), i) : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      {==}
+    case Con{+p, t}:
+      %lrw_b.aes(k, Lw.cr.lrw.tweak(~M.CmBlock, ~CM.CrBlk128.of_octets, k2, i), p) : {Con{p, t} == Con{_, Lw.cr.lrw.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, t, Lw.cr.lrw.inc(i)), Lw.cr.lrw.inc(i))} : List<&2, M.CmBlock>}
+      %lrw_rt.aes(k, k2, t, Lw.cr.lrw.inc(i)) : {Con{p, t} == Con{p, _} : List<&2, M.CmBlock>}
+      {==}
+
+def Laws.aes_lrw_round_trip(k, k2, i, bs):
+  %Equal.sym(List<&2, M.CmBlock>, Lw.cr.lrw.enc.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i, Nil{}), Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), lrw_enc_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i)) : {Lw.cr.lrw.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, _, i, Nil{}) == bs : List<&2, M.CmBlock>}
+  %Equal.sym(List<&2, M.CmBlock>, Lw.cr.lrw.dec.go(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), i, Nil{}), Lw.cr.lrw.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), i), lrw_dec_pub(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), i)) : {_ == bs : List<&2, M.CmBlock>}
+  Equal.sym(List<&2, M.CmBlock>, bs, Lw.cr.lrw.dec(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, Lw.cr.lrw.enc(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, bs, i), i), lrw_rt.aes(k, k2, bs, i))
 
 def Laws.aes_enc_key_length():
   {==}

@@ -1,4 +1,5 @@
-# Proofs of bend-osdev-pkcs's laws. The lemmas are in proof_pkcs.bend; the
+# Proofs of bend-osdev-pkcs's laws. The lemmas are in proof_pkcs.bend and
+# proof_octets.bend (the octets kept, through asn1's match laws); the
 # signature law rests on crypto's sign_verify_bytes_if.
 import Base
 import ../bytes/bytes.bend as B
@@ -11,6 +12,7 @@ import ./pkcs.bend as P
 import ./signed.bend as PS
 import ./p8.bend as P8
 import ./proof_pkcs.bend as PP
+import ./proof_octets.bend as PQ
 import ./LAWS.bend as Laws
 
 def Laws.cms_parsed_conforms(r, b, s, e):
@@ -32,3 +34,15 @@ def Laws.find_attr_type(xs, id, a, e):
 
 def Laws.vec_set_tagged():
   {==}
+
+def Laws.signed_data_slice(r, b, s, e):
+  PQ.pq.sd_slice(r, b, s, PQ.pq.parsed(r, b, s, e))
+
+def Laws.signed_attrs_slice(r, b, s, pre, g, post, a, e, hg, ha):
+  PQ.pq.sa_slice(r, b, s, pre, g, post, a, hg, ha, PQ.pq.parsed(r, b, s, e))
+
+def Laws.certificate_slice(r, b, s, pre, o, post, e, hc):
+  PQ.pq.cert_slice(r, b, s, pre, o, post, hc, PQ.pq.parsed(r, b, s, e))
+
+def Laws.signed_attrs_der(r, b, s, pre, g, post, a, c, e, hg, ha, hd):
+  PQ.pq.der1(g, c, a, ha, PQ.pq.der_match(r, b, s, pre, g, post, a, e, hg, ha, hd))

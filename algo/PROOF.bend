@@ -8,6 +8,9 @@ import ./bsearch.bend as S
 import ../array/array.bend as AR
 import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
+import ../u32/u32.bend as UN
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 import ./proof_u32.bend as U
 import ./proof_bsearch.bend as Q
 import ./LAWS.bend as Laws
@@ -1285,10 +1288,10 @@ def ba.key_cmp(+d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.A
 
 # after a halving that keeps the upper half: hi - (mid + 1) is
 # (hi - lo) - (1 + (hi - lo) / 2)
-def ba.jz_eq(+lo: U32, +hi: U32, eI: {U32.to_nat(U32.inc(Q.bq.mid(lo, hi))) == 1n+Q.bq.m(lo, hi) : Nat}, ehs: {Nat.add(U32.to_nat(lo), Q.bq.s(lo, hi)) == U32.to_nat(hi) : Nat}) -> {Nat.sub(Q.bq.s(lo, hi), 1n+U.uq.half(Q.bq.s(lo, hi))) == Q.bq.s(U32.inc(Q.bq.mid(lo, hi)), hi) : Nat}:
+def ba.jz_eq(+lo: U32, +hi: U32, eI: {U32.to_nat(U32.inc(Q.bq.mid(lo, hi))) == 1n+Q.bq.m(lo, hi) : Nat}, ehs: {Nat.add(U32.to_nat(lo), Q.bq.s(lo, hi)) == U32.to_nat(hi) : Nat}) -> {Nat.sub(Q.bq.s(lo, hi), 1n+UN.U32Nat.half(Q.bq.s(lo, hi))) == Q.bq.s(U32.inc(Q.bq.mid(lo, hi)), hi) : Nat}:
   +l0 = U32.to_nat(lo)
   +s = Q.bq.s(lo, hi)
-  +hs = U.uq.half(s)
+  +hs = UN.U32Nat.half(s)
   +m = Q.bq.m(lo, hi)
   %Equal.sym(Nat, U32.to_nat(U32.inc(Q.bq.mid(lo, hi))), 1n+m, eI) : {Nat.sub(s, 1n+hs) == Nat.sub(U32.to_nat(hi), _) : Nat}
   %ehs : {Nat.sub(s, 1n+hs) == Nat.sub(_, 1n+m) : Nat}
@@ -1306,9 +1309,9 @@ def ba.adv2(b: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +key: U32, +n: U32, +l
       +mid = Q.bq.mid(lo, hi)
       +lb = Q.bq.lb(l, n, key)
       +hinc = Q.bq.le_rw(1n+m, h0, 1n+U32.to_nat(mid), h0, U.uq.succ_cong(m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)), {==}, Equal.trans(Bool, Nat.is_le(1n+m, h0), Nat.is_lt(m, h0), True{}, U.uq.le_succ(m, h0), hmh))
-      +eI = Equal.trans(Nat, U32.to_nat(U32.inc(mid)), 1n+U32.to_nat(mid), 1n+m, U.uq.u32_inc(mid, hi, hinc), U.uq.succ_cong(U32.to_nat(mid), m, eM))
+      +eI = Equal.trans(Nat, U32.to_nat(U32.inc(mid)), 1n+U32.to_nat(mid), 1n+m, UL.u32_inc_value(mid, hi, hinc), U.uq.succ_cong(U32.to_nat(mid), m, eM))
       +j1 = Q.bq.le_rw(1n+m, lb, U32.to_nat(U32.inc(mid)), lb, Equal.sym(Nat, U32.to_nat(U32.inc(mid)), 1n+m, eI), {==}, Equal.trans(Bool, Nat.is_le(1n+m, lb), Nat.is_lt(m, lb), True{}, U.uq.le_succ(m, lb), eb))
-      +jz = Q.bq.lt_rw(Nat.sub(s, 1n+U.uq.half(s)), U.uq.pw(g), Q.bq.s(U32.inc(mid), hi), U.uq.pw(g), ba.jz_eq(lo, hi, eI, ehs), {==}, Q.bq.hr_lt_pw(s, U.uq.pw(g), hz))
+      +jz = Q.bq.lt_rw(Nat.sub(s, 1n+UN.U32Nat.half(s)), U.uq.pw(g), Q.bq.s(U32.inc(mid), hi), U.uq.pw(g), ba.jz_eq(lo, hi, eI, ehs), {==}, Q.bq.hr_lt_pw(s, U.uq.pw(g), hz))
       ih(U32.inc(mid), hi, j1, i2, i3, jz)
     case False{}:
       +h0 = U32.to_nat(hi)
@@ -1319,8 +1322,8 @@ def ba.adv2(b: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +key: U32, +n: U32, +l
       +lb = Q.bq.lb(l, n, key)
       +j2 = Q.bq.le_rw(lb, m, lb, U32.to_nat(mid), {==}, Equal.sym(Nat, U32.to_nat(mid), m, eM), Q.bq.not_lt(m, lb, eb))
       +j3 = Q.bq.le_rw(m, U32.to_nat(n), U32.to_nat(mid), U32.to_nat(n), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, Q.bq.le_trans(m, h0, U32.to_nat(n), Q.bq.lt_le(m, h0, hmh), i3))
-      +e2 = Equal.trans(Nat, U.uq.half(s), Nat.sub(Nat.add(l0, U.uq.half(s)), l0), Nat.sub(U32.to_nat(mid), l0), Equal.sym(Nat, Nat.sub(Nat.add(l0, U.uq.half(s)), l0), U.uq.half(s), U.uq.sub_add_l(l0, U.uq.half(s))), Equal.cong(Nat, Nat, z => Nat.sub(z, l0), m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)))
-      +jz = Q.bq.lt_rw(U.uq.half(s), U.uq.pw(g), Q.bq.s(lo, mid), U.uq.pw(g), e2, {==}, Q.bq.half_lt_pw(s, U.uq.pw(g), hz))
+      +e2 = Equal.trans(Nat, UN.U32Nat.half(s), Nat.sub(Nat.add(l0, UN.U32Nat.half(s)), l0), Nat.sub(U32.to_nat(mid), l0), Equal.sym(Nat, Nat.sub(Nat.add(l0, UN.U32Nat.half(s)), l0), UN.U32Nat.half(s), U.uq.sub_add_l(l0, UN.U32Nat.half(s))), Equal.cong(Nat, Nat, z => Nat.sub(z, l0), m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)))
+      +jz = Q.bq.lt_rw(UN.U32Nat.half(s), U.uq.pw(g), Q.bq.s(lo, mid), U.uq.pw(g), e2, {==}, Q.bq.half_lt_pw(s, U.uq.pw(g), hz))
       ih(lo, mid, i1, j2, j3, jz)
 
 # one halving of [lo, hi): active when lo < hi (c)
@@ -1341,12 +1344,12 @@ def ba.adv(c: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U
       +sh = U32.to_nat(U32.shr(U32.sub(hi, lo)))
       +hlt = u32.mv_lt(lo, hi, True{}, ec)
       +hle = Q.bq.lt_le(l0, h0, hlt)
-      +eD = U.uq.u32_sub(hi, lo, hle)
-      +eE = Equal.trans(Nat, sh, U.uq.half(U32.to_nat(U32.sub(hi, lo))), U.uq.half(s), U.uq.u32_shr(U32.sub(hi, lo)), Equal.cong(Nat, Nat, z => U.uq.half(z), U32.to_nat(U32.sub(hi, lo)), s, eD))
+      +eD = UL.u32_sub_value(hi, lo, hle)
+      +eE = Equal.trans(Nat, sh, UN.U32Nat.half(U32.to_nat(U32.sub(hi, lo))), UN.U32Nat.half(s), UL.u32_shr_value(U32.sub(hi, lo)), Equal.cong(Nat, Nat, z => UN.U32Nat.half(z), U32.to_nat(U32.sub(hi, lo)), s, eD))
       +ehs = Q.bq.add_sub(l0, h0, hle)
-      +hmh = Q.bq.lt_rw(Nat.add(l0, U.uq.half(s)), Nat.add(l0, s), m, h0, {==}, ehs, Equal.trans(Bool, Nat.is_lt(Nat.add(l0, U.uq.half(s)), Nat.add(l0, s)), Nat.is_lt(U.uq.half(s), s), True{}, Q.bq.lt_cancel(l0, U.uq.half(s), s), Q.bq.half_lt(s, Q.bq.sub_pos(l0, h0, hlt))))
-      +hadd = Q.bq.le_rw(m, h0, Nat.add(l0, sh), h0, Equal.cong(Nat, Nat, z => Nat.add(l0, z), U.uq.half(s), sh, Equal.sym(Nat, sh, U.uq.half(s), eE)), {==}, Q.bq.lt_le(m, h0, hmh))
-      +eM = Equal.trans(Nat, U32.to_nat(mid), Nat.add(l0, sh), m, U.uq.u32_add(lo, U32.shr(U32.sub(hi, lo)), hi, hadd), Equal.cong(Nat, Nat, z => Nat.add(l0, z), sh, U.uq.half(s), eE))
+      +hmh = Q.bq.lt_rw(Nat.add(l0, UN.U32Nat.half(s)), Nat.add(l0, s), m, h0, {==}, ehs, Equal.trans(Bool, Nat.is_lt(Nat.add(l0, UN.U32Nat.half(s)), Nat.add(l0, s)), Nat.is_lt(UN.U32Nat.half(s), s), True{}, Q.bq.lt_cancel(l0, UN.U32Nat.half(s), s), Q.bq.half_lt(s, Q.bq.sub_pos(l0, h0, hlt))))
+      +hadd = Q.bq.le_rw(m, h0, Nat.add(l0, sh), h0, Equal.cong(Nat, Nat, z => Nat.add(l0, z), UN.U32Nat.half(s), sh, Equal.sym(Nat, sh, UN.U32Nat.half(s), eE)), {==}, Q.bq.lt_le(m, h0, hmh))
+      +eM = Equal.trans(Nat, U32.to_nat(mid), Nat.add(l0, sh), m, UL.u32_add_value(lo, U32.shr(U32.sub(hi, lo)), hi, hadd), Equal.cong(Nat, Nat, z => Nat.add(l0, z), sh, UN.U32Nat.half(s), eE))
       +hmN = Q.bq.lt_le_trans(m, h0, U32.to_nat(n), hmh, i3)
       %Equal.sym(Bool, U32.is_lt(Q.bq.x(d, l, lo, hi), key), Nat.is_lt(m, lb), ba.key_cmp(d, l, hl, key, n, hN, hs, mid, m, eM, hmN)) : {U32.to_nat(Q.bq.run(g, d, l, Q.bq.lo_b(_, lo, mid), Q.bq.hi_b(_, hi, mid), key)) == lb : Nat}
       ba.adv2(Nat.is_lt(m, lb), g, d, l, key, n, lo, hi, {==}, i1, i2, i3, hz, eM, ehs, hmh, ih)
