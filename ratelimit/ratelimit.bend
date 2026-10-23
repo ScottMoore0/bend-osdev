@@ -249,3 +249,44 @@ def RateLimit.refusals(xs: List<&2, Bool>) -> Nat:
       RateLimit.refusals(t)
     case Con{False{}, t}:
       1n+RateLimit.refusals(t)
+
+# Windows over a run: the times allowed, how many lie in a window, and
+# whether times never go back
+
+# the times of ts whose answers (a run's allowed list, in the same order)
+# are True
+def RateLimit.allowed_times.put(a: Bool, t: W.W64, rest: List<&2, W.W64>) -> List<&2, W.W64>:
+  match a:
+    case True{}:
+      Con{t, rest}
+    case False{}:
+      rest
+
+def RateLimit.allowed_times(ts: List<&2, W.W64>, xs: List<&2, Bool>) -> List<&2, W.W64>:
+  match ts xs:
+    case Nil{} _:
+      Nil{}
+    case Con{t, rest} Nil{}:
+      Nil{}
+    case Con{t, rest} Con{a, more}:
+      RateLimit.allowed_times.put(a, t, RateLimit.allowed_times(rest, more))
+
+# the number of times of ts within the window of length interval ending at
+# now
+def RateLimit.in_window(+interval: W.W64, +now: W.W64, ts: List<&2, W.W64>) -> Nat:
+  List.length(&2, W.W64, RateLimit.keep(interval, now, ts))
+
+# whether the times of ts, and then now, never decrease
+def RateLimit.sorted_upto.next(rest: List<&2, W.W64>, now: W.W64) -> W.W64:
+  match rest:
+    case Nil{}:
+      now
+    case Con{t, r}:
+      t
+
+def RateLimit.sorted_upto(ts: List<&2, W.W64>, +now: W.W64) -> Bool:
+  match ts:
+    case Nil{}:
+      True{}
+    case Con{+t, +rest}:
+      Bool.and(W.W64.is_le(t, RateLimit.sorted_upto.next(rest, now)), RateLimit.sorted_upto(rest, now))
