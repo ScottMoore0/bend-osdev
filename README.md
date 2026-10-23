@@ -28,6 +28,7 @@ GPL source was read.
 
 | Package | What it is |
 |---|---|
+| [u32](u32/) | Laws for Base's `U32` and `Word(n)` as `Nat` arithmetic: comparison, addition, subtraction, increment and shifts, wrapping or not |
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
 | [packing](packing/) | Bit fields at any bit position of a byte buffer, packed and unpacked, with lib/packing's quirks as parameters |
