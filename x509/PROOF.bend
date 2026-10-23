@@ -1,4 +1,5 @@
-# Proofs of bend-osdev-x509's laws. The lemmas are in proof_x509.bend; the
+# Proofs of bend-osdev-x509's laws. The lemmas are in proof_x509.bend and
+# proof_octets.bend (the octets kept, through asn1's match laws); the
 # signature law rests on crypto's sign_verify_bytes_if and the name laws on
 # bytes' octets_is_eq_refl.
 import Base
@@ -13,6 +14,7 @@ import ./namecmp.bend as XC
 import ./x509.bend as X
 import ./verify.bend as XV
 import ./proof_x509.bend as XP
+import ./proof_octets.bend as XO
 import ./LAWS.bend as Laws
 
 def Laws.parsed_conforms(r, b, c, e):
@@ -33,3 +35,33 @@ def Laws.find_ext_id(es, id, x, e):
 
 def Laws.vec_name_rfc5280():
   {==}
+
+def Laws.cert_split(r, b, c, e):
+  XO.xq.split(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.cert_whole(r, ht, b, c, e):
+  XO.xq.whole(r, ht, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.tbs_slice(r, b, c, e):
+  XO.xq.tbs_slice(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.tbs_within(r, b, c, e):
+  XO.xq.tbs_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.sig_alg_within(r, b, c, e):
+  XO.xq.sig_alg_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.issuer_within(r, b, c, e):
+  XO.xq.issuer_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.subject_within(r, b, c, e):
+  XO.xq.subject_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.spki_within(r, b, c, e):
+  XO.xq.spki_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.tbs_alg_within(r, b, c, e):
+  XO.xq.tbs_alg_within(r, b, c, XO.xq.parsed(r, b, c, e))
+
+def Laws.ext_within(r, b, c, pre, x, post, h, e):
+  XO.xq.ext_within(r, b, c, pre, x, post, h, XO.xq.parsed(r, b, c, e))

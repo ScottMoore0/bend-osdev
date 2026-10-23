@@ -451,6 +451,15 @@ def Asn1Tlv.raw(x: Asn1Tlv) -> B.Octets:
     case Asn1Tlv{n, raw}:
       raw
 
+# the octets of each element, in order (those Asn1.read_all answers join
+# back to its input: LAWS.bend, read_all_split)
+def Asn1.raws(xs: List<&2, Asn1Tlv>) -> List<&2, B.Octets>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{x, t}:
+      Con{Asn1Tlv.raw(x), Asn1.raws(t)}
+
 def a1.tlv.out(+xs: List<&2, U32>, res: Result<&2, &2, E.Asn1Error, A1Out>) -> Result<&2, &2, E.Asn1Error, Asn1TlvRead>:
   match res:
     case Fail{e}:
