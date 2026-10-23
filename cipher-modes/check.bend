@@ -1,10 +1,10 @@
 # The specifications' vectors that LAWS.bend cannot hold, run compiled: the
 # checker evaluates AES slowly and keeps what it evaluates, so a proof file
 # with more than a few AES blocks runs out of memory (see the README). Here:
-# FIPS 197 C.1 and C.3 (both directions), NIST SP 800-38A F.2.1, F.2.2, F.2.5
-# and F.2.6 (CBC), IEEE 1619 vectors 1, 2 and 15 to 18 (XTS, with ciphertext
-# stealing), RFC 3610 packets 1 to 3 (CCM, with decryption and a tampered
-# tag) and RFC 4493 examples 1 to 4 and K2 (CMAC).
+# FIPS 197 (2001) C.1, C.2 (AES-192) and C.3 (both directions), NIST SP
+# 800-38A F.2.1, F.2.2, F.2.5 and F.2.6 (CBC), IEEE 1619 vectors 1, 2 and 15
+# to 18 (XTS, with ciphertext stealing), RFC 3610 packets 1 to 3 (CCM, with
+# decryption and a tampered tag) and RFC 4493 examples 1 to 4 and K2 (CMAC).
 import Base
 import ../bytes/bytes.bend as B
 import ./cipher-modes.bend as M
@@ -105,6 +105,8 @@ def main() -> IO(Unit):
   +m2 = B.Octets.of_list(bulk.go(32773n, 7, Nil{}))
   do IO<Unit>:
     IO.print("aes128_fips197_c1_inverse " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.decrypt(k, M.CmBlock{1774510296, 1786446896, 3637360512, 1890895194})), X.CmAes.key128(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])))))
+    IO.print("aes192_fips197_c2 " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.encrypt(k, M.CmBlock{1122867, 1146447479, 2291772091, 3437096703})), X.CmAes.key192(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])))))
+    IO.print("aes192_fips197_c2_inverse " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.decrypt(k, M.CmBlock{3718872228, 2253184992, 1856991392, 3960304017})), X.CmAes.key192(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23])))))
     IO.print("aes256_fips197_c3 " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.encrypt(k, M.CmBlock{1122867, 1146447479, 2291772091, 3437096703})), X.CmAes.key256(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])))))
     IO.print("aes256_fips197_c3_inverse " ++ res(Result.map(&2, &2, M.CmError, X.CmAesKey, B.Octets, k => M.CmBlock.to_octets(X.CmAes.decrypt(k, M.CmBlock{2393028554, 1365722559, 3942402448, 1263100041})), X.CmAes.key256(B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])))))
     IO.print("cbc_sp800_38a_f21 " ++ res(D.CmAes.cbc_encrypt(B.Octets.of_list([43, 126, 21, 22, 40, 174, 210, 166, 171, 247, 21, 136, 9, 207, 79, 60]), B.Octets.of_list([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]), B.Octets.of_list([107, 193, 190, 226, 46, 64, 159, 150, 233, 61, 126, 17, 115, 147, 23, 42, 174, 45, 138, 87, 30, 3, 172, 156, 158, 183, 111, 172, 69, 175, 142, 81, 48, 200, 28, 70, 163, 92, 228, 17, 229, 251, 193, 25, 26, 10, 82, 239, 246, 159, 36, 69, 223, 79, 155, 23, 173, 43, 65, 123, 230, 108, 55, 16]))))
@@ -136,6 +138,8 @@ def main() -> IO(Unit):
     IO.print("ccm_32k " ++ bulk.ccm(D.CmAes.ccm_encrypt(bulk.key(), 8n, bulk.nonce(), bulk.aad(), m1), m1))
 
 #|aes128_fips197_c1_inverse 00112233445566778899aabbccddeeff
+#|aes192_fips197_c2 dda97ca4864cdfe06eaf70a0ec0d7191
+#|aes192_fips197_c2_inverse 00112233445566778899aabbccddeeff
 #|aes256_fips197_c3 8ea2b7ca516745bfeafc49904b496089
 #|aes256_fips197_c3_inverse 00112233445566778899aabbccddeeff
 #|cbc_sp800_38a_f21 7649abac8119b246cee98e9b12e9197d5086cb9b507219ee95db113a917678b273bed6b8e3c1743b7116e69e222295163ff1caa1681fac09120eca307586e1a7

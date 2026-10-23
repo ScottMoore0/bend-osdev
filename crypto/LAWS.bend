@@ -263,10 +263,9 @@ law lift_round_trip:
 
 # CCM as an AEAD (inst_ccm.bend), for every 128-bit block cipher, key, tag
 # length, nonce, associated data and message: the AEAD round trip, given
-# cipher-modes' ccm_round_trip at the same arguments (h). cipher-modes
-# proves h for every input, but a proof that imports its PROOF.bend fails
-# --verdict (its laws with a template hypothesis), so the two are joined in
-# README.md, not here.
+# cipher-modes' ccm_round_trip at the same arguments (h); and, since
+# cipher-modes proves h for every input, the AEAD round trip with no
+# hypothesis (ccm_aead_round_trip)
 law ccm_round_trip_if:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
@@ -276,6 +275,16 @@ law ccm_round_trip_if:
   for +aad: B.Octets
   for +p: B.Octets
   for h: {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p), c => MC.Ccm.decrypt(~K, ~enc, k, tlen, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p)) : Result<&2, &2, M.CmError, B.Octets>}
+  {Result.bind(&2, &2, Cr.CrError, B.Octets, B.Octets, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p), c => CC.CrCcm.open(~K, ~enc, ~tlen, k, nonce, aad, c)) == Result.map(&2, &2, Cr.CrError, B.Octets, B.Octets, c => p, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p)) : Result<&2, &2, Cr.CrError, B.Octets>}
+
+law ccm_aead_round_trip:
+  for ~K: Data
+  for ~enc: K -> M.CmBlock -> M.CmBlock
+  for ~tlen: Nat
+  for +k: K
+  for +nonce: B.Octets
+  for +aad: B.Octets
+  for +p: B.Octets
   {Result.bind(&2, &2, Cr.CrError, B.Octets, B.Octets, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p), c => CC.CrCcm.open(~K, ~enc, ~tlen, k, nonce, aad, c)) == Result.map(&2, &2, Cr.CrError, B.Octets, B.Octets, c => p, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p)) : Result<&2, &2, Cr.CrError, B.Octets>}
 
 # Signatures and key agreement (sign.bend, kex.bend): the generic helpers
@@ -1146,9 +1155,43 @@ law fcrypt_pcbc_round_trip:
   for +bs: List<&2, L.LcBlock64>
   {Pc.CrPcbc.decrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.decrypt, ~LC.CrBlk64.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~Fc.LcFcryptKey, ~L.LcBlock64, ~Fc.LcFcrypt.encrypt, ~LC.CrBlk64.xor, k, iv, bs)) == bs : List<&2, L.LcBlock64>}
 
+# AES-128 and AES-256 (cipher-modes): decryption undoes encryption, for every key and block
+law aes_block_round_trip:
+  for k: X.CmAesKey
+  for +b: M.CmBlock
+  {X.CmAes.decrypt(k, X.CmAes.encrypt(k, b)) == b : M.CmBlock}
+
 # AES-128 and AES-256 (cipher-modes): a key of 24 bytes is refused
 law aes_key_length:
   {Result.map(&2, &2, Cr.CrError, X.CmAesKey, Unit, k => Unit{}, A.CrAes.key(B.Octets.zeros(24n))) == Fail{Cr.CrBadKeyLength{24n}} : Result<&2, &2, Cr.CrError, Unit>}
+
+# AES-128 and AES-256 (cipher-modes) in ECB (modes.bend): decryption undoes encryption, for every key and list of blocks
+law aes_ecb_round_trip:
+  for +k: X.CmAesKey
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrEcb.decrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, k, Md.CrEcb.encrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, k, bs)) == bs : List<&2, M.CmBlock>}
+
+# AES-128 and AES-256 (cipher-modes) in CBC (modes.bend): decryption undoes encryption, for every key, IV and list of blocks
+law aes_cbc_round_trip:
+  for +k: X.CmAesKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Md.CrCbc.decrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, iv, Md.CrCbc.encrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# AES-128 and AES-256 (cipher-modes) in PCBC (pcbc.bend): decryption undoes encryption, for every key, IV and list of blocks
+law aes_pcbc_round_trip:
+  for +k: X.CmAesKey
+  for +iv: M.CmBlock
+  for +bs: List<&2, M.CmBlock>
+  {Pc.CrPcbc.decrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, k, iv, Pc.CrPcbc.encrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+# AES-128 and AES-256 (cipher-modes) in LRW (lrw.bend): decryption undoes encryption, for every key, tweak key, index and list of blocks
+law aes_lrw_round_trip:
+  for +k: X.CmAesKey
+  for +k2: G.Gf128
+  for +i: G.Gf128
+  for +bs: List<&2, M.CmBlock>
+  {Lw.CrLrw.decrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.decrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, Lw.CrLrw.encrypt_blocks(~X.CmAesKey, ~M.CmBlock, ~X.CmAes.encrypt, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)) == bs : List<&2, M.CmBlock>}
 
 # AES, encryption key schedule only (cipher-modes): a key of 20 bytes is refused
 law aes_enc_key_length:

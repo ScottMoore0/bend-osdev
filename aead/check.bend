@@ -1,9 +1,10 @@
 # Every construction on its specification's vectors, or on values from
-# outside this package: RFC 10032's AESRound vector (A.1); AEGIS-128 sealed
-# and opened back, a changed tag and a changed ciphertext byte refused, and
-# the refusals of a short key and nonce (values from ref/model.py: no
-# AEGIS-128 vector is published in the specification, and the model shares
-# this package's author); Encrypt-then-MAC on RFC 7518's Appendix B.1
+# outside this package: RFC 10032's AESRound vector (A.1); AEGIS-128 on the
+# four test vectors of Wu and Preneel's SAC 2013 paper (Appendix A.1), sealed
+# and opened back; AEGIS-128 sealed and opened back on four more inputs, a
+# changed tag and a changed ciphertext byte refused, and the refusals of a
+# short key and nonce (values from ref/model.py, which shares this package's
+# author and agrees with the paper's vectors); Encrypt-then-MAC on RFC 7518's Appendix B.1
 # (AES_128_CBC_HMAC_SHA_256, the McGrew draft's construction, with
 # AdAuthenc.input_mcgrew and PKCS #7 padding), and in the Linux kernel's
 # authenc(hmac(sha256), cbc(aes)) layout (the kernel's value, through
@@ -202,6 +203,9 @@ def main() -> IO(Unit):
     IO.print(R.AdBlk.hex(R.AdAes.round(R.AdAes.sbox(), R.AdBlk.of_octets(hx("000102030405060708090a0b0c0d0e0f")), R.AdBlk.of_octets(hx("101112131415161718191a1b1c1d1e1f")))))
     IO.print(aegis(z16, z16, B.Octets.empty(), B.Octets.empty()))
     IO.print(aegis(z16, z16, B.Octets.empty(), z16))
+    IO.print(aegis(z16, z16, z16, z16))
+    IO.print(aegis(hx("00010000000000000000000000000000"), hx("00000200000000000000000000000000"), hx("00010203"), z16))
+    IO.print(aegis(hx("10010000000000000000000000000000"), hx("10000200000000000000000000000000"), hx("0001020304050607"), m32))
     IO.print(aegis(k, n, hx("0001020304050607"), m32))
     IO.print(aegis(k, n, hx("00010203"), hx("000102030405060708090a0b0c")))
     IO.print(aegis(k, n, B.Octets.of_string("associated data, two blocks long"), B.Octets.of_string("a message of sixty-one bytes, which ends in a partial block...")))
@@ -225,6 +229,9 @@ def main() -> IO(Unit):
 #|7a7b4e5638782546a8c0477a3b813f43
 #|242d8006b64d87c36cb35714af7121f9 
 #|951b050fa72b1a2fc16d2e1f01b07d7ea7d2a99773249542f422217ee888d5f1 00000000000000000000000000000000
+#|10b0dee65a97d751205c128a992473a146dcb9ee93c46cf13731d41b9646c131 00000000000000000000000000000000
+#|2b78f5c1618da39afbb2920f5dae02b074759cd0e19314650d6c635b563d80fd 00000000000000000000000000000000
+#|e08ec10685d63c7364eca78ff6e1a1ddfdfc15d5311a7f2988a0471a13973fd727e84b6c4cc46cb6ece8f1f3e4aa0e78 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
 #|1136818fa157709bc6259a110f3caab7bb9c8051a611411b9068f48f6cddd1fa661595fb87f02c6601fecab6c097e5ae 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
 #|1136818fa157709bc6259a110f225c4b57acfac2aa2e0563b72a74e9ea 000102030405060708090a0b0c
 #|8a968f312470f5f463cf9014120b18b16b679dc1b35bdaa972417cdaa9186ec4460dcef5a5564e6fcb8bb2889d9a6f363f6acee7178a551445a82771587953e8d9cee414547bae20c567b6518924 61206d657373616765206f662073697874792d6f6e652062797465732c20776869636820656e647320696e2061207061727469616c20626c6f636b2e2e2e

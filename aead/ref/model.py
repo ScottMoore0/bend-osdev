@@ -7,7 +7,10 @@ agreement with an outside implementation:
   * AEGIS-128: H. Wu, B. Preneel, "AEGIS: A Fast Authenticated Encryption
     Algorithm (v1.1)" (CAESAR, 2016), section 2.3; the AES round function
     from FIPS 197 section 5.1, checked against RFC 10032's AESRound test
-    vector (Appendix A.1).
+    vector (Appendix A.1). The whole AEAD is checked against the four
+    AEGIS-128 test vectors of H. Wu, B. Preneel, "AEGIS: A Fast
+    Authenticated Encryption Algorithm", SAC 2013, Appendix A.1
+    (SAC2013_VECTORS below; the v1.1 document prints none).
 The other constructions are compared with outside implementations
 (gen.py: the Linux kernel's, cryptography's, hmac's, hashlib's).
 """
@@ -126,3 +129,28 @@ def aegis128_open(key, iv, ad, ct):
         p += pb
         s = _update(s, _pad(pb))
     return p if _final(s, len(ad), len(c)) == tag else None
+
+
+# H. Wu, B. Preneel, "AEGIS: A Fast Authenticated Encryption Algorithm",
+# Selected Areas in Cryptography -- SAC 2013, Appendix A.1, "Test vectors of
+# AEGIS-128" (the authors' copy,
+# https://personal.ntu.edu.sg/wuhj/research/publications/2013_SAC_AEGIS.pdf):
+# (K128, IV128, assoc. data, plaintext, ciphertext, tag), in hexadecimal
+SAC2013_VECTORS = [
+    ("00000000000000000000000000000000", "00000000000000000000000000000000", "",
+     "00000000000000000000000000000000",
+     "951b050fa72b1a2fc16d2e1f01b07d7e", "a7d2a99773249542f422217ee888d5f1"),
+    ("00000000000000000000000000000000", "00000000000000000000000000000000", "00000000000000000000000000000000",
+     "00000000000000000000000000000000",
+     "10b0dee65a97d751205c128a992473a1", "46dcb9ee93c46cf13731d41b9646c131"),
+    ("00010000000000000000000000000000", "00000200000000000000000000000000", "00010203",
+     "00000000000000000000000000000000",
+     "2b78f5c1618da39afbb2920f5dae02b0", "74759cd0e19314650d6c635b563d80fd"),
+    ("10010000000000000000000000000000", "10000200000000000000000000000000", "0001020304050607",
+     "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+     "e08ec10685d63c7364eca78ff6e1a1ddfdfc15d5311a7f2988a0471a13973fd7", "27e84b6c4cc46cb6ece8f1f3e4aa0e78"),
+]
+for _k, _n, _a, _p, _c, _t in SAC2013_VECTORS:
+    _ct = aegis128_seal(*(bytes.fromhex(x) for x in (_k, _n, _a, _p)))
+    assert _ct.hex() == _c + _t
+    assert aegis128_open(bytes.fromhex(_k), bytes.fromhex(_n), bytes.fromhex(_a), _ct) == bytes.fromhex(_p)

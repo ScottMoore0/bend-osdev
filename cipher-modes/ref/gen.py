@@ -76,6 +76,12 @@ def main():
         case("cmac", k, "res(D.CmAes.cmac(%s, %s))" % (o(key), o(p)), t.hex())
         case("cmac2", k, "cmac2(X.CmAes.key(%s), %s, %s)" % (o(key), o(p[:cut]), o(p[cut:])), t.hex())
 
+    for k in range(6):  # one block, AES-192 (CmAes.key192)
+        key, p = rb(24), rb(16)
+        c = run(modes.ECB(), key, p)
+        case("aes192_enc", k, "blk(X.CmAes.key192(%s), %s, True{})" % (o(key), o(p)), c.hex())
+        case("aes192_dec", k, "blk(X.CmAes.key192(%s), %s, False{})" % (o(key), o(c)), p.hex())
+
     with open(os.path.join(here, "cases.bend"), "w") as f:
         f.write("""import Base
 import ../../bytes/bytes.bend as B

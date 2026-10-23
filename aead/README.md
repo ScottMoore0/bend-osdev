@@ -18,7 +18,16 @@ Written from the public specifications only:
 
 * **AEGIS-128:** H. Wu, B. Preneel, *AEGIS: A Fast Authenticated Encryption
   Algorithm (v1.1)*, CAESAR competition final portfolio (2016), section 2.3
-  (AEGIS-128, the 128-bit key and nonce variant). RFC 9312 is *not* AEGIS
+  (AEGIS-128, the 128-bit key and nonce variant). That document prints no
+  test vectors (nor does its v1 of 2014); AEGIS-128's published vectors are
+  in H. Wu, B. Preneel, *AEGIS: A Fast Authenticated Encryption
+  Algorithm*, Selected Areas in Cryptography -- SAC 2013, Lecture Notes in
+  Computer Science (doi:10.1007/978-3-662-43414-7_10; IACR ePrint
+  2013/695), Appendix A.1, "Test vectors of AEGIS-128", read in the
+  authors' copy (https://personal.ntu.edu.sg/wuhj/research/publications/2013_SAC_AEGIS.pdf).
+  The v1.1 document's chapter 8 says "There is no tweak to AEGIS" in the
+  third round, and the SAC 2013 algorithm is the one `aegis128.bend`
+  implements: its outputs match all four vectors (Tests below). RFC 9312 is *not* AEGIS
   (it is about QUIC manageability); the IETF's AEGIS document, RFC 10032,
   specifies AEGIS-128L and AEGIS-256 but not AEGIS-128, and is used here
   only for its AESRound test vector (Appendix A.1).
@@ -165,8 +174,12 @@ changing the laws' statements.
 **Not proved, and tested:** a changed ciphertext or associated data
 refused (a forgery succeeds with probability about 2^-8tlen, so it is no
 law for every input; tested for every construction in `check.bend` and
-`ref/`); AEGIS-128's values (no AEGIS-128 vector is published in the
-specification; compared with `ref/model.py`, which shares the author); the
+`ref/`); AEGIS-128's values, the SAC 2013 paper's four vectors included:
+as `{==}` laws the checker (`--check-only`) accepts them, but `--verdict`
+does not: one vector is 18 to 20 state updates (90 to 100 AES rounds), and the
+kernel's fuel for one def (400,000,000 steps) runs out after six updates
+(measured: six check, seven do not), so they are in `check.bend` rather
+than `LAWS.bend`, as hashes' Streebog digests are; the
 round trips of the generic constructions unconditionally (they hold where
 the wrapped algorithm's do: for a crypto instance with a proved round trip
 the hypothesis is that law at the arguments used).
@@ -174,10 +187,15 @@ the hypothesis is that law at the arguments used).
 ## Tests
 
 * `check.bend`: RFC 10032's AESRound vector; AEGIS-128 sealed and opened
-  back for five inputs (the empty message, a whole block, two blocks with
-  associated data, a 13-byte message, a 61-byte message after 32 bytes of
-  associated data), a changed tag, a 15-byte key, a 15-byte nonce and a
-  ciphertext shorter than a tag refused (values from `ref/model.py`);
+  back on the four test vectors of the SAC 2013 paper (Appendix A.1: no
+  associated data and a 128-bit message; 128 bits of each; 32 bits of
+  associated data and 128 bits of message; 64 and 256 bits, under nonzero
+  keys and IVs), whose expected lines are the paper's printed ciphertexts
+  and tags; AEGIS-128 sealed and opened back for four more inputs (the
+  empty message, two blocks with associated data, a 13-byte message, a
+  61-byte message after 32 bytes of associated data), a changed tag, a
+  15-byte key, a 15-byte nonce and a ciphertext shorter than a tag refused
+  (values from `ref/model.py`);
   encrypt-then-MAC on RFC 7518's Appendix B.1 (AES_128_CBC_HMAC_SHA_256),
   sealed and opened, with its tag changed refused; encrypt-then-MAC in the
   kernel's layout (the kernel's authenc(hmac(sha256), cbc(aes)) value);
@@ -202,7 +220,9 @@ the hypothesis is that law at the arguments used).
   AEGIS-128 model (`ref/model.py`) shares an author with this package**: it
   was written from the same specification, and its agreement is a second
   reading of that specification, not an independent implementation's (its
-  AES round is checked against RFC 10032's vector).
+  AES round is checked against RFC 10032's vector, and the whole AEAD
+  against the SAC 2013 paper's four vectors, `SAC2013_VECTORS`, when it is
+  imported).
 
 ## Sizes
 

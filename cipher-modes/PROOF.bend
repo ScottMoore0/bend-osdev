@@ -11,6 +11,12 @@ import ./xts.bend as T
 import ./ccm.bend as CC
 import ./cmac.bend as CM
 import ./aes_modes.bend as D
+import ../gf/gf.bend as G
+import ../gf/LAWS.bend as GL
+import ../gf/PROOF.bend as GP
+import bend-collections@1.0.0.0/src/crypto/aes/aes.bend as A
+import bend-collections@1.0.0.0/src/crypto/aes/types.bend as TT
+import bend-collections@1.0.0.0/src/crypto/aes/sbox.bend as SB
 import ./LAWS.bend as Laws
 
 # How the proofs go. The modes work on blocks; the byte layer splits a byte
@@ -1275,27 +1281,103 @@ def tr.ccm_decrypt(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, 
   %BL.len_fast(B.Octets.to_list(c)) : {CC.Ccm.decrypt.ref(~K, ~enc, k, m, nonce, aad, c) == CC.ccm.d2.fast(~K, ~enc, Nat.is_le(m, _), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(c)) : Result<&2, &2, M.CmError, B.Octets>}
   tr.d2(~K, ~enc, Nat.is_le(m, B.len(B.Octets.to_list(c))), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(c))
 
-# CBC on blocks
+# The round trips' hypothesis: the law's inv at the list of blocks the mode
+# gives the cipher, an equation (so copyable) that the inductions below take
+# apart a block at a time
 
-def cbcp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, bs, iv), iv) == bs : List<&2, M.CmBlock>}:
+def cmp.head(d: M.CmBlock, xs: List<&2, M.CmBlock>) -> M.CmBlock:
+  match xs:
+    case Nil{}:
+      d
+    case Con{h, t}:
+      h
+
+def cmp.tail(xs: List<&2, M.CmBlock>) -> List<&2, M.CmBlock>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{h, t}:
+      t
+
+def li.con_hd(+a: M.CmBlock, +s: List<&2, M.CmBlock>, +b: M.CmBlock, +t: List<&2, M.CmBlock>, +e: {Con{a, s} == Con{b, t} : List<&2, M.CmBlock>}) -> {a == b : M.CmBlock}:
+  %e : {a == cmp.head(b, _) : M.CmBlock}
+  {==}
+
+def li.con_tl(+a: M.CmBlock, +s: List<&2, M.CmBlock>, +b: M.CmBlock, +t: List<&2, M.CmBlock>, +e: {Con{a, s} == Con{b, t} : List<&2, M.CmBlock>}) -> {s == t : List<&2, M.CmBlock>}:
+  %e : {s == cmp.tail(_) : List<&2, M.CmBlock>}
+  {==}
+
+# the first block's round trip, and the rest's
+def cmp.hd(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +x: M.CmBlock, +xs: List<&2, M.CmBlock>, +h: {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, Con{x, xs}) == Con{x, xs} : List<&2, M.CmBlock>}) -> {dec(k, enc(k, x)) == x : M.CmBlock}:
+  li.con_hd(dec(k, enc(k, x)), M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xs), x, xs, h)
+
+def cmp.tl(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +x: M.CmBlock, +xs: List<&2, M.CmBlock>, +h: {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, Con{x, xs}) == Con{x, xs} : List<&2, M.CmBlock>}) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs : List<&2, M.CmBlock>}:
+  li.con_tl(dec(k, enc(k, x)), M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xs), x, xs, h)
+
+# the round trip of a ++ b gives a's, and b's
+def cmp.app_l(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, a: List<&2, M.CmBlock>, +b: List<&2, M.CmBlock>) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, List.append(&2, M.CmBlock, a, b)) == List.append(&2, M.CmBlock, a, b) : List<&2, M.CmBlock>} -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, a) == a : List<&2, M.CmBlock>}:
+  match a:
+    case Nil{}:
+      h => {==}
+    case Con{+x, +r}:
+      +h => %Equal.sym(M.CmBlock, dec(k, enc(k, x)), x, cmp.hd(~K, ~enc, ~dec, k, x, List.append(&2, M.CmBlock, r, b), h)) : {Con{_, M.CmBlock.dec_enc(~K, ~enc, ~dec, k, r)} == Con{x, r} : List<&2, M.CmBlock>}
+        %Equal.sym(List<&2, M.CmBlock>, M.CmBlock.dec_enc(~K, ~enc, ~dec, k, r), r, cmp.app_l(~K, ~enc, ~dec, k, r, b)(cmp.tl(~K, ~enc, ~dec, k, x, List.append(&2, M.CmBlock, r, b), h))) : {Con{x, _} == Con{x, r} : List<&2, M.CmBlock>}
+        {==}
+
+def cmp.app_r(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, a: List<&2, M.CmBlock>, +b: List<&2, M.CmBlock>) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, List.append(&2, M.CmBlock, a, b)) == List.append(&2, M.CmBlock, a, b) : List<&2, M.CmBlock>} -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, b) == b : List<&2, M.CmBlock>}:
+  match a:
+    case Nil{}:
+      h => h
+    case Con{+x, +r}:
+      h => cmp.app_r(~K, ~enc, ~dec, k, r, b)(cmp.tl(~K, ~enc, ~dec, k, x, List.append(&2, M.CmBlock, r, b), h))
+
+# the blocks CBC encryption gives the cipher: each plaintext block XOR the
+# block before it (the IV first)
+def cbcp.ins(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> List<&2, M.CmBlock>:
   match bs:
     case Nil{}:
-      {==}
-    case Con{+p, +t}:
-      %Equal.sym(M.CmBlock, dec(k, enc(k, M.CmBlock.xor(iv, p))), M.CmBlock.xor(iv, p), inv(k, M.CmBlock.xor(iv, p))) : {Con{M.CmBlock.xor(iv, _), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{p, t} : List<&2, M.CmBlock>}
-      %bx.block(iv, p) : {Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{_, t} : List<&2, M.CmBlock>}
-      %cbcp.go(~K, ~enc, ~dec, ~inv, k, t, enc(k, M.CmBlock.xor(iv, p))) : {Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), _} : List<&2, M.CmBlock>}
-      {==}
+      Nil{}
+    case Con{+p, t}:
+      Con{M.CmBlock.xor(iv, p), cbcp.ins(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p)))}
 
-def Laws.cbc_blocks_round_trip(K, enc, dec, inv, k, iv, bs):
+# the blocks XTS gives the cipher under k1: each block XOR its tweak
+def xtsp.ins(bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> List<&2, M.CmBlock>:
+  match bs:
+    case Nil{}:
+      Nil{}
+    case Con{+p, rest}:
+      Con{M.CmBlock.xor(p, t), xtsp.ins(rest, T.Xts.mul_alpha(t))}
+
+# and ciphertext stealing's: the last whole block XOR its tweak, then (with a
+# tail) the block the tail steals into XOR the next tweak
+def xtsp.sins(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +p: M.CmBlock, tl: List<&2, U32>, +t: M.CmBlock) -> List<&2, M.CmBlock>:
+  match tl:
+    case Nil{}:
+      Con{M.CmBlock.xor(p, t), Nil{}}
+    case Con{+h, +r}:
+      Con{M.CmBlock.xor(p, t), Con{M.CmBlock.xor(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), Nil{}}}
+
+# CBC on blocks
+
+def cbcp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +iv: M.CmBlock) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, cbcp.ins(~K, ~enc, k, bs, iv)) == cbcp.ins(~K, ~enc, k, bs, iv) : List<&2, M.CmBlock>} -> {C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, bs, iv), iv) == bs : List<&2, M.CmBlock>}:
+  match bs:
+    case Nil{}:
+      h => {==}
+    case Con{+p, +t}:
+      +h => %Equal.sym(M.CmBlock, dec(k, enc(k, M.CmBlock.xor(iv, p))), M.CmBlock.xor(iv, p), cmp.hd(~K, ~enc, ~dec, k, M.CmBlock.xor(iv, p), cbcp.ins(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), h)) : {Con{M.CmBlock.xor(iv, _), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{p, t} : List<&2, M.CmBlock>}
+        %bx.block(iv, p) : {Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{_, t} : List<&2, M.CmBlock>}
+        %cbcp.go(~K, ~enc, ~dec, k, t, enc(k, M.CmBlock.xor(iv, p)))(cmp.tl(~K, ~enc, ~dec, k, M.CmBlock.xor(iv, p), cbcp.ins(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), h)) : {Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, t, enc(k, M.CmBlock.xor(iv, p))), enc(k, M.CmBlock.xor(iv, p)))} == Con{M.CmBlock.xor(iv, M.CmBlock.xor(iv, p)), _} : List<&2, M.CmBlock>}
+        {==}
+
+def Laws.cbc_blocks_round_trip(K, enc, dec, k, inv, iv, bs):
   +v = iv
   +b = bs
   # the tail-recursive forms are the structural ones
   %tr.cbc_enc_eq(~K, ~enc, k, b, v) : {C.cbc.dec.fast(~K, ~dec, k, _, iv) == bs : List<&2, M.CmBlock>}
   %tr.cbc_dec_eq(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, b, v), v) : {_ == bs : List<&2, M.CmBlock>}
-  cbcp.go(~K, ~enc, ~dec, ~inv, k, b, v)
+  cbcp.go(~K, ~enc, ~dec, k, b, v)(inv(cbcp.ins(~K, ~enc, k, b, v)))
 
-def Laws.cbc_round_trip(K, enc, dec, inv, k, iv, m, hi, hm):
+def Laws.cbc_round_trip(K, enc, dec, k, inv, iv, m, hi, hm):
   +et = sp.mod_tail(B.Octets.to_list(m))(oc.mod(m, hm))
   # the public defs are the structural ones
   %tr.cbc_encrypt(~K, ~enc, k, iv, m) : {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, _, c => C.Cbc.decrypt(~K, ~dec, k, iv, c)) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
@@ -1315,7 +1397,7 @@ def Laws.cbc_round_trip(K, enc, dec, inv, k, iv, m, hi, hm):
   # and they split into the ciphertext blocks
   %Equal.sym(M.CmSplit, M.cm.split(M.cm.join_onto(C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))), Nil{})), M.CmSplit{C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))), Nil{}}, sp.split_join(C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))))) : {C.cbc.d2(~K, ~dec, k, M.cm.block_of(B.Octets.to_list(iv)), _, B.len(B.Octets.to_list(B.Octets.of_list(M.cm.join_onto(C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))), Nil{}))))) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # CBC on blocks
-  %Equal.sym(List<&2, M.CmBlock>, C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))), M.cm.block_of(B.Octets.to_list(iv))), M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), cbcp.go(~K, ~enc, ~dec, ~inv, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv)))) : {Done{B.Octets.of_list(M.cm.join_onto(_, Nil{}))} == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
+  %Equal.sym(List<&2, M.CmBlock>, C.cbc.dec(~K, ~dec, k, C.cbc.enc(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv))), M.cm.block_of(B.Octets.to_list(iv))), M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), cbcp.go(~K, ~enc, ~dec, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv)))(inv(cbcp.ins(~K, ~enc, k, M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), M.cm.block_of(B.Octets.to_list(iv)))))) : {Done{B.Octets.of_list(M.cm.join_onto(_, Nil{}))} == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # the plaintext blocks and the empty tail
   %et : {Done{B.Octets.of_list(M.cm.join_onto(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(m)))), _))} == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # join back to the message
@@ -1370,27 +1452,27 @@ def bx.rblock(+a: M.CmBlock, +b: M.CmBlock) -> {M.CmBlock.xor(M.CmBlock.xor(a, b
 # XTS on blocks
 
 # one block under one tweak: D(E(p xor t) xor t xor t) xor t == p
-def xtsp.blk(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}, +k: K, +p: M.CmBlock, +t: M.CmBlock) -> {T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t) == p : M.CmBlock}:
+def xtsp.blk(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +p: M.CmBlock, +t: M.CmBlock, hb: {dec(k, enc(k, M.CmBlock.xor(p, t))) == M.CmBlock.xor(p, t) : M.CmBlock}) -> {T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t) == p : M.CmBlock}:
   %Equal.sym(M.CmBlock, M.CmBlock.xor(M.CmBlock.xor(enc(k, M.CmBlock.xor(p, t)), t), t), enc(k, M.CmBlock.xor(p, t)), bx.rblock(enc(k, M.CmBlock.xor(p, t)), t)) : {M.CmBlock.xor(dec(k, _), t) == p : M.CmBlock}
-  %Equal.sym(M.CmBlock, dec(k, enc(k, M.CmBlock.xor(p, t))), M.CmBlock.xor(p, t), inv(k, M.CmBlock.xor(p, t))) : {M.CmBlock.xor(_, t) == p : M.CmBlock}
+  %Equal.sym(M.CmBlock, dec(k, enc(k, M.CmBlock.xor(p, t))), M.CmBlock.xor(p, t), hb) : {M.CmBlock.xor(_, t) == p : M.CmBlock}
   bx.rblock(p, t)
 
-def xtsp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> {T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, bs, t), t) == bs : List<&2, M.CmBlock>}:
+def xtsp.go(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, bs: List<&2, M.CmBlock>, +t: M.CmBlock) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xtsp.ins(bs, t)) == xtsp.ins(bs, t) : List<&2, M.CmBlock>} -> {T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, bs, t), t) == bs : List<&2, M.CmBlock>}:
   match bs:
     case Nil{}:
-      {==}
+      h => {==}
     case Con{+p, +rest}:
-      %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, ~inv, k, p, t)) : {Con{_, T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, rest, T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t))} == Con{p, rest} : List<&2, M.CmBlock>}
-      %Equal.sym(List<&2, M.CmBlock>, T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, rest, T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t)), rest, xtsp.go(~K, ~enc, ~dec, ~inv, k, rest, T.Xts.mul_alpha(t))) : {Con{p, _} == Con{p, rest} : List<&2, M.CmBlock>}
-      {==}
+      +h => %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, k, p, t, cmp.hd(~K, ~enc, ~dec, k, M.CmBlock.xor(p, t), xtsp.ins(rest, T.Xts.mul_alpha(t)), h))) : {Con{_, T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, rest, T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t))} == Con{p, rest} : List<&2, M.CmBlock>}
+        %Equal.sym(List<&2, M.CmBlock>, T.xts.dec(~K, ~dec, k, T.xts.enc(~K, ~enc, k, rest, T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t)), rest, xtsp.go(~K, ~enc, ~dec, k, rest, T.Xts.mul_alpha(t))(cmp.tl(~K, ~enc, ~dec, k, M.CmBlock.xor(p, t), xtsp.ins(rest, T.Xts.mul_alpha(t)), h))) : {Con{p, _} == Con{p, rest} : List<&2, M.CmBlock>}
+        {==}
 
-def Laws.xts_blocks_round_trip(K, enc, dec, inv, k1, t, bs):
+def Laws.xts_blocks_round_trip(K, enc, dec, k1, inv, t, bs):
   +v = t
   +b = bs
   # the tail-recursive forms are the structural ones
   %tr.xts_enc_eq(~K, ~enc, k1, b, v) : {T.xts.dec.fast(~K, ~dec, k1, _, t) == bs : List<&2, M.CmBlock>}
   %tr.xts_dec_eq(~K, ~dec, k1, T.xts.enc(~K, ~enc, k1, b, v), v) : {_ == bs : List<&2, M.CmBlock>}
-  xtsp.go(~K, ~enc, ~dec, ~inv, k1, b, v)
+  xtsp.go(~K, ~enc, ~dec, k1, b, v)(inv(xtsp.ins(b, v)))
 
 # CMAC: the state after a ++ b is the state after a, then b
 
@@ -1519,20 +1601,20 @@ def xtsp.ppY(+tl: List<&2, U32>, +b: M.CmBlock, hm: {B.mask(tl) == tl : List<&2,
 # Ciphertext stealing undoes itself: the last whole block p and a tail tl
 # (masked, fewer than 16 bytes), encrypted by steal_c and steal_t and
 # decrypted by dsteal, come back as p's bytes and then tl
-def xtsp.steal(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}, +k: K, +p: M.CmBlock, tl: List<&2, U32>, +t: M.CmBlock) -> {B.mask(tl) == tl : List<&2, U32>} -> {Nat.is_lt(B.len(tl), 16n) == True{} : Bool} -> {T.xts.dsteal(~K, ~dec, k, T.xts.steal_c(~K, ~enc, k, p, tl, t), T.xts.steal_t(~K, ~enc, k, p, tl, t), t) == M.cm.bytes_onto(p, tl) : List<&2, U32>}:
+def xtsp.steal(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +p: M.CmBlock, tl: List<&2, U32>, +t: M.CmBlock) -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xtsp.sins(~K, ~enc, k, p, tl, t)) == xtsp.sins(~K, ~enc, k, p, tl, t) : List<&2, M.CmBlock>} -> {B.mask(tl) == tl : List<&2, U32>} -> {Nat.is_lt(B.len(tl), 16n) == True{} : Bool} -> {T.xts.dsteal(~K, ~dec, k, T.xts.steal_c(~K, ~enc, k, p, tl, t), T.xts.steal_t(~K, ~enc, k, p, tl, t), t) == M.cm.bytes_onto(p, tl) : List<&2, U32>}:
   match tl:
     case Nil{}:
-      hm => hl => %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, ~inv, k, p, t)) : {M.cm.bytes_of(_) == M.cm.bytes_onto(p, Nil{}) : List<&2, U32>}
+      hs => hm => hl => %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, k, p, t, cmp.hd(~K, ~enc, ~dec, k, M.CmBlock.xor(p, t), Nil{}, hs))) : {M.cm.bytes_of(_) == M.cm.bytes_onto(p, Nil{}) : List<&2, U32>}
         {==}
     case Con{+h, +r}:
-      +hm => +hl => %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t)), M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), xtsp.blk(~K, ~enc, ~dec, ~inv, k, M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(B.len(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), M.cm.bytes_of(_)))), t), B.take(B.len(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), M.cm.bytes_of(_))) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
+      +hs => +hm => +hl => %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), T.Xts.mul_alpha(t)), M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), xtsp.blk(~K, ~enc, ~dec, k, M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t), cmp.hd(~K, ~enc, ~dec, k, M.CmBlock.xor(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), Nil{}, cmp.tl(~K, ~enc, ~dec, k, M.CmBlock.xor(p, t), Con{M.CmBlock.xor(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), Nil{}}, hs)))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(B.len(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), M.cm.bytes_of(_)))), t), B.take(B.len(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), M.cm.bytes_of(_))) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(Nat, B.len(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), B.len(Con{h, r}), li.len_take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))(na.lt_le(B.len(Con{h, r}), 16n)(hl))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(_, M.cm.bytes_of(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))))))), t), B.take(_, M.cm.bytes_of(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))))))) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(List<&2, U32>, M.cm.bytes_of(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))))), B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), xtsp.ppY(Con{h, r}, T.xts.benc(~K, ~enc, k, p, t), hm, hl)) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(B.len(Con{h, r}), _))), t), B.take(B.len(Con{h, r}), _)) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(List<&2, U32>, B.take(B.len(Con{h, r}), B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), Con{h, r}, li.take_append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(B.len(Con{h, r}), B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))))), t), _) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(List<&2, U32>, B.drop(B.len(Con{h, r}), B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), li.drop_append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), _)), t), Con{h, r}) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(List<&2, U32>, B.append(B.take(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)), BL.take_drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t)))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, M.cm.block_of(_), t), Con{h, r}) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
               %Equal.sym(M.CmBlock, M.cm.block_of(M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))), T.xts.benc(~K, ~enc, k, p, t), sp.block_bytes(T.xts.benc(~K, ~enc, k, p, t))) : {M.cm.bytes_onto(T.xts.bdec(~K, ~dec, k, _, t), Con{h, r}) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
-              %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, ~inv, k, p, t)) : {M.cm.bytes_onto(_, Con{h, r}) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
+              %Equal.sym(M.CmBlock, T.xts.bdec(~K, ~dec, k, T.xts.benc(~K, ~enc, k, p, t), t), p, xtsp.blk(~K, ~enc, ~dec, k, p, t, cmp.hd(~K, ~enc, ~dec, k, M.CmBlock.xor(p, t), Con{M.CmBlock.xor(M.cm.block_of(B.append(Con{h, r}, B.drop(B.len(Con{h, r}), M.cm.bytes_of(T.xts.benc(~K, ~enc, k, p, t))))), T.Xts.mul_alpha(t)), Nil{}}, hs))) : {M.cm.bytes_onto(_, Con{h, r}) == M.cm.bytes_onto(p, Con{h, r}) : List<&2, U32>}
         {==}
 
 def xtsp.d2(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, ec: List<&2, M.CmBlock>, +sc: M.CmBlock, +st: List<&2, U32>, +n: Nat) -> {T.xts.d2(~K, ~dec, k, t, M.CmSplit{List.append(&2, M.CmBlock, ec, Con{sc, Nil{}}), st}, n) == Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k, t, ec, sc, st))} : Result<&2, &2, M.CmError, B.Octets>}:
@@ -1544,7 +1626,9 @@ def xtsp.d2(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +t: M.CmBlock, e
       %Equal.sym(M.CmBlock, T.xts.last(List.append(&2, M.CmBlock, es, Con{sc, Nil{}}), e), sc, li.last_app(es, sc, e)) : {Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k, t, Con{e, es}, _, st))} == Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k, t, Con{e, es}, sc, st))} : Result<&2, &2, M.CmError, B.Octets>}
       {==}
 
-def Laws.xts_round_trip(K, enc, dec, inv, k1, k2, i, p, hi, hp):
+def Laws.xts_round_trip(K, enc, dec, k1, k2, inv, i, p, hi, hp):
+  # the hypothesis, at the blocks the cipher is given: ciphertext stealing's, then the others
+  +hh = inv(List.append(&2, M.CmBlock, xtsp.sins(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), xtsp.ins(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))
   +hne = sp.nonempty(B.Octets.to_list(p))(oc.le16(p, hp))
   +mo = Equal.trans(List<&2, U32>, B.mask(M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))), M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), B.mask(T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))), M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), sp.mask_join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), Equal.cong(List<&2, U32>, List<&2, U32>, x => M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), x), B.mask(T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), xtsp.mask_steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))
   # the public defs are the structural ones
@@ -1567,11 +1651,11 @@ def Laws.xts_round_trip(K, enc, dec, inv, k1, k2, i, p, hi, hp):
   # decryption takes the last block apart
   %Equal.sym(Result<&2, &2, M.CmError, B.Octets>, T.xts.d2(~K, ~dec, k1, enc(k2, M.cm.block_of(B.Octets.to_list(i))), M.CmSplit{List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))}, B.len(B.Octets.to_list(B.Octets.of_list(M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))))), Done{B.Octets.of_list(T.xts.dout(~K, ~dec, k1, enc(k2, M.cm.block_of(B.Octets.to_list(i))), T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))}, xtsp.d2(~K, ~dec, k1, enc(k2, M.cm.block_of(B.Octets.to_list(i))), T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), B.len(B.Octets.to_list(B.Octets.of_list(M.cm.join_onto(List.append(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), Con{T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), Nil{}}), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))))))))) : {_ == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # XTS on blocks
-  %Equal.sym(List<&2, M.CmBlock>, T.xts.dec(~K, ~dec, k1, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), xtsp.go(~K, ~enc, ~dec, ~inv, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))) : {Done{B.Octets.of_list(M.cm.join_onto(_, T.xts.dsteal(~K, ~dec, k1, T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
+  %Equal.sym(List<&2, M.CmBlock>, T.xts.dec(~K, ~dec, k1, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), xtsp.go(~K, ~enc, ~dec, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))(cmp.app_r(~K, ~enc, ~dec, k1, xtsp.sins(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), xtsp.ins(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), hh))) : {Done{B.Octets.of_list(M.cm.join_onto(_, T.xts.dsteal(~K, ~dec, k1, T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # as many ciphertext blocks as plaintext blocks: the same last tweak
   %Equal.sym(Nat, List.length(&2, M.CmBlock, T.xts.enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), li.len_enc(~K, ~enc, k1, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))) : {Done{B.Octets.of_list(M.cm.join_onto(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), T.xts.dsteal(~K, ~dec, k1, T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.alpha_n(_, enc(k2, M.cm.block_of(B.Octets.to_list(i)))))))} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # ciphertext stealing undoes itself
-  %Equal.sym(List<&2, U32>, T.xts.dsteal(~K, ~dec, k1, T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), M.cm.bytes_onto(T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p))))), xtsp.steal(~K, ~enc, ~dec, ~inv, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))(sp.tail_masked(B.Octets.to_list(p)))(sp.tail_short(B.Octets.to_list(p)))) : {Done{B.Octets.of_list(M.cm.join_onto(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), _))} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
+  %Equal.sym(List<&2, U32>, T.xts.dsteal(~K, ~dec, k1, T.xts.steal_c(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.steal_t(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), M.cm.bytes_onto(T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p))))), xtsp.steal(~K, ~enc, ~dec, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))))(cmp.app_l(~K, ~enc, ~dec, k1, xtsp.sins(~K, ~enc, k1, T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p)))), T.xts.alpha_n(List.length(&2, M.CmBlock, T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))))), enc(k2, M.cm.block_of(B.Octets.to_list(i))))), xtsp.ins(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), enc(k2, M.cm.block_of(B.Octets.to_list(i)))), hh))(sp.tail_masked(B.Octets.to_list(p)))(sp.tail_short(B.Octets.to_list(p)))) : {Done{B.Octets.of_list(M.cm.join_onto(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), _))} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # the blocks back together
   %sp.join_append(T.xts.init(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), T.xts.last(sp.tl(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p))))), sp.hd(M.cm.split.blocks(M.cm.split(B.mask(B.Octets.to_list(p)))))), M.cm.split.tail(M.cm.split(B.mask(B.Octets.to_list(p))))) : {Done{B.Octets.of_list(_)} == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
   # 
@@ -1951,3 +2035,2208 @@ def Laws.ccm_bad_nonce_length():
 
 def Laws.cmac_rfc4493_k1():
   {==}
+
+# AES: decryption undoes encryption, for every key and block
+
+# BEGIN GENERATED by gen/aes_proof.py: aes
+# Bytes: facts about one byte, on all 256 values
+
+def ap.nth(xs: List<&2, U32>, n: Nat) -> U32:
+  match xs n:
+    case Nil{} _:
+      0
+    case Con{x, t} 0n:
+      x
+    case Con{x, t} 1n+p:
+      ap.nth(t, p)
+
+def ap.pick(+n: Nat, +xs: List<&2, U32>, +ys: List<&2, U32>, e: {xs == ys : List<&2, U32>}) -> {ap.nth(xs, n) == ap.nth(ys, n) : U32}:
+  Equal.cong(List<&2, U32>, U32, l => ap.nth(l, n), xs, ys, e)
+
+def ap.bridge(+c0: Bool, +c1: Bool, +c2: Bool, +c3: Bool, +c4: Bool, +c5: Bool, +c6: Bool, +c7: Bool, +c8: Bool, +c9: Bool, +c10: Bool, +c11: Bool, +c12: Bool, +c13: Bool, +c14: Bool, +c15: Bool, +c16: Bool, +c17: Bool, +c18: Bool, +c19: Bool, +c20: Bool, +c21: Bool, +c22: Bool, +c23: Bool, +c24: Bool, +c25: Bool, +c26: Bool, +c27: Bool, +c28: Bool, +c29: Bool, +c30: Bool, +c31: Bool) -> {U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}} == U32.and(255, U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}) : U32}:
+  {==}
+
+def ap.e_sbl(c0: Bool, c1: Bool, c2: Bool, c3: Bool, c4: Bool, c5: Bool, c6: Bool, c7: Bool) -> {SB.sbox(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}) == U32.and(255, SB.sbox(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}})) : U32}:
+  match c0 c1 c2 c3 c4 c5 c6 c7:
+    case False{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+
+def ap.sbl(+x: U32) -> {SB.sbox(U32.and(255, x)) == U32.and(255, SB.sbox(U32.and(255, x))) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {SB.sbox(_) == U32.and(255, SB.sbox(_)) : U32}
+      ap.e_sbl(c0, c1, c2, c3, c4, c5, c6, c7)
+
+def ap.e_sbi(c0: Bool, c1: Bool, c2: Bool, c3: Bool, c4: Bool, c5: Bool, c6: Bool, c7: Bool) -> {X.aes.isbox(SB.sbox(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}})) == U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}} : U32}:
+  match c0 c1 c2 c3 c4 c5 c6 c7:
+    case False{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+
+def ap.sbi(+x: U32) -> {X.aes.isbox(SB.sbox(U32.and(255, x))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {X.aes.isbox(SB.sbox(_)) == _ : U32}
+      ap.e_sbi(c0, c1, c2, c3, c4, c5, c6, c7)
+
+def ap.ex2.l(+x: U32) -> List<&2, U32>:
+  [SB.xtime(x), SB.mul3(x), X.aes.m9(x), X.aes.m11(x), X.aes.m13(x), X.aes.m14(x), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 9, x))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, x), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(x)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(x)), G.Gf8.mul(G.Gf8.aes(), 11, x)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(x)))), G.Gf8.add(G.Gf8.add(x, 0), G.Gf8.add(0, 0)), G.Gf8.add(G.Gf8.add(0, x), G.Gf8.add(0, 0)), G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(x, 0)), G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(0, x))]
+
+def ap.ex2.r(+x: U32) -> List<&2, U32>:
+  [U32.and(255, SB.xtime(x)), U32.and(255, SB.mul3(x)), G.Gf8.mul(G.Gf8.aes(), 9, x), G.Gf8.mul(G.Gf8.aes(), 11, x), G.Gf8.mul(G.Gf8.aes(), 13, x), G.Gf8.mul(G.Gf8.aes(), 14, x), x, 0, 0, 0, 0, x, 0, 0, 0, 0, x, 0, 0, 0, 0, x, x, x, x, x]
+
+def ap.ex2(c0: Bool, c1: Bool, c2: Bool, c3: Bool, c4: Bool, c5: Bool, c6: Bool, c7: Bool) -> {ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}) == ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}) : List<&2, U32>}:
+  match c0 c1 c2 c3 c4 c5 c6 c7:
+    case False{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} False{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} False{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} False{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} False{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} False{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} False{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} False{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case False{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+    case True{} True{} True{} True{} True{} True{} True{} True{}:
+      {==}
+
+def ap.xtb(+x: U32) -> {SB.xtime(U32.and(255, x)) == U32.and(255, SB.xtime(U32.and(255, x))) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {SB.xtime(_) == U32.and(255, SB.xtime(_)) : U32}
+      ap.pick(0n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.m3b(+x: U32) -> {SB.mul3(U32.and(255, x)) == U32.and(255, SB.mul3(U32.and(255, x))) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {SB.mul3(_) == U32.and(255, SB.mul3(_)) : U32}
+      ap.pick(1n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.m9b(+x: U32) -> {X.aes.m9(U32.and(255, x)) == G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {X.aes.m9(_) == G.Gf8.mul(G.Gf8.aes(), 9, _) : U32}
+      ap.pick(2n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.m11b(+x: U32) -> {X.aes.m11(U32.and(255, x)) == G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x)) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {X.aes.m11(_) == G.Gf8.mul(G.Gf8.aes(), 11, _) : U32}
+      ap.pick(3n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.m13b(+x: U32) -> {X.aes.m13(U32.and(255, x)) == G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {X.aes.m13(_) == G.Gf8.mul(G.Gf8.aes(), 13, _) : U32}
+      ap.pick(4n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.m14b(+x: U32) -> {X.aes.m14(U32.and(255, x)) == G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {X.aes.m14(_) == G.Gf8.mul(G.Gf8.aes(), 14, _) : U32}
+      ap.pick(5n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col00(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, x))))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(_)))) == _ : U32}
+      ap.pick(6n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col01(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(7n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col02(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(8n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col03(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, x))))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(_)))) == 0 : U32}
+      ap.pick(9n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col10(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, x))))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(_)))) == 0 : U32}
+      ap.pick(10n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col11(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, x))))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(_)))) == _ : U32}
+      ap.pick(11n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col12(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(12n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col13(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(13n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col20(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(14n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col21(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, x))))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(_)))) == 0 : U32}
+      ap.pick(15n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col22(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, x))))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(_)))) == _ : U32}
+      ap.pick(16n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col23(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(17n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col30(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(18n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col31(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, x)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, x)))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(_))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 9, _))) == 0 : U32}
+      ap.pick(19n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col32(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, x))))) == 0 : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, _), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(_)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(_)))) == 0 : U32}
+      ap.pick(20n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.col33(+x: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, x))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, x))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, x)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, x))))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(_)), G.Gf8.mul(G.Gf8.aes(), 11, _)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, _), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(_)))) == _ : U32}
+      ap.pick(21n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.fin0(+x: U32) -> {G.Gf8.add(G.Gf8.add(U32.and(255, x), 0), G.Gf8.add(0, 0)) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(_, 0), G.Gf8.add(0, 0)) == _ : U32}
+      ap.pick(22n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.fin1(+x: U32) -> {G.Gf8.add(G.Gf8.add(0, U32.and(255, x)), G.Gf8.add(0, 0)) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(0, _), G.Gf8.add(0, 0)) == _ : U32}
+      ap.pick(23n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.fin2(+x: U32) -> {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(U32.and(255, x), 0)) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(_, 0)) == _ : U32}
+      ap.pick(24n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.fin3(+x: U32) -> {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(0, U32.and(255, x))) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      %ap.bridge(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(0, _)) == _ : U32}
+      ap.pick(25n, ap.ex2.l(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2.r(U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, Word.zero(24n)}}}}}}}}}), ap.ex2(c0, c1, c2, c3, c4, c5, c6, c7))
+
+def ap.bb(+x: U32) -> {U32.and(255, U32.and(255, x)) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.xorb(+a: U32, +b: U32) -> {U32.xor(U32.and(255, a), U32.and(255, b)) == U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))) : U32}:
+  match a b:
+    case U32{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, WCon{a8, WCon{a9, WCon{a10, WCon{a11, WCon{a12, WCon{a13, WCon{a14, WCon{a15, WCon{a16, WCon{a17, WCon{a18, WCon{a19, WCon{a20, WCon{a21, WCon{a22, WCon{a23, WCon{a24, WCon{a25, WCon{a26, WCon{a27, WCon{a28, WCon{a29, WCon{a30, WCon{a31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b0, WCon{b1, WCon{b2, WCon{b3, WCon{b4, WCon{b5, WCon{b6, WCon{b7, WCon{b8, WCon{b9, WCon{b10, WCon{b11, WCon{b12, WCon{b13, WCon{b14, WCon{b15, WCon{b16, WCon{b17, WCon{b18, WCon{b19, WCon{b20, WCon{b21, WCon{b22, WCon{b23, WCon{b24, WCon{b25, WCon{b26, WCon{b27, WCon{b28, WCon{b29, WCon{b30, WCon{b31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.bylo(+x: U32) -> {B.byte(x) == U32.and(255, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.isb(+x: U32, +y: U32, +e: {x == U32.and(255, y) : U32}) -> {x == U32.and(255, x) : U32}:
+  %Equal.sym(U32, x, U32.and(255, y), e) : {_ == U32.and(255, _) : U32}
+  Equal.sym(U32, U32.and(255, U32.and(255, y)), U32.and(255, y), ap.bb(y))
+
+def ap.gx(+k: U32, +u: U32, +v: U32) -> {G.Gf8.mul(G.Gf8.aes(), k, U32.xor(u, v)) == G.Gf8.mul(G.Gf8.aes(), k, G.Gf8.add(u, v)) : U32}:
+  match u v:
+    case U32{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, ra}}}}}}}}} U32{WCon{b0, WCon{b1, WCon{b2, WCon{b3, WCon{b4, WCon{b5, WCon{b6, WCon{b7, rb}}}}}}}}}:
+      {==}
+
+def ap.mx(+k: U32, +u: U32, +v: U32) -> {G.Gf8.mul(G.Gf8.aes(), k, U32.xor(u, v)) == G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, u), G.Gf8.mul(G.Gf8.aes(), k, v)) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), k, U32.xor(u, v)), G.Gf8.mul(G.Gf8.aes(), k, G.Gf8.add(u, v)), ap.gx(k, u, v)) : {_ == G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, u), G.Gf8.mul(G.Gf8.aes(), k, v)) : U32}
+  GL.mul_distrib(G.Gf8.aes(), k, u, v)
+
+def ap.glo(+k: U32, +x: U32) -> {G.Gf8.mul(G.Gf8.aes(), k, U32.and(255, x)) == G.Gf8.mul(G.Gf8.aes(), k, x) : U32}:
+  match x:
+    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.m9(+x: U32) -> {X.aes.m9(x) == G.Gf8.mul(G.Gf8.aes(), 9, x) : U32}:
+  %Equal.sym(U32, U32.and(255, x), U32.and(255, U32.and(255, x)), Equal.sym(U32, U32.and(255, U32.and(255, x)), U32.and(255, x), ap.bb(x))) : {X.aes.c9(_) == G.Gf8.mul(G.Gf8.aes(), 9, x) : U32}
+  %ap.glo(9, x) : {X.aes.c9(U32.and(255, U32.and(255, x))) == _ : U32}
+  ap.m9b(x)
+
+def ap.m11(+x: U32) -> {X.aes.m11(x) == G.Gf8.mul(G.Gf8.aes(), 11, x) : U32}:
+  %Equal.sym(U32, U32.and(255, x), U32.and(255, U32.and(255, x)), Equal.sym(U32, U32.and(255, U32.and(255, x)), U32.and(255, x), ap.bb(x))) : {X.aes.c11(_) == G.Gf8.mul(G.Gf8.aes(), 11, x) : U32}
+  %ap.glo(11, x) : {X.aes.c11(U32.and(255, U32.and(255, x))) == _ : U32}
+  ap.m11b(x)
+
+def ap.m13(+x: U32) -> {X.aes.m13(x) == G.Gf8.mul(G.Gf8.aes(), 13, x) : U32}:
+  %Equal.sym(U32, U32.and(255, x), U32.and(255, U32.and(255, x)), Equal.sym(U32, U32.and(255, U32.and(255, x)), U32.and(255, x), ap.bb(x))) : {X.aes.c13(_) == G.Gf8.mul(G.Gf8.aes(), 13, x) : U32}
+  %ap.glo(13, x) : {X.aes.c13(U32.and(255, U32.and(255, x))) == _ : U32}
+  ap.m13b(x)
+
+def ap.m14(+x: U32) -> {X.aes.m14(x) == G.Gf8.mul(G.Gf8.aes(), 14, x) : U32}:
+  %Equal.sym(U32, U32.and(255, x), U32.and(255, U32.and(255, x)), Equal.sym(U32, U32.and(255, U32.and(255, x)), U32.and(255, x), ap.bb(x))) : {X.aes.c14(_) == G.Gf8.mul(G.Gf8.aes(), 14, x) : U32}
+  %ap.glo(14, x) : {X.aes.c14(U32.and(255, U32.and(255, x))) == _ : U32}
+  ap.m14b(x)
+
+def ap.xg0(m1: G.Gf8Bits, m2: G.Gf8Bits) -> {U32.xor(G.Gf8Bits.to(m1), G.Gf8Bits.to(m2)) == G.Gf8.add(G.Gf8Bits.to(m1), G.Gf8Bits.to(m2)) : U32}:
+  match m1 m2:
+    case G.Gf8Bits{a0, a1, a2, a3, a4, a5, a6, a7} G.Gf8Bits{b0, b1, b2, b3, b4, b5, b6, b7}:
+      {==}
+
+def ap.xg(+k1: U32, +k2: U32, +u: U32, +v: U32) -> {U32.xor(G.Gf8.mul(G.Gf8.aes(), k1, u), G.Gf8.mul(G.Gf8.aes(), k2, v)) == G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k1, u), G.Gf8.mul(G.Gf8.aes(), k2, v)) : U32}:
+  ap.xg0(G.Gf8Bits.mul(G.Gf8Bits.of(k1), G.Gf8Bits.of(u), G.Gf8Bits.of(283)), G.Gf8Bits.mul(G.Gf8Bits.of(k2), G.Gf8Bits.of(v), G.Gf8Bits.of(283)))
+
+def ap.imixg(+p: U32, +q: U32, +r: U32, +s: U32) -> {X.aes.imix0(p, q, r, s) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}:
+  %Equal.sym(U32, X.aes.m14(p), G.Gf8.mul(G.Gf8.aes(), 14, p), ap.m14(p)) : {U32.xor(U32.xor(_, X.aes.m11(q)), U32.xor(X.aes.m13(r), X.aes.m9(s))) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  %Equal.sym(U32, X.aes.m11(q), G.Gf8.mul(G.Gf8.aes(), 11, q), ap.m11(q)) : {U32.xor(U32.xor(G.Gf8.mul(G.Gf8.aes(), 14, p), _), U32.xor(X.aes.m13(r), X.aes.m9(s))) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  %Equal.sym(U32, X.aes.m13(r), G.Gf8.mul(G.Gf8.aes(), 13, r), ap.m13(r)) : {U32.xor(U32.xor(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), U32.xor(_, X.aes.m9(s))) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  %Equal.sym(U32, X.aes.m9(s), G.Gf8.mul(G.Gf8.aes(), 9, s), ap.m9(s)) : {U32.xor(U32.xor(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), U32.xor(G.Gf8.mul(G.Gf8.aes(), 13, r), _)) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  %Equal.sym(U32, U32.xor(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), ap.xg(14, 11, p, q)) : {U32.xor(_, U32.xor(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  %Equal.sym(U32, U32.xor(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s)), ap.xg(13, 9, r, s)) : {U32.xor(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), _) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, p), G.Gf8.mul(G.Gf8.aes(), 11, q)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, r), G.Gf8.mul(G.Gf8.aes(), 9, s))) : U32}
+  ap.xg0(G.Gf8Bits.xor(G.Gf8Bits.of(G.Gf8.mul(G.Gf8.aes(), 14, p)), G.Gf8Bits.of(G.Gf8.mul(G.Gf8.aes(), 11, q))), G.Gf8Bits.xor(G.Gf8Bits.of(G.Gf8.mul(G.Gf8.aes(), 13, r)), G.Gf8Bits.of(G.Gf8.mul(G.Gf8.aes(), 9, s))))
+
+# MixColumns undone, a column at a time
+
+def ap.swap4(+a: U32, +b: U32, +c: U32, +d: U32) -> {G.Gf8.add(G.Gf8.add(a, b), G.Gf8.add(c, d)) == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}:
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(a, b), G.Gf8.add(c, d)), G.Gf8.add(a, G.Gf8.add(b, G.Gf8.add(c, d))), GL.add_assoc(a, b, G.Gf8.add(c, d))) : {_ == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}
+  %GL.add_assoc(b, c, d) : {G.Gf8.add(a, _) == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}
+  %Equal.sym(U32, G.Gf8.add(b, c), G.Gf8.add(c, b), GL.add_comm(b, c)) : {G.Gf8.add(a, G.Gf8.add(_, d)) == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(c, b), d), G.Gf8.add(c, G.Gf8.add(b, d)), GL.add_assoc(c, b, d)) : {G.Gf8.add(a, _) == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}
+  %GL.add_assoc(a, c, G.Gf8.add(b, d)) : {_ == G.Gf8.add(G.Gf8.add(a, c), G.Gf8.add(b, d)) : U32}
+  {==}
+
+def ap.trans(+t00: U32, +t01: U32, +t02: U32, +t03: U32, +t10: U32, +t11: U32, +t12: U32, +t13: U32, +t20: U32, +t21: U32, +t22: U32, +t23: U32, +t30: U32, +t31: U32, +t32: U32, +t33: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t02, t03)), G.Gf8.add(G.Gf8.add(t10, t11), G.Gf8.add(t12, t13))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t22, t23)), G.Gf8.add(G.Gf8.add(t30, t31), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}:
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t02, t03)), G.Gf8.add(G.Gf8.add(t10, t11), G.Gf8.add(t12, t13))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13))), ap.swap4(G.Gf8.add(t00, t01), G.Gf8.add(t02, t03), G.Gf8.add(t10, t11), G.Gf8.add(t12, t13))) : {G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t22, t23)), G.Gf8.add(G.Gf8.add(t30, t31), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t22, t23)), G.Gf8.add(G.Gf8.add(t30, t31), G.Gf8.add(t32, t33))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33))), ap.swap4(G.Gf8.add(t20, t21), G.Gf8.add(t22, t23), G.Gf8.add(t30, t31), G.Gf8.add(t32, t33))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13))), _) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))), ap.swap4(G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))) : {_ == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(t00, t01), G.Gf8.add(t10, t11)), G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t01, t11)), ap.swap4(t00, t01, t10, t11)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(t20, t21), G.Gf8.add(t30, t31)), G.Gf8.add(G.Gf8.add(t20, t30), G.Gf8.add(t21, t31)), ap.swap4(t20, t21, t30, t31)) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t01, t11)), _), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t01, t11)), G.Gf8.add(G.Gf8.add(t20, t30), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), ap.swap4(G.Gf8.add(t00, t10), G.Gf8.add(t01, t11), G.Gf8.add(t20, t30), G.Gf8.add(t21, t31))) : {G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(t02, t03), G.Gf8.add(t12, t13)), G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t03, t13)), ap.swap4(t02, t03, t12, t13)) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(_, G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)))) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(t22, t23), G.Gf8.add(t32, t33)), G.Gf8.add(G.Gf8.add(t22, t32), G.Gf8.add(t23, t33)), ap.swap4(t22, t23, t32, t33)) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t03, t13)), _)) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t03, t13)), G.Gf8.add(G.Gf8.add(t22, t32), G.Gf8.add(t23, t33))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33))), ap.swap4(G.Gf8.add(t02, t12), G.Gf8.add(t03, t13), G.Gf8.add(t22, t32), G.Gf8.add(t23, t33))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), _) == G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(t00, t10), G.Gf8.add(t20, t30)), G.Gf8.add(G.Gf8.add(t01, t11), G.Gf8.add(t21, t31))), G.Gf8.add(G.Gf8.add(G.Gf8.add(t02, t12), G.Gf8.add(t22, t32)), G.Gf8.add(G.Gf8.add(t03, t13), G.Gf8.add(t23, t33)))) : U32}
+  {==}
+
+def ap.row(+k: U32, +x1: U32, +x2: U32, +x3: U32, +x4: U32) -> {G.Gf8.mul(G.Gf8.aes(), k, U32.xor(U32.xor(U32.xor(x1, x2), x3), x4)) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x3), G.Gf8.mul(G.Gf8.aes(), k, x4))) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), k, U32.xor(U32.xor(U32.xor(x1, x2), x3), x4)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, U32.xor(U32.xor(x1, x2), x3)), G.Gf8.mul(G.Gf8.aes(), k, x4)), ap.mx(k, U32.xor(U32.xor(x1, x2), x3), x4)) : {_ == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x3), G.Gf8.mul(G.Gf8.aes(), k, x4))) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), k, U32.xor(U32.xor(x1, x2), x3)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, U32.xor(x1, x2)), G.Gf8.mul(G.Gf8.aes(), k, x3)), ap.mx(k, U32.xor(x1, x2), x3)) : {G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), k, x4)) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x3), G.Gf8.mul(G.Gf8.aes(), k, x4))) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), k, U32.xor(x1, x2)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), ap.mx(k, x1, x2)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), k, x3)), G.Gf8.mul(G.Gf8.aes(), k, x4)) == G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x3), G.Gf8.mul(G.Gf8.aes(), k, x4))) : U32}
+  GL.add_assoc(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), k, x1), G.Gf8.mul(G.Gf8.aes(), k, x2)), G.Gf8.mul(G.Gf8.aes(), k, x3), G.Gf8.mul(G.Gf8.aes(), k, x4))
+
+def ap.out0(+a: U32, +b: U32, +c: U32, +d: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))) == U32.and(255, a) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), ap.row(14, SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b)), U32.and(255, c), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d)))), ap.row(11, U32.and(255, a), SB.xtime(U32.and(255, b)), SB.mul3(U32.and(255, c)), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), _), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))))), ap.row(13, U32.and(255, a), U32.and(255, b), SB.xtime(U32.and(255, c)), SB.mul3(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))), ap.row(9, SB.mul3(U32.and(255, a)), U32.and(255, b), U32.and(255, c), SB.xtime(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))))), _)) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, a))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))))), ap.trans(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))) : {_ == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, a))))), U32.and(255, a), ap.col00(a)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b)))), 0, ap.col01(b)) : {G.Gf8.add(G.Gf8.add(U32.and(255, a), _), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), 0, ap.col02(c)) : {G.Gf8.add(G.Gf8.add(U32.and(255, a), 0), G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))))) == U32.and(255, a) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, d))))), 0, ap.col03(d)) : {G.Gf8.add(G.Gf8.add(U32.and(255, a), 0), G.Gf8.add(0, _)) == U32.and(255, a) : U32}
+  ap.fin0(a)
+
+def ap.out1(+a: U32, +b: U32, +c: U32, +d: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))) == U32.and(255, b) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), ap.row(14, U32.and(255, a), SB.xtime(U32.and(255, b)), SB.mul3(U32.and(255, c)), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d))))), ap.row(11, U32.and(255, a), U32.and(255, b), SB.xtime(U32.and(255, c)), SB.mul3(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), _), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))))), ap.row(13, SB.mul3(U32.and(255, a)), U32.and(255, b), U32.and(255, c), SB.xtime(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))))), G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))), ap.row(9, SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b)), U32.and(255, c), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))))), _)) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, a))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))), ap.trans(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))) : {_ == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, a))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, a))))), 0, ap.col10(a)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, b))))), U32.and(255, b), ap.col11(b)) : {G.Gf8.add(G.Gf8.add(0, _), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, c)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, c)))), 0, ap.col12(c)) : {G.Gf8.add(G.Gf8.add(0, U32.and(255, b)), G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, b) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))), 0, ap.col13(d)) : {G.Gf8.add(G.Gf8.add(0, U32.and(255, b)), G.Gf8.add(0, _)) == U32.and(255, b) : U32}
+  ap.fin1(b)
+
+def ap.out2(+a: U32, +b: U32, +c: U32, +d: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))) == U32.and(255, c) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))))), ap.row(14, U32.and(255, a), U32.and(255, b), SB.xtime(U32.and(255, c)), SB.mul3(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d))))), ap.row(11, SB.mul3(U32.and(255, a)), U32.and(255, b), U32.and(255, c), SB.xtime(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))))), _), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), ap.row(13, SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b)), U32.and(255, c), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))))), G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))), ap.row(9, U32.and(255, a), SB.xtime(U32.and(255, b)), SB.mul3(U32.and(255, c)), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), _)) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))), ap.trans(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))) : {_ == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, a)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)))), 0, ap.col20(a)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b)))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, b))))), 0, ap.col21(b)) : {G.Gf8.add(G.Gf8.add(0, _), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, c))))), U32.and(255, c), ap.col22(c)) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))))) == U32.and(255, c) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, d)))), 0, ap.col23(d)) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(U32.and(255, c), _)) == U32.and(255, c) : U32}
+  ap.fin2(c)
+
+def ap.out3(+a: U32, +b: U32, +c: U32, +d: U32) -> {G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))) == U32.and(255, d) : U32}:
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))))), ap.row(14, SB.mul3(U32.and(255, a)), U32.and(255, b), U32.and(255, c), SB.xtime(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d)))), ap.row(11, SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b)), U32.and(255, c), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))))), _), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), ap.row(13, U32.and(255, a), SB.xtime(U32.and(255, b)), SB.mul3(U32.and(255, c)), U32.and(255, d))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(_, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))), ap.row(9, U32.and(255, a), U32.and(255, b), SB.xtime(U32.and(255, c)), SB.mul3(U32.and(255, d)))) : {G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), _)) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))))), ap.trans(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))) : {_ == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.mul3(U32.and(255, a))), G.Gf8.mul(G.Gf8.aes(), 11, SB.xtime(U32.and(255, a)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, a)), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, a)))), 0, ap.col30(a)) : {G.Gf8.add(G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b))))), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, b)), G.Gf8.mul(G.Gf8.aes(), 11, SB.mul3(U32.and(255, b)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.xtime(U32.and(255, b))), G.Gf8.mul(G.Gf8.aes(), 9, U32.and(255, b)))), 0, ap.col31(b)) : {G.Gf8.add(G.Gf8.add(0, _), G.Gf8.add(G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.and(255, c)), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, c))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, SB.mul3(U32.and(255, c))), G.Gf8.mul(G.Gf8.aes(), 9, SB.xtime(U32.and(255, c))))), 0, ap.col32(c)) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(_, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))))) == U32.and(255, d) : U32}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, SB.xtime(U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.and(255, d))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.and(255, d)), G.Gf8.mul(G.Gf8.aes(), 9, SB.mul3(U32.and(255, d))))), U32.and(255, d), ap.col33(d)) : {G.Gf8.add(G.Gf8.add(0, 0), G.Gf8.add(0, _)) == U32.and(255, d) : U32}
+  ap.fin3(d)
+
+def ap.mixc(+a: U32, +b: U32, +c: U32, +d: U32) -> {X.aes.imix_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}:
+  %Equal.sym(U32, X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))), ap.imixg(U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))))) : {TT.W{_, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))))), U32.and(255, a), ap.out0(a, b, c, d)) : {TT.W{_, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))), ap.imixg(U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)))) : {TT.W{U32.and(255, a), _, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))))), U32.and(255, b), ap.out1(a, b, c, d)) : {TT.W{U32.and(255, a), _, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, X.aes.imix0(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))), ap.imixg(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)))) : {TT.W{U32.and(255, a), U32.and(255, b), _, X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))))), U32.and(255, c), ap.out2(a, b, c, d)) : {TT.W{U32.and(255, a), U32.and(255, b), _, X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, X.aes.imix0(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))), ap.imixg(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))))) : {TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), _} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  %Equal.sym(U32, G.Gf8.add(G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 14, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), G.Gf8.mul(G.Gf8.aes(), 11, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)))), G.Gf8.add(G.Gf8.mul(G.Gf8.aes(), 13, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), G.Gf8.mul(G.Gf8.aes(), 9, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))))), U32.and(255, d), ap.out3(a, b, c, d)) : {TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), _} == TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)} : TT.Quad}
+  {==}
+
+def ap.rowb0(+a: U32, +b: U32, +c: U32, +d: U32) -> {U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}:
+  %Equal.sym(U32, SB.xtime(U32.and(255, a)), U32.and(255, SB.xtime(U32.and(255, a))), ap.xtb(a)) : {U32.xor(U32.xor(U32.xor(_, SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, SB.mul3(U32.and(255, b)), U32.and(255, SB.mul3(U32.and(255, b))), ap.m3b(b)) : {U32.xor(U32.xor(U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), _), U32.and(255, c)), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b)))), U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), ap.xorb(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b)))) : {U32.xor(U32.xor(_, U32.and(255, c)), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c)), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), ap.xorb(U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b)))), c)) : {U32.xor(_, U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d)), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))), ap.xorb(U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c)), d)) : {_ == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d))) : U32}
+  {==}
+
+def ap.rowb1(+a: U32, +b: U32, +c: U32, +d: U32) -> {U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}:
+  %Equal.sym(U32, SB.xtime(U32.and(255, b)), U32.and(255, SB.xtime(U32.and(255, b))), ap.xtb(b)) : {U32.xor(U32.xor(U32.xor(U32.and(255, a), _), SB.mul3(U32.and(255, c))), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, SB.mul3(U32.and(255, c)), U32.and(255, SB.mul3(U32.and(255, c))), ap.m3b(c)) : {U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b)))), _), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b)))), U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), ap.xorb(a, SB.xtime(U32.and(255, b)))) : {U32.xor(U32.xor(_, U32.and(255, SB.mul3(U32.and(255, c)))), U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c)))), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), ap.xorb(U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b)))), SB.mul3(U32.and(255, c)))) : {U32.xor(_, U32.and(255, d)) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d)), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))), ap.xorb(U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c)))), d)) : {_ == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d))) : U32}
+  {==}
+
+def ap.rowb2(+a: U32, +b: U32, +c: U32, +d: U32) -> {U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}:
+  %Equal.sym(U32, SB.xtime(U32.and(255, c)), U32.and(255, SB.xtime(U32.and(255, c))), ap.xtb(c)) : {U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), _), SB.mul3(U32.and(255, d))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, SB.mul3(U32.and(255, d)), U32.and(255, SB.mul3(U32.and(255, d))), ap.m3b(d)) : {U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), U32.and(255, SB.xtime(U32.and(255, c)))), _) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, a), U32.and(255, b)), U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), ap.xorb(a, b)) : {U32.xor(U32.xor(_, U32.and(255, SB.xtime(U32.and(255, c)))), U32.and(255, SB.mul3(U32.and(255, d)))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c)))), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), ap.xorb(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c)))) : {U32.xor(_, U32.and(255, SB.mul3(U32.and(255, d)))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d)))), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))), ap.xorb(U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c)))), SB.mul3(U32.and(255, d)))) : {_ == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d))))) : U32}
+  {==}
+
+def ap.rowb3(+a: U32, +b: U32, +c: U32, +d: U32) -> {U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}:
+  %Equal.sym(U32, SB.mul3(U32.and(255, a)), U32.and(255, SB.mul3(U32.and(255, a))), ap.m3b(a)) : {U32.xor(U32.xor(U32.xor(_, U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, SB.xtime(U32.and(255, d)), U32.and(255, SB.xtime(U32.and(255, d))), ap.xtb(d)) : {U32.xor(U32.xor(U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b)), U32.and(255, c)), _) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b)), U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), ap.xorb(SB.mul3(U32.and(255, a)), b)) : {U32.xor(U32.xor(_, U32.and(255, c)), U32.and(255, SB.xtime(U32.and(255, d)))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c)), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), ap.xorb(U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b)), c)) : {U32.xor(_, U32.and(255, SB.xtime(U32.and(255, d)))) == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}
+  %Equal.sym(U32, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d)))), U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))), ap.xorb(U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c)), SB.xtime(U32.and(255, d)))) : {_ == U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d))))) : U32}
+  {==}
+
+def ap.mixcb(+a: U32, +b: U32, +c: U32, +d: U32) -> {A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)}) == X.aes.mask_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) : TT.Quad}:
+  %Equal.sym(U32, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.and(255, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), ap.isb(U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d)), U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.xtime(U32.and(255, a))), U32.and(255, SB.mul3(U32.and(255, b))))), U32.and(255, c))), U32.and(255, d)), ap.rowb0(a, b, c, d))) : {TT.W{_, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))} == X.aes.mask_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) : TT.Quad}
+  %Equal.sym(U32, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.and(255, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), ap.isb(U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d)), U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, SB.xtime(U32.and(255, b))))), U32.and(255, SB.mul3(U32.and(255, c))))), U32.and(255, d)), ap.rowb1(a, b, c, d))) : {TT.W{U32.and(255, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), _, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))} == X.aes.mask_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) : TT.Quad}
+  %Equal.sym(U32, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.and(255, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), ap.isb(U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d))), U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, a), U32.and(255, b))), U32.and(255, SB.xtime(U32.and(255, c))))), U32.and(255, SB.mul3(U32.and(255, d)))), ap.rowb2(a, b, c, d))) : {TT.W{U32.and(255, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), U32.and(255, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), _, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))} == X.aes.mask_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) : TT.Quad}
+  %Equal.sym(U32, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.and(255, U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d)))), ap.isb(U32.xor(U32.xor(U32.xor(SB.mul3(U32.and(255, a)), U32.and(255, b)), U32.and(255, c)), SB.xtime(U32.and(255, d))), U32.xor(U32.and(255, U32.xor(U32.and(255, U32.xor(U32.and(255, SB.mul3(U32.and(255, a))), U32.and(255, b))), U32.and(255, c))), U32.and(255, SB.xtime(U32.and(255, d)))), ap.rowb3(a, b, c, d))) : {TT.W{U32.and(255, U32.xor(U32.xor(U32.xor(SB.xtime(U32.and(255, a)), SB.mul3(U32.and(255, b))), U32.and(255, c)), U32.and(255, d))), U32.and(255, U32.xor(U32.xor(U32.xor(U32.and(255, a), SB.xtime(U32.and(255, b))), SB.mul3(U32.and(255, c))), U32.and(255, d))), U32.and(255, U32.xor(U32.xor(U32.xor(U32.and(255, a), U32.and(255, b)), SB.xtime(U32.and(255, c))), SB.mul3(U32.and(255, d)))), _} == X.aes.mask_w(A.mix_column(TT.W{U32.and(255, a), U32.and(255, b), U32.and(255, c), U32.and(255, d)})) : TT.Quad}
+  {==}
+
+# States: each step of a round undone, or made of bytes again
+
+def ap.ark2(+m: TT.State, +k: TT.State) -> {A.add_round_key(A.add_round_key(m, k), k) == m : TT.State}:
+  match m k:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}:
+      %Equal.sym(U32, U32.xor(U32.xor(z0, k0), k0), z0, bx.ru32(z0, k0)) : {TT.S{TT.W{_, U32.xor(U32.xor(z1, k1), k1), U32.xor(U32.xor(z2, k2), k2), U32.xor(U32.xor(z3, k3), k3)}, TT.W{U32.xor(U32.xor(z4, k4), k4), U32.xor(U32.xor(z5, k5), k5), U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z1, k1), k1), z1, bx.ru32(z1, k1)) : {TT.S{TT.W{z0, _, U32.xor(U32.xor(z2, k2), k2), U32.xor(U32.xor(z3, k3), k3)}, TT.W{U32.xor(U32.xor(z4, k4), k4), U32.xor(U32.xor(z5, k5), k5), U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z2, k2), k2), z2, bx.ru32(z2, k2)) : {TT.S{TT.W{z0, z1, _, U32.xor(U32.xor(z3, k3), k3)}, TT.W{U32.xor(U32.xor(z4, k4), k4), U32.xor(U32.xor(z5, k5), k5), U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z3, k3), k3), z3, bx.ru32(z3, k3)) : {TT.S{TT.W{z0, z1, z2, _}, TT.W{U32.xor(U32.xor(z4, k4), k4), U32.xor(U32.xor(z5, k5), k5), U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z4, k4), k4), z4, bx.ru32(z4, k4)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{_, U32.xor(U32.xor(z5, k5), k5), U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z5, k5), k5), z5, bx.ru32(z5, k5)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, _, U32.xor(U32.xor(z6, k6), k6), U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z6, k6), k6), z6, bx.ru32(z6, k6)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, _, U32.xor(U32.xor(z7, k7), k7)}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z7, k7), k7), z7, bx.ru32(z7, k7)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, _}, TT.W{U32.xor(U32.xor(z8, k8), k8), U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z8, k8), k8), z8, bx.ru32(z8, k8)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{_, U32.xor(U32.xor(z9, k9), k9), U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z9, k9), k9), z9, bx.ru32(z9, k9)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, _, U32.xor(U32.xor(z10, k10), k10), U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z10, k10), k10), z10, bx.ru32(z10, k10)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, _, U32.xor(U32.xor(z11, k11), k11)}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z11, k11), k11), z11, bx.ru32(z11, k11)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, _}, TT.W{U32.xor(U32.xor(z12, k12), k12), U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z12, k12), k12), z12, bx.ru32(z12, k12)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{_, U32.xor(U32.xor(z13, k13), k13), U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z13, k13), k13), z13, bx.ru32(z13, k13)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, _, U32.xor(U32.xor(z14, k14), k14), U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z14, k14), k14), z14, bx.ru32(z14, k14)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, _, U32.xor(U32.xor(z15, k15), k15)}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      %Equal.sym(U32, U32.xor(U32.xor(z15, k15), k15), z15, bx.ru32(z15, k15)) : {TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, _}} == TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} : TT.State}
+      {==}
+
+def ap.shift(+s: TT.State) -> {X.aes.inv_shift(A.shift_rows(s)) == s : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      {==}
+
+def ap.shm(+s: TT.State) -> {A.shift_rows(X.aes.mask(s)) == X.aes.mask(A.shift_rows(s)) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      {==}
+
+def ap.mm(+s: TT.State) -> {X.aes.mask(X.aes.mask(s)) == X.aes.mask(s) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      %Equal.sym(U32, U32.and(255, U32.and(255, z0)), U32.and(255, z0), ap.bb(z0)) : {TT.S{TT.W{_, U32.and(255, U32.and(255, z1)), U32.and(255, U32.and(255, z2)), U32.and(255, U32.and(255, z3))}, TT.W{U32.and(255, U32.and(255, z4)), U32.and(255, U32.and(255, z5)), U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z1)), U32.and(255, z1), ap.bb(z1)) : {TT.S{TT.W{U32.and(255, z0), _, U32.and(255, U32.and(255, z2)), U32.and(255, U32.and(255, z3))}, TT.W{U32.and(255, U32.and(255, z4)), U32.and(255, U32.and(255, z5)), U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z2)), U32.and(255, z2), ap.bb(z2)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), _, U32.and(255, U32.and(255, z3))}, TT.W{U32.and(255, U32.and(255, z4)), U32.and(255, U32.and(255, z5)), U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z3)), U32.and(255, z3), ap.bb(z3)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), _}, TT.W{U32.and(255, U32.and(255, z4)), U32.and(255, U32.and(255, z5)), U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z4)), U32.and(255, z4), ap.bb(z4)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{_, U32.and(255, U32.and(255, z5)), U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z5)), U32.and(255, z5), ap.bb(z5)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), _, U32.and(255, U32.and(255, z6)), U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z6)), U32.and(255, z6), ap.bb(z6)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), _, U32.and(255, U32.and(255, z7))}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z7)), U32.and(255, z7), ap.bb(z7)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), _}, TT.W{U32.and(255, U32.and(255, z8)), U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z8)), U32.and(255, z8), ap.bb(z8)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{_, U32.and(255, U32.and(255, z9)), U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z9)), U32.and(255, z9), ap.bb(z9)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), _, U32.and(255, U32.and(255, z10)), U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z10)), U32.and(255, z10), ap.bb(z10)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), _, U32.and(255, U32.and(255, z11))}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z11)), U32.and(255, z11), ap.bb(z11)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), _}, TT.W{U32.and(255, U32.and(255, z12)), U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z12)), U32.and(255, z12), ap.bb(z12)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{_, U32.and(255, U32.and(255, z13)), U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z13)), U32.and(255, z13), ap.bb(z13)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), _, U32.and(255, U32.and(255, z14)), U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z14)), U32.and(255, z14), ap.bb(z14)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), U32.and(255, z13), _, U32.and(255, U32.and(255, z15))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, U32.and(255, U32.and(255, z15)), U32.and(255, z15), ap.bb(z15)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), _}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      {==}
+
+def ap.subl(+s: TT.State) -> {A.sub_bytes(X.aes.mask(s)) == X.aes.mask(A.sub_bytes(X.aes.mask(s))) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      %Equal.sym(U32, SB.sbox(U32.and(255, z0)), U32.and(255, SB.sbox(U32.and(255, z0))), ap.sbl(z0)) : {TT.S{TT.W{_, SB.sbox(U32.and(255, z1)), SB.sbox(U32.and(255, z2)), SB.sbox(U32.and(255, z3))}, TT.W{SB.sbox(U32.and(255, z4)), SB.sbox(U32.and(255, z5)), SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z1)), U32.and(255, SB.sbox(U32.and(255, z1))), ap.sbl(z1)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), _, SB.sbox(U32.and(255, z2)), SB.sbox(U32.and(255, z3))}, TT.W{SB.sbox(U32.and(255, z4)), SB.sbox(U32.and(255, z5)), SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z2)), U32.and(255, SB.sbox(U32.and(255, z2))), ap.sbl(z2)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), _, SB.sbox(U32.and(255, z3))}, TT.W{SB.sbox(U32.and(255, z4)), SB.sbox(U32.and(255, z5)), SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z3)), U32.and(255, SB.sbox(U32.and(255, z3))), ap.sbl(z3)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), _}, TT.W{SB.sbox(U32.and(255, z4)), SB.sbox(U32.and(255, z5)), SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z4)), U32.and(255, SB.sbox(U32.and(255, z4))), ap.sbl(z4)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{_, SB.sbox(U32.and(255, z5)), SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z5)), U32.and(255, SB.sbox(U32.and(255, z5))), ap.sbl(z5)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), _, SB.sbox(U32.and(255, z6)), SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z6)), U32.and(255, SB.sbox(U32.and(255, z6))), ap.sbl(z6)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), _, SB.sbox(U32.and(255, z7))}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z7)), U32.and(255, SB.sbox(U32.and(255, z7))), ap.sbl(z7)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), _}, TT.W{SB.sbox(U32.and(255, z8)), SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z8)), U32.and(255, SB.sbox(U32.and(255, z8))), ap.sbl(z8)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{_, SB.sbox(U32.and(255, z9)), SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z9)), U32.and(255, SB.sbox(U32.and(255, z9))), ap.sbl(z9)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), _, SB.sbox(U32.and(255, z10)), SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z10)), U32.and(255, SB.sbox(U32.and(255, z10))), ap.sbl(z10)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), _, SB.sbox(U32.and(255, z11))}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z11)), U32.and(255, SB.sbox(U32.and(255, z11))), ap.sbl(z11)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), U32.and(255, SB.sbox(U32.and(255, z10))), _}, TT.W{SB.sbox(U32.and(255, z12)), SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z12)), U32.and(255, SB.sbox(U32.and(255, z12))), ap.sbl(z12)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), U32.and(255, SB.sbox(U32.and(255, z10))), U32.and(255, SB.sbox(U32.and(255, z11)))}, TT.W{_, SB.sbox(U32.and(255, z13)), SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z13)), U32.and(255, SB.sbox(U32.and(255, z13))), ap.sbl(z13)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), U32.and(255, SB.sbox(U32.and(255, z10))), U32.and(255, SB.sbox(U32.and(255, z11)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z12))), _, SB.sbox(U32.and(255, z14)), SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z14)), U32.and(255, SB.sbox(U32.and(255, z14))), ap.sbl(z14)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), U32.and(255, SB.sbox(U32.and(255, z10))), U32.and(255, SB.sbox(U32.and(255, z11)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z12))), U32.and(255, SB.sbox(U32.and(255, z13))), _, SB.sbox(U32.and(255, z15))}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(U32, SB.sbox(U32.and(255, z15)), U32.and(255, SB.sbox(U32.and(255, z15))), ap.sbl(z15)) : {TT.S{TT.W{U32.and(255, SB.sbox(U32.and(255, z0))), U32.and(255, SB.sbox(U32.and(255, z1))), U32.and(255, SB.sbox(U32.and(255, z2))), U32.and(255, SB.sbox(U32.and(255, z3)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z4))), U32.and(255, SB.sbox(U32.and(255, z5))), U32.and(255, SB.sbox(U32.and(255, z6))), U32.and(255, SB.sbox(U32.and(255, z7)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z8))), U32.and(255, SB.sbox(U32.and(255, z9))), U32.and(255, SB.sbox(U32.and(255, z10))), U32.and(255, SB.sbox(U32.and(255, z11)))}, TT.W{U32.and(255, SB.sbox(U32.and(255, z12))), U32.and(255, SB.sbox(U32.and(255, z13))), U32.and(255, SB.sbox(U32.and(255, z14))), _}} == X.aes.mask(A.sub_bytes(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      {==}
+
+def ap.subi(+s: TT.State) -> {X.aes.inv_sub(A.sub_bytes(X.aes.mask(s))) == X.aes.mask(s) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z0))), U32.and(255, z0), ap.sbi(z0)) : {TT.S{TT.W{_, X.aes.isbox(SB.sbox(U32.and(255, z1))), X.aes.isbox(SB.sbox(U32.and(255, z2))), X.aes.isbox(SB.sbox(U32.and(255, z3)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z4))), X.aes.isbox(SB.sbox(U32.and(255, z5))), X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z1))), U32.and(255, z1), ap.sbi(z1)) : {TT.S{TT.W{U32.and(255, z0), _, X.aes.isbox(SB.sbox(U32.and(255, z2))), X.aes.isbox(SB.sbox(U32.and(255, z3)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z4))), X.aes.isbox(SB.sbox(U32.and(255, z5))), X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z2))), U32.and(255, z2), ap.sbi(z2)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), _, X.aes.isbox(SB.sbox(U32.and(255, z3)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z4))), X.aes.isbox(SB.sbox(U32.and(255, z5))), X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z3))), U32.and(255, z3), ap.sbi(z3)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), _}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z4))), X.aes.isbox(SB.sbox(U32.and(255, z5))), X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z4))), U32.and(255, z4), ap.sbi(z4)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{_, X.aes.isbox(SB.sbox(U32.and(255, z5))), X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z5))), U32.and(255, z5), ap.sbi(z5)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), _, X.aes.isbox(SB.sbox(U32.and(255, z6))), X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z6))), U32.and(255, z6), ap.sbi(z6)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), _, X.aes.isbox(SB.sbox(U32.and(255, z7)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z7))), U32.and(255, z7), ap.sbi(z7)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), _}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z8))), X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z8))), U32.and(255, z8), ap.sbi(z8)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{_, X.aes.isbox(SB.sbox(U32.and(255, z9))), X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z9))), U32.and(255, z9), ap.sbi(z9)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), _, X.aes.isbox(SB.sbox(U32.and(255, z10))), X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z10))), U32.and(255, z10), ap.sbi(z10)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), _, X.aes.isbox(SB.sbox(U32.and(255, z11)))}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z11))), U32.and(255, z11), ap.sbi(z11)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), _}, TT.W{X.aes.isbox(SB.sbox(U32.and(255, z12))), X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z12))), U32.and(255, z12), ap.sbi(z12)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{_, X.aes.isbox(SB.sbox(U32.and(255, z13))), X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z13))), U32.and(255, z13), ap.sbi(z13)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), _, X.aes.isbox(SB.sbox(U32.and(255, z14))), X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z14))), U32.and(255, z14), ap.sbi(z14)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), U32.and(255, z13), _, X.aes.isbox(SB.sbox(U32.and(255, z15)))}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(U32, X.aes.isbox(SB.sbox(U32.and(255, z15))), U32.and(255, z15), ap.sbi(z15)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), _}} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      {==}
+
+def ap.mixl(+s: TT.State) -> {A.mix_columns(X.aes.mask(s)) == X.aes.mask(A.mix_columns(X.aes.mask(s))) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      %Equal.sym(TT.Quad, A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)})), ap.mixcb(z0, z1, z2, z3)) : {TT.S{_, A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}), A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}), A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)})} == X.aes.mask(A.mix_columns(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(TT.Quad, A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)})), ap.mixcb(z4, z5, z6, z7)) : {TT.S{X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)})), _, A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}), A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)})} == X.aes.mask(A.mix_columns(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(TT.Quad, A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)})), ap.mixcb(z8, z9, z10, z11)) : {TT.S{X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)})), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)})), _, A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)})} == X.aes.mask(A.mix_columns(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      %Equal.sym(TT.Quad, A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)}), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)})), ap.mixcb(z12, z13, z14, z15)) : {TT.S{X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)})), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)})), X.aes.mask_w(A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)})), _} == X.aes.mask(A.mix_columns(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}))) : TT.State}
+      {==}
+
+def ap.mixi(+s: TT.State) -> {X.aes.inv_mix(A.mix_columns(X.aes.mask(s))) == X.aes.mask(s) : TT.State}:
+  match s:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}:
+      %Equal.sym(TT.Quad, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)})), TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, ap.mixc(z0, z1, z2, z3)) : {TT.S{_, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)})), X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)})), X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)}))} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(TT.Quad, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)})), TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, ap.mixc(z4, z5, z6, z7)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, _, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)})), X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)}))} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(TT.Quad, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)})), TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, ap.mixc(z8, z9, z10, z11)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, _, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)}))} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      %Equal.sym(TT.Quad, X.aes.imix_w(A.mix_column(TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)})), TT.W{U32.and(255, z12), U32.and(255, z13), U32.and(255, z14), U32.and(255, z15)}, ap.mixc(z12, z13, z14, z15)) : {TT.S{TT.W{U32.and(255, z0), U32.and(255, z1), U32.and(255, z2), U32.and(255, z3)}, TT.W{U32.and(255, z4), U32.and(255, z5), U32.and(255, z6), U32.and(255, z7)}, TT.W{U32.and(255, z8), U32.and(255, z9), U32.and(255, z10), U32.and(255, z11)}, _} == X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}) : TT.State}
+      {==}
+
+def ap.arkl(+m: TT.State, +k: TT.State) -> {A.add_round_key(X.aes.mask(m), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(m), X.aes.mask(k))) : TT.State}:
+  match m k:
+    case TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}} TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}:
+      %Equal.sym(U32, U32.xor(U32.and(255, z0), U32.and(255, k0)), U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), ap.xorb(z0, k0)) : {TT.S{TT.W{_, U32.xor(U32.and(255, z1), U32.and(255, k1)), U32.xor(U32.and(255, z2), U32.and(255, k2)), U32.xor(U32.and(255, z3), U32.and(255, k3))}, TT.W{U32.xor(U32.and(255, z4), U32.and(255, k4)), U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z1), U32.and(255, k1)), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), ap.xorb(z1, k1)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), _, U32.xor(U32.and(255, z2), U32.and(255, k2)), U32.xor(U32.and(255, z3), U32.and(255, k3))}, TT.W{U32.xor(U32.and(255, z4), U32.and(255, k4)), U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z2), U32.and(255, k2)), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), ap.xorb(z2, k2)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), _, U32.xor(U32.and(255, z3), U32.and(255, k3))}, TT.W{U32.xor(U32.and(255, z4), U32.and(255, k4)), U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z3), U32.and(255, k3)), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3))), ap.xorb(z3, k3)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), _}, TT.W{U32.xor(U32.and(255, z4), U32.and(255, k4)), U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z4), U32.and(255, k4)), U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), ap.xorb(z4, k4)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{_, U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z5), U32.and(255, k5)), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), ap.xorb(z5, k5)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), _, U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z6), U32.and(255, k6)), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), ap.xorb(z6, k6)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), _, U32.xor(U32.and(255, z7), U32.and(255, k7))}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z7), U32.and(255, k7)), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7))), ap.xorb(z7, k7)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), _}, TT.W{U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z8), U32.and(255, k8)), U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), ap.xorb(z8, k8)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{_, U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z9), U32.and(255, k9)), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), ap.xorb(z9, k9)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), _, U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z10), U32.and(255, k10)), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), ap.xorb(z10, k10)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), _, U32.xor(U32.and(255, z11), U32.and(255, k11))}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z11), U32.and(255, k11)), U32.and(255, U32.xor(U32.and(255, z11), U32.and(255, k11))), ap.xorb(z11, k11)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), _}, TT.W{U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z12), U32.and(255, k12)), U32.and(255, U32.xor(U32.and(255, z12), U32.and(255, k12))), ap.xorb(z12, k12)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), U32.and(255, U32.xor(U32.and(255, z11), U32.and(255, k11)))}, TT.W{_, U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z13), U32.and(255, k13)), U32.and(255, U32.xor(U32.and(255, z13), U32.and(255, k13))), ap.xorb(z13, k13)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), U32.and(255, U32.xor(U32.and(255, z11), U32.and(255, k11)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z12), U32.and(255, k12))), _, U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z14), U32.and(255, k14)), U32.and(255, U32.xor(U32.and(255, z14), U32.and(255, k14))), ap.xorb(z14, k14)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), U32.and(255, U32.xor(U32.and(255, z11), U32.and(255, k11)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z12), U32.and(255, k12))), U32.and(255, U32.xor(U32.and(255, z13), U32.and(255, k13))), _, U32.xor(U32.and(255, z15), U32.and(255, k15))}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      %Equal.sym(U32, U32.xor(U32.and(255, z15), U32.and(255, k15)), U32.and(255, U32.xor(U32.and(255, z15), U32.and(255, k15))), ap.xorb(z15, k15)) : {TT.S{TT.W{U32.and(255, U32.xor(U32.and(255, z0), U32.and(255, k0))), U32.and(255, U32.xor(U32.and(255, z1), U32.and(255, k1))), U32.and(255, U32.xor(U32.and(255, z2), U32.and(255, k2))), U32.and(255, U32.xor(U32.and(255, z3), U32.and(255, k3)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z4), U32.and(255, k4))), U32.and(255, U32.xor(U32.and(255, z5), U32.and(255, k5))), U32.and(255, U32.xor(U32.and(255, z6), U32.and(255, k6))), U32.and(255, U32.xor(U32.and(255, z7), U32.and(255, k7)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z8), U32.and(255, k8))), U32.and(255, U32.xor(U32.and(255, z9), U32.and(255, k9))), U32.and(255, U32.xor(U32.and(255, z10), U32.and(255, k10))), U32.and(255, U32.xor(U32.and(255, z11), U32.and(255, k11)))}, TT.W{U32.and(255, U32.xor(U32.and(255, z12), U32.and(255, k12))), U32.and(255, U32.xor(U32.and(255, z13), U32.and(255, k13))), U32.and(255, U32.xor(U32.and(255, z14), U32.and(255, k14))), _}} == X.aes.mask(A.add_round_key(X.aes.mask(TT.S{TT.W{z0, z1, z2, z3}, TT.W{z4, z5, z6, z7}, TT.W{z8, z9, z10, z11}, TT.W{z12, z13, z14, z15}}), X.aes.mask(TT.S{TT.W{k0, k1, k2, k3}, TT.W{k4, k5, k6, k7}, TT.W{k8, k9, k10, k11}, TT.W{k12, k13, k14, k15}}))) : TT.State}
+      {==}
+
+def ap.ismask(+x: TT.State, +v: TT.State, +e: {x == X.aes.mask(v) : TT.State}) -> {x == X.aes.mask(x) : TT.State}:
+  %Equal.sym(TT.State, x, X.aes.mask(v), e) : {_ == X.aes.mask(_) : TT.State}
+  Equal.sym(TT.State, X.aes.mask(X.aes.mask(v)), X.aes.mask(v), ap.mm(v))
+
+# A round, the last round and the first AddRoundKey undone, on states of
+# bytes, and their outputs bytes again
+
+def ap.round_inv(+z: TT.State, +k: TT.State) -> {X.aes.inv_round(A.round(X.aes.mask(z), X.aes.mask(k)), X.aes.mask(k)) == X.aes.mask(z) : TT.State}:
+  %Equal.sym(TT.State, A.add_round_key(A.add_round_key(A.mix_columns(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k)), X.aes.mask(k)), A.mix_columns(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), ap.ark2(A.mix_columns(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k))) : {X.aes.inv_sub(X.aes.inv_shift(X.aes.inv_mix(_))) == X.aes.mask(z) : TT.State}
+  %Equal.sym(TT.State, A.sub_bytes(X.aes.mask(z)), X.aes.mask(A.sub_bytes(X.aes.mask(z))), ap.subl(z)) : {X.aes.inv_sub(X.aes.inv_shift(X.aes.inv_mix(A.mix_columns(A.shift_rows(_))))) == X.aes.mask(z) : TT.State}
+  %Equal.sym(TT.State, A.shift_rows(X.aes.mask(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), ap.shm(A.sub_bytes(X.aes.mask(z)))) : {X.aes.inv_sub(X.aes.inv_shift(X.aes.inv_mix(A.mix_columns(_)))) == X.aes.mask(z) : TT.State}
+  %Equal.sym(TT.State, X.aes.inv_mix(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), ap.mixi(A.shift_rows(A.sub_bytes(X.aes.mask(z))))) : {X.aes.inv_sub(X.aes.inv_shift(_)) == X.aes.mask(z) : TT.State}
+  %ap.shm(A.sub_bytes(X.aes.mask(z))) : {X.aes.inv_sub(X.aes.inv_shift(_)) == X.aes.mask(z) : TT.State}
+  %Equal.sym(TT.State, X.aes.inv_shift(A.shift_rows(X.aes.mask(A.sub_bytes(X.aes.mask(z))))), X.aes.mask(A.sub_bytes(X.aes.mask(z))), ap.shift(X.aes.mask(A.sub_bytes(X.aes.mask(z))))) : {X.aes.inv_sub(_) == X.aes.mask(z) : TT.State}
+  %ap.subl(z) : {X.aes.inv_sub(_) == X.aes.mask(z) : TT.State}
+  ap.subi(z)
+
+def ap.round_eq(+z: TT.State, +k: TT.State) -> {A.round(X.aes.mask(z), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(k))) : TT.State}:
+  %Equal.sym(TT.State, A.sub_bytes(X.aes.mask(z)), X.aes.mask(A.sub_bytes(X.aes.mask(z))), ap.subl(z)) : {A.add_round_key(A.mix_columns(A.shift_rows(_)), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(k))) : TT.State}
+  %Equal.sym(TT.State, A.shift_rows(X.aes.mask(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), ap.shm(A.sub_bytes(X.aes.mask(z)))) : {A.add_round_key(A.mix_columns(_), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(k))) : TT.State}
+  %Equal.sym(TT.State, A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z))))), X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), ap.mixl(A.shift_rows(A.sub_bytes(X.aes.mask(z))))) : {A.add_round_key(_, X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(k))) : TT.State}
+  ap.arkl(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z))))), k)
+
+def ap.round_out(+z: TT.State, +k: TT.State) -> {A.round(X.aes.mask(z), X.aes.mask(k)) == X.aes.mask(A.round(X.aes.mask(z), X.aes.mask(k))) : TT.State}:
+  ap.ismask(A.round(X.aes.mask(z), X.aes.mask(k)), A.add_round_key(X.aes.mask(A.mix_columns(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))))), X.aes.mask(k)), ap.round_eq(z, k))
+
+def ap.last_inv(+z: TT.State, +k: TT.State) -> {X.aes.inv_last(A.last_round(X.aes.mask(z), X.aes.mask(k)), X.aes.mask(k)) == X.aes.mask(z) : TT.State}:
+  %Equal.sym(TT.State, A.add_round_key(A.add_round_key(A.shift_rows(A.sub_bytes(X.aes.mask(z))), X.aes.mask(k)), X.aes.mask(k)), A.shift_rows(A.sub_bytes(X.aes.mask(z))), ap.ark2(A.shift_rows(A.sub_bytes(X.aes.mask(z))), X.aes.mask(k))) : {X.aes.inv_sub(X.aes.inv_shift(_)) == X.aes.mask(z) : TT.State}
+  %Equal.sym(TT.State, X.aes.inv_shift(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), A.sub_bytes(X.aes.mask(z)), ap.shift(A.sub_bytes(X.aes.mask(z)))) : {X.aes.inv_sub(_) == X.aes.mask(z) : TT.State}
+  ap.subi(z)
+
+def ap.last_eq(+z: TT.State, +k: TT.State) -> {A.last_round(X.aes.mask(z), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k))) : TT.State}:
+  %Equal.sym(TT.State, A.sub_bytes(X.aes.mask(z)), X.aes.mask(A.sub_bytes(X.aes.mask(z))), ap.subl(z)) : {A.add_round_key(A.shift_rows(_), X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k))) : TT.State}
+  %Equal.sym(TT.State, A.shift_rows(X.aes.mask(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), ap.shm(A.sub_bytes(X.aes.mask(z)))) : {A.add_round_key(_, X.aes.mask(k)) == X.aes.mask(A.add_round_key(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k))) : TT.State}
+  ap.arkl(A.shift_rows(A.sub_bytes(X.aes.mask(z))), k)
+
+def ap.last_out(+z: TT.State, +k: TT.State) -> {A.last_round(X.aes.mask(z), X.aes.mask(k)) == X.aes.mask(A.last_round(X.aes.mask(z), X.aes.mask(k))) : TT.State}:
+  ap.ismask(A.last_round(X.aes.mask(z), X.aes.mask(k)), A.add_round_key(X.aes.mask(A.shift_rows(A.sub_bytes(X.aes.mask(z)))), X.aes.mask(k)), ap.last_eq(z, k))
+
+# The rounds and the cipher, by induction on the round keys
+
+def ap.rounds_out(n: Nat, ks: List<&2, TT.State>, +z: TT.State) -> {A.rounds(n, X.aes.mask(z), X.aes.mask_keys(ks)) == X.aes.mask(A.rounds(n, X.aes.mask(z), X.aes.mask_keys(ks))) : TT.State}:
+  match n ks:
+    case 0n Con{+k, rest}:
+      ap.last_out(z, k)
+    case 1n+p Con{+k, rest}:
+      %Equal.sym(TT.State, A.round(X.aes.mask(z), X.aes.mask(k)), X.aes.mask(A.round(X.aes.mask(z), X.aes.mask(k))), ap.round_out(z, k)) : {A.rounds(p, _, X.aes.mask_keys(rest)) == X.aes.mask(A.rounds(p, _, X.aes.mask_keys(rest))) : TT.State}
+      ap.rounds_out(p, rest, A.round(X.aes.mask(z), X.aes.mask(k)))
+    case 0n Nil{}:
+      Equal.sym(TT.State, X.aes.mask(X.aes.mask(z)), X.aes.mask(z), ap.mm(z))
+    case 1n+p Nil{}:
+      Equal.sym(TT.State, X.aes.mask(X.aes.mask(z)), X.aes.mask(z), ap.mm(z))
+
+def ap.rounds_inv(n: Nat, ks: List<&2, TT.State>, +z: TT.State) -> {X.aes.inv_rounds(n, X.aes.mask_keys(ks), A.rounds(n, X.aes.mask(z), X.aes.mask_keys(ks))) == X.aes.mask(z) : TT.State}:
+  match n ks:
+    case 0n Con{+k, rest}:
+      ap.last_inv(z, k)
+    case 1n+p Con{+k, rest}:
+      %Equal.sym(TT.State, A.round(X.aes.mask(z), X.aes.mask(k)), X.aes.mask(A.round(X.aes.mask(z), X.aes.mask(k))), ap.round_out(z, k)) : {X.aes.inv_round(X.aes.inv_rounds(p, X.aes.mask_keys(rest), A.rounds(p, _, X.aes.mask_keys(rest))), X.aes.mask(k)) == X.aes.mask(z) : TT.State}
+      %Equal.sym(TT.State, X.aes.inv_rounds(p, X.aes.mask_keys(rest), A.rounds(p, X.aes.mask(A.round(X.aes.mask(z), X.aes.mask(k))), X.aes.mask_keys(rest))), X.aes.mask(A.round(X.aes.mask(z), X.aes.mask(k))), ap.rounds_inv(p, rest, A.round(X.aes.mask(z), X.aes.mask(k)))) : {X.aes.inv_round(_, X.aes.mask(k)) == X.aes.mask(z) : TT.State}
+      %ap.round_out(z, k) : {X.aes.inv_round(_, X.aes.mask(k)) == X.aes.mask(z) : TT.State}
+      ap.round_inv(z, k)
+    case 0n Nil{}:
+      ap.mm(z)
+    case 1n+p Nil{}:
+      ap.mm(z)
+
+def ap.cipher_out(+nr: Nat, ks: List<&2, TT.State>, +s: TT.State) -> {A.cipher(nr, X.aes.mask(s), X.aes.mask_keys(ks)) == X.aes.mask(A.cipher(nr, X.aes.mask(s), X.aes.mask_keys(ks))) : TT.State}:
+  match ks:
+    case Con{+k, rest}:
+      %Equal.sym(TT.State, A.add_round_key(X.aes.mask(s), X.aes.mask(k)), X.aes.mask(A.add_round_key(X.aes.mask(s), X.aes.mask(k))), ap.arkl(s, k)) : {A.rounds(Nat.sub(nr, 1n), _, X.aes.mask_keys(rest)) == X.aes.mask(A.rounds(Nat.sub(nr, 1n), _, X.aes.mask_keys(rest))) : TT.State}
+      ap.rounds_out(Nat.sub(nr, 1n), rest, A.add_round_key(X.aes.mask(s), X.aes.mask(k)))
+    case Nil{}:
+      Equal.sym(TT.State, X.aes.mask(X.aes.mask(s)), X.aes.mask(s), ap.mm(s))
+
+def ap.cipher_inv(+nr: Nat, ks: List<&2, TT.State>, +s: TT.State) -> {X.aes.inv_cipher(nr, X.aes.mask_keys(ks), A.cipher(nr, X.aes.mask(s), X.aes.mask_keys(ks))) == X.aes.mask(s) : TT.State}:
+  match ks:
+    case Con{+k, rest}:
+      %Equal.sym(TT.State, A.add_round_key(X.aes.mask(s), X.aes.mask(k)), X.aes.mask(A.add_round_key(X.aes.mask(s), X.aes.mask(k))), ap.arkl(s, k)) : {X.aes.mask(A.add_round_key(X.aes.inv_rounds(Nat.sub(nr, 1n), X.aes.mask_keys(rest), A.rounds(Nat.sub(nr, 1n), _, X.aes.mask_keys(rest))), X.aes.mask(k))) == X.aes.mask(s) : TT.State}
+      %Equal.sym(TT.State, X.aes.inv_rounds(Nat.sub(nr, 1n), X.aes.mask_keys(rest), A.rounds(Nat.sub(nr, 1n), X.aes.mask(A.add_round_key(X.aes.mask(s), X.aes.mask(k))), X.aes.mask_keys(rest))), X.aes.mask(A.add_round_key(X.aes.mask(s), X.aes.mask(k))), ap.rounds_inv(Nat.sub(nr, 1n), rest, A.add_round_key(X.aes.mask(s), X.aes.mask(k)))) : {X.aes.mask(A.add_round_key(_, X.aes.mask(k))) == X.aes.mask(s) : TT.State}
+      %ap.arkl(s, k) : {X.aes.mask(A.add_round_key(_, X.aes.mask(k))) == X.aes.mask(s) : TT.State}
+      %Equal.sym(TT.State, A.add_round_key(A.add_round_key(X.aes.mask(s), X.aes.mask(k)), X.aes.mask(k)), X.aes.mask(s), ap.ark2(X.aes.mask(s), X.aes.mask(k))) : {X.aes.mask(_) == X.aes.mask(s) : TT.State}
+      ap.mm(s)
+    case Nil{}:
+      ap.mm(s)
+
+# The block: its bytes into the state and back
+
+def ap.state_back(+e: TT.State) -> {X.aes.state16(M.cm.bytes_of(M.cm.block_of(A.bytes_of(e)))) == X.aes.mask(e) : TT.State}:
+  match e:
+    case TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}:
+      %Equal.sym(List<&2, U32>, M.cm.bytes_onto(M.cm.block16(e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15), Nil{}), Con{B.byte(e0), Con{B.byte(e1), Con{B.byte(e2), Con{B.byte(e3), Con{B.byte(e4), Con{B.byte(e5), Con{B.byte(e6), Con{B.byte(e7), Con{B.byte(e8), Con{B.byte(e9), Con{B.byte(e10), Con{B.byte(e11), Con{B.byte(e12), Con{B.byte(e13), Con{B.byte(e14), Con{B.byte(e15), Nil{}}}}}}}}}}}}}}}}}, sp.blk16g(e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, Nil{})) : {X.aes.state16(_) == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e0), U32.and(255, e0), ap.bylo(e0)) : {TT.S{TT.W{_, B.byte(e1), B.byte(e2), B.byte(e3)}, TT.W{B.byte(e4), B.byte(e5), B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e1), U32.and(255, e1), ap.bylo(e1)) : {TT.S{TT.W{U32.and(255, e0), _, B.byte(e2), B.byte(e3)}, TT.W{B.byte(e4), B.byte(e5), B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e2), U32.and(255, e2), ap.bylo(e2)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), _, B.byte(e3)}, TT.W{B.byte(e4), B.byte(e5), B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e3), U32.and(255, e3), ap.bylo(e3)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), _}, TT.W{B.byte(e4), B.byte(e5), B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e4), U32.and(255, e4), ap.bylo(e4)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{_, B.byte(e5), B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e5), U32.and(255, e5), ap.bylo(e5)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), _, B.byte(e6), B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e6), U32.and(255, e6), ap.bylo(e6)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), _, B.byte(e7)}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e7), U32.and(255, e7), ap.bylo(e7)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), _}, TT.W{B.byte(e8), B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e8), U32.and(255, e8), ap.bylo(e8)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{_, B.byte(e9), B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e9), U32.and(255, e9), ap.bylo(e9)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), _, B.byte(e10), B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e10), U32.and(255, e10), ap.bylo(e10)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), _, B.byte(e11)}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e11), U32.and(255, e11), ap.bylo(e11)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), U32.and(255, e10), _}, TT.W{B.byte(e12), B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e12), U32.and(255, e12), ap.bylo(e12)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), U32.and(255, e10), U32.and(255, e11)}, TT.W{_, B.byte(e13), B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e13), U32.and(255, e13), ap.bylo(e13)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), U32.and(255, e10), U32.and(255, e11)}, TT.W{U32.and(255, e12), _, B.byte(e14), B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e14), U32.and(255, e14), ap.bylo(e14)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), U32.and(255, e10), U32.and(255, e11)}, TT.W{U32.and(255, e12), U32.and(255, e13), _, B.byte(e15)}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      %Equal.sym(U32, B.byte(e15), U32.and(255, e15), ap.bylo(e15)) : {TT.S{TT.W{U32.and(255, e0), U32.and(255, e1), U32.and(255, e2), U32.and(255, e3)}, TT.W{U32.and(255, e4), U32.and(255, e5), U32.and(255, e6), U32.and(255, e7)}, TT.W{U32.and(255, e8), U32.and(255, e9), U32.and(255, e10), U32.and(255, e11)}, TT.W{U32.and(255, e12), U32.and(255, e13), U32.and(255, e14), _}} == X.aes.mask(TT.S{TT.W{e0, e1, e2, e3}, TT.W{e4, e5, e6, e7}, TT.W{e8, e9, e10, e11}, TT.W{e12, e13, e14, e15}}) : TT.State}
+      {==}
+
+def ap.in_mask(+b: M.CmBlock) -> {X.aes.state_in(b) == X.aes.mask(X.aes.state_in(b)) : TT.State}:
+  match b:
+    case M.CmBlock{U32{WCon{p0, WCon{p1, WCon{p2, WCon{p3, WCon{p4, WCon{p5, WCon{p6, WCon{p7, WCon{p8, WCon{p9, WCon{p10, WCon{p11, WCon{p12, WCon{p13, WCon{p14, WCon{p15, WCon{p16, WCon{p17, WCon{p18, WCon{p19, WCon{p20, WCon{p21, WCon{p22, WCon{p23, WCon{p24, WCon{p25, WCon{p26, WCon{p27, WCon{p28, WCon{p29, WCon{p30, WCon{p31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{q0, WCon{q1, WCon{q2, WCon{q3, WCon{q4, WCon{q5, WCon{q6, WCon{q7, WCon{q8, WCon{q9, WCon{q10, WCon{q11, WCon{q12, WCon{q13, WCon{q14, WCon{q15, WCon{q16, WCon{q17, WCon{q18, WCon{q19, WCon{q20, WCon{q21, WCon{q22, WCon{q23, WCon{q24, WCon{q25, WCon{q26, WCon{q27, WCon{q28, WCon{q29, WCon{q30, WCon{q31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{r0, WCon{r1, WCon{r2, WCon{r3, WCon{r4, WCon{r5, WCon{r6, WCon{r7, WCon{r8, WCon{r9, WCon{r10, WCon{r11, WCon{r12, WCon{r13, WCon{r14, WCon{r15, WCon{r16, WCon{r17, WCon{r18, WCon{r19, WCon{r20, WCon{r21, WCon{r22, WCon{r23, WCon{r24, WCon{r25, WCon{r26, WCon{r27, WCon{r28, WCon{r29, WCon{r30, WCon{r31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{s0, WCon{s1, WCon{s2, WCon{s3, WCon{s4, WCon{s5, WCon{s6, WCon{s7, WCon{s8, WCon{s9, WCon{s10, WCon{s11, WCon{s12, WCon{s13, WCon{s14, WCon{s15, WCon{s16, WCon{s17, WCon{s18, WCon{s19, WCon{s20, WCon{s21, WCon{s22, WCon{s23, WCon{s24, WCon{s25, WCon{s26, WCon{s27, WCon{s28, WCon{s29, WCon{s30, WCon{s31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.out_in(+b: M.CmBlock) -> {X.aes.out(X.aes.mask(X.aes.state_in(b))) == b : M.CmBlock}:
+  match b:
+    case M.CmBlock{U32{WCon{p0, WCon{p1, WCon{p2, WCon{p3, WCon{p4, WCon{p5, WCon{p6, WCon{p7, WCon{p8, WCon{p9, WCon{p10, WCon{p11, WCon{p12, WCon{p13, WCon{p14, WCon{p15, WCon{p16, WCon{p17, WCon{p18, WCon{p19, WCon{p20, WCon{p21, WCon{p22, WCon{p23, WCon{p24, WCon{p25, WCon{p26, WCon{p27, WCon{p28, WCon{p29, WCon{p30, WCon{p31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{q0, WCon{q1, WCon{q2, WCon{q3, WCon{q4, WCon{q5, WCon{q6, WCon{q7, WCon{q8, WCon{q9, WCon{q10, WCon{q11, WCon{q12, WCon{q13, WCon{q14, WCon{q15, WCon{q16, WCon{q17, WCon{q18, WCon{q19, WCon{q20, WCon{q21, WCon{q22, WCon{q23, WCon{q24, WCon{q25, WCon{q26, WCon{q27, WCon{q28, WCon{q29, WCon{q30, WCon{q31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{r0, WCon{r1, WCon{r2, WCon{r3, WCon{r4, WCon{r5, WCon{r6, WCon{r7, WCon{r8, WCon{r9, WCon{r10, WCon{r11, WCon{r12, WCon{r13, WCon{r14, WCon{r15, WCon{r16, WCon{r17, WCon{r18, WCon{r19, WCon{r20, WCon{r21, WCon{r22, WCon{r23, WCon{r24, WCon{r25, WCon{r26, WCon{r27, WCon{r28, WCon{r29, WCon{r30, WCon{r31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}, U32{WCon{s0, WCon{s1, WCon{s2, WCon{s3, WCon{s4, WCon{s5, WCon{s6, WCon{s7, WCon{s8, WCon{s9, WCon{s10, WCon{s11, WCon{s12, WCon{s13, WCon{s14, WCon{s15, WCon{s16, WCon{s17, WCon{s18, WCon{s19, WCon{s20, WCon{s21, WCon{s22, WCon{s23, WCon{s24, WCon{s25, WCon{s26, WCon{s27, WCon{s28, WCon{s29, WCon{s30, WCon{s31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+def ap.top(+nr: Nat, +ks: List<&2, TT.State>, +b: M.CmBlock) -> {X.aes.out(X.aes.inv_cipher(nr, X.aes.mask_keys(ks), X.aes.state16(M.cm.bytes_of(M.cm.block_of(A.bytes_of(A.cipher(nr, X.aes.state_in(b), X.aes.mask_keys(ks)))))))) == b : M.CmBlock}:
+  %Equal.sym(TT.State, X.aes.state_in(b), X.aes.mask(X.aes.state_in(b)), ap.in_mask(b)) : {X.aes.out(X.aes.inv_cipher(nr, X.aes.mask_keys(ks), X.aes.state16(M.cm.bytes_of(M.cm.block_of(A.bytes_of(A.cipher(nr, _, X.aes.mask_keys(ks)))))))) == b : M.CmBlock}
+  %Equal.sym(TT.State, X.aes.state16(M.cm.bytes_of(M.cm.block_of(A.bytes_of(A.cipher(nr, X.aes.mask(X.aes.state_in(b)), X.aes.mask_keys(ks)))))), X.aes.mask(A.cipher(nr, X.aes.mask(X.aes.state_in(b)), X.aes.mask_keys(ks))), ap.state_back(A.cipher(nr, X.aes.mask(X.aes.state_in(b)), X.aes.mask_keys(ks)))) : {X.aes.out(X.aes.inv_cipher(nr, X.aes.mask_keys(ks), _)) == b : M.CmBlock}
+  %ap.cipher_out(nr, ks, X.aes.state_in(b)) : {X.aes.out(X.aes.inv_cipher(nr, X.aes.mask_keys(ks), _)) == b : M.CmBlock}
+  %Equal.sym(TT.State, X.aes.inv_cipher(nr, X.aes.mask_keys(ks), A.cipher(nr, X.aes.mask(X.aes.state_in(b)), X.aes.mask_keys(ks))), X.aes.mask(X.aes.state_in(b)), ap.cipher_inv(nr, ks, X.aes.state_in(b))) : {X.aes.out(_) == b : M.CmBlock}
+  ap.out_in(b)
+
+def Laws.aes_round_trip(k, b):
+  match k:
+    case X.CmAesKey{sched}:
+      match sched:
+        case A.Schedule{+nr, +ks}:
+          ap.top(nr, ks, b)
+# END GENERATED: aes
