@@ -93,6 +93,7 @@ GPL source was read.
 | [sm2](sm2/) | SM2 digital signatures (draft-shen-sm2-ecdsa-02): Z_A, signing and verification over any curve and hash, SM3 by default |
 | [ecrdsa](ecrdsa/) | GOST R 34.10-2012 signatures (RFC 7091) over any curve and hash, Streebog by default, with RFC 4491's key and signature forms |
 | [pubkey](pubkey/) | RSA, DH, ECDSA, ECDH, SM2 and GOST R 34.10-2012 as instances of crypto's signature and key-agreement interfaces, generic over hash, curve and group, with the interfaces' laws for each |
+| [collections-crypto](collections-crypto/) | bend-collections' AES-GCM, ChaCha20-Poly1305, XChaCha20-Poly1305, ChaCha20 and XChaCha20 (any round count), Poly1305, GMAC, BLAKE2b, BLAKE2s, BLAKE3, Keccak-256, X25519 and Ed25519 as instances of crypto's interfaces, through adapters, with the interfaces' laws and the RFCs' algorithms (X25519, Ed25519, Keccak) proved from bend-collections' laws, and an audit of that code (AUDIT.md) |
 | [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, SHA3-256 conditioning through crypto's hash interface |
 | [jitterclock](jitterclock/) | A monotonic nanosecond clock as a library effect (C and JavaScript sides), timing a hash loop to feed jitter |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
