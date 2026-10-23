@@ -31,6 +31,7 @@ GPL source was read.
 
 | Package | What it is |
 |---|---|
+| [u32](u32/) | Laws for Base's `U32` and `Word(n)` as `Nat` arithmetic: comparison, addition, subtraction, increment and shifts, wrapping or not |
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
 | [byte](byte/) | Typed 8- and 16-bit words (`ByteU8`, `ByteU16`) and a `U32`'s bytes, from bendlang/bend#1660, with an adapter note for packages with their own `U8` |

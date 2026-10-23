@@ -20,7 +20,8 @@
 #   held after an expiry; delete makes a timer not held, and add, delete and
 #   expire never make a timer handed out earlier held again;
 # * ids: every timer the queue hands out stays "issued" through add, delete
-#   and expire.
+#   and expire;
+# * the order on times (TqTime.cmp) is word64's W64.cmp.
 import Base
 import ../word64/word64.bend as W
 import ./timer.bend as T
@@ -168,6 +169,15 @@ law tq_issued_expire:
   for tq: Q.TimerQueue<List<&2, T.TqTimer>>
   for +now: W.W64
   {Q.TimerQueue.next_id(List<&2, T.TqTimer>, Q.TqExpired.queue(List<&2, T.TqTimer>, Q.TimerQueueList.expire(tq, now))) == Q.TimerQueue.next_id(List<&2, T.TqTimer>, tq) : Nat}
+
+# The order on times is word64's: TqTime.cmp, built from W64.hi and
+# W64.lo, agrees with W64.cmp (and so with the order of the values, by
+# word64's cmp_value)
+
+law tq_time_cmp:
+  for +a: W.W64
+  for +b: W.W64
+  {T.TqTime.cmp(a, b) == W.W64.cmp(a, b) : Cmp}
 
 # Witnesses and vectors: timers at 30, 10, 20 and 10, the third deleted,
 # then an expiry at 15
