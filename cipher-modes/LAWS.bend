@@ -1,7 +1,12 @@
 # Laws about the public interface of every mode. The block cipher is the
 # template arguments ~K, ~enc, ~dec; laws that need decryption to undo
-# encryption take that as a hypothesis, ~inv, so they hold for every cipher
-# that satisfies it (AES's inverse is tested, not proved: see the README).
+# encryption take that as a hypothesis, inv, at the law's key: for every list
+# of blocks xs, CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs (each block
+# encrypted and decrypted back is itself), so they hold for every cipher and
+# key that satisfy it. The hypothesis is an ordinary one, used once (on the
+# list of blocks the mode gives the cipher), which --verdict models; a cipher
+# that proves dec(k, enc(k, b)) == b for every key and block as a law gives
+# it for every list by induction (README.md, "Laws").
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
@@ -21,8 +26,8 @@ law cbc_blocks_round_trip:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
   for ~dec: K -> M.CmBlock -> M.CmBlock
-  for ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}
   for +k: K
+  for inv: @xs: List<&2, M.CmBlock> -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs : List<&2, M.CmBlock>}
   for iv: M.CmBlock
   for bs: List<&2, M.CmBlock>
   {C.Cbc.decrypt_blocks(~K, ~dec, k, iv, C.Cbc.encrypt_blocks(~K, ~enc, k, iv, bs)) == bs : List<&2, M.CmBlock>}
@@ -33,8 +38,8 @@ law cbc_round_trip:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
   for ~dec: K -> M.CmBlock -> M.CmBlock
-  for ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}
   for +k: K
+  for inv: @xs: List<&2, M.CmBlock> -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs : List<&2, M.CmBlock>}
   for +iv: B.Octets
   for +m: B.Octets
   for hi: {B.Octets.len(iv) == 16n : Nat}
@@ -47,8 +52,8 @@ law xts_blocks_round_trip:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
   for ~dec: K -> M.CmBlock -> M.CmBlock
-  for ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}
   for +k1: K
+  for inv: @xs: List<&2, M.CmBlock> -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k1, xs) == xs : List<&2, M.CmBlock>}
   for t: M.CmBlock
   for bs: List<&2, M.CmBlock>
   {T.Xts.decrypt_blocks(~K, ~dec, k1, t, T.Xts.encrypt_blocks(~K, ~enc, k1, t, bs)) == bs : List<&2, M.CmBlock>}
@@ -72,9 +77,9 @@ law xts_round_trip:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
   for ~dec: K -> M.CmBlock -> M.CmBlock
-  for ~inv: @k: K -> @b: M.CmBlock -> {dec(k, enc(k, b)) == b : M.CmBlock}
   for +k1: K
   for +k2: K
+  for inv: @xs: List<&2, M.CmBlock> -> {M.CmBlock.dec_enc(~K, ~enc, ~dec, k1, xs) == xs : List<&2, M.CmBlock>}
   for +i: B.Octets
   for +p: B.Octets
   for hi: {B.Octets.len(i) == 16n : Nat}

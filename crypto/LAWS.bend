@@ -263,10 +263,9 @@ law lift_round_trip:
 
 # CCM as an AEAD (inst_ccm.bend), for every 128-bit block cipher, key, tag
 # length, nonce, associated data and message: the AEAD round trip, given
-# cipher-modes' ccm_round_trip at the same arguments (h). cipher-modes
-# proves h for every input, but a proof that imports its PROOF.bend fails
-# --verdict (its laws with a template hypothesis), so the two are joined in
-# README.md, not here.
+# cipher-modes' ccm_round_trip at the same arguments (h); and, since
+# cipher-modes proves h for every input, the AEAD round trip with no
+# hypothesis (ccm_aead_round_trip)
 law ccm_round_trip_if:
   for ~K: Data
   for ~enc: K -> M.CmBlock -> M.CmBlock
@@ -276,6 +275,16 @@ law ccm_round_trip_if:
   for +aad: B.Octets
   for +p: B.Octets
   for h: {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p), c => MC.Ccm.decrypt(~K, ~enc, k, tlen, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p)) : Result<&2, &2, M.CmError, B.Octets>}
+  {Result.bind(&2, &2, Cr.CrError, B.Octets, B.Octets, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p), c => CC.CrCcm.open(~K, ~enc, ~tlen, k, nonce, aad, c)) == Result.map(&2, &2, Cr.CrError, B.Octets, B.Octets, c => p, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p)) : Result<&2, &2, Cr.CrError, B.Octets>}
+
+law ccm_aead_round_trip:
+  for ~K: Data
+  for ~enc: K -> M.CmBlock -> M.CmBlock
+  for ~tlen: Nat
+  for +k: K
+  for +nonce: B.Octets
+  for +aad: B.Octets
+  for +p: B.Octets
   {Result.bind(&2, &2, Cr.CrError, B.Octets, B.Octets, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p), c => CC.CrCcm.open(~K, ~enc, ~tlen, k, nonce, aad, c)) == Result.map(&2, &2, Cr.CrError, B.Octets, B.Octets, c => p, CC.CrCcm.seal(~K, ~enc, ~tlen, k, nonce, aad, p)) : Result<&2, &2, Cr.CrError, B.Octets>}
 
 # Signatures and key agreement (sign.bend, kex.bend): the generic helpers

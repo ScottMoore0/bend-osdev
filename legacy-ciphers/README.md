@@ -237,11 +237,15 @@ XT.Xts.decrypt(~C.LcCamelliaKey, ~C.LcCamellia.encrypt, ~C.LcCamellia.decrypt, k
 ```
 
 and likewise CCM and CMAC. cipher-modes' round-trip laws take the cipher's
-inversion as a hypothesis (`~inv: @k -> @b -> {dec(k, enc(k, b)) == b}`);
-this package's `sm4_round_trip`, `camellia_round_trip`, `serpent_round_trip`,
-`twofish_round_trip`, `aria_round_trip` and `cast6_round_trip` are exactly
-that statement, proved for every key and
-block, so those mode laws hold for these ciphers. `check.bend` runs every
+inversion at the law's key as a hypothesis (`inv: @xs -> {CmBlock.dec_enc(~K,
+~enc, ~dec, k, xs) == xs}`: every list of blocks comes back); this
+package's `sm4_round_trip`, `camellia_round_trip`, `serpent_round_trip`,
+`twofish_round_trip`, `aria_round_trip` and `cast6_round_trip` prove
+`dec(k, enc(k, b)) == b` for every key and block, which gives it, so those
+mode laws hold for these ciphers: bend-osdev-cm-instances states and proves
+them at each of the six (`sm4_cbc_round_trip`, `sm4_xts_round_trip`, ...),
+in a package of its own so that importing this package's proofs (crypto
+does) does not take in cipher-modes' too. `check.bend` runs every
 128-bit cipher through cipher-modes' CBC over 32 KB both ways, and the
 differential test compares CBC with `cryptography` (SM4, Camellia), the
 `openssl` command (ARIA) and the models (Serpent, Twofish, CAST-256).

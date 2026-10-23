@@ -69,6 +69,7 @@ every value.
 |---|---|
 | `CmBlock{w0, w1, w2, w3}` | a 128-bit block (open type) |
 | `CmBlock.zero()`, `CmBlock.xor(a, b)`, `CmBlock.hex(b)` | the zero block, XOR, hex text |
+| `CmBlock.dec_enc(~K, ~enc, ~dec, +k, xs)` | each block of `xs` encrypted and decrypted back under `k`: `xs` itself wherever decryption undoes encryption (the round-trip laws' hypothesis) |
 | `CmBlock.of_octets(o) -> Maybe<&2, CmBlock>`, `CmBlock.to_octets(b) -> Octets` | 16 bytes to a block and back (`None` for another length) |
 | `CmError` | `CmBadKeyLength{got}`, `CmBadIvLength{got}`, `CmBadTweakLength{got}`, `CmBadNonceLength{got}`, `CmBadTagLength{got}`, `CmBadBlockSize{got}`, `CmNotBlockMultiple{len}`, `CmTooShort{len}`, `CmTooLong{len}`, `CmBadPadding{}`, `CmTagMismatch{}` |
 
@@ -168,7 +169,10 @@ answer `Maybe`.
 
 * **Any 128-bit block cipher:** pass its key type and its block functions as
   the template arguments; nothing in the modes changes. A cipher that also
-  proves `dec(k, enc(k, b)) == b` gets the round-trip laws below for free.
+  proves `dec(k, enc(k, b)) == b` gets the round-trip laws below: an
+  induction on the list turns that law into their hypothesis, and
+  bend-osdev-cm-instances writes it, and the four laws, out for each of
+  legacy-ciphers' 128-bit ciphers (its `gen/instances.py` takes a new row).
 * **The default cipher:** `aes.bend` can be replaced (for instance by a
   table-driven or hardware AES) without touching the modes; `aes_modes.bend`
   is the only file that names it.
@@ -181,22 +185,39 @@ answer `Maybe`.
 
 ## Laws
 
-`LAWS.bend`. Laws that need
-decryption to undo encryption take the hypothesis `~inv: @k -> @b ->
-{dec(k, enc(k, b)) == b}`, so they hold for every cipher that satisfies it.
+`LAWS.bend`. Laws that need decryption to undo encryption take the
+hypothesis `inv: @xs -> {CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs}` at
+the law's key (`k`, or XTS's data key `k1`): for every list of blocks, each
+block encrypted and decrypted back is itself. So they hold for every cipher
+and key that satisfy it. The hypothesis says no more than `dec(k, enc(k,
+b)) == b` for every block `b` at that key (a list of one block gives that,
+and an induction gives every list from it), and less than the earlier form
+of these laws asked, which was a template hypothesis for every key; so each
+law says at least as much as before. It is an ordinary hypothesis, used once
+in each proof (on the list of blocks the mode gives the cipher: the CBC
+inputs, the blocks XOR their tweaks, ciphertext stealing's two), so
+`--verdict` models it, where it has no model of a template hypothesis whose
+type is a proposition. The proofs then take the list's equation apart a
+block at a time (an equation is `Data`, so copyable).
+
+For a cipher whose package proves `dec(k, enc(k, b)) == b` for every key and
+block as a law, `bend-osdev-cm-instances` proves the hypothesis for every key
+and list (by induction, using that law at every block) and states the four
+laws at that cipher with no hypothesis: SM4, Camellia, Serpent, Twofish, ARIA
+and CAST-256 (legacy-ciphers).
 
 **For every input:**
 
 * `cbc_blocks_round_trip`: CBC on blocks, for every key, IV and list of
-  blocks (with `~inv`);
+  blocks (with `inv`);
 * `cbc_round_trip`: CBC on bytes, for every key, every 16-byte IV and every
   message of whole blocks: encryption succeeds and decryption gives the
-  message back (with `~inv`);
+  message back (with `inv`);
 * `xts_blocks_round_trip`: XTS on blocks, for every data key and starting
-  tweak (with `~inv`);
+  tweak (with `inv`);
 * `xts_round_trip`: XTS on bytes, ciphertext stealing included, for every
   pair of keys, every 16-byte sequence number and every data unit of at
-  least 16 bytes (with `~inv`);
+  least 16 bytes (with `inv`, at the data key);
 * `ccm_round_trip`: for every cipher (no hypothesis: CCM only encrypts), key,
   tag length, nonce, associated data and message, decrypting what encryption
   produced gives the message back, and when the parameters are refused both
@@ -293,15 +314,13 @@ encryption, as the task names it; only `aes.bend` imports it.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK; `--verdict` SOME PROOFS FAIL:
-the four laws that take the cipher hypothesis `~inv` (and their four lemmas)
-are outside the BendTT kernel's scope ("no model for ~inv": the translation
-cannot model a template whose type is a proposition; bend-mathlib's laws with
-`~assoc` and `~comm` hit the same; the run now reports it as "a mismatch
-between the TypeScript implementation, and the formalized BendTT kernel"),
-and every other law and lemma, the `tr.*` lemmas tying the tail-recursive
-forms to the structural ones included, passes `--verdict` when they are left
-out; `check.bend` passes; `ref/run.sh` 252 cases match.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 10 s, 1.3 GB),
+`--verdict` ALL PROOFS CHECK (about 30 s, 1.5 GB peak), `check.bend` passes,
+`ref/run.sh` 252 cases match, `scripts/deps.sh` passes. (`--verdict` failed
+here until the four round-trip laws took their hypothesis as the ordinary
+`inv` above rather than a template `~inv`, which the BendTT kernel cannot
+model.) Packages that import `PROOF.bend` (bend-osdev-cm-instances does)
+pass `--verdict` with it.
 
 ## Side channels
 

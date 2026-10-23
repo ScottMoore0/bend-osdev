@@ -6,6 +6,8 @@ import ../word64/word64.bend as W
 import ../cipher-modes/cipher-modes.bend as M
 import ../cipher-modes/aes.bend as X
 import ../cipher-modes/ccm.bend as MC
+import ../cipher-modes/LAWS.bend as CML
+import ../cipher-modes/PROOF.bend as CMP
 import ../legacy-ciphers/legacy-ciphers.bend as L
 import ../legacy-ciphers/des.bend as D
 import ../legacy-ciphers/tdes.bend as T
@@ -402,6 +404,10 @@ def Laws.lift_round_trip(E, f, d, r, p, h):
 
 def Laws.ccm_round_trip_if(K, enc, tlen, k, nonce, aad, p, h):
   Laws.lift_round_trip(~M.CmError, ~CM.CrCm.err, c => MC.Ccm.decrypt(~K, ~enc, k, tlen, nonce, aad, c), MC.Ccm.encrypt(~K, ~enc, k, tlen, nonce, aad, p), p, h)
+
+# cipher-modes' ccm_round_trip is the hypothesis, at the same arguments
+def Laws.ccm_aead_round_trip(K, enc, tlen, k, nonce, aad, p):
+  Laws.ccm_round_trip_if(~K, ~enc, ~tlen, k, nonce, aad, p, CML.ccm_round_trip(~K, ~enc, k, tlen, nonce, aad, p))
 
 # Signatures and key agreement
 
