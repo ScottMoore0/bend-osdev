@@ -33,6 +33,7 @@ GPL source was read.
 |---|---|
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
+| [byte](byte/) | Typed 8- and 16-bit words (`ByteU8`, `ByteU16`) and a `U32`'s bytes, from bendlang/bend#1660, with an adapter note for packages with their own `U8` |
 | [packing](packing/) | Bit fields at any bit position of a byte buffer, packed and unpacked, with lib/packing's quirks as parameters |
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
@@ -98,7 +99,7 @@ GPL source was read.
 | [ecrdsa](ecrdsa/) | GOST R 34.10-2012 signatures (RFC 7091) over any curve and hash, Streebog by default, with RFC 4491's key and signature forms |
 | [pubkey](pubkey/) | RSA, DH, ECDSA, ECDH, SM2 and GOST R 34.10-2012 as instances of crypto's signature and key-agreement interfaces, generic over hash, curve and group, with the interfaces' laws for each |
 | [kithash](kithash/) | An adapter for bend-kit-hash: its CRC-32, Adler-32, FNV-1a, XXH32 and XXH64 as instances of crypto's hash interface, and its SipHash-1-3 with siphash's SipHash and HalfSipHash as MAC instances, on `Octets`; agreement with crc, deflate, zstd and siphash proved on vectors and tested on random inputs; an audit of bend-kit-hash (AUDIT.md) |
-| [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, SHA3-256 conditioning through crypto's hash interface |
+| [jitter](jitter/) | The core of a CPU Jitter RNG (jitterentropy) on given time deltas: the stuck test, SP 800-90B's RCT and APT, and the conditioner as a parameter: SHA3-256 through crypto's hash interface (the default), or jitterentropy 3.7.0's XDRBG over SHAKE256 |
 | [jitterclock](jitterclock/) | A monotonic nanosecond clock as a library effect (C and JavaScript sides), timing a hash loop to feed jitter |
 | [bpf](bpf/) | Classic BPF and seccomp filters, checked against the running kernel |
 | [ebpf](ebpf/) | An eBPF interpreter (RFC 9669) with a bounds-checked memory model, and a verifier |

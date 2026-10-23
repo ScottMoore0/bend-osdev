@@ -1,3 +1,5 @@
 cases.bend
 expected.txt
+cases_xdrbg.bend
+expected_xdrbg.txt
 __pycache__/

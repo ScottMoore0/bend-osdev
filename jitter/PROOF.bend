@@ -7,6 +7,12 @@ import ./sample.bend as Sm
 import ./stuck.bend as Sk
 import ./health.bend as Ht
 import ./jitter.bend as J
+import ./shake.bend as S
+import ./xdrbg.bend as X
+import ./xdrbg256.bend as JX
+import ../crypto/inst_sha3.bend as S3
+import bend-collections-laws-crypto@1.0.0.0/src/crypto/keccak/types.bend as TK
+import bend-collections-laws-crypto@1.0.0.0/src/crypto/keccak/permutation.bend as P
 import ./LAWS.bend as Laws
 
 # ---------------------------------------------------------------- logic
@@ -358,18 +364,27 @@ def Laws.stuck_source(H, bsize, init, update, digest, p, h, d, n):
       %Equal.sym(Bool, Nat.is_le(J.JitParams.need(p), J.jit.count(Sk.JitStuck.is_stuck(Sk.JitStuck.new(), d), 0n)), False{}, few(J.JitParams.need(p), h, Sk.JitStuck.is_stuck(Sk.JitStuck.new(), d))) : {Bool.and(Bool.not(J.Jitter.failed(~H, J.jit.absorb_all(~H, ~bsize, ~update, ~digest, List.replicate(W.W64, m, d), p, J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, J.Jitter.init(~H, ~init, p), d)))), _) == False{} : Bool}
       and_false_r(Bool.not(J.Jitter.failed(~H, J.jit.absorb_all(~H, ~bsize, ~update, ~digest, List.replicate(W.W64, m, d), p, J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, J.Jitter.init(~H, ~init, p), d)))))
 
-def Laws.block_refused(H, init, update, final, p, st, h):
-  %Equal.sym(Bool, J.Jitter.can_block(~H, p, st), False{}, h) : {J.jit.block.go(~H, ~init, ~update, ~final, _, p, st) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitBlock<H>>}
+# a block that cannot be taken is refused, for any conditioner
+def core_refused(~H: Data, ~take: H -> J.JitTaken<H>, +p: J.JitParams, +st: J.JitState<H>, h: {J.Jitter.can_block(~H, p, st) == False{} : Bool}) -> {J.JitCore.block(~H, ~take, p, st) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitBlock<H>>}:
+  %Equal.sym(Bool, J.Jitter.can_block(~H, p, st), False{}, h) : {J.jit.block.go(~H, ~take, _, p, st) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitBlock<H>>}
   {==}
 
-def Laws.read_failed(H, bsize, init, update, final, digest, p, st, ds, n, h):
+def Laws.block_refused(H, init, update, final, p, st, h):
+  core_refused(~H, ~J.JitCond.hash(~H, ~init, ~update, ~final), p, st, h)
+
+# a failed generator refuses every read of one or more bytes, for any
+# conditioner
+def core_rfailed(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> J.JitTaken<H>, +p: J.JitParams, +st: J.JitState<H>, ds: List<&2, W.W64>, +n: Nat, h: {J.Jitter.failed(~H, st) == True{} : Bool}) -> {J.JitCore.read(~H, ~bsize, ~update, ~digest, ~take, p, st, ds, 1n+n) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitOut<H>>}:
   match ds:
     case Nil{}:
       %Equal.sym(Bool, J.Jitter.failed(~H, st), True{}, h) : {J.jit.end(~H, False{}, _, p, st, B.Octets.empty(), 1n+n) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitOut<H>>}
       {==}
     case Con{+d, +rest}:
-      %Equal.sym(Bool, J.Jitter.failed(~H, st), True{}, h) : {J.jit.go(~H, ~bsize, ~init, ~update, ~final, ~digest, Con{d, rest}, False{}, _, p, st, B.Octets.empty(), 1n+n) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitOut<H>>}
+      %Equal.sym(Bool, J.Jitter.failed(~H, st), True{}, h) : {J.jit.go(~H, ~bsize, ~update, ~digest, ~take, Con{d, rest}, False{}, _, p, st, B.Octets.empty(), 1n+n) == Fail{J.Jitter.why(~H, p, st)} : Result<&2, &2, J.JitError, J.JitOut<H>>}
       {==}
+
+def Laws.read_failed(H, bsize, init, update, final, digest, p, st, ds, n, h):
+  core_rfailed(~H, ~bsize, ~update, ~digest, ~J.JitCond.hash(~H, ~init, ~update, ~final), p, st, ds, n, h)
 
 # ---------------------------------------------------------------- the length of what is read
 
@@ -396,7 +411,7 @@ def fit_len(+n: Nat, +acc: B.Octets) -> {B.Octets.len(J.jit.fit(n, acc)) == n : 
   +l = J.jit.pad(n, B.Octets.to_list(acc))
   Equal.trans(Nat, B.Octets.len(B.Octets.of_list(l)), B.len(B.Octets.to_list(B.Octets.of_list(l))), n, BL.octets_len_list(B.Octets.of_list(l)), Equal.trans(Nat, B.len(B.Octets.to_list(B.Octets.of_list(l))), B.len(B.mask(l)), n, Equal.cong(List<&2, U32>, Nat, z => B.len(z), B.Octets.to_list(B.Octets.of_list(l)), B.mask(l), BL.octets_to_of(l)), Equal.trans(Nat, B.len(B.mask(l)), B.len(l), n, mask_len(l), pad_len(n, B.Octets.to_list(acc)))))
 
-def gl(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, ds: List<&2, W.W64>, done: Bool, failed: Bool, +p: J.JitParams, +st: J.JitState<H>, +acc: B.Octets, +n: Nat) -> {Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => B.Octets.len(J.JitOut.out(~H, o)), J.jit.go(~H, ~bsize, ~init, ~update, ~final, ~digest, ds, done, failed, p, st, acc, n)) == Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => n, J.jit.go(~H, ~bsize, ~init, ~update, ~final, ~digest, ds, done, failed, p, st, acc, n)) : Result<&2, &2, J.JitError, Nat>}:
+def gl(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> J.JitTaken<H>, ds: List<&2, W.W64>, done: Bool, failed: Bool, +p: J.JitParams, +st: J.JitState<H>, +acc: B.Octets, +n: Nat) -> {Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => B.Octets.len(J.JitOut.out(~H, o)), J.jit.go(~H, ~bsize, ~update, ~digest, ~take, ds, done, failed, p, st, acc, n)) == Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => n, J.jit.go(~H, ~bsize, ~update, ~digest, ~take, ds, done, failed, p, st, acc, n)) : Result<&2, &2, J.JitError, Nat>}:
   match ds:
     case Nil{}:
       match done:
@@ -417,14 +432,154 @@ def gl(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -
             case True{}:
               {==}
             case False{}:
-              +r = J.jit.emit(~H, ~init, ~update, ~final, J.Jitter.can_block(~H, p, J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, st, d)), J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, st, d), acc)
-              gl(~H, ~bsize, ~init, ~update, ~final, ~digest, rest, Nat.is_le(n, B.Octets.len(J.JitAcc.acc(~H, r))), J.Jitter.failed(~H, J.JitAcc.state(~H, r)), p, J.JitAcc.state(~H, r), J.JitAcc.acc(~H, r), n)
+              +r = J.jit.emit(~H, ~take, J.Jitter.can_block(~H, p, J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, st, d)), J.Jitter.absorb(~H, ~bsize, ~update, ~digest, p, st, d), acc)
+              gl(~H, ~bsize, ~update, ~digest, ~take, rest, Nat.is_le(n, B.Octets.len(J.JitAcc.acc(~H, r))), J.Jitter.failed(~H, J.JitAcc.state(~H, r)), p, J.JitAcc.state(~H, r), J.JitAcc.acc(~H, r), n)
+
+# a read that succeeds gives exactly the bytes asked for, for any conditioner
+def core_rlen(~H: Data, ~bsize: Nat, ~update: H -> B.Octets -> H, ~digest: B.Octets -> B.Octets, ~take: H -> J.JitTaken<H>, +p: J.JitParams, +st: J.JitState<H>, ds: List<&2, W.W64>, +n: Nat) -> {Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => B.Octets.len(J.JitOut.out(~H, o)), J.JitCore.read(~H, ~bsize, ~update, ~digest, ~take, p, st, ds, n)) == Result.map(&2, &2, J.JitError, J.JitOut<H>, Nat, o => n, J.JitCore.read(~H, ~bsize, ~update, ~digest, ~take, p, st, ds, n)) : Result<&2, &2, J.JitError, Nat>}:
+  gl(~H, ~bsize, ~update, ~digest, ~take, ds, Nat.is_le(n, 0n), J.Jitter.failed(~H, st), p, st, B.Octets.empty(), n)
 
 def Laws.read_length(H, bsize, init, update, final, digest, p, st, ds, n):
-  gl(~H, ~bsize, ~init, ~update, ~final, ~digest, ds, Nat.is_le(n, 0n), J.Jitter.failed(~H, st), p, st, B.Octets.empty(), n)
+  core_rlen(~H, ~bsize, ~update, ~digest, ~J.JitCond.hash(~H, ~init, ~update, ~final), p, st, ds, n)
 
 def Laws.params_default():
   {==}
 
 def Laws.need_default():
   {==}
+
+# ---------------------------------------------------------------- the core, for any conditioner
+
+def Laws.core_block_refused(H, take, p, st, h):
+  core_refused(~H, ~take, p, st, h)
+
+def Laws.core_read_failed(H, bsize, update, digest, take, p, st, ds, n, h):
+  core_rfailed(~H, ~bsize, ~update, ~digest, ~take, p, st, ds, n, h)
+
+def Laws.core_read_length(H, bsize, update, digest, take, p, st, ds, n):
+  core_rlen(~H, ~bsize, ~update, ~digest, ~take, p, st, ds, n)
+
+# ---------------------------------------------------------------- SHAKE256
+
+# a list's Octets has the list's length
+def octets_of_len(+xs: List<&2, U32>) -> {B.Octets.len(B.Octets.of_list(xs)) == B.len(xs) : Nat}:
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(xs)), B.len(B.Octets.to_list(B.Octets.of_list(xs))), B.len(xs), BL.octets_len_list(B.Octets.of_list(xs)), Equal.trans(Nat, B.len(B.Octets.to_list(B.Octets.of_list(xs))), B.len(B.mask(xs)), B.len(xs), Equal.cong(List<&2, U32>, Nat, z => B.len(z), B.Octets.to_list(B.Octets.of_list(xs)), B.mask(xs), BL.octets_to_of(xs)), mask_len(xs)))
+
+# squeezing n bytes gives n bytes
+def sq_len(n: Nat, buf: List<&2, U32>, +s: TK.State) -> {B.len(S.jit.shake.sq(n, buf, s)) == n : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+ +m:
+      match buf:
+        case Con{x, t}:
+          Equal.cong(Nat, Nat, z => 1n+z, B.len(S.jit.shake.sq(m, t, s)), m, sq_len(m, t, s))
+        case Nil{}:
+          Equal.cong(Nat, Nat, z => 1n+z, B.len(S.jit.shake.sq(m, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s))), m, sq_len(m, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s)))
+
+def sqo_len(+n: Nat, o: S.JitShakeOut) -> {B.len(S.jit.shake.sq_o(n, o)) == n : Nat}:
+  match o:
+    case S.JitShakeOut{buf, s}:
+      sq_len(n, buf, s)
+
+def Laws.shake_read_length(s, i, n):
+  match s:
+    case S.JitShakeState{+st}:
+      Equal.trans(Nat, B.Octets.len(B.Octets.of_list(S.jit.shake.sq_o(n, S.jit.shake.skip_o(i, S.jit.shake.out(st))))), B.len(S.jit.shake.sq_o(n, S.jit.shake.skip_o(i, S.jit.shake.out(st)))), n, octets_of_len(S.jit.shake.sq_o(n, S.jit.shake.skip_o(i, S.jit.shake.out(st)))), sqo_len(n, S.jit.shake.skip_o(i, S.jit.shake.out(st))))
+
+# skipping i + a bytes is skipping i, then a
+def skip_add(i: Nat, +a: Nat, buf: List<&2, U32>, +s: TK.State) -> {S.jit.shake.skip(Nat.add(i, a), buf, s) == S.jit.shake.skip_o(a, S.jit.shake.skip(i, buf, s)) : S.JitShakeOut}:
+  match i:
+    case 0n:
+      {==}
+    case 1n+ +m:
+      match buf:
+        case Con{x, t}:
+          skip_add(m, a, t, s)
+        case Nil{}:
+          skip_add(m, a, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s))
+
+def skipo_add(+i: Nat, +a: Nat, o: S.JitShakeOut) -> {S.jit.shake.skip_o(Nat.add(i, a), o) == S.jit.shake.skip_o(a, S.jit.shake.skip_o(i, o)) : S.JitShakeOut}:
+  match o:
+    case S.JitShakeOut{buf, s}:
+      skip_add(i, a, buf, s)
+
+# a + b bytes squeezed are a bytes, then b bytes from where they end
+def sq_add(a: Nat, +b: Nat, buf: List<&2, U32>, +s: TK.State) -> {S.jit.shake.sq(Nat.add(a, b), buf, s) == B.append(S.jit.shake.sq(a, buf, s), S.jit.shake.sq_o(b, S.jit.shake.skip(a, buf, s))) : List<&2, U32>}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+ +m:
+      match buf:
+        case Con{+x, +t}:
+          Equal.cong(List<&2, U32>, List<&2, U32>, z => Con{x, z}, S.jit.shake.sq(Nat.add(m, b), t, s), B.append(S.jit.shake.sq(m, t, s), S.jit.shake.sq_o(b, S.jit.shake.skip(m, t, s))), sq_add(m, b, t, s))
+        case Nil{}:
+          Equal.cong(List<&2, U32>, List<&2, U32>, z => Con{S.jit.shake.hd(S.jit.shake.block(P.permute(s))), z}, S.jit.shake.sq(Nat.add(m, b), S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s)), B.append(S.jit.shake.sq(m, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s)), S.jit.shake.sq_o(b, S.jit.shake.skip(m, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s)))), sq_add(m, b, S.jit.shake.tl(S.jit.shake.block(P.permute(s))), P.permute(s)))
+
+def sqo_add(+a: Nat, +b: Nat, o: S.JitShakeOut) -> {S.jit.shake.sq_o(Nat.add(a, b), o) == B.append(S.jit.shake.sq_o(a, o), S.jit.shake.sq_o(b, S.jit.shake.skip_o(a, o))) : List<&2, U32>}:
+  match o:
+    case S.JitShakeOut{buf, s}:
+      sq_add(a, b, buf, s)
+
+# masking a joined list masks each part
+def mask_app(xs: List<&2, U32>, +ys: List<&2, U32>) -> {B.mask(B.append(xs, ys)) == B.append(B.mask(xs), B.mask(ys)) : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+h, t}:
+      Equal.cong(List<&2, U32>, List<&2, U32>, z => Con{B.byte(h), z}, B.mask(B.append(t, ys)), B.append(B.mask(t), B.mask(ys)), mask_app(t, ys))
+
+# the Octets of a joined list are the parts' Octets joined
+def ofa(+xs: List<&2, U32>, +ys: List<&2, U32>) -> {B.Octets.of_list(B.append(xs, ys)) == B.Octets.append(B.Octets.of_list(xs), B.Octets.of_list(ys)) : B.Octets}:
+  %BL.octets_of_to(B.Octets.append(B.Octets.of_list(xs), B.Octets.of_list(ys))) : {B.Octets.of_list(B.append(xs, ys)) == _ : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.append(B.Octets.of_list(xs), B.Octets.of_list(ys))), B.append(B.Octets.to_list(B.Octets.of_list(xs)), B.Octets.to_list(B.Octets.of_list(ys))), BL.octets_append_list(B.Octets.of_list(xs), B.Octets.of_list(ys))) : {B.Octets.of_list(B.append(xs, ys)) == B.Octets.of_list(_) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(xs)), B.mask(xs), BL.octets_to_of(xs)) : {B.Octets.of_list(B.append(xs, ys)) == B.Octets.of_list(B.append(_, B.Octets.to_list(B.Octets.of_list(ys)))) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(ys)), B.mask(ys), BL.octets_to_of(ys)) : {B.Octets.of_list(B.append(xs, ys)) == B.Octets.of_list(B.append(B.mask(xs), _)) : B.Octets}
+  %mask_app(xs, ys) : {B.Octets.of_list(B.append(xs, ys)) == B.Octets.of_list(_) : B.Octets}
+  %BL.octets_to_of(B.append(xs, ys)) : {B.Octets.of_list(B.append(xs, ys)) == B.Octets.of_list(_) : B.Octets}
+  Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(B.Octets.of_list(B.append(xs, ys)))), B.Octets.of_list(B.append(xs, ys)), BL.octets_of_list_idempotent(B.append(xs, ys)))
+
+def Laws.shake_read_split(s, i, a, b):
+  match s:
+    case S.JitShakeState{+st}:
+      %Equal.sym(S.JitShakeOut, S.jit.shake.skip_o(Nat.add(i, a), S.jit.shake.out(st)), S.jit.shake.skip_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st))), skipo_add(i, a, S.jit.shake.out(st))) : {B.Octets.of_list(S.jit.shake.sq_o(Nat.add(a, b), S.jit.shake.skip_o(i, S.jit.shake.out(st)))) == B.Octets.append(B.Octets.of_list(S.jit.shake.sq_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st)))), B.Octets.of_list(S.jit.shake.sq_o(b, _))) : B.Octets}
+      %Equal.sym(List<&2, U32>, S.jit.shake.sq_o(Nat.add(a, b), S.jit.shake.skip_o(i, S.jit.shake.out(st))), B.append(S.jit.shake.sq_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st))), S.jit.shake.sq_o(b, S.jit.shake.skip_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st))))), sqo_add(a, b, S.jit.shake.skip_o(i, S.jit.shake.out(st)))) : {B.Octets.of_list(_) == B.Octets.append(B.Octets.of_list(S.jit.shake.sq_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st)))), B.Octets.of_list(S.jit.shake.sq_o(b, S.jit.shake.skip_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st)))))) : B.Octets}
+      ofa(S.jit.shake.sq_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st))), S.jit.shake.sq_o(b, S.jit.shake.skip_o(a, S.jit.shake.skip_o(i, S.jit.shake.out(st)))))
+
+def Laws.shake256_empty():
+  {==}
+
+def Laws.shake256_empty_second_block():
+  {==}
+
+# ---------------------------------------------------------------- XDRBG-256 over SHAKE256
+
+def Laws.xdrbg_absorb_append(p, st, a, b):
+  aa(~X.JitXdrbgPool<S.JitShakeState>, ~136n, ~JX.JitXdrbg256.update, ~S3.CrSha3.sha3_256, a, b, p, st)
+
+def Laws.xdrbg_block_append(p, st, a, b):
+  Equal.cong(J.JitState<X.JitXdrbgPool<S.JitShakeState>>, Result<&2, &2, J.JitError, J.JitBlock<X.JitXdrbgPool<S.JitShakeState>>>, +z => JX.JitXdrbg256.block(p, z), JX.JitXdrbg256.absorb_all(p, JX.JitXdrbg256.absorb_all(p, st, a), b), JX.JitXdrbg256.absorb_all(p, st, List.append(&2, W.W64, a, b)), aa(~X.JitXdrbgPool<S.JitShakeState>, ~136n, ~JX.JitXdrbg256.update, ~S3.CrSha3.sha3_256, a, b, p, st))
+
+# a block's bytes: the generate's T read from offset |V| = 64, l = 32 of them
+def xbl.take(st: J.JitState<X.JitXdrbgPool<S.JitShakeState>>) -> {B.Octets.len(J.JitBlock.out(~X.JitXdrbgPool<S.JitShakeState>, J.jit.take(~X.JitXdrbgPool<S.JitShakeState>, ~JX.JitXdrbg256.take, st))) == 32n : Nat}:
+  match st:
+    case J.JitState{pool, s, r, a, c, dis}:
+      match pool:
+        case X.JitXdrbgPool{x, rs}:
+          Laws.shake_read_length(S.JitShake.update(S.JitShake.update(S.JitShake.init(), S.JitShake.read(S.JitShake.update(x, X.jit.xdrbg.encode(B.Octets.empty(), X.jit.xdrbg.seed_n(rs))), 0n, 64n)), X.jit.xdrbg.encode(B.Octets.empty(), 2n)), 64n, 32n)
+
+def xbl.go(+p: J.JitParams, +st: J.JitState<X.JitXdrbgPool<S.JitShakeState>>, ok: Bool) -> {Result.map(&2, &2, J.JitError, J.JitBlock<X.JitXdrbgPool<S.JitShakeState>>, Nat, k => B.Octets.len(J.JitBlock.out(~X.JitXdrbgPool<S.JitShakeState>, k)), J.jit.block.go(~X.JitXdrbgPool<S.JitShakeState>, ~JX.JitXdrbg256.take, ok, p, st)) == Result.map(&2, &2, J.JitError, J.JitBlock<X.JitXdrbgPool<S.JitShakeState>>, Nat, k => 32n, J.jit.block.go(~X.JitXdrbgPool<S.JitShakeState>, ~JX.JitXdrbg256.take, ok, p, st)) : Result<&2, &2, J.JitError, Nat>}:
+  match ok:
+    case False{}:
+      {==}
+    case True{}:
+      Equal.cong(Nat, Result<&2, &2, J.JitError, Nat>, z => Done{z}, B.Octets.len(J.JitBlock.out(~X.JitXdrbgPool<S.JitShakeState>, J.jit.take(~X.JitXdrbgPool<S.JitShakeState>, ~JX.JitXdrbg256.take, st))), 32n, xbl.take(st))
+
+def Laws.xdrbg_block_length(p, st):
+  xbl.go(p, st, J.Jitter.can_block(~X.JitXdrbgPool<S.JitShakeState>, p, st))
+
+def Laws.xdrbg_read_length(p, st, ds, n):
+  core_rlen(~X.JitXdrbgPool<S.JitShakeState>, ~136n, ~JX.JitXdrbg256.update, ~S3.CrSha3.sha3_256, ~JX.JitXdrbg256.take, p, st, ds, n)
+
+def Laws.xdrbg_read_failed(p, st, ds, n, h):
+  core_rfailed(~X.JitXdrbgPool<S.JitShakeState>, ~136n, ~JX.JitXdrbg256.update, ~S3.CrSha3.sha3_256, ~JX.JitXdrbg256.take, p, st, ds, n, h)
