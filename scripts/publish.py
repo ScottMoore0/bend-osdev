@@ -12,6 +12,9 @@ Its files are staged in a temporary directory first:
     ref/ and gen/ stays out;
   * each import of a sibling package, `import ../y/f.bend as Y`, becomes the
     hub import `import bend-osdev-y@<y/VERSION>/f.bend as Y`;
+  * a - in a file's path becomes a _ (cipher-modes.bend is staged as
+    cipher_modes.bend), in the file's name and in every import of it, since
+    the hub refuses a path segment that is not letters, digits and _;
   * a generated entry, package.bend, imports every staged file, because
     `bend --publish` sends the file it is given and what that file imports,
     and a package's entry file does not import all of its concerns.
@@ -136,6 +139,13 @@ def order(want):
     return out
 
 
+def hub_path(path):
+    """a file path as the hub accepts it: the hub refuses a path segment that
+    is not letters, digits and _ (cipher-modes.bend), so a - becomes a _ in
+    every segment; . and .. are kept"""
+    return "/".join(s if s in (".", "..") else s.replace("-", "_") for s in path.split("/"))
+
+
 def stage(p, into):
     """the staged files of p in the directory into; returns the hub imports"""
     hub = set()
@@ -144,18 +154,21 @@ def stage(p, into):
         def rewrite(m):
             s = sibling(p, f, m.group(2))
             if s is None:
-                return m.group(0)
+                if "@" in m.group(2).split("/")[0]:
+                    return m.group(0)
+                return m.group(1) + hub_path(m.group(2)) + m.group(3)
             hub.add(hub_name(s[0]))
-            return m.group(1) + hub_name(s[0]) + "/" + s[1] + m.group(3)
+            return m.group(1) + hub_name(s[0]) + "/" + hub_path(s[1]) + m.group(3)
         text = open(os.path.join(ROOT, p, f), encoding="utf-8").read()
-        os.makedirs(os.path.dirname(os.path.join(into, f)), exist_ok=True)
-        with open(os.path.join(into, f), "w", encoding="utf-8", newline="\n") as fh:
+        out = os.path.join(into, hub_path(f))
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(IMPORT.sub(rewrite, text))
     shutil.copy(os.path.join(ROOT, p, "LICENSE"), os.path.join(into, "LICENSE"))
     lines = ["# bend-osdev-%s: every file of the package, so that bend --publish sends" % p,
              "# them all (written by scripts/publish.py; not in the repository)",
              "import Base"]
-    lines += ["import ./%s as F%d" % (f, k) for k, f in enumerate(top_files(p))]
+    lines += ["import ./%s as F%d" % (hub_path(f), k) for k, f in enumerate(top_files(p))]
     with open(os.path.join(into, "package.bend"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines) + "\n")
     return sorted(hub)
