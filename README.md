@@ -30,6 +30,7 @@ GPL source was read.
 |---|---|
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
+| [byte](byte/) | Typed 8- and 16-bit words (`ByteU8`, `ByteU16`) and a `U32`'s bytes, from bendlang/bend#1660, with an adapter note for packages with their own `U8` |
 | [packing](packing/) | Bit fields at any bit position of a byte buffer, packed and unpacked, with lib/packing's quirks as parameters |
 | [kitbytes](kitbytes/) | An adapter between `Octets` and bend-kit's `Bytes` |
 | [array](array/) | Laws for Base's `Array`: get after set, other slots unchanged, size kept, agreement with a list model |
