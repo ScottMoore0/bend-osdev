@@ -193,9 +193,9 @@ needs: relocations from a section neither `SHT_REL` nor `SHT_RELA`, ...).
 
 ## Laws
 
-`LAWS.bend` has 61 laws.
+`LAWS.bend` has 63 laws.
 
-**31 hold for every input:**
+**33 hold for every input:**
 
 * each writer and its reader agree, in both classes and both byte orders,
   with any bytes following: `parse(write(x) ++ rest) == Done{normal(x)}` for
@@ -213,7 +213,10 @@ needs: relocations from a section neither `SHT_REL` nor `SHT_RELA`, ...).
   every table and every offset (`strtab_string`), and so do symbol and
   section names through it (`sym_name_indexed`, `shdr_name_indexed`);
 * every named dynamic tag's code is read back as that name (`dyn_tag_code`);
-  `ELF64_R_INFO`'s symbol and type come back out of `r_info` (`rel_info64`);
+  `ELF64_R_INFO`'s symbol and type come back out of `r_info` (`rel_info64`),
+  and so do `ELF32_R_INFO`'s, as the symbol's low 24 bits and the type's
+  low 8 bits, the parts `ELF32_R_INFO` keeps (`rel_info32_sym`,
+  `rel_info32_type`);
 * the header reader answers `ElfBadMagic` for anything without the magic,
   fails on anything shorter than 52 bytes, and answers `ElfTruncated` for
   every header with its last byte cut off.
@@ -232,12 +235,16 @@ and found; a GNU property note aligned to 8. Four of them are witnesses that
 the hypotheses of `rejects_bad_magic`, `rejects_short`, `note_round_trip` and
 `notes_round_trip` can hold.
 
-Not for every input: `ELF32_R_INFO` (its bit operations on a symbolic word
-do not compute to the fields' bits, so `rel_info32` is a vector), and the
-packed version chains (`verdef_chain`, `verneed_chain`: their links are
+`ELF32_R_INFO`'s laws split the symbol and the type into their 32 bits, so
+its shifts and masks compute on symbolic bits; the shift right leaves each
+of the symbol's bits as `Bool.or(s, False)` (Base's `Bool.or` matches its
+first argument), and 24 rewrites by `Bool.or(s, False) == s` finish the
+proof (`gen/proof/rinfo32.bend.part`).
+
+Not for every input: the packed version chains (`verdef_chain`, `verneed_chain`: their links are
 `20 + 8 * vd_cnt` and the like, and a for-all law would need `U32`
 arithmetic laws, `to_nat(a + b) == to_nat(a) + to_nat(b)` below 2^32, that
-neither Base nor this repository states yet). Both are also covered by the
+neither Base nor this repository states yet). They are also covered by the
 differential test.
 
 How the proofs go (`PROOF.bend`, written by `gen/pgen2.py`): the round trips
@@ -359,8 +366,8 @@ indices (counting offsets up as `U32`s would need laws such as `to_nat(i + 1)
   named only for the GNU build ID; `DT_FLAGS` and `DT_FLAGS_1` bits are not
   decoded; section groups, hash tables (`.hash`, `.gnu.hash`) and `SHT_RELR`
   are not decoded (their bytes are available through `ElfShdr.bytes`).
-* The packed version chains and `ELF32_R_INFO` have vectors and the
-  differential test, not for-all laws (see Laws).
+* The packed version chains have vectors and the differential test, not
+  for-all laws (see Laws).
 
 ## Status
 
