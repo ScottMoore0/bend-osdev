@@ -76,10 +76,22 @@ def W64.from_parts(hi: U32, lo: U32) -> W64:
 def W64.two32() -> Nat:
   Nat.add(4294967295n, 1n)
 
+# x * 2^n: x doubled n times
+def W64.dbl(n: Nat, x: Nat) -> Nat:
+  match n:
+    case 0n:
+      x
+    case 1n+p:
+      Nat.double(W64.dbl(p, x))
+
+# lo + hi * 2^32. The high half's weight is 32 doublings of its value, not a
+# product with the closed number 2^32: the checkers count a Nat in unary, so
+# a proof that unfolds to_nat on unknown halves stays symbolic this way
+# (see README.md, Laws).
 def W64.to_nat(a: W64) -> Nat:
   match a:
     case W64{h, l}:
-      Nat.add(Nat.mul(U32.to_nat(h), W64.two32()), U32.to_nat(l))
+      Nat.add(U32.to_nat(l), W64.dbl(32n, U32.to_nat(h)))
 
 def W64.from_nat.pair(qr: Nat & Nat) -> W64:
   (q, r) = qr

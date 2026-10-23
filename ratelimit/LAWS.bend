@@ -17,13 +17,12 @@
 #   one adds one; a report answers the count and clears it, and changes
 #   nothing else; so after a report, the count is the number of refused
 #   calls since;
-# * interval and burst never change.
-#
-# The window's own arithmetic (that a time within the window at a later
-# check was within it at every check between, for nondecreasing times) is
-# not stated: it needs laws of W64 subtraction and order, which word64
-# leaves to its tests. The differential test checks the trace property
-# itself, for the sliding policy, on random times.
+# * interval and burst never change;
+# * the window law over a whole run, for the sliding policy: for times
+#   that never decrease, no window of length interval holds more than
+#   burst allowed events. Its proof follows the window's arithmetic (a time
+#   within the window at a later check was within it at every check
+#   between) through word64's laws of W64 subtraction and order.
 import Base
 import ../word64/word64.bend as W
 import ./ratelimit.bend as R
@@ -157,3 +156,26 @@ law ratelimit_vec_report:
 # the eleventh and one at 4 are suppressed, and at 5 a new burst begins
 law ratelimit_vec_printk:
   {R.RateLimitRun.allowed(R.RateLimit.run(R.RateLimit.printk(W.W64.one()), [W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(0), W.W64.from_u32(4), W.W64.from_u32(5)])) == [True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}, False{}, False{}, True{}] : List<&2, Bool>}
+
+# The window law over a whole run, for the sliding policy (the default):
+# for times that never decrease, up to and including now, the allowed
+# events within the window of length interval ending at now are at most
+# burst. Taking now as the last allowed event of any stretch of length
+# interval, no such stretch holds more than burst allowed events.
+law ratelimit_run_window:
+  for +i: W.W64
+  for +b: U32
+  for +ts: List<&2, W.W64>
+  for +now: W.W64
+  for h: {R.RateLimit.sorted_upto(ts, now) == True{} : Bool}
+  {Nat.is_le(R.RateLimit.in_window(i, now, R.RateLimit.allowed_times(ts, R.RateLimitRun.allowed(R.RateLimit.run(R.RateLimit.new(i, b), ts)))), U32.to_nat(b)) == True{} : Bool}
+
+# the hypothesis can hold, and a window count: at 12, of the times 1, 3
+# and 12, two are within 10 units
+law ratelimit_window_wit:
+  {(R.RateLimit.sorted_upto([W.W64.from_u32(0), W.W64.from_u32(5)], W.W64.from_u32(9)), R.RateLimit.in_window(W.W64.from_u32(10), W.W64.from_u32(12), [W.W64.from_u32(1), W.W64.from_u32(3), W.W64.from_u32(12)])) == (True{}, 2n) : Bool & Nat}
+
+# the sliding run of ratelimit_vec_sliding: of its allowed times (0, 1, 2,
+# 10, 11, 12, 25), three lie in the window ending at 12, as many as burst
+law ratelimit_vec_window:
+  {R.RateLimit.in_window(W.W64.from_u32(10), W.W64.from_u32(12), R.RateLimit.allowed_times([W.W64.from_u32(0), W.W64.from_u32(1), W.W64.from_u32(2), W.W64.from_u32(3), W.W64.from_u32(9), W.W64.from_u32(10), W.W64.from_u32(11), W.W64.from_u32(12), W.W64.from_u32(13), W.W64.from_u32(25)], R.RateLimitRun.allowed(R.RateLimit.run(R.RateLimit.new(W.W64.from_u32(10), 3), [W.W64.from_u32(0), W.W64.from_u32(1), W.W64.from_u32(2), W.W64.from_u32(3), W.W64.from_u32(9), W.W64.from_u32(10), W.W64.from_u32(11), W.W64.from_u32(12), W.W64.from_u32(13), W.W64.from_u32(25)])))) == 3n : Nat}
