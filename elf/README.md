@@ -241,11 +241,19 @@ of the symbol's bits as `Bool.or(s, False)` (Base's `Bool.or` matches its
 first argument), and 24 rewrites by `Bool.or(s, False) == s` finish the
 proof (`gen/proof/rinfo32.bend.part`).
 
-Not for every input: the packed version chains (`verdef_chain`, `verneed_chain`: their links are
-`20 + 8 * vd_cnt` and the like, and a for-all law would need `U32`
-arithmetic laws, `to_nat(a + b) == to_nat(a) + to_nat(b)` below 2^32, that
-neither Base nor this repository states yet). They are also covered by the
-differential test.
+Not for every input: the packed version chains (`verdef_chain`,
+`verneed_chain` are vectors). Their links are `20 + 8 * vd_cnt` and the
+like, and that arithmetic is now stated: bend-osdev-u32's `u32_add_value`
+and `u32_shl_value` give the link's value, `20 + 8 * n` for n names below
+2^16. What a for-all law still lacks is reading at an offset inside bytes
+joined together: the chain reader moves to each entry with `elf_seek.oct`,
+whose `elf_skip.oct` asks `B.Octets.at` whether the offset is inside the
+bytes before it drops them, and bytes states no law for `Octets.at`, nor
+for `take` and `drop` at an offset other than the length of the first part
+of an append (`octets_take_append`, `octets_drop_append`). Those are
+bytes interface laws (bytes has 55 dependents), the subject of a batch of
+their own (the audit's B5: "bytes offset readers"), and are not added
+here. The chains are also covered by the differential test.
 
 How the proofs go (`PROOF.bend`, written by `gen/pgen2.py`): the round trips
 never look inside `W64` or `Octets`: they rewrite with bytes'
