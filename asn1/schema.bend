@@ -52,6 +52,12 @@ type Asn1Match is Data:
   Asn1MAbsent{}
   Asn1MDefault{value: N.Asn1Node}
 
+# A step from a match to one inside it: its i-th field (Asn1Match.at), or
+# the match inside an EXPLICIT tag or a CHOICE (Asn1Match.inner)
+type Asn1Step is Data:
+  Asn1StepAt{index: Nat}
+  Asn1StepInner{}
+
 # Common schemas
 
 type A1Slot is Data:
@@ -506,3 +512,16 @@ def a1.s.raw_of(t: Maybe<&2, A.Asn1Tlv>) -> B.Octets:
 
 def Asn1Match.raw(m: Asn1Match) -> B.Octets:
   a1.s.raw_of(Asn1Match.tlv(m))
+
+def a1.s.follow(path: List<&2, Asn1Step>, m: Asn1Match) -> Asn1Match:
+  match path:
+    case Nil{}:
+      m
+    case Con{Asn1StepAt{i}, t}:
+      a1.s.follow(t, Asn1Match.at(m, i))
+    case Con{Asn1StepInner{}, t}:
+      a1.s.follow(t, Asn1Match.inner(m))
+
+# the match reached from m by the steps of path, in order
+def Asn1Match.follow(m: Asn1Match, path: List<&2, Asn1Step>) -> Asn1Match:
+  a1.s.follow(path, m)

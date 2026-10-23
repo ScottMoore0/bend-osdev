@@ -33,6 +33,13 @@ def a1.enc_list(ns: List<&2, N.Asn1Node>, tail: List<&2, U32>) -> List<&2, U32>:
     case Con{N.Asn1Cons{T.Asn1Tag{c, n}, xs}, rest}:
       a1.tlv(c, True{}, n, a1.enc_list(xs, Nil{}), a1.enc_list(rest, tail))
 
+# the identifier octets the encoder writes for a tag, primitive or
+# constructed (8.1.2)
+def Asn1.identifier(t: T.Asn1Tag, cons: Bool) -> B.Octets:
+  match t:
+    case T.Asn1Tag{c, +n}:
+      B.Octets.of_list(T.a1.id_bytes(c, cons, n))
+
 # Why elements cannot be encoded
 
 def a1.is_univ0(c: T.Asn1Class, n: Nat) -> Bool:
