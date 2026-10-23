@@ -1,0 +1,8 @@
+bytes
+word64
+crypto
+siphash
+crc
+deflate
+zstd
+bend-kit-hash@0.2.0.0
