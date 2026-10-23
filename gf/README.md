@@ -22,6 +22,9 @@ GF(2^m)). No GPL source was read.
 | `tables.bend` | the table-driven fast path for GF(2^8): `Gf8Tab`, exp/log tables, multiply, inverse, divide through them |
 | `gf128.bend` | GF(2^128): `Gf128`, GCM's multiplication and GHASH, multiplication by x in each bit order, the big-endian product |
 | `gfm.bend` | GF(2^m), 2 ≤ m ≤ 16: `GfmField`, the named BCH fields, add, multiply, power, inverse, divide, exponential and logarithm |
+| `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`PROOF.bend` is written by `gen/proof.py`) |
+| `proof_tab.bend` | the tables' proof helpers: the fills as lists through bend-osdev-array's laws, the exp table's entries, U32 and `Nat` counting |
+| `proof_tab_cases.bend` | the named fields' facts for the table proofs, by computation (written by `gen/proof_tab.py`) |
 
 ## API
 
@@ -98,6 +101,25 @@ named fields `Gfm.gf16()` (x^4+x+1), `Gfm.gf32()` (x^5+x^2+1),
 * **GF(2^8), for the named fields and every nonzero input:** `a * inv(a) = 1`
   and `exp(log(a)) = a`, checked over all 255 nonzero bytes (32 cases per
   def, to stay within `--verdict`'s fuel).
+* **The tables, for the named fields and every input:** the table that
+  `Gf8Tab.new` builds is handed back unchanged beside each result (each law
+  says what the returned pair *is*, so a caller follows a run of lookups on
+  one table), and the result is the reference's: `Gf8Tab.mul(t, a, b)` is
+  `Gf8.mul(a, b)` for every `a` and `b` (`tab_mul_aes`, `tab_mul_rs`),
+  `Gf8Tab.log(t, a)` is `U32.from_nat(Gf8.log(a))` for every `a`
+  (`tab_log_aes`, `tab_log_rs`), and `Gf8Tab.exp(t, i)` is `Gf8.exp(i)` for
+  every `U32` `i` below 510 (`tab_exp_aes`, `tab_exp_rs`, with
+  `witness_tab_exp`). The method is bend-osdev-blockdev's and
+  bend-osdev-ringbuf's: array's `of_list_new` and `of_list_set` turn each
+  fill, write by write, into `Arrays.of_list(d, l, 0)` for a Data list `l`
+  (`proof_tab.bend`; the exp table's list holds `gen^i` at `i`, for every
+  field), and every read is array's `of_list_get`, a literal pair of the same
+  table and `l`'s entry. The log table's list is computed for each named
+  field and checked against the fill's model; its entry at each byte is
+  `Gf8.log` of the byte (256 cases, 32 per def). A product of nonzero bytes
+  is then `exp[log a + log b] = gen^(log b + log a) = gen^(log b) *
+  gen^(log a)` (`pow_add`) `= b * a` (`exp_log`) `= a * b`; with a zero
+  byte the table answers 0, as does `Gf8.mul` (`mul_zero`).
 * **GF(2^m):** addition commutes for every field and input; in GF(2^4)
   multiplication commutes (all 256 pairs) and every nonzero element has an
   inverse; in GF(2^5) every nonzero element has an inverse.
@@ -113,11 +135,26 @@ Not proved for every input:
   symbolic bits through 128 rounds; `ref/run.sh` compares every function
   with an independent model and with Python's `cryptography` (AES-GCM tags,
   AES-CMAC, AES-XTS), and the vectors fix the bit orders against each other.
-* **The tables:** tied to the reference by vectors, by an exhaustive check
-  at run time in `check.bend` (all 65,536 products and 256 inverses of both
-  named fields agree), and by `ref/run.sh`. A law for every input would need
-  lemmas about how the tables are filled.
+* **The tables, beyond the named fields' products, logarithms and
+  exponentials:** `Gf8Tab.inv` and `Gf8Tab.div` are tied to the reference
+  by vectors, by the exhaustive check at run time in `check.bend` (all
+  65,536 products and 256 inverses of both named fields agree) and by
+  `ref/run.sh`. Their laws would follow the product's, with the further step
+  `exp[255 - log a] = a^254`, which needs `gen^255 = 1` and powers of
+  powers; that step is not done yet. The tables of a field given as a
+  parameter (any `Gf8Field`) are not proved: they are right only when the
+  generator generates the field, and `--verdict`'s kernel compares
+  `Gf8Tab.exp_table(f)` with its fill by running the fill, which it can do
+  for a named field (both sides closed) but not for a field `f` given as a
+  variable (it runs out of fuel), so each table's first step is stated per
+  field (`proof_tab_cases.bend`).
 * **GF(2^m) beyond the small fields:** vectors and `ref/run.sh`.
+
+## Dependencies
+
+bend-osdev-bytes (`gf128.bend`'s octet conversions) and bend-osdev-array,
+whose laws the table proofs use (`proof_tab.bend`; no run-time code
+imports it).
 
 ## Tests
 
@@ -135,3 +172,5 @@ Python's `cryptography` package.
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 764 cases match, `scripts/deps.sh` passes.
+`PROOF.bend` takes about 3 minutes to check and its kernel check about 3
+minutes more (WSL2).
