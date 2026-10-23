@@ -21,7 +21,8 @@ block, this script writes:
 
 Adding a cipher: a row in CIPHERS (its import, its key type, its encryption
 and decryption, the law of its package that decryption undoes encryption,
-and a key the cipher accepts for check.bend), then run this script.
+a key the cipher accepts for check.bend, and the error type of its key
+function), then run this script.
 """
 import os, sys
 
@@ -29,8 +30,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(HERE, "..")
 
 
-def row(name, title, alias, path, K, key, enc, dec, rt, tkey):
-    return dict(name=name, title=title, alias=alias, path=path, K=K, key=key, enc=enc, dec=dec, rt=rt, tkey=tkey)
+def row(name, title, alias, path, K, key, enc, dec, rt, tkey, err="LC.LcError"):
+    return dict(name=name, title=title, alias=alias, path=path, K=K, key=key, enc=enc, dec=dec, rt=rt, tkey=tkey, err=err)
 
 
 K16 = "000102030405060708090a0b0c0d0e0f"
@@ -47,6 +48,9 @@ CIPHERS = [
         "Ar.LcAria.encrypt", "Ar.LcAria.decrypt", "LL.aria_round_trip", K16),
     row("cast6", "CAST-256 (legacy-ciphers)", "C6", "../legacy-ciphers/cast6.bend", "C6.LcCast6Key", "C6.LcCast6.key",
         "C6.LcCast6.encrypt", "C6.LcCast6.decrypt", "LL.cast6_round_trip", K16),
+    # cipher-modes' own default: its round trip is cipher-modes' aes_round_trip
+    row("aes", "AES-128, AES-192 and AES-256 (cipher-modes)", "X", "../cipher-modes/aes.bend", "X.CmAesKey", "X.CmAes.key",
+        "X.CmAes.encrypt", "X.CmAes.decrypt", "CML.aes_round_trip", K16, "M.CmError"),
 ]
 
 L = "List<&2, M.CmBlock>"
@@ -129,8 +133,9 @@ import ../cipher-modes/xts.bend as XT
 
 PROOF_HEAD = '''# Proofs of LAWS.bend, written by gen/instances.py: each c_dec_enc by
 # induction on the list, with the cipher's own round-trip law (legacy-ciphers'
-# LAWS.bend) at every block; each mode law is cipher-modes' law at the
-# cipher's template arguments, with c_dec_enc as its hypothesis.
+# LAWS.bend, or cipher-modes' aes_round_trip) at every block; each mode law is
+# cipher-modes' law at the cipher's template arguments, with c_dec_enc as its
+# hypothesis.
 import Base
 import ../bytes/bytes.bend as B
 import ../cipher-modes/cipher-modes.bend as M
@@ -155,7 +160,8 @@ CHECK_HEAD = '''# Every cipher through cipher-modes' four round trips, at run ti
 # (CBC, and XTS on whole blocks) and 61 bytes (XTS with ciphertext
 # stealing), encrypted and decrypted back. Written by gen/instances.py. The
 # ciphers' own values are tested in legacy-ciphers (its vectors, and CBC
-# against cryptography and the openssl command), the modes' in cipher-modes.
+# against cryptography and the openssl command) and in cipher-modes (AES:
+# FIPS 197's vectors, and against cryptography), the modes' in cipher-modes.
 import Base
 import ../bytes/bytes.bend as B
 import ../legacy-ciphers/legacy-ciphers.bend as LC
@@ -236,13 +242,13 @@ def four(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, ~dec: K -> M.CmBlock -> M.
 def check_case(c):
     K = c["K"]
     return ('''
-def run.%s(a: Result<&2, &2, LC.LcError, %s>, b: Result<&2, &2, LC.LcError, %s>) -> String:
+def run.%s(a: Result<&2, &2, %s, %s>, b: Result<&2, &2, %s, %s>) -> String:
   match a b:
     case Done{+k} Done{+k2}:
       four(~%s, ~%s, ~%s, "%s", k, k2)
     case _ _:
       "%s: key refused"
-''' % (c["name"], K, K, K, c["enc"], c["dec"], c["name"], c["name"]))
+''' % (c["name"], c["err"], K, c["err"], K, K, c["enc"], c["dec"], c["name"], c["name"]))
 
 
 def check_file():

@@ -3,7 +3,8 @@
 # (CBC, and XTS on whole blocks) and 61 bytes (XTS with ciphertext
 # stealing), encrypted and decrypted back. Written by gen/instances.py. The
 # ciphers' own values are tested in legacy-ciphers (its vectors, and CBC
-# against cryptography and the openssl command), the modes' in cipher-modes.
+# against cryptography and the openssl command) and in cipher-modes (AES:
+# FIPS 197's vectors, and against cryptography), the modes' in cipher-modes.
 import Base
 import ../bytes/bytes.bend as B
 import ../legacy-ciphers/legacy-ciphers.bend as LC
@@ -16,6 +17,7 @@ import ../legacy-ciphers/serpent.bend as Sp
 import ../legacy-ciphers/twofish.bend as Tf
 import ../legacy-ciphers/aria.bend as Ar
 import ../legacy-ciphers/cast6.bend as C6
+import ../cipher-modes/aes.bend as X
 
 def hx.digit(+c: U32) -> U32:
   U32.sub(c, U32.add(48, U32.mul(39, U32.shrn(c, 6n))))
@@ -125,6 +127,13 @@ def run.cast6(a: Result<&2, &2, LC.LcError, C6.LcCast6Key>, b: Result<&2, &2, LC
     case _ _:
       "cast6: key refused"
 
+def run.aes(a: Result<&2, &2, M.CmError, X.CmAesKey>, b: Result<&2, &2, M.CmError, X.CmAesKey>) -> String:
+  match a b:
+    case Done{+k} Done{+k2}:
+      four(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, "aes", k, k2)
+    case _ _:
+      "aes: key refused"
+
 def main() -> IO(Unit):
   do IO<Unit>:
     IO.print(run.sm4(S.LcSm4.key(hx("000102030405060708090a0b0c0d0e0f")), S.LcSm4.key(hx("f0e0d0c0b0a090807060504030201000"))))
@@ -133,6 +142,7 @@ def main() -> IO(Unit):
     IO.print(run.twofish(Tf.LcTwofish.key(hx("000102030405060708090a0b0c0d0e0f")), Tf.LcTwofish.key(hx("f0e0d0c0b0a090807060504030201000"))))
     IO.print(run.aria(Ar.LcAria.key(hx("000102030405060708090a0b0c0d0e0f")), Ar.LcAria.key(hx("f0e0d0c0b0a090807060504030201000"))))
     IO.print(run.cast6(C6.LcCast6.key(hx("000102030405060708090a0b0c0d0e0f")), C6.LcCast6.key(hx("f0e0d0c0b0a090807060504030201000"))))
+    IO.print(run.aes(X.CmAes.key(hx("000102030405060708090a0b0c0d0e0f")), X.CmAes.key(hx("f0e0d0c0b0a090807060504030201000"))))
 
 #|sm4 cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok
 #|camellia cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok
@@ -140,3 +150,4 @@ def main() -> IO(Unit):
 #|twofish cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok
 #|aria cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok
 #|cast6 cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok
+#|aes cbc_blocks ok, cbc ok, xts_blocks ok, xts ok, xts stealing ok

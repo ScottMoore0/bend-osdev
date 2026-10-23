@@ -1,7 +1,8 @@
 # Proofs of LAWS.bend, written by gen/instances.py: each c_dec_enc by
 # induction on the list, with the cipher's own round-trip law (legacy-ciphers'
-# LAWS.bend) at every block; each mode law is cipher-modes' law at the
-# cipher's template arguments, with c_dec_enc as its hypothesis.
+# LAWS.bend, or cipher-modes' aes_round_trip) at every block; each mode law is
+# cipher-modes' law at the cipher's template arguments, with c_dec_enc as its
+# hypothesis.
 import Base
 import ../bytes/bytes.bend as B
 import ../cipher-modes/cipher-modes.bend as M
@@ -15,6 +16,7 @@ import ../legacy-ciphers/serpent.bend as Sp
 import ../legacy-ciphers/twofish.bend as Tf
 import ../legacy-ciphers/aria.bend as Ar
 import ../legacy-ciphers/cast6.bend as C6
+import ../cipher-modes/aes.bend as X
 import ../legacy-ciphers/LAWS.bend as LL
 import ../legacy-ciphers/PROOF.bend as LP
 import ./LAWS.bend as Laws
@@ -156,3 +158,26 @@ def Laws.cast6_xts_blocks_round_trip(k1, t, bs):
 
 def Laws.cast6_xts_round_trip(k1, k2, i, p, hi, hp):
   CML.xts_round_trip(~C6.LcCast6Key, ~C6.LcCast6.encrypt, ~C6.LcCast6.decrypt, k1, k2, xs => Laws.cast6_dec_enc(k1, xs), i, p, hi, hp)
+
+# AES-128, AES-192 and AES-256 (cipher-modes)
+
+def Laws.aes_dec_enc(k, xs):
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
+      %Equal.sym(M.CmBlock, X.CmAes.decrypt(k, X.CmAes.encrypt(k, x)), x, CML.aes_round_trip(k, x)) : {Con{_, M.CmBlock.dec_enc(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k, t)} == Con{x, t} : List<&2, M.CmBlock>}
+      %Equal.sym(List<&2, M.CmBlock>, M.CmBlock.dec_enc(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k, t), t, Laws.aes_dec_enc(k, t)) : {Con{x, _} == Con{x, t} : List<&2, M.CmBlock>}
+      {==}
+
+def Laws.aes_cbc_blocks_round_trip(k, iv, bs):
+  CML.cbc_blocks_round_trip(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k, xs => Laws.aes_dec_enc(k, xs), iv, bs)
+
+def Laws.aes_cbc_round_trip(k, iv, m, hi, hm):
+  CML.cbc_round_trip(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k, xs => Laws.aes_dec_enc(k, xs), iv, m, hi, hm)
+
+def Laws.aes_xts_blocks_round_trip(k1, t, bs):
+  CML.xts_blocks_round_trip(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k1, xs => Laws.aes_dec_enc(k1, xs), t, bs)
+
+def Laws.aes_xts_round_trip(k1, k2, i, p, hi, hp):
+  CML.xts_round_trip(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k1, k2, xs => Laws.aes_dec_enc(k1, xs), i, p, hi, hp)

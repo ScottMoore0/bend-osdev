@@ -21,6 +21,7 @@ import ../legacy-ciphers/serpent.bend as Sp
 import ../legacy-ciphers/twofish.bend as Tf
 import ../legacy-ciphers/aria.bend as Ar
 import ../legacy-ciphers/cast6.bend as C6
+import ../cipher-modes/aes.bend as X
 
 # SM4 (legacy-ciphers)
 
@@ -243,3 +244,40 @@ law cast6_xts_round_trip:
   for hi: {B.Octets.len(i) == 16n : Nat}
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~C6.LcCast6Key, ~C6.LcCast6.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~C6.LcCast6Key, ~C6.LcCast6.encrypt, ~C6.LcCast6.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
+
+# AES-128, AES-192 and AES-256 (cipher-modes)
+
+# meets cipher-modes' round-trip hypothesis at every key
+law aes_dec_enc:
+  for +k: X.CmAesKey
+  for xs: List<&2, M.CmBlock>
+  {M.CmBlock.dec_enc(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k, xs) == xs : List<&2, M.CmBlock>}
+
+law aes_cbc_blocks_round_trip:
+  for +k: X.CmAesKey
+  for iv: M.CmBlock
+  for bs: List<&2, M.CmBlock>
+  {CB.Cbc.decrypt_blocks(~X.CmAesKey, ~X.CmAes.decrypt, k, iv, CB.Cbc.encrypt_blocks(~X.CmAesKey, ~X.CmAes.encrypt, k, iv, bs)) == bs : List<&2, M.CmBlock>}
+
+law aes_cbc_round_trip:
+  for +k: X.CmAesKey
+  for +iv: B.Octets
+  for +m: B.Octets
+  for hi: {B.Octets.len(iv) == 16n : Nat}
+  for hm: {Nat.mod(B.Octets.len(m), 16n) == 0n : Nat}
+  {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, CB.Cbc.encrypt(~X.CmAesKey, ~X.CmAes.encrypt, k, iv, m), c => CB.Cbc.decrypt(~X.CmAesKey, ~X.CmAes.decrypt, k, iv, c)) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
+
+law aes_xts_blocks_round_trip:
+  for +k1: X.CmAesKey
+  for t: M.CmBlock
+  for bs: List<&2, M.CmBlock>
+  {XT.Xts.decrypt_blocks(~X.CmAesKey, ~X.CmAes.decrypt, k1, t, XT.Xts.encrypt_blocks(~X.CmAesKey, ~X.CmAes.encrypt, k1, t, bs)) == bs : List<&2, M.CmBlock>}
+
+law aes_xts_round_trip:
+  for +k1: X.CmAesKey
+  for +k2: X.CmAesKey
+  for +i: B.Octets
+  for +p: B.Octets
+  for hi: {B.Octets.len(i) == 16n : Nat}
+  for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
+  {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~X.CmAesKey, ~X.CmAes.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}

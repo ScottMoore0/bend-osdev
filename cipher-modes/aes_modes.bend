@@ -1,9 +1,10 @@
 # The modes with AES as the cipher: the named defaults. Each takes the raw key
 # as Octets and picks AES-128 or AES-256 by its length (XTS: the two keys
 # joined, 32 or 64 bytes), so a wrong length answers CmBadKeyLength. To
-# expand a key once and use it many times, call CmAes.key (aes.bend; and
-# CmAes.prepare before decrypting) and the generic mode with ~X.CmAesKey,
-# ~X.CmAes.encrypt, ~X.CmAes.decrypt.
+# expand a key once and use it many times, call CmAes.key (aes.bend) and the
+# generic mode with ~X.CmAesKey, ~X.CmAes.encrypt, ~X.CmAes.decrypt.
+# (CmAes.prepare, applied below before decrypting, is the identity now:
+# decryption uses the encryption schedule.)
 import Base
 import ../bytes/bytes.bend as B
 import ./cipher-modes.bend as M

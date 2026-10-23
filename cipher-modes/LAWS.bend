@@ -99,6 +99,14 @@ law ccm_round_trip:
   for +p: B.Octets
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, CC.Ccm.encrypt(~K, ~enc, k, m, nonce, aad, p), c => CC.Ccm.decrypt(~K, ~enc, k, m, nonce, aad, c)) == Result.map(&2, &2, M.CmError, B.Octets, B.Octets, c => p, CC.Ccm.encrypt(~K, ~enc, k, m, nonce, aad, p)) : Result<&2, &2, M.CmError, B.Octets>}
 
+# AES (aes.bend): decryption undoes encryption, for every key (every value
+# of CmAesKey, whatever its number of rounds and round keys: AES-128, AES-192
+# and AES-256 among them) and every block
+law aes_round_trip:
+  for k: X.CmAesKey
+  for +b: M.CmBlock
+  {X.CmAes.decrypt(k, X.CmAes.encrypt(k, b)) == b : M.CmBlock}
+
 # A block written as Octets reads back as the same block, for every block
 law block_octets_round_trip:
   for +b: M.CmBlock
