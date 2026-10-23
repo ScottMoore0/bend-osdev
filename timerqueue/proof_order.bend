@@ -817,3 +817,18 @@ def kt.fresh2(+e2: W.W64, +n: Nat, +e1: W.W64, +i: Nat, +h: {Nat.is_lt(i, n) == 
   %Equal.sym(Cmp, Nat.cmp(n, i), cm.flip(Nat.cmp(i, n)), n.flip(i, n)) : {Cmp.is_eq(T.TqCmp.lex(T.TqTime.cmp(e2, e1), _)) == False{} : Bool}
   %Equal.sym(Cmp, Nat.cmp(i, n), LT{}, cm.lt_of(Nat.cmp(i, n), h)) : {Cmp.is_eq(T.TqCmp.lex(T.TqTime.cmp(e2, e1), cm.flip(_))) == False{} : Bool}
   lex.ne_gt(T.TqTime.cmp(e2, e1))
+
+# TqTime.cmp is word64's W64.cmp, by word64's laws cmp_hi_lt, cmp_hi_eq and
+# cmp_hi_gt (high halves, then low halves)
+
+def tm.w64.go(c: Cmp, +a: W.W64, +b: W.W64, e: {U32.cmp(W.W64.hi(a), W.W64.hi(b)) == c : Cmp}) -> {T.TqCmp.lex(c, U32.cmp(W.W64.lo(a), W.W64.lo(b))) == W.W64.cmp(a, b) : Cmp}:
+  match c:
+    case LT{}:
+      Equal.sym(Cmp, W.W64.cmp(a, b), LT{}, WL.cmp_hi_lt(a, b, e))
+    case EQ{}:
+      Equal.sym(Cmp, W.W64.cmp(a, b), U32.cmp(W.W64.lo(a), W.W64.lo(b)), WL.cmp_hi_eq(a, b, e))
+    case GT{}:
+      Equal.sym(Cmp, W.W64.cmp(a, b), GT{}, WL.cmp_hi_gt(a, b, e))
+
+def tm.w64(+a: W.W64, +b: W.W64) -> {T.TqTime.cmp(a, b) == W.W64.cmp(a, b) : Cmp}:
+  tm.w64.go(U32.cmp(W.W64.hi(a), W.W64.hi(b)), a, b, {==})

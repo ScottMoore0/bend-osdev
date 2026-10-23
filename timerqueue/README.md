@@ -147,15 +147,18 @@ queue, time and timer ("valid": `TimerQueueList.valid`):
 * A vector (four timers, one deleted, an expiry) and witnesses that the
   hypotheses can hold (`tq_vec`, `tq_wit`).
 
+* **The order on times is word64's** (`tq_time_cmp`): `TqTime.cmp`, built
+  from `W64.hi` and `W64.lo`, agrees with `W64.cmp` for every pair of
+  times, and so (by word64's `cmp_value`) with the order of the values.
+
 The order lemmas are proved from Base's `U32` order (bit by bit, as
 bend-osdev-maple does) and, for the equality of two times with equal
-halves, word64's interface law `parts_of`; nothing looks inside `W64`.
+halves, word64's interface law `parts_of`; `tq_time_cmp` follows from
+word64's laws `cmp_hi_lt`, `cmp_hi_eq` and `cmp_hi_gt`. Nothing looks
+inside `W64`.
 
-**What is not proved**: that the queue's order on times (`TqTime.cmp`,
-built from `W64.hi` and `W64.lo`) agrees with word64's own `W64.cmp`;
-word64 states no law relating them, and this package uses only its
-interface. The differential test compares the fired order with Python's
-integers.
+Every property this package states is proved; the differential test
+also compares the fired order with Python's integers.
 
 ## Tests
 
@@ -176,6 +179,6 @@ integers.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (25 laws), `--verdict` ALL
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (26 laws), `--verdict` ALL
 PROOFS CHECK, `check.bend` passes, `ref/run.sh` 2583 events in 40 sequences
 match, `scripts/deps.sh timerqueue` ok.
