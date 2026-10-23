@@ -141,3 +141,39 @@ law sub_value:
   for +b: W.W64
   for h: {Nat.is_le(W.W64.to_nat(b), W.W64.to_nat(a)) == True{} : Bool}
   {W.W64.to_nat(W.W64.sub(a, b)) == Nat.sub(W.W64.to_nat(a), W.W64.to_nat(b)) : Nat}
+
+# Shifts, as Nat facts. A shift left by k < 64 multiplies the value by 2^k
+# when the result is no more than a word's value; a shift right by k < 64
+# is the floor of the value divided by 2^k (2^k times it is at most the
+# value, and 2^k times one more is above it); by 64 or more, both give 0.
+law shl_value:
+  for +a: W.W64
+  for +k: Nat
+  for +c: W.W64
+  for hk: {Nat.is_lt(k, 64n) == True{} : Bool}
+  for +h: {Nat.is_le(U.U32Nat.dbl(k, W.W64.to_nat(a)), W.W64.to_nat(c)) == True{} : Bool}
+  {W.W64.to_nat(W.W64.shl(a, k)) == U.U32Nat.dbl(k, W.W64.to_nat(a)) : Nat}
+
+law shr_value_le:
+  for +a: W.W64
+  for +k: Nat
+  for hk: {Nat.is_lt(k, 64n) == True{} : Bool}
+  {Nat.is_le(U.U32Nat.dbl(k, W.W64.to_nat(W.W64.shr(a, k))), W.W64.to_nat(a)) == True{} : Bool}
+
+law shr_value_lt:
+  for +a: W.W64
+  for +k: Nat
+  for hk: {Nat.is_lt(k, 64n) == True{} : Bool}
+  {Nat.is_lt(W.W64.to_nat(a), U.U32Nat.dbl(k, 1n+W.W64.to_nat(W.W64.shr(a, k)))) == True{} : Bool}
+
+law shl_big:
+  for +a: W.W64
+  for +k: Nat
+  for +h: {Nat.is_le(64n, k) == True{} : Bool}
+  {W.W64.shl(a, k) == W.W64.zero() : W.W64}
+
+law shr_big:
+  for +a: W.W64
+  for +k: Nat
+  for +h: {Nat.is_le(64n, k) == True{} : Bool}
+  {W.W64.shr(a, k) == W.W64.zero() : W.W64}
