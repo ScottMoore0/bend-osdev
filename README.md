@@ -19,10 +19,13 @@ GPL source was read.
   (see that README).
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
 - **Publishing on BendHub**, every package at version 0.1.0.0, as
-  `bend-osdev-<package>`: so far word64, bytes, acpi, caps and apparmor
-  (`import bend-osdev-bytes@0.1.0.0/bytes.bend as B`). The hub registers
-  about five new package names a day, so the others follow over the coming
-  days.
+  `bend-osdev-<package>`: so far acpi, aead, algo, apparmor, array, bpf,
+  bytes, caps, cipher-modes, crc, crypto, gf, hashes, legacy-ciphers and
+  word64 (`import bend-osdev-bytes@0.1.0.0/bytes.bend as B`). The hub
+  registers about five new package names a day, so the others follow over
+  the coming days. File names with a `-` are published with a `_`
+  (`bend-osdev-cipher-modes@0.1.0.0/cipher_modes.bend`), since the hub
+  refuses `-` in a path.
 
 ## Packages
 
