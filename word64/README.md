@@ -52,7 +52,9 @@ the arithmetic of each 32-bit half.
   packages use only the defs above, and their proofs use only this package's
   laws (in particular `parts_of`), never the inside of `W64`.
 * **Interface laws for dependents' proofs:** `parts_of` (a word is its halves
-  joined), `hi_from_parts`, `lo_from_parts`, `lo_from_u32`; and the value
+  joined), `hi_from_parts`, `lo_from_parts`, `lo_from_u32`,
+  `from_parts_zero_hi` (halves 0 and a are `from_u32(a)`) and
+  `from_parts_zero` (halves 0 and 0 are `zero()`); and the value
   laws below (`cmp_value`, `lt_value`, `le_value`, `add_value`, `sub_value`
   and the rest), so that a dependent reasons about `W64` arithmetic as
   `Nat` arithmetic without looking inside `W64`.
@@ -65,6 +67,7 @@ the arithmetic of each 32-bit half.
   multiply that overflows, and the text forms;
 * **properties for every input**: `lo(from_u32(a)) == a`;
   `hi(from_parts(h, l)) == h` and `lo(from_parts(h, l)) == l` for all `h`, `l`;
+  `from_parts(0, a) == from_u32(a)` and `from_parts(0, 0) == zero()`;
   and `from_parts(hi(v), lo(v)) == v` for every word `v`;
 * **the value of a word** (`to_nat_parts`): `lo + hi * 2^32`, the weight
   2^32 written as 32 doublings (`U32Nat.dbl(32n, ...)`, from
@@ -164,7 +167,7 @@ Python's integers on random words and on the edge values 0, 1, 2^32 - 1,
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (32 laws), `PROOF_mul.bend`
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (34 laws), `PROOF_mul.bend`
 (4), `PROOF_div.bend` (4), `PROOF_bits.bend` (8) and `PROOF_text.bend` (1)
 ALL PROOFS CHECK, and `--verdict` ALL PROOFS CHECK on each (about 4 s
 each, peak 0.36 to 0.40 GB); `check.bend` passes and `ref/run.sh` 850 cases match, both as native

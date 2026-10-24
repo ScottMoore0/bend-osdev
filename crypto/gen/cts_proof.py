@@ -8,9 +8,10 @@
 
 The region holds, for each of the two block formats (inst_cm.bend's 128-bit
 CmBlock, legacy-ciphers' 64-bit LcBlock64), the same proof with the
-format's defs filled in: its bytes read back are the block's (a lemma on
-the bytes' bits, pc.<f>_dbits, and one reading them off a list,
-pc.<f>_dualL), a block of bytes encrypted and decrypted is itself where the
+format's defs filled in: its bytes read back are the block's (for
+CmBlock, a lemma on the bytes' bits, pc.cm_dbits, and one reading them off
+a list, pc.cm_dualL; for LcBlock64, legacy-ciphers' law
+block64_octets_dual), a block of bytes encrypted and decrypted is itself where the
 cipher's block is (pc.<f>_br), the two facts on every list of block inputs
 that PROOF_cts.bend's generic lemmas take as hypotheses (pc.<f>_brs_all,
 pc.<f>_bls_all), and the law <f>block_cts_round_trip from them.
@@ -22,35 +23,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PROOF = os.path.join(HERE, "..", "PROOF_cts.bend")
 
 TEMPLATE = r'''
-# @NAME@: the format's byte strings are the blocks' (pc.@F@_dual), so a
+# @NAME@: the format's byte strings are the blocks' (@DUAL@), so a
 # block of bytes encrypted and decrypted is itself where the cipher's block
 # is (pc.@F@_br), and keeps its length (pc.@F@_bl)
-
-def pc.@F@_mget(m: Maybe<&2, @BLK@>, +d: @BLK@) -> @BLK@:
-  match m:
-    case Some{b}:
-      b
-    case None{}:
-      d
-
-def pc.@F@_mdisc(m: Maybe<&2, @BLK@>) -> Type:
-  match m:
-    case Some{b}:
-      Empty
-    case None{}:
-      Unit
-
-def pc.@F@_nsome(+bl: @BLK@, h: {None{} == Some{bl} : Maybe<&2, @BLK@>}) -> Empty:
-  %h : pc.@F@_mdisc(_)
-  Unit{}
-
-@DUALBITS@
-
-@DUALL@
-
-def pc.@F@_dual(+o: B.Octets, +bl: @BLK@, em: {@OF@(o) == Some{bl} : Maybe<&2, @BLK@>}) -> {@TO@(bl) == o : B.Octets}:
-  Equal.trans(B.Octets, @TO@(bl), B.Octets.of_list(B.Octets.to_list(o)), o, pc.@F@_dualL(B.Octets.to_list(o), bl)(em), BL.octets_of_to(o))
-
+@DUALDEFS@
 def pc.@F@_ebl.go(m: Maybe<&2, @BLK@>) -> @BLK@:
   match m:
     case Some{b}:
@@ -71,7 +47,7 @@ def pc.@F@_br.go(~K: Data, ~enc: K -> @BLK@ -> @BLK@, ~dec: K -> @BLK@ -> @BLK@,
       +em => hi => %Equal.sym(Maybe<&2, @BLK@>, @OF@(o), Some{bl}, em) : {Ct.cr.cts.b(~K, ~@BLK@, ~dec, ~@OF@, ~@TO@, k, Ct.cr.cts.b.go(~K, ~@BLK@, ~enc, ~@TO@, k, _, o)) == o : B.Octets}
         %Equal.sym(Maybe<&2, @BLK@>, @OF@(@TO@(enc(k, bl))), Some{enc(k, bl)}, @FMT@(enc(k, bl))) : {Ct.cr.cts.b.go(~K, ~@BLK@, ~dec, ~@TO@, k, _, @TO@(enc(k, bl))) == o : B.Octets}
         %Equal.sym(@BLK@, dec(k, enc(k, bl)), bl, hi) : {@TO@(_) == o : B.Octets}
-        pc.@F@_dual(o, bl, em)
+        @DUAL@(o, bl, em)
 
 def pc.@F@_br(~K: Data, ~enc: K -> @BLK@ -> @BLK@, ~dec: K -> @BLK@ -> @BLK@, +k: K, +o: B.Octets, hi: {dec(k, enc(k, pc.@F@_ebl(o))) == pc.@F@_ebl(o) : @BLK@}) -> {Ct.cr.cts.b(~K, ~@BLK@, ~dec, ~@OF@, ~@TO@, k, Ct.cr.cts.b(~K, ~@BLK@, ~enc, ~@OF@, ~@TO@, k, o)) == o : B.Octets}:
   pc.@F@_br.go(~K, ~enc, ~dec, k, @OF@(o), o)({==})(hi)
@@ -83,7 +59,7 @@ def pc.@F@_bl.go(~K: Data, ~enc: K -> @BLK@ -> @BLK@, +k: K, m: Maybe<&2, @BLK@>
         {==}
     case Some{+bl}:
       +em => %Equal.sym(Maybe<&2, @BLK@>, @OF@(o), Some{bl}, em) : {B.Octets.len(Ct.cr.cts.b.go(~K, ~@BLK@, ~enc, ~@TO@, k, _, o)) == B.Octets.len(o) : Nat}
-        Equal.trans(Nat, B.Octets.len(@TO@(enc(k, bl))), @N@, B.Octets.len(o), @LEN@(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), @N@, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(@TO@(bl)), @N@, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, @TO@(bl), Equal.sym(B.Octets, @TO@(bl), o, pc.@F@_dual(o, bl, em))), @LEN@(bl))))
+        Equal.trans(Nat, B.Octets.len(@TO@(enc(k, bl))), @N@, B.Octets.len(o), @LEN@(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), @N@, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(@TO@(bl)), @N@, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, @TO@(bl), Equal.sym(B.Octets, @TO@(bl), o, @DUAL@(o, bl, em))), @LEN@(bl))))
 
 def pc.@F@_bl(~K: Data, ~enc: K -> @BLK@ -> @BLK@, +k: K, +o: B.Octets) -> {B.Octets.len(Ct.cr.cts.b(~K, ~@BLK@, ~enc, ~@OF@, ~@TO@, k, o)) == B.Octets.len(o) : Nat}:
   pc.@F@_bl.go(~K, ~enc, k, @OF@(o), o)({==})
@@ -173,11 +149,39 @@ def Laws.@F@block@SUF@_cts_round_trip(K, enc, dec, k, inv, iv, m):
   pc.@F@_fin(~K, ~enc, ~dec, k, iv, m, pc.@F@_inner(~K, ~enc, ~dec, k, inv, iv, m), pc.@F@_len(~K, ~enc, k, iv, m), Ct.cr.cts.check(@N@, iv, B.Octets.len(m)))({==})
 '''
 
+DUALDEFS = r'''
+def pc.@F@_mget(m: Maybe<&2, @BLK@>, +d: @BLK@) -> @BLK@:
+  match m:
+    case Some{b}:
+      b
+    case None{}:
+      d
+
+def pc.@F@_mdisc(m: Maybe<&2, @BLK@>) -> Type:
+  match m:
+    case Some{b}:
+      Empty
+    case None{}:
+      Unit
+
+def pc.@F@_nsome(+bl: @BLK@, h: {None{} == Some{bl} : Maybe<&2, @BLK@>}) -> Empty:
+  %h : pc.@F@_mdisc(_)
+  Unit{}
+
+@DUALBITS@
+
+@DUALL@
+
+def pc.@F@_dual(+o: B.Octets, +bl: @BLK@, em: {@OF@(o) == Some{bl} : Maybe<&2, @BLK@>}) -> {@TO@(bl) == o : B.Octets}:
+  Equal.trans(B.Octets, @TO@(bl), B.Octets.of_list(B.Octets.to_list(o)), o, pc.@F@_dualL(B.Octets.to_list(o), bl)(em), BL.octets_of_to(o))
+
+'''
+
 FORMATS = [
     dict(F='cm', SUF='', NAME='The 128-bit block format (inst_cm.bend)', BLK='M.CmBlock', OF='CM.CrBlk128.of_octets', TO='CM.CrBlk128.to_octets',
-         N='16n', Q='15n', NB=16, ZERO='M.CmBlock{0, 0, 0, 0}', FMT='PB.pb.cm_fmt', LEN='PB.pb.cm_len', BLOCK='CM.cr.f128.block'),
+         N='16n', Q='15n', NB=16, ZERO='M.CmBlock{0, 0, 0, 0}', FMT='PB.pb.cm_fmt', LEN='PB.pb.cm_len', BLOCK='CM.cr.f128.block', DUAL='pc.cm_dual'),
     dict(F='lc', SUF='64', NAME="The 64-bit block format (legacy-ciphers' LcBlock64)", BLK='L.LcBlock64', OF='L.LcBlock64.of_octets', TO='L.LcBlock64.to_octets',
-         N='8n', Q='7n', NB=8, ZERO='L.LcBlock64{0, 0}', FMT='LL.block64_octets_round_trip', LEN='PB.pb.lc_len', BLOCK='L.lc.block_of'),
+         N='8n', Q='7n', NB=8, ZERO='L.LcBlock64{0, 0}', FMT='LL.block64_octets_round_trip', LEN='PB.pb.lc_len', DUAL='LL.block64_octets_dual'),
 ]
 
 def u32(p):
@@ -190,6 +194,11 @@ def lst(names, tail='Nil{}'):
     return s
 
 def gen(f):
+    if 'BLOCK' not in f:
+        s = TEMPLATE.replace('@DUALDEFS@', '')
+        for k, v in f.items():
+            s = s.replace('@%s@' % k, str(v))
+        return s
     nb = f['NB']
     a = ["a%d" % i for i in range(nb)]
     full = lst(a)
@@ -223,6 +232,9 @@ def gen(f):
         var = nxt
     duall = "\n".join(lines) + "\n"
     s = TEMPLATE
+    # a format whose package states its byte form both ways as a law (DUAL
+    # names it) needs no lemmas of its own; inst_cm.bend's is proved here
+    s = s.replace('@DUALDEFS@', DUALDEFS[:-1])
     s = s.replace('@DUALBITS@', dbits).replace('@DUALL@', duall)
     for k, v in f.items():
         s = s.replace('@%s@' % k, str(v))

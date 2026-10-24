@@ -15,6 +15,10 @@ import ./inst_cm.bend as CM
 import ./proof_bits.bend as Bits
 import ./PROOF_bytes.bend as PB
 import ./LAWS_cts.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # How the proofs go. CBC-CS3 cuts the message into pieces of the block size
 # (CrOct.pieces: whole blocks, then the last 1 to b bytes), and decryption
@@ -66,13 +70,6 @@ def pc.and_r(a: Bool, +b: Bool) -> {Bool.and(a, b) == True{} : Bool} -> {b == Tr
     case True{}:
       h => h
 
-def pc.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      pc.le_refl(p)
-
 def pc.le0(+y: Nat) -> {Nat.is_le(0n, y) == True{} : Bool}:
   match y:
     case 0n:
@@ -80,17 +77,9 @@ def pc.le0(+y: Nat) -> {Nat.is_le(0n, y) == True{} : Bool}:
     case 1n+p:
       {==}
 
-# a <= a + b
-def pc.le_add(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      pc.le0(b)
-    case 1n+p:
-      pc.le_add(p, b)
-
 def pc.le_of_add(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(a, b) == c : Nat} -> {Nat.is_le(a, c) == True{} : Bool}:
   h => %h : {Nat.is_le(a, _) == True{} : Bool}
-    pc.le_add(a, b)
+    UO.nat_le_add_r(a, b)
 
 def pc.eq_true(+a: Nat, +b: Nat) -> {Nat.is_eq(a, b) == True{} : Bool} -> {a == b : Nat}:
   match a b:
@@ -122,22 +111,6 @@ def pc.le_neq(+a: Nat, +q: Nat) -> {Nat.is_le(a, 1n+q) == True{} : Bool} -> {Nat
               h1 => h2 => pc.absurd({Nat.is_le(2n+aq, 0n) == True{} : Bool}, h1)
             case 1n+qp:
               h1 => h2 => pc.le_neq(ap, qp)(h1)(h2)
-
-def pc.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pc.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def pc.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pc.add_succ(p, n) : {1n+Nat.add(p, 1n+n) == 1n+_ : Nat}
-      {==}
 
 # d <= n gives d + (n - d) = n
 def pc.add_sub(+d: Nat, +n: Nat) -> {Nat.is_le(d, n) == True{} : Bool} -> {Nat.add(d, Nat.sub(n, d)) == n : Nat}:
@@ -208,7 +181,7 @@ def pc.len_rev(+c: List<&2, U32>, +z: List<&2, U32>) -> {B.len(O.cr.oct.rev(c, z
     case Nil{}:
       {==}
     case Con{y, t}:
-      Equal.trans(Nat, B.len(O.cr.oct.rev(t, Con{y, z})), Nat.add(B.len(t), 1n+B.len(z)), 1n+Nat.add(B.len(t), B.len(z)), pc.len_rev(t, Con{y, z}), pc.add_succ(B.len(t), B.len(z)))
+      Equal.trans(Nat, B.len(O.cr.oct.rev(t, Con{y, z})), Nat.add(B.len(t), 1n+B.len(z)), 1n+Nat.add(B.len(t), B.len(z)), pc.len_rev(t, Con{y, z}), UL.nat_add_succ(B.len(t), B.len(z)))
 
 def pc.rro(+p: List<&2, U32>, +c: List<&2, U32>, +z: List<&2, U32>) -> {O.cr.oct.rev(O.cr.oct.rev(p, c), z) == O.cr.oct.rev(c, B.append(p, z)) : List<&2, U32>}:
   match p:
@@ -218,7 +191,7 @@ def pc.rro(+p: List<&2, U32>, +c: List<&2, U32>, +z: List<&2, U32>) -> {O.cr.oct
       pc.rro(t, Con{x, c}, z)
 
 def pc.add1(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
-  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, pc.add_succ(a, 0n), Equal.cong(Nat, Nat, w => 1n+w, Nat.add(a, 0n), a, pc.add_zero(a)))
+  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, UL.nat_add_succ(a, 0n), Equal.cong(Nat, Nat, w => 1n+w, Nat.add(a, 0n), a, UL.nat_add_zero(a)))
 
 def pc.con2(-A: Data, +x: A, +y: A, +t: List<&2, A>, +u: List<&2, A>, ex: {x == y : A}, et: {t == u : List<&2, A>}) -> {Con{x, t} == Con{y, u} : List<&2, A>}:
   %ex : {Con{x, t} == Con{_, u} : List<&2, A>}
@@ -273,7 +246,7 @@ def pc.go_PC(+xs: List<&2, U32>, +q: Nat, +i: Nat, +j: Nat, +cur: List<&2, U32>,
             pc.go_PC(t, q, 0n, q, Nil{}, Con{O.cr.oct.rev(Con{x, cur}, Nil{}), acc}, z)({==})
         case 1n+jp:
           +h => %Equal.sym(Bool, Nat.is_eq(1n+i, 1n+q), False{}, PB.pb.notfull(i, jp, 1n+q)(h)) : {O.cr.oct.revs(pc.pg(t, 1n+q, _, Con{x, cur}, i, acc), z) == O.cr.oct.revs(acc, pc.PC(t, q, jp, Con{x, cur}, z)) : List<&2, List<&2, U32>>}
-            pc.go_PC(t, q, 1n+i, jp, Con{x, cur}, acc, z)(Equal.trans(Nat, 1n+Nat.add(i, 1n+jp), Nat.add(i, 2n+jp), 1n+q, Equal.sym(Nat, Nat.add(i, 2n+jp), 1n+Nat.add(i, 1n+jp), pc.add_succ(i, 1n+jp)), h))
+            pc.go_PC(t, q, 1n+i, jp, Con{x, cur}, acc, z)(Equal.trans(Nat, 1n+Nat.add(i, 1n+jp), Nat.add(i, 2n+jp), 1n+q, Equal.sym(Nat, Nat.add(i, 2n+jp), 1n+Nat.add(i, 1n+jp), UL.nat_add_succ(i, 1n+jp)), h))
 
 def pc.pieces(+q: Nat, +xs: List<&2, U32>) -> {O.CrOct.pieces(1n+q, xs) == pc.PC(xs, q, q, Nil{}, Nil{}) : List<&2, List<&2, U32>>}:
   pc.go_PC(xs, q, 0n, q, Nil{}, Nil{}, Nil{})({==})
@@ -312,7 +285,7 @@ def pc.wfz(+n: Nat, +ps: List<&2, List<&2, U32>>) -> Bool:
       Bool.and(pc.okp(n, p, t), pc.wfz(n, t))
 
 def pc.len_rc(+y: U32, +t: List<&2, U32>) -> {B.len(O.cr.oct.rev(Con{y, t}, Nil{})) == 1n+B.len(t) : Nat}:
-  Equal.trans(Nat, B.len(O.cr.oct.rev(Con{y, t}, Nil{})), Nat.add(1n+B.len(t), 0n), 1n+B.len(t), pc.len_rev(Con{y, t}, Nil{}), pc.add_zero(1n+B.len(t)))
+  Equal.trans(Nat, B.len(O.cr.oct.rev(Con{y, t}, Nil{})), Nat.add(1n+B.len(t), 0n), 1n+B.len(t), pc.len_rev(Con{y, t}, Nil{}), UL.nat_add_zero(1n+B.len(t)))
 
 def pc.lt_rc(+y: U32, +t: List<&2, U32>) -> {Nat.is_lt(0n, B.len(O.cr.oct.rev(Con{y, t}, Nil{}))) == True{} : Bool}:
   %Equal.sym(Nat, B.len(O.cr.oct.rev(Con{y, t}, Nil{})), 1n+B.len(t), pc.len_rc(y, t)) : {Nat.is_lt(0n, _) == True{} : Bool}
@@ -326,7 +299,7 @@ def pc.okp_full(+q: Nat, +p: List<&2, U32>, +t: List<&2, List<&2, U32>>) -> {B.l
   match t:
     case Nil{}:
       h => %Equal.sym(Nat, B.len(p), 1n+q, h) : {Bool.and(Nat.is_lt(0n, _), Nat.is_le(_, 1n+q)) == True{} : Bool}
-        pc.le_refl(q)
+        UL.nat_le_refl(q)
     case Con{a, b}:
       h => %Equal.sym(Nat, B.len(p), 1n+q, h) : {Nat.is_eq(_, 1n+q) == True{} : Bool}
         pc.eq_refl(q)
@@ -349,7 +322,7 @@ def pc.wf_PC(+xs: List<&2, U32>, +q: Nat, +j: Nat, +cur: List<&2, U32>) -> {Nat.
         case 0n:
           h => pc.true_and(pc.okp(1n+q, O.cr.oct.rev(Con{x, cur}, Nil{}), pc.PC(t, q, q, Nil{}, Nil{})), pc.wfz(1n+q, pc.PC(t, q, q, Nil{}, Nil{})), pc.okp_full(q, O.cr.oct.rev(Con{x, cur}, Nil{}), pc.PC(t, q, q, Nil{}, Nil{}))(Equal.trans(Nat, B.len(O.cr.oct.rev(Con{x, cur}, Nil{})), 1n+B.len(cur), 1n+q, pc.len_rc(x, cur), Equal.trans(Nat, 1n+B.len(cur), Nat.add(B.len(cur), 1n), 1n+q, Equal.sym(Nat, Nat.add(B.len(cur), 1n), 1n+B.len(cur), pc.add1(B.len(cur))), h))), pc.wf_PC(t, q, q, Nil{})({==}))
         case 1n+jp:
-          h => pc.wf_PC(t, q, jp, Con{x, cur})(Equal.trans(Nat, 1n+Nat.add(B.len(cur), 1n+jp), Nat.add(B.len(cur), 2n+jp), 1n+q, Equal.sym(Nat, Nat.add(B.len(cur), 2n+jp), 1n+Nat.add(B.len(cur), 1n+jp), pc.add_succ(B.len(cur), 1n+jp)), h))
+          h => pc.wf_PC(t, q, jp, Con{x, cur})(Equal.trans(Nat, 1n+Nat.add(B.len(cur), 1n+jp), Nat.add(B.len(cur), 2n+jp), 1n+q, Equal.sym(Nat, Nat.add(B.len(cur), 2n+jp), 1n+Nat.add(B.len(cur), 1n+jp), UL.nat_add_succ(B.len(cur), 1n+jp)), h))
 
 # a piece of 1 + j bytes is cut off whole
 def pc.Afull(+p: List<&2, U32>, +r: List<&2, U32>, +q: Nat, +j: Nat, +cur: List<&2, U32>, +z: List<&2, List<&2, U32>>) -> {B.len(p) == 1n+j : Nat} -> {pc.PC(B.append(p, r), q, j, cur, z) == Con{O.cr.oct.rev(O.cr.oct.rev(p, cur), Nil{}), pc.PC(r, q, q, Nil{}, z)} : List<&2, List<&2, U32>>}:
@@ -1221,79 +1194,9 @@ def Laws.cmblock_cts_round_trip(K, enc, dec, k, inv, iv, m):
   pc.cm_fin(~K, ~enc, ~dec, k, iv, m, pc.cm_inner(~K, ~enc, ~dec, k, inv, iv, m), pc.cm_len(~K, ~enc, k, iv, m), Ct.cr.cts.check(16n, iv, B.Octets.len(m)))({==})
 
 
-# The 64-bit block format (legacy-ciphers' LcBlock64): the format's byte strings are the blocks' (pc.lc_dual), so a
+# The 64-bit block format (legacy-ciphers' LcBlock64): the format's byte strings are the blocks' (LL.block64_octets_dual), so a
 # block of bytes encrypted and decrypted is itself where the cipher's block
 # is (pc.lc_br), and keeps its length (pc.lc_bl)
-
-def pc.lc_mget(m: Maybe<&2, L.LcBlock64>, +d: L.LcBlock64) -> L.LcBlock64:
-  match m:
-    case Some{b}:
-      b
-    case None{}:
-      d
-
-def pc.lc_mdisc(m: Maybe<&2, L.LcBlock64>) -> Type:
-  match m:
-    case Some{b}:
-      Empty
-    case None{}:
-      Unit
-
-def pc.lc_nsome(+bl: L.LcBlock64, h: {None{} == Some{bl} : Maybe<&2, L.LcBlock64>}) -> Empty:
-  %h : pc.lc_mdisc(_)
-  Unit{}
-
-# a block's bytes read from 8 bytes are those bytes (on their bits)
-def pc.lc_dbits(a0: U32, a1: U32, a2: U32, a3: U32, a4: U32, a5: U32, a6: U32, a7: U32) -> {L.LcBlock64.to_octets(pc.lc_mget(L.lc.block_of(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}), L.LcBlock64{0, 0})) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}) : B.Octets}:
-  match a0 a1 a2 a3 a4 a5 a6 a7:
-    case U32{WCon{b0_0, WCon{b0_1, WCon{b0_2, WCon{b0_3, WCon{b0_4, WCon{b0_5, WCon{b0_6, WCon{b0_7, WCon{b0_8, WCon{b0_9, WCon{b0_10, WCon{b0_11, WCon{b0_12, WCon{b0_13, WCon{b0_14, WCon{b0_15, WCon{b0_16, WCon{b0_17, WCon{b0_18, WCon{b0_19, WCon{b0_20, WCon{b0_21, WCon{b0_22, WCon{b0_23, WCon{b0_24, WCon{b0_25, WCon{b0_26, WCon{b0_27, WCon{b0_28, WCon{b0_29, WCon{b0_30, WCon{b0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b1_0, WCon{b1_1, WCon{b1_2, WCon{b1_3, WCon{b1_4, WCon{b1_5, WCon{b1_6, WCon{b1_7, WCon{b1_8, WCon{b1_9, WCon{b1_10, WCon{b1_11, WCon{b1_12, WCon{b1_13, WCon{b1_14, WCon{b1_15, WCon{b1_16, WCon{b1_17, WCon{b1_18, WCon{b1_19, WCon{b1_20, WCon{b1_21, WCon{b1_22, WCon{b1_23, WCon{b1_24, WCon{b1_25, WCon{b1_26, WCon{b1_27, WCon{b1_28, WCon{b1_29, WCon{b1_30, WCon{b1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b2_0, WCon{b2_1, WCon{b2_2, WCon{b2_3, WCon{b2_4, WCon{b2_5, WCon{b2_6, WCon{b2_7, WCon{b2_8, WCon{b2_9, WCon{b2_10, WCon{b2_11, WCon{b2_12, WCon{b2_13, WCon{b2_14, WCon{b2_15, WCon{b2_16, WCon{b2_17, WCon{b2_18, WCon{b2_19, WCon{b2_20, WCon{b2_21, WCon{b2_22, WCon{b2_23, WCon{b2_24, WCon{b2_25, WCon{b2_26, WCon{b2_27, WCon{b2_28, WCon{b2_29, WCon{b2_30, WCon{b2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b3_0, WCon{b3_1, WCon{b3_2, WCon{b3_3, WCon{b3_4, WCon{b3_5, WCon{b3_6, WCon{b3_7, WCon{b3_8, WCon{b3_9, WCon{b3_10, WCon{b3_11, WCon{b3_12, WCon{b3_13, WCon{b3_14, WCon{b3_15, WCon{b3_16, WCon{b3_17, WCon{b3_18, WCon{b3_19, WCon{b3_20, WCon{b3_21, WCon{b3_22, WCon{b3_23, WCon{b3_24, WCon{b3_25, WCon{b3_26, WCon{b3_27, WCon{b3_28, WCon{b3_29, WCon{b3_30, WCon{b3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b4_0, WCon{b4_1, WCon{b4_2, WCon{b4_3, WCon{b4_4, WCon{b4_5, WCon{b4_6, WCon{b4_7, WCon{b4_8, WCon{b4_9, WCon{b4_10, WCon{b4_11, WCon{b4_12, WCon{b4_13, WCon{b4_14, WCon{b4_15, WCon{b4_16, WCon{b4_17, WCon{b4_18, WCon{b4_19, WCon{b4_20, WCon{b4_21, WCon{b4_22, WCon{b4_23, WCon{b4_24, WCon{b4_25, WCon{b4_26, WCon{b4_27, WCon{b4_28, WCon{b4_29, WCon{b4_30, WCon{b4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b5_0, WCon{b5_1, WCon{b5_2, WCon{b5_3, WCon{b5_4, WCon{b5_5, WCon{b5_6, WCon{b5_7, WCon{b5_8, WCon{b5_9, WCon{b5_10, WCon{b5_11, WCon{b5_12, WCon{b5_13, WCon{b5_14, WCon{b5_15, WCon{b5_16, WCon{b5_17, WCon{b5_18, WCon{b5_19, WCon{b5_20, WCon{b5_21, WCon{b5_22, WCon{b5_23, WCon{b5_24, WCon{b5_25, WCon{b5_26, WCon{b5_27, WCon{b5_28, WCon{b5_29, WCon{b5_30, WCon{b5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b6_0, WCon{b6_1, WCon{b6_2, WCon{b6_3, WCon{b6_4, WCon{b6_5, WCon{b6_6, WCon{b6_7, WCon{b6_8, WCon{b6_9, WCon{b6_10, WCon{b6_11, WCon{b6_12, WCon{b6_13, WCon{b6_14, WCon{b6_15, WCon{b6_16, WCon{b6_17, WCon{b6_18, WCon{b6_19, WCon{b6_20, WCon{b6_21, WCon{b6_22, WCon{b6_23, WCon{b6_24, WCon{b6_25, WCon{b6_26, WCon{b6_27, WCon{b6_28, WCon{b6_29, WCon{b6_30, WCon{b6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b7_0, WCon{b7_1, WCon{b7_2, WCon{b7_3, WCon{b7_4, WCon{b7_5, WCon{b7_6, WCon{b7_7, WCon{b7_8, WCon{b7_9, WCon{b7_10, WCon{b7_11, WCon{b7_12, WCon{b7_13, WCon{b7_14, WCon{b7_15, WCon{b7_16, WCon{b7_17, WCon{b7_18, WCon{b7_19, WCon{b7_20, WCon{b7_21, WCon{b7_22, WCon{b7_23, WCon{b7_24, WCon{b7_25, WCon{b7_26, WCon{b7_27, WCon{b7_28, WCon{b7_29, WCon{b7_30, WCon{b7_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
-      {==}
-
-
-# a block read from a list of bytes is written back as those bytes
-def pc.lc_dualL(+xs: List<&2, U32>, +bl: L.LcBlock64) -> {L.lc.block_of(xs) == Some{bl} : Maybe<&2, L.LcBlock64>} -> {L.LcBlock64.to_octets(bl) == B.Octets.of_list(xs) : B.Octets}:
-  match xs:
-    case Nil{}:
-      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Nil{}) : B.Octets}, pc.lc_nsome(bl, h))
-    case Con{+a0, +x1}:
-      match x1:
-        case Nil{}:
-          h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Nil{}}) : B.Octets}, pc.lc_nsome(bl, h))
-        case Con{+a1, +x2}:
-          match x2:
-            case Nil{}:
-              h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Nil{}}}) : B.Octets}, pc.lc_nsome(bl, h))
-            case Con{+a2, +x3}:
-              match x3:
-                case Nil{}:
-                  h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Nil{}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-                case Con{+a3, +x4}:
-                  match x4:
-                    case Nil{}:
-                      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Nil{}}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-                    case Con{+a4, +x5}:
-                      match x5:
-                        case Nil{}:
-                          h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Nil{}}}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-                        case Con{+a5, +x6}:
-                          match x6:
-                            case Nil{}:
-                              h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Nil{}}}}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-                            case Con{+a6, +x7}:
-                              match x7:
-                                case Nil{}:
-                                  h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Nil{}}}}}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-                                case Con{+a7, +x8}:
-                                  match x8:
-                                    case Nil{}:
-                                      h => %Equal.cong(Maybe<&2, L.LcBlock64>, L.LcBlock64, mm => pc.lc_mget(mm, bl), L.lc.block_of(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}), Some{bl}, h) : {L.LcBlock64.to_octets(_) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}) : B.Octets}
-                                        pc.lc_dbits(a0, a1, a2, a3, a4, a5, a6, a7)
-                                    case Con{+a8, +x9}:
-                                      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, x9}}}}}}}}}) : B.Octets}, pc.lc_nsome(bl, h))
-
-
-def pc.lc_dual(+o: B.Octets, +bl: L.LcBlock64, em: {L.LcBlock64.of_octets(o) == Some{bl} : Maybe<&2, L.LcBlock64>}) -> {L.LcBlock64.to_octets(bl) == o : B.Octets}:
-  Equal.trans(B.Octets, L.LcBlock64.to_octets(bl), B.Octets.of_list(B.Octets.to_list(o)), o, pc.lc_dualL(B.Octets.to_list(o), bl)(em), BL.octets_of_to(o))
 
 def pc.lc_ebl.go(m: Maybe<&2, L.LcBlock64>) -> L.LcBlock64:
   match m:
@@ -1315,7 +1218,7 @@ def pc.lc_br.go(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, ~dec: K -> L.Lc
       +em => hi => %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(o), Some{bl}, em) : {Ct.cr.cts.b(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.to_octets, k, _, o)) == o : B.Octets}
         %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(L.LcBlock64.to_octets(enc(k, bl))), Some{enc(k, bl)}, LL.block64_octets_round_trip(enc(k, bl))) : {Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.to_octets, k, _, L.LcBlock64.to_octets(enc(k, bl))) == o : B.Octets}
         %Equal.sym(L.LcBlock64, dec(k, enc(k, bl)), bl, hi) : {L.LcBlock64.to_octets(_) == o : B.Octets}
-        pc.lc_dual(o, bl, em)
+        LL.block64_octets_dual(o, bl, em)
 
 def pc.lc_br(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, ~dec: K -> L.LcBlock64 -> L.LcBlock64, +k: K, +o: B.Octets, hi: {dec(k, enc(k, pc.lc_ebl(o))) == pc.lc_ebl(o) : L.LcBlock64}) -> {Ct.cr.cts.b(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, Ct.cr.cts.b(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, o)) == o : B.Octets}:
   pc.lc_br.go(~K, ~enc, ~dec, k, L.LcBlock64.of_octets(o), o)({==})(hi)
@@ -1327,7 +1230,7 @@ def pc.lc_bl.go(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, +k: K, m: Maybe
         {==}
     case Some{+bl}:
       +em => %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(o), Some{bl}, em) : {B.Octets.len(Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.to_octets, k, _, o)) == B.Octets.len(o) : Nat}
-        Equal.trans(Nat, B.Octets.len(L.LcBlock64.to_octets(enc(k, bl))), 8n, B.Octets.len(o), PB.pb.lc_len(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), 8n, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(L.LcBlock64.to_octets(bl)), 8n, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, L.LcBlock64.to_octets(bl), Equal.sym(B.Octets, L.LcBlock64.to_octets(bl), o, pc.lc_dual(o, bl, em))), PB.pb.lc_len(bl))))
+        Equal.trans(Nat, B.Octets.len(L.LcBlock64.to_octets(enc(k, bl))), 8n, B.Octets.len(o), PB.pb.lc_len(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), 8n, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(L.LcBlock64.to_octets(bl)), 8n, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, L.LcBlock64.to_octets(bl), Equal.sym(B.Octets, L.LcBlock64.to_octets(bl), o, LL.block64_octets_dual(o, bl, em))), PB.pb.lc_len(bl))))
 
 def pc.lc_bl(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, +k: K, +o: B.Octets) -> {B.Octets.len(Ct.cr.cts.b(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, o)) == B.Octets.len(o) : Nat}:
   pc.lc_bl.go(~K, ~enc, k, L.LcBlock64.of_octets(o), o)({==})

@@ -8528,6 +8528,81 @@ def Laws.block64_octets_round_trip(b):
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(L.lc.block_bytes(b, Nil{}))), B.mask(L.lc.block_bytes(b, Nil{})), BL.octets_to_of(L.lc.block_bytes(b, Nil{}))) : {L.lc.block_of(_) == Some{b} : Maybe<&2, L.LcBlock64>}
   blk_bytes(b)
 
+
+# a block read from 8 bytes is written back as those bytes (on their bits,
+# and then off a list of any length)
+def b64.mget(m: Maybe<&2, L.LcBlock64>, +d: L.LcBlock64) -> L.LcBlock64:
+  match m:
+    case Some{b}:
+      b
+    case None{}:
+      d
+
+def b64.mdisc(m: Maybe<&2, L.LcBlock64>) -> Type:
+  match m:
+    case Some{b}:
+      Empty
+    case None{}:
+      Unit
+
+def b64.nsome(+bl: L.LcBlock64, h: {None{} == Some{bl} : Maybe<&2, L.LcBlock64>}) -> Empty:
+  %h : b64.mdisc(_)
+  Unit{}
+
+# a block's bytes read from 8 bytes are those bytes (on their bits)
+def b64.dbits(a0: U32, a1: U32, a2: U32, a3: U32, a4: U32, a5: U32, a6: U32, a7: U32) -> {L.LcBlock64.to_octets(b64.mget(L.lc.block_of(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}), L.LcBlock64{0, 0})) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}) : B.Octets}:
+  match a0 a1 a2 a3 a4 a5 a6 a7:
+    case U32{WCon{b0_0, WCon{b0_1, WCon{b0_2, WCon{b0_3, WCon{b0_4, WCon{b0_5, WCon{b0_6, WCon{b0_7, WCon{b0_8, WCon{b0_9, WCon{b0_10, WCon{b0_11, WCon{b0_12, WCon{b0_13, WCon{b0_14, WCon{b0_15, WCon{b0_16, WCon{b0_17, WCon{b0_18, WCon{b0_19, WCon{b0_20, WCon{b0_21, WCon{b0_22, WCon{b0_23, WCon{b0_24, WCon{b0_25, WCon{b0_26, WCon{b0_27, WCon{b0_28, WCon{b0_29, WCon{b0_30, WCon{b0_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b1_0, WCon{b1_1, WCon{b1_2, WCon{b1_3, WCon{b1_4, WCon{b1_5, WCon{b1_6, WCon{b1_7, WCon{b1_8, WCon{b1_9, WCon{b1_10, WCon{b1_11, WCon{b1_12, WCon{b1_13, WCon{b1_14, WCon{b1_15, WCon{b1_16, WCon{b1_17, WCon{b1_18, WCon{b1_19, WCon{b1_20, WCon{b1_21, WCon{b1_22, WCon{b1_23, WCon{b1_24, WCon{b1_25, WCon{b1_26, WCon{b1_27, WCon{b1_28, WCon{b1_29, WCon{b1_30, WCon{b1_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b2_0, WCon{b2_1, WCon{b2_2, WCon{b2_3, WCon{b2_4, WCon{b2_5, WCon{b2_6, WCon{b2_7, WCon{b2_8, WCon{b2_9, WCon{b2_10, WCon{b2_11, WCon{b2_12, WCon{b2_13, WCon{b2_14, WCon{b2_15, WCon{b2_16, WCon{b2_17, WCon{b2_18, WCon{b2_19, WCon{b2_20, WCon{b2_21, WCon{b2_22, WCon{b2_23, WCon{b2_24, WCon{b2_25, WCon{b2_26, WCon{b2_27, WCon{b2_28, WCon{b2_29, WCon{b2_30, WCon{b2_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b3_0, WCon{b3_1, WCon{b3_2, WCon{b3_3, WCon{b3_4, WCon{b3_5, WCon{b3_6, WCon{b3_7, WCon{b3_8, WCon{b3_9, WCon{b3_10, WCon{b3_11, WCon{b3_12, WCon{b3_13, WCon{b3_14, WCon{b3_15, WCon{b3_16, WCon{b3_17, WCon{b3_18, WCon{b3_19, WCon{b3_20, WCon{b3_21, WCon{b3_22, WCon{b3_23, WCon{b3_24, WCon{b3_25, WCon{b3_26, WCon{b3_27, WCon{b3_28, WCon{b3_29, WCon{b3_30, WCon{b3_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b4_0, WCon{b4_1, WCon{b4_2, WCon{b4_3, WCon{b4_4, WCon{b4_5, WCon{b4_6, WCon{b4_7, WCon{b4_8, WCon{b4_9, WCon{b4_10, WCon{b4_11, WCon{b4_12, WCon{b4_13, WCon{b4_14, WCon{b4_15, WCon{b4_16, WCon{b4_17, WCon{b4_18, WCon{b4_19, WCon{b4_20, WCon{b4_21, WCon{b4_22, WCon{b4_23, WCon{b4_24, WCon{b4_25, WCon{b4_26, WCon{b4_27, WCon{b4_28, WCon{b4_29, WCon{b4_30, WCon{b4_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b5_0, WCon{b5_1, WCon{b5_2, WCon{b5_3, WCon{b5_4, WCon{b5_5, WCon{b5_6, WCon{b5_7, WCon{b5_8, WCon{b5_9, WCon{b5_10, WCon{b5_11, WCon{b5_12, WCon{b5_13, WCon{b5_14, WCon{b5_15, WCon{b5_16, WCon{b5_17, WCon{b5_18, WCon{b5_19, WCon{b5_20, WCon{b5_21, WCon{b5_22, WCon{b5_23, WCon{b5_24, WCon{b5_25, WCon{b5_26, WCon{b5_27, WCon{b5_28, WCon{b5_29, WCon{b5_30, WCon{b5_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b6_0, WCon{b6_1, WCon{b6_2, WCon{b6_3, WCon{b6_4, WCon{b6_5, WCon{b6_6, WCon{b6_7, WCon{b6_8, WCon{b6_9, WCon{b6_10, WCon{b6_11, WCon{b6_12, WCon{b6_13, WCon{b6_14, WCon{b6_15, WCon{b6_16, WCon{b6_17, WCon{b6_18, WCon{b6_19, WCon{b6_20, WCon{b6_21, WCon{b6_22, WCon{b6_23, WCon{b6_24, WCon{b6_25, WCon{b6_26, WCon{b6_27, WCon{b6_28, WCon{b6_29, WCon{b6_30, WCon{b6_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{b7_0, WCon{b7_1, WCon{b7_2, WCon{b7_3, WCon{b7_4, WCon{b7_5, WCon{b7_6, WCon{b7_7, WCon{b7_8, WCon{b7_9, WCon{b7_10, WCon{b7_11, WCon{b7_12, WCon{b7_13, WCon{b7_14, WCon{b7_15, WCon{b7_16, WCon{b7_17, WCon{b7_18, WCon{b7_19, WCon{b7_20, WCon{b7_21, WCon{b7_22, WCon{b7_23, WCon{b7_24, WCon{b7_25, WCon{b7_26, WCon{b7_27, WCon{b7_28, WCon{b7_29, WCon{b7_30, WCon{b7_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
+      {==}
+
+
+# a block read from a list of bytes is written back as those bytes
+def b64.dualL(+xs: List<&2, U32>, +bl: L.LcBlock64) -> {L.lc.block_of(xs) == Some{bl} : Maybe<&2, L.LcBlock64>} -> {L.LcBlock64.to_octets(bl) == B.Octets.of_list(xs) : B.Octets}:
+  match xs:
+    case Nil{}:
+      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Nil{}) : B.Octets}, b64.nsome(bl, h))
+    case Con{+a0, +x1}:
+      match x1:
+        case Nil{}:
+          h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Nil{}}) : B.Octets}, b64.nsome(bl, h))
+        case Con{+a1, +x2}:
+          match x2:
+            case Nil{}:
+              h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Nil{}}}) : B.Octets}, b64.nsome(bl, h))
+            case Con{+a2, +x3}:
+              match x3:
+                case Nil{}:
+                  h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Nil{}}}}) : B.Octets}, b64.nsome(bl, h))
+                case Con{+a3, +x4}:
+                  match x4:
+                    case Nil{}:
+                      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Nil{}}}}}) : B.Octets}, b64.nsome(bl, h))
+                    case Con{+a4, +x5}:
+                      match x5:
+                        case Nil{}:
+                          h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Nil{}}}}}}) : B.Octets}, b64.nsome(bl, h))
+                        case Con{+a5, +x6}:
+                          match x6:
+                            case Nil{}:
+                              h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Nil{}}}}}}}) : B.Octets}, b64.nsome(bl, h))
+                            case Con{+a6, +x7}:
+                              match x7:
+                                case Nil{}:
+                                  h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Nil{}}}}}}}}) : B.Octets}, b64.nsome(bl, h))
+                                case Con{+a7, +x8}:
+                                  match x8:
+                                    case Nil{}:
+                                      h => %Equal.cong(Maybe<&2, L.LcBlock64>, L.LcBlock64, mm => b64.mget(mm, bl), L.lc.block_of(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}), Some{bl}, h) : {L.LcBlock64.to_octets(_) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Nil{}}}}}}}}}) : B.Octets}
+                                        b64.dbits(a0, a1, a2, a3, a4, a5, a6, a7)
+                                    case Con{+a8, +x9}:
+                                      h => Empty.absurd({L.LcBlock64.to_octets(bl) == B.Octets.of_list(Con{a0, Con{a1, Con{a2, Con{a3, Con{a4, Con{a5, Con{a6, Con{a7, Con{a8, x9}}}}}}}}}) : B.Octets}, b64.nsome(bl, h))
+
+
+def b64.dual(+o: B.Octets, +bl: L.LcBlock64, em: {L.LcBlock64.of_octets(o) == Some{bl} : Maybe<&2, L.LcBlock64>}) -> {L.LcBlock64.to_octets(bl) == o : B.Octets}:
+  Equal.trans(B.Octets, L.LcBlock64.to_octets(bl), B.Octets.of_list(B.Octets.to_list(o)), o, b64.dualL(B.Octets.to_list(o), bl)(em), BL.octets_of_to(o))
+
+def Laws.block64_octets_dual(o, b, e):
+  b64.dual(o, b, e)
 # the bytes of the blocks bs in front of ys, structurally
 def m64_joins(bs: List<&2, L.LcBlock64>, ys: List<&2, U32>) -> List<&2, U32>:
   match bs:

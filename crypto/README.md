@@ -582,10 +582,10 @@ shows `CrOct.pieces` of the joined encrypted pieces gives those pieces back
 (every piece's length through the format, the stolen bytes' `take` and
 `drop`, the XOR with the zero-padded piece undone over its length), for
 every block size; what each format contributes is that its bytes read back
-are its blocks' both ways (`gen/cts_proof.py`'s region: a lemma computing on
-the bytes' bits, which for the 64-bit format reads them through
-legacy-ciphers' `lc.block_of`, the code `LcBlock64.of_octets` runs, as the
-proofs here compute on words' bits elsewhere).
+are its blocks' both ways (`gen/cts_proof.py`'s region: for the 128-bit
+format, a lemma computing on the bytes' bits; for the 64-bit format,
+legacy-ciphers' laws `block64_octets_round_trip` and
+`block64_octets_dual`).
 
 **HKDF** (`LAWS_hkdf.bend`): `hkdf_length` and `hkdf_prefix`, the KDF
 interface's length and prefix laws for `CrHkdf.derive`, for every hash
@@ -817,6 +817,9 @@ SHA3-256 and their laws, above; MIT). The interface and generic files
 `LAWS.bend` and `PROOF.bend` import none of the algorithm packages (only
 bytes and its proofs, and this package's interface and generic files), so a
 proof elsewhere that uses a generic law takes in none of their proofs.
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 

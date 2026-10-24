@@ -326,7 +326,9 @@ blocks. The 128-bit modes report cipher-modes' own `CmError`.
 * `rc4_streaming_data`, `rc4_streaming_state`: RC4 over `a ++ b` is RC4 over
   `a`, then over `b` from the state after `a`;
 * `block64_octets_round_trip`, `blocks64_octets_round_trip`: a block, and a
-  list of blocks, read back from its bytes;
+  list of blocks, read back from its bytes; `block64_octets_dual`: 8 bytes
+  read as a block are written back as those bytes (the format both ways,
+  for crypto's CBC-CS3 proof);
 * `des_ecb_round_trip`, `des_cbc_round_trip`, `tdes_ecb_round_trip`,
   `tdes_cbc_round_trip`: the 64-bit modes undo themselves on blocks, for every
   key, IV and list of blocks;

@@ -211,11 +211,18 @@ law rc4_streaming_state:
   for +b: B.Octets
   {R.LcRc4.out_state(R.LcRc4.update(st, B.Octets.append(a, b))) == R.LcRc4.out_state(R.LcRc4.update(R.LcRc4.out_state(R.LcRc4.update(st, a)), b)) : R.LcRc4State}
 
-# 64-bit blocks as bytes: a block read back from its 8 bytes is itself, and
-# a list of blocks read back from its bytes is itself
+# 64-bit blocks as bytes: a block read back from its 8 bytes is itself, 8
+# bytes read as a block are written back as those bytes, and a list of
+# blocks read back from its bytes is itself
 law block64_octets_round_trip:
   for +b: L.LcBlock64
   {L.LcBlock64.of_octets(L.LcBlock64.to_octets(b)) == Some{b} : Maybe<&2, L.LcBlock64>}
+
+law block64_octets_dual:
+  for +o: B.Octets
+  for +b: L.LcBlock64
+  for e: {L.LcBlock64.of_octets(o) == Some{b} : Maybe<&2, L.LcBlock64>}
+  {L.LcBlock64.to_octets(b) == o : B.Octets}
 
 law blocks64_octets_round_trip:
   for +bs: List<&2, L.LcBlock64>
