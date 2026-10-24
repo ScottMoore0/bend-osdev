@@ -56,7 +56,8 @@ restated here in this package's own words; no kernel source was read.
 | `genalloc.bend` | the types, the pool and its operations: create, add, alloc, free, sizes, reading |
 | `fit.bend` | the fit algorithms, and `genpool.alloc_first` |
 | `bits.bend` | granule bitmaps: reading, runs, filling, counting (shared by the pool and the fit algorithms) |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws of the pool and their proofs |
+| `LAWS_fit.bend`, `PROOF_fit.bend` | the laws of the fit algorithms (where each places an allocation) and their proofs |
 | `proof_nat.bend`, `proof_bits.bend`, `proof_pool.bend` | the lemmas `PROOF.bend` uses: `Nat` arithmetic and order; bitmaps and the walk of `free`; plans, marking and locating chunks |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -133,8 +134,32 @@ lawful or not), size, address and fit data:
   with this package's operations is valid;
 * **vectors:** first fit, aligned fit, and a refused overlapping chunk.
 
-Not stated as laws: which place each fit algorithm picks (that the first fit
-is the lowest, the best fit the shortest run). These are tested against the
+`LAWS_fit.bend`, where the fit algorithms place an allocation, for every fit
+data, granule bitmap, number of granules `n`, chunk address and granule
+size (proved by induction over the scan the first fits share):
+
+* first fit (`first_fit_free`, `first_fit_lowest`, `first_fit_none`): its
+  answer `s` starts a free run of `n` granules (`bits.run_free(bits, s, n)`),
+  no run of `n` granules starting below `s` is free, and when it answers
+  `None` with `n >= 1`, no run of `n` granules is free anywhere;
+* first fit with an alignment (`first_fit_align_free`,
+  `first_fit_align_lowest`, `first_fit_align_none`), given `GpAlign{al}`:
+  the same, over the runs whose address `base + s * g` is a multiple of `al`
+  (`al` of 0 taken as 1);
+* first fit with the order alignment (`first_fit_order_align_free`): its
+  answer starts a free run of `n` granules;
+* the fixed offset (`fixed_offset_at`, `fixed_offset_free`,
+  `fixed_offset_none`, `fixed_offset_no_data`, `fixed_offset_align_data`):
+  given `GpOffset{off}` it answers `off / g` exactly when `off` is a whole
+  number of granules and the `n` granules there are free, and `None`
+  otherwise; without `GpOffset` it answers `None`.
+
+Not proved: that the best fit picks the shortest free run long enough (the
+first of those on ties), and that the order-aligned first fit picks the
+lowest free run at a multiple of `n` rounded up to a power of two. The order
+alignment is computed by an internal def (`genpool.fit.pow2`, with a fuel of
+48 doublings), so the law would have to state it through a public
+characterisation of that power of two first. Both are tested against the
 model below.
 
 ## Tests
@@ -176,6 +201,7 @@ None: Base only (`DEPS` is empty).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
+Bend 2.0.37: `PROOF.bend` and `PROOF_fit.bend` ALL PROOFS CHECK, `--verdict`
+ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 1233 operations in 40 sequences match,
 `scripts/deps.sh genalloc` ok.
