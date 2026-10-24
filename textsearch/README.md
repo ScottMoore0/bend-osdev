@@ -63,7 +63,9 @@ as an NFA simulation. No kernel source was read.
 | `fsm.bend` | the token automaton: `TsClass`, `TsRecur`, `TsToken`, `TsFsm`, the step; and its reference, `ts.fsm.naive` |
 | `naive.bend` | the reference for plain patterns: the pattern tried at every offset |
 | `spec.bend` | bounded exhaustive agreement with the references, for the laws |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws for every automaton and the bounded ones, and their proofs |
+| `LAWS_kmp.bend`, `PROOF_kmp.bend` | KMP against the reference, and its proof (the theory of borders) |
+| `proof_lib.bend` | lemmas the proof files share (no law) |
 | `check.bend` | examples and large exhaustive comparisons, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
 
@@ -125,16 +127,42 @@ the `ts.bm.*` tables and scan, the `ts.fsm.*` steps, `ts.naive.at`/`go`, and
 * **vectors:** KMP across chunks, both Boyer-Moore rules (one ignoring
   case), and the token automaton with a range and `TsPlus`.
 
-**Not proved, and why.** That KMP, Boyer-Moore and the token automaton find
+`LAWS_kmp.bend`, **for every input**, proved in `PROOF_kmp.bend`:
+
+* `kmp_ref`: KMP finds exactly what the reference finds,
+  `ts.kmp.ends(icase, p, xs) == ts.naive.ends(icase, p, xs)`, for every
+  pattern (the empty one included), exactly or ignoring case, and every
+  text; `kmp_search_ref`: so does `ts.kmp.search` for every chunking
+  (with `kmp_split`).
+
+The proof is a theory of borders on sets of prefix lengths (lists of
+Bools, entry j for the prefix of j bytes). Reading byte c takes a set S to
+the empty prefix and j + 1 for each j in S whose next pattern byte is c
+(the shift-and automaton); B(k), that set after the pattern's own first k
+bytes, is the set of borders of those bytes. Then:
+
+* the prefix table is right (`bd.pi_ok`): for every k, B(k) is k added to
+  B(table entry k - 1), and the entry is below k. The table is built by
+  KMP's own step, so this goes along the table's construction, with
+* following the table loses no border (`bd.back_ok`, `bd.next_ok`): from a
+  prefix of k bytes, the prefix KMP's step finds after byte c, q2, has
+  B(q2) equal to the set after c from B(k) (strong induction along the
+  table's entries);
+* the shift-and automaton's semantics (`kp.gstep`): from a set S it
+  reports, on the rest of the text, the matches of the prefixes in S still
+  to be completed, then the reference's;
+* so KMP's one number q stands for the whole set B(q) (`kp.run`), and from
+  B(0) nothing is pending: KMP reports what the reference reports. Ignoring
+  case is the same search on the folded pattern and text.
+
+**Not proved, and why.** That Boyer-Moore and the token automaton find
 exactly what the references find **in general**, and Boyer-Moore's
-chunking law in general. KMP's correctness rests on the theory of borders
-(the prefix table's entries are the longest borders, and following them
-loses no occurrence); Boyer-Moore's on each shift being safe; the token
-automaton's on the NFA simulation matching the backtracking reference.
-Each is a substantial development not done here. They are held instead by
-the bounded laws above (proved by computation, kept small because the
-checker bounds the work of one law), by `check.bend`'s much larger
-exhaustive comparisons, and by `ref/`.
+chunking law in general. Boyer-Moore's correctness rests on each shift
+being safe; the token automaton's on the NFA simulation matching the
+backtracking reference. Each is a substantial development not done here.
+They are held instead by the bounded laws above (proved by computation,
+kept small because the checker bounds the work of one law), by
+`check.bend`'s much larger exhaustive comparisons, and by `ref/`.
 
 ## Tests
 
@@ -172,6 +200,6 @@ exhaustive comparisons, and by `ref/`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 200 cases match, `scripts/deps.sh
-textsearch` ok.
+Bend 2.0.37: `PROOF.bend` and `PROOF_kmp.bend` ALL PROOFS CHECK, and
+under `--verdict` (each in its own process, under 0.3 GB), `check.bend`
+passes, `ref/run.sh` 200 cases match, `scripts/deps.sh textsearch` ok.
