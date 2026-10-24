@@ -137,9 +137,15 @@ Written from the public specifications only:
 | `LAWS_crc.bend`, `PROOF_crc.bend` | the same for crc's CRCs as hashes, and HMAC and HKDF over them, from crc's laws |
 | `LAWS_sha.bend`, `PROOF_sha.bend` | the same for bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs over them, from bend-collections-laws-crypto's laws |
 | `LAWS_hs.bend`, `PROOF_hs.bend` | the same for the hashes package's hashes and Michael, and HMAC and PBKDF2 over them, from that package's laws |
+| `LAWS_bytes.bend`, `PROOF_bytes.bend` | the byte layer of the block-cipher modes: `CrModes.blocks_of` reads back what `CrModes.octets_of` writes (for every block size, and at the two block formats), and ECB, CBC, PCBC and LRW on bytes, and their proofs, from bytes' laws |
+| `LAWS_cts.bend`, `PROOF_cts.bend` | the CBC-CS3 round trip at the two block formats, and its proof, from bytes' laws |
+| `LAWS_hkdf.bend`, `PROOF_hkdf.bend` | the KDF interface's length and prefix laws for HKDF over every hash whose digests have its digest size, and their proofs, from bytes' laws |
+| `LAWS_ctr.bend`, `PROOF_ctr.bend` | the CTR counter's increment (its value plus one modulo 2^(8n)), and its proof, from bytes' laws |
 | `proof_bits.bend`, `proof_modes.bend` | lemmas the proof files share: on bits, words, bytes, lists and the two block formats; and the loops of ECB, CBC, PCBC and LRW as their structural forms |
 | `gen/instances.py` | the table of instances and the law schemas: writes the per-instance laws in each `LAWS_<part>.bend` and their proofs in its `PROOF_<part>.bend` (`--check` checks they are up to date) |
 | `gen/proof.py` | writes the lemmas proved on a word's 32 bits (the "bits" region of `proof_bits.bend`) |
+| `gen/cts_proof.py` | writes `PROOF_cts.bend`'s proof for each block format (its "formats" region; `--check` checks it is up to date) |
+| `gen/ctr_proof.py` | writes `PROOF_ctr.bend`'s two facts about one byte, on each of its 256 values (its "bytes" region; `--check` checks it is up to date) |
 
 Bend imports do not re-export, so import the files you use: a program that
 needs HMAC over its own hash imports `hash.bend`, `mac.bend` and
@@ -270,7 +276,14 @@ laws come in three forms:
 * **Conditional laws** take the algorithm's property at the very arguments
   they need, as an ordinary hypothesis used once (`--verdict` accepts these):
   `lift_round_trip` (an AEAD's round trip survives mapping its errors onto
-  `CrError`), `ccm_round_trip_if`, `sign_verify_bytes_if`, `kex_agree_if`.
+  `CrError`), `ccm_round_trip_if`, `sign_verify_bytes_if`, `kex_agree_if`,
+  and the byte layer's mode round trips (`<f>_ecb_octets_round_trip` ..., at
+  the blocks used). A property needed at every step of an induction is taken
+  on lists, as cipher-modes' `inv` is: used once, on the list the proof
+  builds, then taken apart an element at a time (an equation is `Data`):
+  `modes_blocks_of_octets_of` (the format at a list of blocks),
+  `<f>_cts_round_trip` (the cipher, `inv`), `hkdf_length` and
+  `hkdf_prefix` (the hash's digest length, `hd`).
 * **Law schemas, instantiated per instance.** A law whose proof needs the
   algorithm's property at every step of an induction (ECB and CBC undo
   themselves because the cipher does, block by block; HMAC in pieces because
@@ -315,17 +328,17 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 
 | Instance | Interface | Proved | Tested |
 |---|---|---|---|
-| DES, 3DES (64-bit, `LcBlock64`) | block cipher | round_trip, round_trip_dual (from legacy-ciphers), format (legacy-ciphers'), xor, key_length; ECB and CBC round trips over it | vectors both ways, ECB/CBC/CTR vs cryptography |
+| DES, 3DES (64-bit, `LcBlock64`) | block cipher | round_trip, round_trip_dual (from legacy-ciphers), format (legacy-ciphers'), xor, key_length; ECB and CBC round trips over it (on blocks; on bytes from them, through `LAWS_bytes.bend`'s laws at its block format) | vectors both ways, ECB/CBC/CTR vs cryptography |
 | SM4, Camellia, Serpent, Twofish (128-bit, `CmBlock`) | block cipher | the same | vectors both ways; ECB/CBC/CTR vs cryptography (SM4, Camellia) or legacy-ciphers' models (Serpent, Twofish) |
 | ARIA, CAST-256 (128-bit, `CmBlock`) | block cipher | the same (from legacy-ciphers' `aria_round_trip`, `cast6_round_trip` and their duals) | RFC 5794 and RFC 2612 vectors both ways; ECB/CBC/CTR vs the openssl command (ARIA) or legacy-ciphers' model (CAST-256) |
 | Blowfish, CAST-128, TEA, XTEA, FCrypt (64-bit, `LcBlock64`) | block cipher | the same | vectors both ways (the set Schneier publishes, RFC 2144 B.1, the FCrypt specification's; TEA and XTEA on the model's values: their papers give none); ECB/CBC/CTR vs cryptography (Blowfish, CAST-128) or the model (TEA, XTEA, FCrypt) |
-| PCBC over every block cipher whose round trip is proved | (mode) | `<c>_pcbc_round_trip` on blocks, for every key, IV and list of blocks | the FCrypt specification's PCBC vector; vs `ref/gen.py`'s PCBC over every cipher (AES included) |
-| LRW over every 128-bit block cipher whose round trip is proved | (mode) | `<c>_lrw_round_trip` on blocks, for every key, tweak key, first index and list of blocks | IEEE P1619 Annex B vectors 1 to 5 (AES-128 and AES-256) both ways; vs the Linux kernel's lrw(aes) through AF_ALG, and `ref/gen.py`'s LRW over the others |
-| CBC-CS3 over every block cipher | (mode) | none (below) | RFC 3962 B's four vectors both ways and a short message refused; vs the kernel's cts(cbc(aes)), and `ref/gen.py`'s CS3 over the others |
+| PCBC over every block cipher whose round trip is proved | (mode) | `<c>_pcbc_round_trip` on blocks, for every key, IV and list of blocks; on bytes, `cmblock_pcbc_octets_round_trip` and `lcblock64_pcbc_octets_round_trip` from it | the FCrypt specification's PCBC vector; vs `ref/gen.py`'s PCBC over every cipher (AES included) |
+| LRW over every 128-bit block cipher whose round trip is proved | (mode) | `<c>_lrw_round_trip` on blocks, for every key, tweak key, first index and list of blocks; on bytes, `cmblock_lrw_octets_round_trip` from it | IEEE P1619 Annex B vectors 1 to 5 (AES-128 and AES-256) both ways; vs the Linux kernel's lrw(aes) through AF_ALG, and `ref/gen.py`'s LRW over the others |
+| CBC-CS3 over every block cipher | (mode) | the round trip, `cmblock_cts_round_trip` and `lcblock64_cts_round_trip`, for every cipher over the format with `inv` (every instance's block round trip gives `inv` for every list), every key, IV and message | RFC 3962 B's four vectors both ways and a short message refused; vs the kernel's cts(cbc(aes)), and `ref/gen.py`'s CS3 over the others |
 | XCBC-MAC over every block cipher | MAC | `xcbc_accepts` (every cipher) | RFC 3566 test cases 1 to 7; vs `ref/gen.py`'s XCBC over AES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256; a changed tag refused |
 | VMAC over every 128-bit block cipher | MAC | `vmac_accepts` (every cipher and nonce length) | draft-krovetz-vmac-01's vectors (64- and 128-bit tags); vs `ref/gen.py`'s VMAC over the 128-bit ciphers, nonces of 1 to 15 bytes; a changed tag refused |
 | AES-128, AES-256 (`CrAes.key`; `CrAes.key_enc`, the same key now: cipher-modes decrypts with the encryption schedule) | block cipher | round_trip (from cipher-modes' `aes_round_trip`), format, xor, key_length; ECB, CBC, PCBC and LRW round trips over it; FIPS 197 C.1 through the interface | C.1 and C.3 both ways; ECB/CBC/CTR vs cryptography |
-| CTR over every block cipher above | stream cipher | involution, streaming_data, streaming_state, for every block cipher | SP 800-38A F.5.1; in two pieces vs cryptography / models, a counter wrapping |
+| CTR over every block cipher above | stream cipher | involution, streaming_data, streaming_state, for every block cipher; the counter's increment, +1 mod 2^(8n) (`ctr_counter_increment`) | SP 800-38A F.5.1; in two pieces vs cryptography / models, a counter wrapping |
 | RC4, RC4-drop[n] | stream cipher | involution, streaming_data, streaming_state (from legacy-ciphers); key and IV refusals | RFC 6229 whole and in pieces, drop[1536]; vs cryptography's ARC4 and the model |
 | CMAC over every 128-bit cipher above | MAC | accepts, agrees (for every cipher) | RFC 4493 examples 1 to 4; vs cryptography (AES, SM4, Camellia) and RFC 4493 over the models; a changed tag refused |
 | CCM over every 128-bit cipher above, any tag length | AEAD | round_trip (`ccm_aead_round_trip`, from cipher-modes' `ccm_round_trip`: below) | RFC 3610 packets 1 to 3; vs cryptography's AESCCM, and RFC 3610 over the others; changed tag, ciphertext and associated data refused |
@@ -334,7 +347,7 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | SHA-256, SHA-512 (bend-collections; `CrSha2State`) | hash | the one-shot digest is FIPS 180-4's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA-256 of "abc" | streaming for every state (bend-collections proves pieces only from the start); FIPS 180-4's examples whole and in pieces; vs hashlib, in pieces |
 | SHA3-256 (bend-collections; `CrSha3State`) | hash | the one-shot digest is FIPS 202's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA3-256 of "abc" | streaming for every state (as for SHA-2); NIST's examples whole and in pieces; vs hashlib, in pieces |
 | HMAC over each hash above | MAC | accepts, agrees (for every hash); split (in pieces equals one call) over CRC-32, CRC-64, SHA-256, SHA-512 and SHA3-256; streaming of HMAC's state over CRC-32 and CRC-64; RFC 4231 test case 2 for HMAC-SHA-256; one HMAC-CRC-32 vector | RFC 4231 test cases 1 to 7 for HMAC-SHA-256 and HMAC-SHA-512; vs Python's hmac over hashlib's SHA-256, SHA-512 and SHA3-256 and over CRC-32, CRC-32C and CRC-64/XZ, keys from 0 to 200 bytes |
-| HKDF over each hash above (HKDF-SHA-256 the named one) | KDF | the refusal of more than 255 digests (over CRC-32 and SHA-256) | RFC 5869 A.1 to A.3; length; vs cryptography's HKDF over SHA-256, SHA-512 and SHA3-256, and RFC 5869 on Python's hmac over the CRCs |
+| HKDF over each hash above (HKDF-SHA-256 the named one) | KDF | length and prefix (`hkdf_length`, `hkdf_prefix`, for every hash whose digests have its digest size: the hash's length law gives the hypothesis); the refusal of more than 255 digests (over CRC-32 and SHA-256) | RFC 5869 A.1 to A.3; length; vs cryptography's HKDF over SHA-256, SHA-512 and SHA3-256, and RFC 5869 on Python's hmac over the CRCs |
 | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256, Streebog-512 (hashes; `Hs.HsMdState<C>`) | hash | streaming for every state, split, split3, length for every state (from hashes' laws, `gen/instances.py`'s `hs_row`s); their vectors in hashes | the specifications' vectors in hashes; one-shot and in pieces through the interface (check.bend); vs hashlib (MD5, SHA-1, RIPEMD-160, SM3) and hashes' models (MD4, Streebog) |
 | HMAC over each of those | MAC | accepts, agrees; streaming of HMAC's state and split (in pieces equals one call), for each | RFC 2202 test cases 1 and 2 for HMAC-MD5 and HMAC-SHA-1, in pieces with verify; HMAC over the others vs Python's hmac (over hashlib or hashes' models), keys of 0 to 100 bytes |
 | Michael (hashes; `Hs.HsW2`, `CrMichael.key`) | MAC | accepts (for every key and message), agrees (the named default verify), the refusal of a 16-byte key; the sixth vector through `CrMac.compute_with` (the vectors are unverified against a published copy of 802.11i: hashes/README.md) | the six vectors through the interface, verify accepting and refusing a changed tag, a 7-byte key refused; vs hashes' model |
@@ -472,7 +485,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-215 laws, in six pairs of law and proof files. Each proof file imports its
+230 laws, in ten pairs of law and proof files. Each proof file imports its
 law file as `Laws` and only the proofs its laws rest on, and each is checked
 in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 
@@ -484,6 +497,10 @@ in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 | `LAWS_crc.bend`, `PROOF_crc.bend` | 17: `crc32_*`, `crc32c_hash_check`, `crc64_*`, `hkdf_too_long`, `hmac_crc32_vector`, and the CRC rows (`hmac_crc32_*`, `hmac_crc64_*`) | crc's laws |
 | `LAWS_sha.bend`, `PROOF_sha.bend` | 21: `sha256_*`, `sha512_*`, `sha3_256_*`, `hkdf_sha256_too_long`, `hmac_sha256_rfc4231_2`, `pbkdf2_hmac_sha256_rfc7914_1`, `kbkdf_hmac_sha256_vector`, and the SHA rows (`hmac_sha256_split`, `hmac_sha512_split`, `hmac_sha3_256_split`) | bend-collections-laws-crypto's laws, bytes' laws |
 | `LAWS_hs.bend`, `PROOF_hs.bend` | 48: `michael_*`, `pbkdf2_zero_iterations`, `pbkdf2_hmac_sha1_rfc6070_*`, and the `hs_row`s (`<h>_hash_*`, `hmac_<h>_*`) | the hashes package's laws, the generic laws |
+| `LAWS_bytes.bend`, `PROOF_bytes.bend` | 10: `modes_blocks_of_octets_of`, `cmblock_blocks_of_octets_of`, `lcblock64_blocks_of_octets_of`, and `<f>_ecb_octets_round_trip`, `<f>_cbc_octets_round_trip`, `<f>_pcbc_octets_round_trip` for f = cmblock, lcblock64, and `cmblock_lrw_octets_round_trip` | bytes' laws, legacy-ciphers' `block64_octets_round_trip` |
+| `LAWS_cts.bend`, `PROOF_cts.bend` | 2: `cmblock_cts_round_trip`, `lcblock64_cts_round_trip` | bytes' laws, legacy-ciphers' `block64_octets_round_trip`, `PROOF_bytes.bend`'s lemmas |
+| `LAWS_hkdf.bend`, `PROOF_hkdf.bend` | 2: `hkdf_length`, `hkdf_prefix` | bytes' laws |
+| `LAWS_ctr.bend`, `PROOF_ctr.bend` | 1: `ctr_counter_increment` | bytes' laws |
 
 A proof elsewhere that uses a law imports the pair that holds it: x509 and
 pkcs use `sign_verify_bytes_if` through `../crypto/LAWS.bend` and
@@ -530,9 +547,79 @@ for). The interface's prefix law holds of the streams, not of the
 derivations: a derivation binds its length L into every PRF input, so
 derivations of two lengths differ (as SP 800-108 intends).
 
+**The byte layer of the modes** (`LAWS_bytes.bend`): `modes_blocks_of_octets_of`:
+for every block size (at least 1), block format and list of blocks whose
+bytes are bsize bytes each and read back as the blocks (the format's
+length and its law at those blocks, as two hypotheses on the list,
+`crbl.lens(bs) == crbl.reps(bsize, bs)` and `crbl.reads(bs) ==
+crbl.somes(bs)`), `CrModes.blocks_of(CrModes.octets_of(bs)) == Done{bs}`:
+the bytes are cut into exactly the blocks' bytes and their length is a
+whole number of blocks (`pb.piece`, `pb.chJ`, `pb.modJ`, the remainder on
+Base's `Nat.divmod.go`). At the two block formats, whose laws give the
+hypotheses for every list: `cmblock_blocks_of_octets_of` (16 bytes) and
+`lcblock64_blocks_of_octets_of` (8 bytes), for every list of blocks. Then
+for every block cipher over a format, every key and every message of
+whole blocks given as the bytes of its blocks (`CrModes.octets_of(bs)`),
+with every IV block for CBC and PCBC (as its bytes) and every key pair,
+index and IV that gf128 reads as the index for LRW: encryption on bytes
+succeeds and decryption gives the message back wherever decryption undoes
+encryption on the blocks used (a hypothesis at those blocks: for an
+instance, its `<c>_ecb_round_trip`, `<c>_cbc_round_trip`,
+`<c>_pcbc_round_trip` or `<c>_lrw_round_trip`):
+`cmblock_ecb_octets_round_trip`, `lcblock64_ecb_octets_round_trip`,
+`cmblock_cbc_octets_round_trip`, `lcblock64_cbc_octets_round_trip`,
+`cmblock_pcbc_octets_round_trip`, `lcblock64_pcbc_octets_round_trip`,
+`cmblock_lrw_octets_round_trip`.
+
+**CBC-CS3** (`LAWS_cts.bend`): `cmblock_cts_round_trip`,
+`lcblock64_cts_round_trip`: for every block cipher over the format, every
+key with `inv` (each block encrypted and decrypted back is itself, as
+cipher-modes' laws take it), every IV and every message, `bind(encrypt(m),
+decrypt) == map(c => m, encrypt(m))`: decryption gives the message back,
+and when encryption refuses (an IV of another length, a message shorter
+than a block) both refuse alike. The proof (`PROOF_cts.bend`'s comment)
+shows `CrOct.pieces` of the joined encrypted pieces gives those pieces back
+(every piece's length through the format, the stolen bytes' `take` and
+`drop`, the XOR with the zero-padded piece undone over its length), for
+every block size; what each format contributes is that its bytes read back
+are its blocks' both ways (`gen/cts_proof.py`'s region: a lemma computing on
+the bytes' bits, which for the 64-bit format reads them through
+legacy-ciphers' `lc.block_of`, the code `LcBlock64.of_octets` runs, as the
+proofs here compute on words' bits elsewhere).
+
+**HKDF** (`LAWS_hkdf.bend`): `hkdf_length` and `hkdf_prefix`, the KDF
+interface's length and prefix laws for `CrHkdf.derive`, for every hash
+(`~bsize`, `~dsize`, `~digest`) whose digest has `dsize` bytes on the inputs
+it is used on (the hypothesis `hd`, for every list of byte strings each
+one's digest has `dsize` bytes, as cipher-modes' laws take a cipher's
+property: a hash whose one-shot digest has `dsize` bytes for every input,
+such as SHA-256, SHA-512 and SHA3-256 by `sha256_hash_length`,
+`sha512_hash_length` and `sha3_256_hash_length`, gives it for every list
+by induction), and every input keying material, salt, context and length:
+a derivation that succeeds has the length asked for, and when the
+derivation of n + j bytes succeeds, the derivation of n bytes from the same
+inputs succeeds and is its first n bytes. HKDF's output is unchanged: the
+proof is on hkdf.bend's own blocks and its ceiling, N = (len + dsize - 1) /
+dsize on Base's `Nat.divmod` (N dsize is at least len: quotient times
+divisor plus remainder is the dividend, with the remainder below the
+divisor; and more bytes need no fewer blocks).
+
+**The CTR counter** (`LAWS_ctr.bend`): `ctr_counter_increment`: for every
+block cipher, key and counter block of n bytes (an IV's bytes), when the
+state's keystream bytes are used up the next step moves the counter to its
+value plus one modulo 2^(8n) (SP 800-38A B.1's standard incrementing
+function). The value is the bytes as a big-endian number (`crctr.val`) and
+2^(8n) is `crctr.pw(n)`, 256 multiplied n times, never a closed constant:
+each byte and carry in give the byte and carry out (`ct.bf`, every byte
+value checked, `gen/ctr_proof.py`'s region), so value + 1 = value' + carry
+256^n for the whole block, and value' is below 256^n.
+
 **Conditional** (a property of the algorithm at the arguments used, as a
 hypothesis): `lift_round_trip`, `ccm_round_trip_if`,
-`sign_verify_bytes_if`, `kex_agree_if`.
+`sign_verify_bytes_if`, `kex_agree_if`; and those above taking a property on
+lists or at the blocks used: `modes_blocks_of_octets_of`, the
+`<f>_<mode>_octets_round_trip`s, `<f>_cts_round_trip`, `hkdf_length`,
+`hkdf_prefix`.
 
 **Per instance** (generated): `<c>_block_round_trip`,
 `<c>_block_round_trip_dual`, `<c>_ecb_round_trip`, `<c>_cbc_round_trip`,
@@ -569,24 +656,24 @@ block-cipher interface (with `CrAes.key_enc`); the refusals (an empty RC4 key, a
 CTR counter of the wrong length, bytes that are not whole blocks, an HKDF
 output past 255 digests, over CRC-32 and over SHA-256).
 
-**Not proved, and tested:** the CBC-CS3 round trip: decryption cuts the ciphertext into pieces again, so a
-proof needs `CrOct.pieces` of a concatenation of encrypted blocks to give
-those blocks back (every block's length through the format, the stolen
-bytes' `take` and `drop`, the XOR with a zero-padded piece undone over its
-length), for every block size; those lemmas are not done in this version
-(tested: RFC 3962's vectors both ways, and 32 cases against the
-kernel's cts(cbc(aes)) and `ref/gen.py`'s CS3); the byte layer of PCBC and
-LRW (as of ECB and CBC: the laws are on lists of blocks); VMAC's and XCBC's
+**Not proved, and tested:** that every message of whole blocks is the
+bytes of a list of blocks (`CrModes.octets_of(bs)`, the form the byte
+layer's round trips take it in: the other direction of a block format,
+`blk_to(blk_of(o)) == o` for every o of bsize bytes, is proved here for
+the two formats only inside `PROOF_cts.bend`, and the byte layer's laws are
+not stated for every message; tested on the specifications' vectors and
+`ref/gen.py`); the CBC-CS3 round trip over a block format other than the
+two (the law is per format: the proof for every block size takes the
+format's properties at the cipher's inputs, which are internal to the
+mode); VMAC's and XCBC's
 values (the MAC laws hold whatever the tag is; the values are tested on
 the specifications' vectors); an AEAD's and a MAC's refusal of changed input (a forgery succeeds with probability
 2^-8tlen, so it is no law for every input; tested on every instance); the
-KDF laws for HKDF (its length needs arithmetic on ceilings not done here;
-PBKDF2's are proved, above); SHA-2's and SHA3-256's streaming law for every state (bend-collections
+KDF laws for HKDF over a `~digest` whose digests are not all of the digest
+size (none holds there: HKDF's output can then be shorter than asked; over
+every hash whose digests are, both are proved, above); SHA-2's and SHA3-256's streaming law for every state (bend-collections
 proves the pieces from the start state only, which is what the split laws
-and HMAC need); the byte layer of ECB and CBC (`CrModes.blocks_of` and
-`octets_of` for every block size); the CTR counter's increment (the stream
-laws hold whatever it is; its value is tested against SP 800-38A and
-cryptography).
+and HMAC need).
 
 ## Tests
 
@@ -733,12 +820,15 @@ proof elsewhere that uses a generic law takes in none of their proofs.
 
 ## Status
 
-Bend 2.0.37: each of the six proof files ALL PROOFS CHECK, and ALL PROOFS
+Bend 2.0.37: each of the ten proof files ALL PROOFS CHECK, and ALL PROOFS
 CHECK under `--verdict`, each in a process of its own (`--verdict`, on WSL2
 shared with other checks: `PROOF.bend` 4 s and 0.29 GB peak, `PROOF_lc.bend`
 34 s and 0.66 GB, `PROOF_hs.bend` 83 s and 0.72 GB, `PROOF_sha.bend` 56 s
 and 0.91 GB, `PROOF_crc.bend` 135 s and 0.71 GB, `PROOF_cm.bend` 7.7 min
-and 1.30 GB, nearly all of it cipher-modes' proofs; in one `PROOF.bend`
-they peaked at about 3.26 GB in 12 min), `gen/instances.py --check` and
-`gen/proof.py --check` up to date, `check.bend` passes, `ref/run.sh` 499 cases
-match, `scripts/deps.sh` passes.
+and 1.30 GB, nearly all of it cipher-modes' proofs, `PROOF_bytes.bend` 36 s
+and 0.67 GB, `PROOF_cts.bend` 36 s and 0.74 GB, `PROOF_hkdf.bend` 4 s and
+0.28 GB, `PROOF_ctr.bend` 5 s and 0.28 GB; in one `PROOF.bend` the first
+six peaked at about 3.26 GB in 12 min), `gen/instances.py --check`,
+`gen/proof.py --check`, `gen/cts_proof.py --check` and `gen/ctr_proof.py
+--check` up to date, `check.bend` passes, `ref/run.sh` 499 cases match,
+`scripts/deps.sh` passes.

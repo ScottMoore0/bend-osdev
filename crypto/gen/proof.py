@@ -33,6 +33,9 @@ def bits_region():
     out.append(lemma("the low byte of a XOR depends only on the low byte of its first operand",
                      "byte_xor_byte(z: U32, k: U32) -> {B.byte(U32.xor(z, k)) == B.byte(U32.xor(B.byte(z), k)) : U32}",
                      ["z", "k"], ["a", "b"]))
+    out.append(lemma("0 XOR a word is the word",
+                     "u32_xor0(y: U32) -> {U32.xor(0, y) == y : U32}",
+                     ["y"], ["a"]))
     out.append(lemma("a word's big-endian bytes are four",
                      "be32_len(v: U32) -> {B.Octets.len(B.Octets.be32(v)) == 4n : Nat}",
                      ["v"], ["a"]))
