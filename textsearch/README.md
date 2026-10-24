@@ -63,7 +63,11 @@ as an NFA simulation. No kernel source was read.
 | `fsm.bend` | the token automaton: `TsClass`, `TsRecur`, `TsToken`, `TsFsm`, the step; and its reference, `ts.fsm.naive` |
 | `naive.bend` | the reference for plain patterns: the pattern tried at every offset |
 | `spec.bend` | bounded exhaustive agreement with the references, for the laws |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws for every automaton and the bounded ones, and their proofs |
+| `LAWS_kmp.bend`, `PROOF_kmp.bend` | KMP against the reference, and its proof (the theory of borders) |
+| `LAWS_fsm.bend`, `PROOF_fsm.bend` | the token automaton against its backtracking reference, and its proof |
+| `LAWS_bm.bend`, `PROOF_bm.bend` | Boyer-Moore against the reference, whole and in chunks, and its proof (every shift safe) |
+| `proof_lib.bend` | lemmas the proof files share (no law) |
 | `check.bend` | examples and large exhaustive comparisons, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
 
@@ -98,7 +102,9 @@ the `ts.bm.*` tables and scan, the `ts.fsm.*` steps, `ts.naive.at`/`go`, and
   that reads a byte at a time needs only a step, and `auto.bend` gives it
   the chunking and its laws for free (`auto_split` holds for every step).
 * **Boyer-Moore's shift** is a parameter (`TsBmRule`); a new rule is a case
-  of `ts.bm.shift` (each must be safe: never skip an occurrence).
+  of `ts.bm.shift` (each must be safe: never skip an occurrence; for
+  `bm_ref` to cover it, its safety is a case of `bp.safe_long` in
+  `PROOF_bm.bend`).
 * **Case** is a parameter (`icase`); other byte equivalences would replace
   `ts.fold`.
 * **Classes** in the token automaton are open data; a new class is a
@@ -125,16 +131,98 @@ the `ts.bm.*` tables and scan, the `ts.fsm.*` steps, `ts.naive.at`/`go`, and
 * **vectors:** KMP across chunks, both Boyer-Moore rules (one ignoring
   case), and the token automaton with a range and `TsPlus`.
 
-**Not proved, and why.** That KMP, Boyer-Moore and the token automaton find
-exactly what the references find **in general**, and Boyer-Moore's
-chunking law in general. KMP's correctness rests on the theory of borders
-(the prefix table's entries are the longest borders, and following them
-loses no occurrence); Boyer-Moore's on each shift being safe; the token
-automaton's on the NFA simulation matching the backtracking reference.
-Each is a substantial development not done here. They are held instead by
-the bounded laws above (proved by computation, kept small because the
-checker bounds the work of one law), by `check.bend`'s much larger
-exhaustive comparisons, and by `ref/`.
+`LAWS_kmp.bend`, **for every input**, proved in `PROOF_kmp.bend`:
+
+* `kmp_ref`: KMP finds exactly what the reference finds,
+  `ts.kmp.ends(icase, p, xs) == ts.naive.ends(icase, p, xs)`, for every
+  pattern (the empty one included), exactly or ignoring case, and every
+  text; `kmp_search_ref`: so does `ts.kmp.search` for every chunking
+  (with `kmp_split`).
+
+The proof is a theory of borders on sets of prefix lengths (lists of
+Bools, entry j for the prefix of j bytes). Reading byte c takes a set S to
+the empty prefix and j + 1 for each j in S whose next pattern byte is c
+(the shift-and automaton); B(k), that set after the pattern's own first k
+bytes, is the set of borders of those bytes. Then:
+
+* the prefix table is right (`bd.pi_ok`): for every k, B(k) is k added to
+  B(table entry k - 1), and the entry is below k. The table is built by
+  KMP's own step, so this goes along the table's construction, with
+* following the table loses no border (`bd.back_ok`, `bd.next_ok`): from a
+  prefix of k bytes, the prefix KMP's step finds after byte c, q2, has
+  B(q2) equal to the set after c from B(k) (strong induction along the
+  table's entries);
+* the shift-and automaton's semantics (`kp.gstep`): from a set S it
+  reports, on the rest of the text, the matches of the prefixes in S still
+  to be completed, then the reference's;
+* so KMP's one number q stands for the whole set B(q) (`kp.run`), and from
+  B(0) nothing is pending: KMP reports what the reference reports. Ignoring
+  case is the same search on the folded pattern and text.
+
+`LAWS_fsm.bend`, **for every input**, proved in `PROOF_fsm.bend`:
+
+* `fsm_ref`: the token automaton finds exactly what its backtracking
+  reference finds, `ts.fsm.ends(tks, xs) == ts.fsm.naive(tks, xs)`, for
+  every token pattern (every class and count, `TsPlus` included) and every
+  text; `fsm_search_ref`: so does `ts.fsm.search` for every chunking.
+
+The proof transfers apparmor's `glob_run` method. The reference's
+backtracking matcher is taken without its fuel (`fs.full`; the fuel
+`ts.fsm.naive` gives, two per token and one per byte, is always enough,
+`fs.fuel_ok`), and `TsPlus` written as `TsOne` then `TsStar`, as the
+automaton keeps it, matches the same (`fs.exp_ok`). A set of positions
+means what it accepts: some active position whose remaining tokens match
+the rest exactly (`fs.sem`). Each pass of the step takes one meaning to the
+next: closing over optional tokens adds nothing (`fs.CL`), reading a byte
+moves a closed set's meaning on by that byte (`fs.AL`, `fs.CA`), starting a
+match adds the whole pattern (`fs.ST`); so after byte c the positions
+accept w exactly when, before it, they accepted c then w or the pattern
+matches c then w (`fs.STEP`), and the report, the last position, is the
+set accepting no more bytes (`fs.HIT`). From a set, the automaton reports
+at each later end whether a match begun before is accepted or some
+non-empty run within the rest matches (`fs.run`); from the start nothing is
+under way, which is the reference.
+
+`LAWS_bm.bend`, **for every input**, proved in `PROOF_bm.bend`:
+
+* `bm_ref`: Boyer-Moore finds exactly what the reference finds,
+  `ts.bm.ends(icase, rule, p, xs) == ts.naive.ends(icase, p, xs)`, for
+  both shift rules (`TsHorspool`, and `TsGoodSuffix`, the larger of
+  Horspool's shift and the strong good-suffix shift), every pattern (the
+  empty one included), exactly or ignoring case, and every text;
+* `bm_split`: its chunking law, `ts.bm.search(icase, rule, p, cs) ==
+  ts.bm.ends(icase, rule, p, ts.concat(cs))`, for every chunking; and
+  `bm_search_ref`: so the chunked search finds what the reference finds.
+
+The proof shows every shift safe. Ignoring case is the exact search of the
+folded pattern in the folded text (`bp.conv`). Each window's report is
+the reference's test at its offset: the code's count of agreeing bytes
+from the window's end is the whole pattern exactly when the pattern is
+there (`bp.hit_ok`). No offset the step skips holds the pattern
+(`bp.safe`):
+
+* Horspool's shift h: Horspool's scan leaves no pattern position from
+  m - h to m - 2 holding the window's last byte b (`bp.hs_go`), and a
+  skipped offset i would put pattern position m - 1 - i under b;
+* the good-suffix shift g after a mismatch at position j: the search for g
+  fails at every s below it (`bp.least_nok`), and an occurrence at offset
+  s would make s hold, since the pattern there agrees with the matched
+  suffix and puts the window's byte j, which is not pattern byte j, under
+  position j (`bp.okw`);
+* after a match, the shift is the least period, every s below it is not a
+  period (`bp.per_nok`), and an occurrence at s would make it one;
+* the default rule's shift is the larger of Horspool's and the
+  good-suffix shift, and an offset below it is below one of them.
+
+So the scan skips only offsets the reference rejects (`bp.main`). Between
+chunks the search keeps the last m - 1 bytes; the reference over a
+chunk's bytes followed by the rest of the text is its matches inside them,
+then those starting in the kept bytes or later (`bp.ns`), which is what
+the next chunks report (`bp.rg`).
+
+All three algorithms are thus proved against their references for every
+input; the bounded laws in `LAWS.bend` stay as closed-computation checks
+of the same agreement.
 
 ## Tests
 
@@ -172,6 +260,7 @@ exhaustive comparisons, and by `ref/`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 200 cases match, `scripts/deps.sh
-textsearch` ok.
+Bend 2.0.37: `PROOF.bend`, `PROOF_kmp.bend`, `PROOF_fsm.bend` and
+`PROOF_bm.bend` ALL PROOFS CHECK, and under `--verdict` (each in its own
+process, under 0.3 GB), `check.bend` passes, `ref/run.sh` 200 cases
+match, `scripts/deps.sh textsearch` ok.
