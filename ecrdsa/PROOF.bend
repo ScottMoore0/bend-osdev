@@ -1,6 +1,10 @@
 import Base
 import ../bytes/bytes.bend as B
+import ../bytes/LAWS.bend as BL
+import ../bytes/PROOF.bend as BP
 import ../bignum/bignum.bend as N
+import ../bignum/LAWS.bend as NL
+import ../bignum/PROOF.bend as NP
 import ../ecc/ecc.bend as E
 import ../ecc/ecdsa.bend as S
 import ./ecrdsa.bend as G
@@ -327,3 +331,126 @@ def Laws.toy_sign_verify(d, k, hd, hk):
                             case 1n+dz:
                               Empty.absurd({Laws.ecrdsalaw.signs_verify(Laws.ecrdsalaw.nat1(7n+dz), Laws.ecrdsalaw.nat1(k)) == True{} : Bool}, ex.absurd(hd))
 # END GENERATED: exhaustive
+
+# Properties, for every input
+
+# RFC 4491's public-key form read back: each coordinate's little-endian
+# bytes come back from its number (bignum's octets_round_trip, with the
+# bytes reversed twice: bytes' rev_rev), so the bytes written for a key
+# read from o are o itself, and are read as that key again
+
+def rt.bdisc(+b: Bool) -> Type:
+  match b:
+    case True{}:
+      Empty
+    case False{}:
+      Unit
+
+def rt.absurd(+e: {False{} == True{} : Bool}) -> Empty:
+  %e : rt.bdisc(_)
+  Unit{}
+
+def rt.nat_eq_true(a: Nat, b: Nat, h: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b : Nat}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({0n == 1n+q : Nat}, rt.absurd(h))
+    case 1n+p 0n:
+      Empty.absurd({1n+p == 0n : Nat}, rt.absurd(h))
+    case 1n+p 1n+q:
+      %rt.nat_eq_true(p, q, h) : {1n+p == 1n+_ : Nat}
+      {==}
+
+def rt.min_add(+a: Nat, +b: Nat) -> {Nat.min(a, Nat.add(a, b)) == a : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.min(p, Nat.add(p, b)), p, rt.min_add(p, b))
+
+def rt.sub_zero(+b: Nat) -> {Nat.sub(b, 0n) == b : Nat}:
+  match b:
+    case 0n:
+      {==}
+    case 1n+q:
+      {==}
+
+def rt.sub_add(+a: Nat, +b: Nat) -> {Nat.sub(Nat.add(a, b), a) == b : Nat}:
+  match a:
+    case 0n:
+      rt.sub_zero(b)
+    case 1n+p:
+      rt.sub_add(p, b)
+
+# bytes of twice the field's length split into two halves of the field's
+# length
+def rt.len_take(+c: E.EcCurve, +o: B.Octets, +h: {B.Octets.len(o) == Nat.mul(2n, E.EcCurve.field_len(c)) : Nat}) -> {B.Octets.len(B.Octets.take(E.EcCurve.field_len(c), o)) == E.EcCurve.field_len(c) : Nat}:
+  %Equal.sym(Nat, B.Octets.len(B.Octets.take(E.EcCurve.field_len(c), o)), Nat.min(E.EcCurve.field_len(c), B.Octets.len(o)), BL.octets_len_take(E.EcCurve.field_len(c), o)) : {_ == E.EcCurve.field_len(c) : Nat}
+  %Equal.sym(Nat, B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c)), h) : {Nat.min(E.EcCurve.field_len(c), _) == E.EcCurve.field_len(c) : Nat}
+  rt.min_add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n))
+
+def rt.len_drop(+c: E.EcCurve, +o: B.Octets, +h: {B.Octets.len(o) == Nat.mul(2n, E.EcCurve.field_len(c)) : Nat}) -> {B.Octets.len(B.Octets.drop(E.EcCurve.field_len(c), o)) == E.EcCurve.field_len(c) : Nat}:
+  %Equal.sym(Nat, B.Octets.len(B.Octets.drop(E.EcCurve.field_len(c), o)), Nat.sub(B.Octets.len(o), E.EcCurve.field_len(c)), BL.octets_len_drop(E.EcCurve.field_len(c), o)) : {_ == E.EcCurve.field_len(c) : Nat}
+  %Equal.sym(Nat, B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c)), h) : {Nat.sub(_, E.EcCurve.field_len(c)) == E.EcCurve.field_len(c) : Nat}
+  Equal.trans(Nat, Nat.sub(Nat.add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), E.EcCurve.field_len(c)), Nat.add(E.EcCurve.field_len(c), 0n), E.EcCurve.field_len(c), rt.sub_add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), BP.add_zero(E.EcCurve.field_len(c)))
+
+# reversing a list keeps its length, and commutes with masking
+def rt.rev_len(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {List.length(&2, U32, B.rev_onto(xs, acc)) == Nat.add(List.length(&2, U32, xs), List.length(&2, U32, acc)) : Nat}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.trans(Nat, List.length(&2, U32, B.rev_onto(t, Con{h, acc})), Nat.add(List.length(&2, U32, t), 1n+List.length(&2, U32, acc)), 1n+Nat.add(List.length(&2, U32, t), List.length(&2, U32, acc)), rt.rev_len(t, Con{h, acc}), BP.add_succ(List.length(&2, U32, t), List.length(&2, U32, acc)))
+
+def rt.mask_rev(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {B.mask(B.rev_onto(xs, acc)) == B.rev_onto(B.mask(xs), B.mask(acc)) : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      rt.mask_rev(t, Con{h, acc})
+
+# a byte string's list is already masked
+def rt.mask_list(+o: B.Octets) -> {B.mask(B.Octets.to_list(o)) == B.Octets.to_list(o) : List<&2, U32>}:
+  Equal.trans(List<&2, U32>, B.mask(B.Octets.to_list(o)), B.Octets.to_list(B.Octets.of_list(B.Octets.to_list(o))), B.Octets.to_list(o), Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.Octets.to_list(o))), B.mask(B.Octets.to_list(o)), BL.octets_to_of(B.Octets.to_list(o))), Equal.cong(B.Octets, List<&2, U32>, x => B.Octets.to_list(x), B.Octets.of_list(B.Octets.to_list(o)), o, BL.octets_of_to(o)))
+
+def rt.len_rev(+xs: B.Octets) -> {B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))) == B.Octets.len(xs) : Nat}:
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), B.len(B.rev(B.Octets.to_list(xs))), B.Octets.len(xs), BL.octets_len_of_list(B.rev(B.Octets.to_list(xs))),
+    Equal.trans(Nat, B.len(B.rev(B.Octets.to_list(xs))), Nat.add(B.len(B.Octets.to_list(xs)), 0n), B.Octets.len(xs), rt.rev_len(B.Octets.to_list(xs), Nil{}),
+      Equal.trans(Nat, Nat.add(B.len(B.Octets.to_list(xs)), 0n), B.len(B.Octets.to_list(xs)), B.Octets.len(xs), BP.add_zero(B.len(B.Octets.to_list(xs))), Equal.sym(Nat, B.Octets.len(xs), B.len(B.Octets.to_list(xs)), BL.octets_len_list(xs)))))
+
+# l little-endian bytes, read as a number and written back to l bytes
+def rt.le_of_le(+xs: B.Octets, +l: Nat, +hl: {B.Octets.len(xs) == l : Nat}) -> {G.ecrdsa.le(G.ecrdsa.of_le(xs), l) == xs : B.Octets}:
+  %Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), B.Octets.len(xs), l, rt.len_rev(xs), hl) : {B.Octets.of_list(B.rev(B.Octets.to_list(Maybe.default(&2, B.Octets, N.BnNat.to_octets(N.BnNat.of_octets(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), _), B.Octets.zeros(l))))) == xs : B.Octets}
+  %Equal.sym(Maybe<&2, B.Octets>, N.BnNat.to_octets(N.BnNat.of_octets(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs))))), Some{B.Octets.of_list(B.rev(B.Octets.to_list(xs)))}, NL.octets_round_trip(B.Octets.of_list(B.rev(B.Octets.to_list(xs))))) : {B.Octets.of_list(B.rev(B.Octets.to_list(Maybe.default(&2, B.Octets, _, B.Octets.zeros(l))))) == xs : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), B.mask(B.rev(B.Octets.to_list(xs))), BL.octets_to_of(B.rev(B.Octets.to_list(xs)))) : {B.Octets.of_list(B.rev(_)) == xs : B.Octets}
+  %Equal.sym(List<&2, U32>, B.mask(B.rev_onto(B.Octets.to_list(xs), Nil{})), B.rev_onto(B.mask(B.Octets.to_list(xs)), B.mask(Nil{})), rt.mask_rev(B.Octets.to_list(xs), Nil{})) : {B.Octets.of_list(B.rev(_)) == xs : B.Octets}
+  %Equal.sym(List<&2, U32>, B.mask(B.Octets.to_list(xs)), B.Octets.to_list(xs), rt.mask_list(xs)) : {B.Octets.of_list(B.rev(B.rev_onto(_, B.mask(Nil{})))) == xs : B.Octets}
+  %Equal.sym(List<&2, U32>, B.rev(B.rev(B.Octets.to_list(xs))), B.Octets.to_list(xs), BL.rev_rev(B.Octets.to_list(xs))) : {B.Octets.of_list(_) == xs : B.Octets}
+  BL.octets_of_to(xs)
+
+# the bytes written for the key read from o are o
+def rt.to_eq(+c: E.EcCurve, +o: B.Octets, +hl: {B.Octets.len(o) == Nat.mul(2n, E.EcCurve.field_len(c)) : Nat}) -> {G.Ecrdsa.public_to(c, E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}) == o : B.Octets}:
+  %Equal.sym(B.Octets, G.ecrdsa.le(G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), E.EcCurve.field_len(c)), B.Octets.take(E.EcCurve.field_len(c), o), rt.le_of_le(B.Octets.take(E.EcCurve.field_len(c), o), E.EcCurve.field_len(c), rt.len_take(c, o, hl))) : {B.Octets.append(_, G.ecrdsa.le(G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o)), E.EcCurve.field_len(c))) == o : B.Octets}
+  %Equal.sym(B.Octets, G.ecrdsa.le(G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o)), E.EcCurve.field_len(c)), B.Octets.drop(E.EcCurve.field_len(c), o), rt.le_of_le(B.Octets.drop(E.EcCurve.field_len(c), o), E.EcCurve.field_len(c), rt.len_drop(c, o, hl))) : {B.Octets.append(B.Octets.take(E.EcCurve.field_len(c), o), _) == o : B.Octets}
+  BL.octets_take_drop(E.EcCurve.field_len(c), o)
+
+def rt.ok(oc: Bool, +c: E.EcCurve, +o: B.Octets, +hl: {B.Octets.len(o) == Nat.mul(2n, E.EcCurve.field_len(c)) : Nat}, +hok: {Nat.is_eq(B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c))) == True{} : Bool}, +hoc: {E.EcCurve.on_curve(c, E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}) == oc : Bool}) -> {Result.bind(&2, &2, G.EcrdsaError, E.EcPoint, E.EcPoint, Result.map(&2, &2, G.EcrdsaError, Unit, E.EcPoint, u => E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}, G.EcrdsaError.check(oc, G.EcrdsaBadPublicKey{})), p => G.Ecrdsa.public_of(c, G.Ecrdsa.public_to(c, p))) == Result.map(&2, &2, G.EcrdsaError, Unit, E.EcPoint, u => E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}, G.EcrdsaError.check(oc, G.EcrdsaBadPublicKey{})) : Result<&2, &2, G.EcrdsaError, E.EcPoint>}:
+  match oc:
+    case False{}:
+      {==}
+    case True{}:
+      %Equal.sym(B.Octets, G.Ecrdsa.public_to(c, E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}), o, rt.to_eq(c, o, hl)) : {G.Ecrdsa.public_of(c, _) == Done{E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}} : Result<&2, &2, G.EcrdsaError, E.EcPoint>}
+      %Equal.sym(Bool, Nat.is_eq(B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c))), True{}, hok) : {G.ecrdsa.pk.go(_, c, o) == Done{E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}} : Result<&2, &2, G.EcrdsaError, E.EcPoint>}
+      %Equal.sym(Bool, E.EcCurve.on_curve(c, E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}), True{}, hoc) : {Result.map(&2, &2, G.EcrdsaError, Unit, E.EcPoint, u => E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}, G.EcrdsaError.check(_, G.EcrdsaBadPublicKey{})) == Done{E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}} : Result<&2, &2, G.EcrdsaError, E.EcPoint>}
+      {==}
+
+def rt.go(ok: Bool, +c: E.EcCurve, +o: B.Octets, +hok: {Nat.is_eq(B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c))) == ok : Bool}) -> {Result.bind(&2, &2, G.EcrdsaError, E.EcPoint, E.EcPoint, G.ecrdsa.pk.go(ok, c, o), p => G.Ecrdsa.public_of(c, G.Ecrdsa.public_to(c, p))) == G.ecrdsa.pk.go(ok, c, o) : Result<&2, &2, G.EcrdsaError, E.EcPoint>}:
+  match ok:
+    case False{}:
+      {==}
+    case True{}:
+      rt.ok(E.EcCurve.on_curve(c, E.EcAff{G.ecrdsa.of_le(B.Octets.take(E.EcCurve.field_len(c), o)), G.ecrdsa.of_le(B.Octets.drop(E.EcCurve.field_len(c), o))}), c, o, rt.nat_eq_true(B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c)), hok), hok, {==})
+
+def Laws.public_round_trip(c, o):
+  rt.go(Nat.is_eq(B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c))), c, o, {==})

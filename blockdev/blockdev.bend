@@ -59,6 +59,47 @@ def Dev.read_bytes.some(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -
 def Dev.read_bytes(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, DevError, B.Octets>, +d: D, off: Nat, +len: Nat) -> Result<&2, &2, DevError, B.Octets>:
   Dev.read_bytes.some(~D, ~block_size, ~read_block, Nat.is_eq(len, 0n), d, off, len)
 
+# count blocks from block first, as a list, in order (read_blocks joins
+# them: LAWS_range.bend, read_blocks_list)
+def Dev.read_list(~D: Data, ~read_block: D -> Nat -> Result<&2, &2, DevError, B.Octets>, +d: D, count: Nat, +first: Nat) -> Result<&2, &2, DevError, List<&2, B.Octets>>:
+  match count:
+    case 0n:
+      Done{Nil{}}
+    case 1n+p:
+      do Result<&2, &2, DevError, List<&2, B.Octets>>:
+        blk : B.Octets <- read_block(d, first)
+        rest : List<&2, B.Octets> <- Dev.read_list(~D, ~read_block, d, p, Nat.add(first, 1n))
+        return Con{blk, rest}
+
+# Specifications for the laws (they run, too)
+
+def Dev.uniform.ok(r: Result<&2, &2, DevError, B.Octets>, +bs: Nat) -> Bool:
+  match r:
+    case Done{b}:
+      Nat.is_eq(B.Octets.len(b), bs)
+    case Fail{e}:
+      False{}
+
+# whether count blocks from block first each read as exactly bs bytes
+def Dev.uniform.go(~D: Data, ~read_block: D -> Nat -> Result<&2, &2, DevError, B.Octets>, count: Nat, +d: D, +bs: Nat, +first: Nat) -> Bool:
+  match count:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(Dev.uniform.ok(read_block(d, first), bs), Dev.uniform.go(~D, ~read_block, p, d, bs, Nat.add(first, 1n)))
+
+# whether blocks 0 to n - 1 of d each read as exactly block_size(d) bytes:
+# then the blocks joined are the device's first n * block_size(d) bytes, and
+# Dev.read_bytes reads inside them (LAWS_range.bend, read_bytes_image)
+def Dev.uniform(~D: Data, ~block_size: D -> Nat, ~read_block: D -> Nat -> Result<&2, &2, DevError, B.Octets>, +d: D, n: Nat) -> Bool:
+  Dev.uniform.go(~D, ~read_block, n, d, block_size(d), 0n)
+
+# o with the bytes from offset off on replaced by data: the bytes before off,
+# then data, then the bytes of o after off + len(data) (what a write of data
+# at off does to a device's image)
+def Dev.patch(+off: Nat, +data: B.Octets, +o: B.Octets) -> B.Octets:
+  B.Octets.append(B.Octets.take(off, o), B.Octets.append(data, B.Octets.drop(Nat.add(off, B.Octets.len(data)), o)))
+
 # The adapters: a pure device as an owned one (the device handed back is
 # the device itself)
 
@@ -369,3 +410,8 @@ def MemDev.own_write_block.go(+d: MemDev, n: Nat, data: B.Octets) -> MemDev & Re
 
 def MemDev.own_write_block(d: MemDev, n: Nat, data: B.Octets) -> MemDev & Result<&2, &2, DevError, Unit>:
   MemDev.own_write_block.go(d, n, data)
+
+# whether every block of d reads as exactly block_size(d) bytes (true of
+# every device of_octets, blank and update build: LAWS_range.bend)
+def MemDev.valid(+d: MemDev) -> Bool:
+  Dev.uniform(~MemDev, ~MemDev.block_size, ~MemDev.read_block, d, MemDev.block_count(d))

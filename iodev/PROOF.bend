@@ -265,6 +265,182 @@ def Laws.span_in_block(bp, n, i, len, h):
 def Laws.blocks_cover(bp, size):
   IOP.cover(bp, size)
 
+# A span inside (or past) n blocks: (first + count) * bs is off + len plus
+# the slack, which is less than a block
+
+def IOP.lt_zero(+x: Nat) -> {Nat.is_lt(x, 0n) == False{} : Bool}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+def IOP.lt0(+p: Nat, h: {Nat.is_lt(p, 0n) == True{} : Bool}) -> Empty:
+  IOP.bool_clash(Equal.trans(Bool, False{}, Nat.is_lt(p, 0n), True{}, Equal.sym(Bool, Nat.is_lt(p, 0n), False{}, IOP.lt_zero(p)), h))
+
+def IOP.le_zero(+x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+def IOP.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+ +p:
+      IOP.le_refl(p)
+
+def IOP.le_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_le(a, b) == True{} : Bool}, +h2: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
+  match a b c:
+    case 0n _ _:
+      IOP.le_zero(c)
+    case 1n+ +p 0n _:
+      IOP.ex_falso({Nat.is_le(1n+p, c) == True{} : Bool}, IOP.bool_clash(h1))
+    case 1n+ +p 1n+ +q 0n:
+      IOP.ex_falso({Nat.is_le(1n+p, 0n) == True{} : Bool}, IOP.bool_clash(h2))
+    case 1n+ +p 1n+ +q 1n+ +r:
+      IOP.le_trans(p, q, r, h1, h2)
+
+# a < b is 1 + a <= b
+def IOP.lt_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(1n+a, b) == True{} : Bool}:
+  match a b:
+    case _ 0n:
+      IOP.ex_falso({Nat.is_le(1n+a, 0n) == True{} : Bool}, IOP.lt0(a, h))
+    case 0n 1n+ +q:
+      IOP.le_zero(q)
+    case 1n+ +p 1n+ +q:
+      IOP.lt_le(p, q, h)
+
+def IOP.le_lt(+a: Nat, +b: Nat, +h: {Nat.is_le(1n+a, b) == True{} : Bool}) -> {Nat.is_lt(a, b) == True{} : Bool}:
+  match a b:
+    case _ 0n:
+      IOP.ex_falso({Nat.is_lt(a, 0n) == True{} : Bool}, IOP.bool_clash(h))
+    case 0n 1n+ +q:
+      {==}
+    case 1n+ +p 1n+ +q:
+      IOP.le_lt(p, q, h)
+
+# x <= x + y
+def IOP.le_add_r(+x: Nat, +y: Nat) -> {Nat.is_le(x, Nat.add(x, y)) == True{} : Bool}:
+  match x:
+    case 0n:
+      IOP.le_zero(y)
+    case 1n+ +p:
+      IOP.le_add_r(p, y)
+
+def IOP.lt_le_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_lt(a, b) == True{} : Bool}, +h2: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
+  IOP.le_lt(a, c, IOP.le_trans(1n+a, b, c, IOP.lt_le(a, b, h1), h2))
+
+def IOP.lt_rw_l(-x: Nat, -y: Nat, -m: Nat, e: {x == y : Nat}, h: {Nat.is_lt(y, m) == True{} : Bool}) -> {Nat.is_lt(x, m) == True{} : Bool}:
+  %Equal.sym(Nat, x, y, e) : {Nat.is_lt(_, m) == True{} : Bool}
+  h
+
+def IOP.lt_rw_r(-k: Nat, -x: Nat, -y: Nat, e: {x == y : Nat}, h: {Nat.is_lt(k, y) == True{} : Bool}) -> {Nat.is_lt(k, x) == True{} : Bool}:
+  %Equal.sym(Nat, x, y, e) : {Nat.is_lt(k, _) == True{} : Bool}
+  h
+
+def IOP.le_rw_l(-x: Nat, -y: Nat, -m: Nat, e: {x == y : Nat}, h: {Nat.is_le(y, m) == True{} : Bool}) -> {Nat.is_le(x, m) == True{} : Bool}:
+  %Equal.sym(Nat, x, y, e) : {Nat.is_le(_, m) == True{} : Bool}
+  h
+
+def IOP.le_rw_r(-k: Nat, -x: Nat, -y: Nat, e: {x == y : Nat}, h: {Nat.is_le(k, y) == True{} : Bool}) -> {Nat.is_le(k, x) == True{} : Bool}:
+  %Equal.sym(Nat, x, y, e) : {Nat.is_le(k, _) == True{} : Bool}
+  h
+
+# c + a < c + b is a < b
+def IOP.add_lt_l(+c: Nat, -a: Nat, -b: Nat) -> {Nat.is_lt(Nat.add(c, a), Nat.add(c, b)) == Nat.is_lt(a, b) : Bool}:
+  match c:
+    case 0n:
+      {==}
+    case 1n+ +p:
+      IOP.add_lt_l(p, a, b)
+
+# x * (1 + bp) < y * (1 + bp) gives x < y
+def IOP.mul_lt_cancel(+x: Nat, +y: Nat, +bp: Nat, +h: {Nat.is_lt(Nat.mul(x, 1n+bp), Nat.mul(y, 1n+bp)) == True{} : Bool}) -> {Nat.is_lt(x, y) == True{} : Bool}:
+  match x y:
+    case 0n 0n:
+      IOP.ex_falso({Nat.is_lt(0n, 0n) == True{} : Bool}, IOP.bool_clash(h))
+    case 0n 1n+ +q:
+      {==}
+    case 1n+ +p 0n:
+      IOP.ex_falso({Nat.is_lt(1n+p, 0n) == True{} : Bool}, IOP.bool_clash(h))
+    case 1n+ +p 1n+ +q:
+      IOP.mul_lt_cancel(p, q, bp, Equal.trans(Bool, Nat.is_lt(Nat.mul(p, 1n+bp), Nat.mul(q, 1n+bp)), Nat.is_lt(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), Nat.add(1n+bp, Nat.mul(q, 1n+bp))), True{}, Equal.sym(Bool, Nat.is_lt(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), Nat.add(1n+bp, Nat.mul(q, 1n+bp))), Nat.is_lt(Nat.mul(p, 1n+bp), Nat.mul(q, 1n+bp)), IOP.add_lt_l(1n+bp, Nat.mul(p, 1n+bp), Nat.mul(q, 1n+bp))), h))
+
+# x < 1 + n gives x <= n
+def IOP.lt_succ_le(+x: Nat, +n: Nat, +h: {Nat.is_lt(x, 1n+n) == True{} : Bool}) -> {Nat.is_le(x, n) == True{} : Bool}:
+  match x n:
+    case 0n _:
+      IOP.le_zero(n)
+    case 1n+ +p 0n:
+      IOP.ex_falso({Nat.is_le(1n+p, 0n) == True{} : Bool}, IOP.lt0(p, h))
+    case 1n+ +p 1n+ +q:
+      IOP.lt_succ_le(p, q, h)
+
+# (a + b) * c == a * c + b * c
+def IOP.mul_add(+a: Nat, +b: Nat, +c: Nat) -> {Nat.mul(Nat.add(a, b), c) == Nat.add(Nat.mul(a, c), Nat.mul(b, c)) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+ +p:
+      %Equal.sym(Nat, Nat.mul(Nat.add(p, b), c), Nat.add(Nat.mul(p, c), Nat.mul(b, c)), IOP.mul_add(p, b, c)) : {Nat.add(c, _) == Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)) : Nat}
+      Equal.sym(Nat, Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)), Nat.add(c, Nat.add(Nat.mul(p, c), Nat.mul(b, c))), IOP.add_assoc(c, Nat.mul(p, c), Nat.mul(b, c)))
+
+# a <= b gives a + (b - a) == b
+def IOP.le_wit(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.add(a, Nat.sub(b, a)) == b : Nat}:
+  match a b:
+    case 0n _:
+      IOP.sub_zero(b)
+    case 1n+ +p 0n:
+      IOP.ex_falso({Nat.add(1n+p, Nat.sub(0n, 1n+p)) == 0n : Nat}, IOP.bool_clash(h))
+    case 1n+ +p 1n+ +q:
+      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, Nat.sub(q, p)), q, IOP.le_wit(p, q, h))
+
+# P <= Q and L < bs give P + L < bs + Q
+def IOP.lt_add_both(+a: Nat, +b: Nat, +l: Nat, +bs: Nat, +h1: {Nat.is_le(a, b) == True{} : Bool}, +h2: {Nat.is_lt(l, bs) == True{} : Bool}) -> {Nat.is_lt(Nat.add(a, l), Nat.add(bs, b)) == True{} : Bool}:
+  match a b:
+    case 0n _:
+      IOP.lt_le_trans(l, bs, Nat.add(bs, b), h2, IOP.le_add_r(bs, b))
+    case 1n+ +p 0n:
+      IOP.ex_falso({Nat.is_lt(Nat.add(1n+p, l), Nat.add(bs, 0n)) == True{} : Bool}, IOP.bool_clash(h1))
+    case 1n+ +p 1n+ +q:
+      %Equal.sym(Nat, Nat.add(bs, 1n+q), 1n+Nat.add(bs, q), IOP.add_succ(bs, q)) : {Nat.is_lt(1n+Nat.add(p, l), _) == True{} : Bool}
+      IOP.lt_add_both(p, q, l, bs, h1, h2)
+
+def IOP.span_eq(+bp: Nat, +off: Nat, +len: Nat) -> {Nat.mul(Nat.add(S.IOSpan.first(S.IOSpan.of(1n+bp, off, len)), S.IOSpan.count(S.IOSpan.of(1n+bp, off, len))), 1n+bp) == Nat.add(Nat.add(off, len), S.IOSpan.slack(S.IOSpan.of(1n+bp, off, len))) : Nat}:
+  +bs : Nat = 1n+bp
+  +s = Nat.mod(off, bs)
+  +f = Nat.div(off, bs)
+  +t = Nat.add(Nat.add(s, len), Nat.sub(bs, 1n))
+  +c = Nat.div(t, bs)
+  +l = Nat.sub(Nat.sub(bs, 1n), Nat.mod(t, bs))
+  %Equal.sym(Nat, Nat.mul(Nat.add(f, c), bs), Nat.add(Nat.mul(f, bs), Nat.mul(c, bs)), IOP.mul_add(f, c, bs)) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
+  %Equal.sym(Nat, Nat.mul(c, bs), Nat.add(Nat.add(s, len), l), IOP.cover(bp, Nat.add(s, len))) : {Nat.add(Nat.mul(f, bs), _) == Nat.add(Nat.add(off, len), l) : Nat}
+  %IOP.add_assoc(Nat.mul(f, bs), Nat.add(s, len), l) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
+  %IOP.add_assoc(Nat.mul(f, bs), s, len) : {Nat.add(_, l) == Nat.add(Nat.add(off, len), l) : Nat}
+  %IOP.div_mod(off, bp) : {Nat.add(Nat.add(Nat.add(Nat.mul(f, bs), s), len), l) == Nat.add(Nat.add(_, len), l) : Nat}
+  {==}
+
+def IOP.span_within(+bp: Nat, +off: Nat, +len: Nat, +n: Nat, +h: {Nat.is_le(Nat.add(off, len), Nat.mul(n, 1n+bp)) == True{} : Bool}) -> {Nat.is_le(Nat.add(S.IOSpan.first(S.IOSpan.of(1n+bp, off, len)), S.IOSpan.count(S.IOSpan.of(1n+bp, off, len))), n) == True{} : Bool}:
+  +sp = S.IOSpan.of(1n+bp, off, len)
+  +fc = Nat.add(S.IOSpan.first(sp), S.IOSpan.count(sp))
+  +l = S.IOSpan.slack(sp)
+  IOP.lt_succ_le(fc, n, IOP.mul_lt_cancel(fc, 1n+n, bp, IOP.lt_rw_l(Nat.mul(fc, 1n+bp), Nat.add(Nat.add(off, len), l), Nat.add(1n+bp, Nat.mul(n, 1n+bp)), IOP.span_eq(bp, off, len), IOP.lt_add_both(Nat.add(off, len), Nat.mul(n, 1n+bp), l, 1n+bp, h, Laws.span_slack(bp, off, len)))))
+
+def IOP.span_past(+bp: Nat, +off: Nat, +len: Nat, +n: Nat, +h: {Nat.is_lt(Nat.mul(n, 1n+bp), Nat.add(off, len)) == True{} : Bool}) -> {Nat.is_lt(n, Nat.add(S.IOSpan.first(S.IOSpan.of(1n+bp, off, len)), S.IOSpan.count(S.IOSpan.of(1n+bp, off, len)))) == True{} : Bool}:
+  +sp = S.IOSpan.of(1n+bp, off, len)
+  +fc = Nat.add(S.IOSpan.first(sp), S.IOSpan.count(sp))
+  +l = S.IOSpan.slack(sp)
+  IOP.mul_lt_cancel(n, fc, bp, IOP.lt_rw_r(Nat.mul(n, 1n+bp), Nat.mul(fc, 1n+bp), Nat.add(Nat.add(off, len), l), IOP.span_eq(bp, off, len), IOP.lt_le_trans(Nat.mul(n, 1n+bp), Nat.add(off, len), Nat.add(Nat.add(off, len), l), h, IOP.le_add_r(Nat.add(off, len), l))))
+
+def Laws.span_within(bp, off, len, n, h):
+  IOP.span_within(bp, off, len, n, h)
+
+def Laws.span_past(bp, off, len, n, h):
+  IOP.span_past(bp, off, len, n, h)
+
 # The adapters. One step of IODev.read_blocks on a pure device, with the
 # read's result generalised to res (IOP.tail is the step as read_blocks runs
 # it; its continuation is written as read_blocks writes its own, so that

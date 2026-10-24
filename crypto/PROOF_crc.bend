@@ -1,6 +1,8 @@
 # Proofs of LAWS_crc.bend, from crc's streaming laws.
 import Base
 import ../bytes/bytes.bend as B
+import ../bytes/LAWS.bend as BL
+import ../bytes/PROOF.bend as BP
 import ../word64/word64.bend as W
 import ../crc/crc.bend as C
 import ../crc/LAWS.bend as CL
@@ -39,6 +41,9 @@ def Laws.crc64_xz_hash_check():
 
 def Laws.crc32_hash_length(spec, c):
   Bits.be32_len(C.Crc32Spec.finish(spec, c))
+
+def Laws.crc64_hash_length(spec, c):
+  BL.octets_len_be64(C.Crc64Spec.finish(spec, c))
 
 def Laws.hmac_crc32_vector():
   {==}
