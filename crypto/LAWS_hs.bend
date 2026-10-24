@@ -28,9 +28,8 @@ import ./inst_pbkdf2.bend as PbI
 
 # Michael as a MAC (inst_michael.bend): it accepts what it computes, for
 # every key and message (it uses the named default verify); a key of
-# another length than 8 bytes is refused; the sixth test vector recalled as
-# IEEE 802.11i's, through the MAC interface (not checked against a published
-# copy: hashes/README.md)
+# another length than 8 bytes is refused; the sixth test vector of IEEE
+# Std 802.11-2024's Table J-2, through the MAC interface
 law michael_accepts:
   for +k: Hs.HsW2
   for +m: B.Octets

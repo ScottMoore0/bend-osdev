@@ -4,8 +4,8 @@
 # the digest in one call, then the same message fed in three pieces
 # (init, three updates, final). Then Streebog's transformations on RFC
 # 6986's example 1, a million bytes "a" through SHA-1 and RIPEMD-160, and
-# Michael on the six vectors recalled as the standard's (each key the
-# previous tag; unverified, README.md), on IEEE 802.11-2012 M.6.3's TKIP
+# Michael on the six vectors of IEEE Std 802.11-2024's Table J-2 (each key
+# the previous tag) and its block function 1000 times (Table J-1), on IEEE 802.11-2012 M.6.3's TKIP
 # frame (as hostap's wlantest/test_vectors.c gives it), with a
 # short key refused. The values are the specifications' (the #| lines).
 import Base
@@ -55,6 +55,19 @@ def as.go(n: Nat, acc: List<&2, U32>) -> List<&2, U32>:
 def million_a() -> B.Octets:
   B.Octets.of_list(as.go(1000000n, Nil{}))
 
+# Michael's block function applied n times
+def michael.iter(n: Nat, lr: Hs.HsW2) -> Hs.HsW2:
+  match n:
+    case 0n:
+      lr
+    case 1n+p:
+      michael.iter(p, MI.hs.michael.b(lr))
+
+def michael.pair(lr: Hs.HsW2) -> String:
+  match lr:
+    case Hs.HsW2{l, r}:
+      U32.show(l) ++ " " ++ U32.show(r)
+
 def main() -> IO(Unit):
   +big = million_a()
   do IO<Unit>:
@@ -99,6 +112,7 @@ def main() -> IO(Unit):
     IO.print("michael e8f9becae97e5d29 " ++ mic(B.Octets.of_list([232, 249, 190, 202, 233, 126, 93, 41]), B.Octets.of_string("Mic")))
     IO.print("michael 90038fc6cf13c1db " ++ mic(B.Octets.of_list([144, 3, 143, 198, 207, 19, 193, 219]), B.Octets.of_string("Mich")))
     IO.print("michael d55e100510128986 " ++ mic(B.Octets.of_list([213, 94, 16, 5, 16, 18, 137, 134]), B.Octets.of_string("Michael")))
+    IO.print("michael b 1000 times on (1, 0): " ++ michael.pair(michael.iter(1000n, Hs.HsW2{1, 0})))
     IO.print("michael tkip m.6.3 " ++ mic(B.Octets.of_list([52, 86, 120, 144, 18, 52, 86, 120]), B.Octets.of_list([2, 3, 4, 5, 6, 8, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 170, 170, 3, 0, 0, 0, 8, 0, 69, 0, 0, 84, 0, 0, 64, 0, 64, 1, 165, 85, 192, 168, 10, 2, 192, 168, 10, 1, 8, 0, 58, 176, 0, 0, 0, 0, 205, 76, 5, 0, 0, 0, 0, 0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55])))
     IO.print("michael short key: " ++ mic(B.Octets.zeros(7n), B.Octets.empty()))
 
@@ -143,5 +157,6 @@ def main() -> IO(Unit):
 #|michael e8f9becae97e5d29 90038fc6cf13c1db 90038fc6cf13c1db
 #|michael 90038fc6cf13c1db d55e100510128986 d55e100510128986
 #|michael d55e100510128986 0a942b124ecaa546 0a942b124ecaa546
+#|michael b 1000 times on (1, 0): 2667889837 784777919
 #|michael tkip m.6.3 6881a3f3d648d03c 6881a3f3d648d03c
 #|michael short key: bad key length 7
