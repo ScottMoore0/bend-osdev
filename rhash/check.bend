@@ -68,6 +68,8 @@ def main() -> IO(Unit):
   +s1 = ins_from(300n, 0, R.RHash.new(~U32, ~U32, R.RhParams.shrinking()))
   +s2 = R.RHash.drain(~U32, ~U32, ~R.RHash.jhash2, del_from(290n, 0, 1, s1))
   +s3 = R.RHash.drain(~U32, ~U32, ~R.RHash.jhash2, R.RHash.remove(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, s2, 299))
+  +r40 = R.RHash.resize(~U32, ~U32, ~R.RHash.jhash2, s3, 40n, 7)
+  +n40 = R.RHash.new(~U32, ~U32, R.RhParams{70n, 30n, False{}, 2n, 40n, 40n, 4n, 0, 2654435769})
   do IO<Unit>:
     IO.print("1000 keys: size " ++ Nat.show(R.RHash.size(~U32, ~U32, t1)) ++ ", 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, t1)) ++ " buckets")
     IO.print("lookup 7: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, t1, 7)) ++ ", 999: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, t1, 999)) ++ ", 1000: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, t1, 1000)))
@@ -78,6 +80,8 @@ def main() -> IO(Unit):
     IO.print("drained: resizing " ++ Bool.show(R.RHash.resizing(~U32, ~U32, t5)) ++ ", 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, t5)) ++ " buckets, every odd key found: " ++ Bool.show(odd_found(500n, 1, t5, True{})))
     IO.print("word keys: [1, 2] " ++ show(R.RHash.lookup(~List<&2, U32>, ~U32, ~R.RHash.key_words, ~R.RHash.jhash2, w1, wkey(1, 2))) ++ ", [2, 1] " ++ show(R.RHash.lookup(~List<&2, U32>, ~U32, ~R.RHash.key_words, ~R.RHash.jhash2, w1, wkey(2, 1))) ++ ", [1] " ++ show(R.RHash.lookup(~List<&2, U32>, ~U32, ~R.RHash.key_words, ~R.RHash.jhash2, w1, [1])))
     IO.print("shrinking: 300 keys 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, s1)) ++ ", 10 left 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, s2)) ++ ", 9 left 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, s3)) ++ ", lookup 295: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, s3, 295)))
+    IO.print("resize to 2^40 asked: 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, r40)) ++ " buckets, resizing " ++ Bool.show(R.RHash.resizing(~U32, ~U32, r40)) ++ ", lookup 295: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, r40, 295)))
+    IO.print("log limit " ++ Nat.show(R.RHash.log_limit()) ++ "; init_log 40: 2^" ++ Nat.show(R.RHash.log(~U32, ~U32, n40)) ++ " buckets, lookup 1: " ++ show(R.RHash.lookup(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, R.RHash.insert(~U32, ~U32, ~R.RHash.key_u32, ~R.RHash.jhash2, n40, 1, 11), 1)))
 
 #|1000 keys: size 1000, 2^11 buckets
 #|lookup 7: 21, 999: 2997, 1000: none
@@ -88,3 +92,5 @@ def main() -> IO(Unit):
 #|drained: resizing False, 2^3 buckets, every odd key found: True
 #|word keys: [1, 2] 12, [2, 1] 21, [1] none
 #|shrinking: 300 keys 2^9, 10 left 2^7, 9 left 2^6, lookup 295: 885
+#|resize to 2^40 asked: 2^31 buckets, resizing True, lookup 295: 885
+#|log limit 31; init_log 40: 2^31 buckets, lookup 1: 11

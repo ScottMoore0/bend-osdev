@@ -88,8 +88,9 @@ example `RHash.insert(~U32, ~U32, ~RHash.key_u32, ~RHash.jhash2, t, k, v)`.
 | `RHash.same_key(a, b)` | whether two keys are the same key (equal encodings) |
 | `RHash.step(t)`, `RHash.steps(t, n)` | one (n) migration steps: the old bucket at the cursor moves into the new array; nothing when no resize is under way |
 | `RHash.drain(t)` | a resize under way finished (one step per old bucket) |
-| `RHash.resize(t, log, seed)` | an explicit resize to 2^log buckets: any resize under way is finished first, then the new one starts, and its steps follow later operations or `RHash.step` |
+| `RHash.resize(t, log, seed)` | an explicit resize to 2^min(log, `RHash.log_limit()`) buckets (a larger log is clamped): any resize under way is finished first, then the new one starts, and its steps follow later operations or `RHash.step` |
 | `RHash.resizing(t)`, `RHash.log(t)` | whether a resize is under way; the current array's log of its size |
+| `RHash.log_limit()` | 31: the most any array's log can be (2^31 buckets). A bound of the representation, not of the policy: the migration cursor is a U32 that wraps through the U32 mask 2^log - 1, and a bucket's path is the low log bits of a 32-bit hash, so a log of 32 or more breaks both. An explicit resize, `init_log` and `max_log` are all clamped to it |
 | `RHash.apply(t, op)`, `RHash.run(t, ops)` | operations (`RhOp`: `RhIns{k, v}`, `RhDel{k}`, `RhStep{}`, `RhResize{log, seed}`), in order |
 | `RHash.replay(p, tr)` | a trace, the latest operation first, replayed on a new table |
 | `RHash.jhash2`, `RHash.key_u32`, `RHash.key_words` | the named defaults above |
@@ -107,7 +108,8 @@ steps, seed, seed_step}`. After every insert and remove the table moves
 `steps` old buckets; then, if no resize is under way, it doubles when it
 holds more than `grow_pct` percent of its buckets (below 2^max_log), and,
 when `auto_shrink` is set, halves when it holds fewer than `shrink_pct`
-percent (above 2^min_log).
+percent (above 2^min_log). `init_log` and `max_log` are clamped to
+`RHash.log_limit()` (31): a policy cannot ask for more than 2^31 buckets.
 
 | Named default | grow_pct | shrink_pct | auto_shrink | min_log | max_log | init_log | steps | seed | seed_step |
 |---|---|---|---|---|---|---|---|---|---|
@@ -145,7 +147,10 @@ only for tables built through the interface:
   every one (the reference test also runs a hash that sends every key to
   bucket 0).
 * **The policy** is the `RhParams` record: thresholds, bounds, the initial
-  size, the steps per operation and the seeds.
+  size, the steps per operation and the seeds. Its sizes are bounded by
+  `RHash.log_limit()` (31), which is not a parameter: it comes from the U32
+  cursor and the 32-bit hash, and a `max_log` or `init_log` above it acts
+  as 31, as an explicit resize past it does.
 * **Explicit control:** `RHash.step`, `RHash.steps`, `RHash.drain` and
   `RHash.resize` drive a resize without inserts or removes, as the kernel's
   worker would.
@@ -178,14 +183,30 @@ Not a law: that a resize finishes. For tables built through the interface,
 draining (one step per old bucket) empties the old array, but for an
 arbitrary table value it need not, and nothing depends on it: lookups are
 right whether or not it does. `check.bend` and the reference test show it
-finishing.
+finishing. A proof would need a reachability invariant over every
+interface operation: the old array is a complete tree of depth `old_log`
+in which the buckets the cursor has passed are taken, a node whose buckets
+are all taken has collapsed, and the cursor walks 0, 1, ..., 2^old_log - 1
+(`rh.next`'s mask, `2^old_log - 1` as a U32, is right because a log is at
+most 31); then the bucket the cursor takes last in each subtree collapses
+it, so after 2^old_log steps from a fresh start, or from any point of a
+walk, the old array is one empty bucket. Not proved here.
+
+Every size is clamped to `RHash.log_limit()`, 31: an explicit resize
+(`RHash.resize`, `RhResize`), and the policy's `init_log` and `max_log`
+(growth stops there whatever `max_log` says). The
+cursor is a U32, and with log 32 or more its wrap mask `2^log - 1` and the
+bucket paths' bits past 31 go wrong (a resize to 2^34 and then another could
+leave the old array never emptied, and later resizes ignored). `check.bend`
+asks for 2^40 buckets and gets 2^31.
 
 ## Tests
 
 * `check.bend`: 1000 keys (2^11 buckets after growing), removes, an
   explicit resize to 2^3 checked after every 16 steps until it finishes
-  (every present key found each time), drain, word-list keys, and the
-  shrinking policy.
+  (every present key found each time), drain, word-list keys, the
+  shrinking policy, and an explicit resize asking for 2^40 buckets (2^31
+  given, keys still found).
 * `ref/run.sh`: four scenarios against a Python dict, 3800 random
   operations in 38 batches (inserts, removes, explicit steps, explicit
   resizes to random sizes), every key's lookup and the size compared after
@@ -200,5 +221,7 @@ finishing.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 3800 operations in 38 batches match,
-`scripts/deps.sh` passes.
+`check.bend` passes, `ref/run.sh` 3800 operations in 38 batches match (the
+whole `VERDICT=1 scripts/check.sh rhash` about 21 s, peak 0.37 GB),
+`scripts/deps.sh` passes. Every size is clamped to `RHash.log_limit()`;
+that a resize started through the interface finishes is not proved (Laws).
