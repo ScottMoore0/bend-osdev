@@ -102,7 +102,9 @@ segment size are this package's own choices; RFC 1951 gives no numbers.
 | `error.bend` | `DeflateError` |
 | `eq.bend`, `table.bend` | internal: bitwise equality (for the proofs), a U32-keyed trie |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
-| `gen/fixed.py`, `gen/proofs.py`, `gen/vectors.py` | generators: the fixed trees; the stored-block header lemmas in `PROOF.bend`; the stream vectors in `LAWS.bend` and their proofs |
+| `LAWS_canon.bend`, `PROOF_canon.bend` | RFC 1951 3.2.2's canonical codes, written as the RFC writes them, and the law that `huff_code` gives them |
+| `LAWS_stream.bend`, `PROOF_stream.bend` | the streaming inflater and zlib reader against their one-shot forms |
+| `gen/fixed.py`, `gen/proofs.py`, `gen/vectors.py`, `gen/canon.py` | generators: the fixed trees; the stored-block header lemmas in `PROOF.bend`; the stream vectors in `LAWS.bend` and their proofs; the case splits on the 16 code lengths in `PROOF_canon.bend` (`--check` checks it is up to date) |
 | `check.bend` | examples, with their output |
 | `ref/gen.py`, `ref/run.sh`, `ref/runner.bend` | the differential test |
 
@@ -231,11 +233,15 @@ The option records, `DflTok`, `DflTree`, `DflDecoded`, `DflKraft`,
 
 `bytes` (Octets) and `crc` (CRC-32 for gzip, table-driven), from
 bend-osdev. Adler-32 is written here (RFC 1950 defines it in a paragraph);
-bend-kit-hash is not needed.
+bend-kit-hash is not needed. `PROOF_canon.bend` uses `u32`'s laws (a U32's
+value), so `DEPS` lists `u32`; no code imports it.
 
 ## Laws
 
-`LAWS.bend` has 77 laws: 15 for every input and 62 vectors.
+80 laws in three pairs of law and proof files, each proof file checked
+in a process of its own: `LAWS.bend` has 77 (15 for every input and 62
+vectors), `LAWS_canon.bend` 1 and `LAWS_stream.bend` 2, all for every
+input.
 
 **For every input** (proved by induction):
 
@@ -268,6 +274,56 @@ bend-kit-hash is not needed.
 * `adler32_streaming`: Adler-32 over two pieces is Adler-32 over the joined
   string.
 
+**The canonical codes** (`LAWS_canon.bend`): the file writes 3.2.2's three
+steps as the RFC writes them, in U32 as its C code counts:
+`canon_count(ls, n)` (step 1, bl_count[n]: how many symbols have length
+n), `canon_next(ls, bits)` (step 2: next_code[1] = 0 and next_code[bits] =
+(next_code[bits-1] + bl_count[bits-1]) << 1), and `canon_code(ls, s)`
+(step 3: none for a length of 0; else next_code[len] counted on by every
+symbol before s of the same length, so the codes of a length are
+consecutive and in the order of the symbols; its len bits, the most
+significant first, as 3.1.1 packs them).
+
+* `huff_code_canonical`: for every list of lengths `ls` no longer than a
+  word's value (so that symbol numbers, counted in U32, do not wrap) and
+  every symbol `s` whose length is at most 15 (MAX_BITS), if
+  `huff_code(ls, s) == Some{p}` then `canon_code(ls, s) == Some{p}`: every
+  code the tree holds is the symbol's canonical code, whatever the other
+  lengths are (over-subscribed included). With `huff_code_decodes`, the
+  tree decodes each such code to its symbol.
+
+The proof follows symbol s through `huff_tree`: the counts are
+`canon_count` (one more at each symbol's length), the list of first codes
+is `canon_next` (the 16 counts are symbolic but the list's shape is not,
+so each entry computes), each symbol of s's length before s adds one to
+that entry, inserting another symbol leaves s's path in the tree as it was
+(the symbols' U32 numbers are their positions, by `u32`'s laws), and
+inserting s gives it the path of its code's bits.
+
+**Streaming** (`LAWS_stream.bend`): `inflate_pieces(opts, ps)` and
+`zlib_pieces(opts, ps)` run the streaming reader over the pieces `ps` in
+turn (start, one feed per piece, finish) and join everything it answers
+(each feed's output, then the finish's).
+
+* `inflate_streaming`: `inflate_pieces(opts, ps) == inflate_split(opts,
+  stream_join(ps))` for every options and every list of pieces (empty
+  pieces, single bytes, any split): the same failure, or the same output
+  and the same bytes after the stream.
+* `zlib_streaming`: `zlib_pieces(opts, ps) == zlib_decompress_with(opts,
+  stream_join(ps))`, the same for the zlib reader, whose header may arrive
+  in any pieces and whose Adler-32 is kept piece by piece.
+
+The resumption invariant: the inflater's driver only ever adds to its
+output list, so running it from a list `acc` is running it from the empty
+list and putting `acc` after what it adds (a full driver stays full); so
+handing the output out after each feed changes only where the bytes are
+joined, and the output plus the room left is the maximum, so the one-shot
+form's final check always passes. The zlib reader reads its header again
+from the start as each piece arrives; once the header is whole (or refused
+for a reason other than being short), more input changes nothing but the
+input it leaves for the body; and Adler-32 over the pieces is Adler-32 over
+their join.
+
 How the round trip is proved: `deflate_with` inflates the stream it wrote
 (with room for exactly `len(o)` bytes) and keeps it only if the inflater
 reaches the end of the stream with nothing after it and its output equals
@@ -288,15 +344,26 @@ differential test:
   check makes the round trip hold whatever they write, and the differential
   test checks the fallback never happens (no stream it compressed is the
   fallback's);
-* that `huff_tree` builds 3.2.2's canonical codes for every set of lengths
-  (the prefix-free law holds for whatever tree it builds; the vectors pin
-  3.2.2's example and 3.2.6's fixed codes, and the fixed trees equal the
-  generated constants);
+* that `huff_tree` gives every symbol with a length its code when the
+  lengths are not over-subscribed (`huff_code_canonical` proves that every
+  code it gives is the canonical one; that none is left out needs the
+  canonical codes of such lengths to be prefix-free and to fit in their
+  lengths: Kraft's inequality over the U32 values of next_code, with no
+  wrap, and the bits of those values, which this release does not prove;
+  the vectors pin 3.2.2's example and 3.2.6's fixed codes, and the
+  differential test decodes thousands of dynamic codes);
 * that the inflater decodes every valid stream as RFC 1951 says (the
   differential test, against zlib on thousands of streams);
-* that the streaming forms (inflater, deflater, zlib and gzip readers and
-  writers) equal the one-shot forms for every split (the differential test
-  feeds pieces and single bytes).
+* that the gzip reader's and the writers' streaming forms (the deflater,
+  the zlib and gzip writers) equal the one-shot forms for every split (the
+  inflater's and the zlib reader's are proved: `inflate_streaming`,
+  `zlib_streaming`). Not yet proved: the gzip reader (several members, a
+  step loop bounded by 4 + 3 steps per byte fed, whose bound would have to
+  be shown always enough, and its CRC-32 and ISIZE kept piece by piece, the
+  size as a U32 sum), and the deflater (segments cut from the pending
+  input as it grows, and the bit writer's bytes handed out between feeds)
+  with the two writers built on it. The differential test feeds pieces and
+  single bytes to all of them.
 
 **Vectors** (proved by computation): the fixed trees; 3.2.2's example
 codes; 3.2.6's fixed codes; the Kraft classes; Adler-32 of "", "a",
@@ -385,7 +452,10 @@ lists of the input and output (about 80 bytes per byte held).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
-(77 laws), `check.bend` passes, `ref/run.sh` 1,498 decoding cases match
+Bend 2.0.37: `PROOF.bend` (77 laws), `PROOF_canon.bend` (1) and
+`PROOF_stream.bend` (2) each ALL PROOFS CHECK, and `--verdict` ALL PROOFS
+CHECK (80 laws; under `--verdict`, `PROOF_canon.bend` peaks at about 0.17 GB
+and `PROOF_stream.bend` at 0.33 GB, `PROOF.bend` at 0.57 GB), `gen/canon.py --check` passes,
+`check.bend` passes, `ref/run.sh` 1,498 decoding cases match
 zlib and the gzip tool and 351 compressed streams decode back (seeds 2026
 and 1 to 3), `scripts/deps.sh` passes.
