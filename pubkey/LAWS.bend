@@ -49,9 +49,10 @@ law lift_pk_format:
 
 # RSA's public keys (rsa's raw form, keys.bend): a checked key (hk: Rsa.public_of
 # accepts its integers) is read back from the bytes written for it, given
-# rsa's public_form_round_trip_if (rsa/LAWS.bend) at its integers (hr). Not
-# of lift_pk_format's shape: rsa's form reads back a key read from any bytes
-# only up to the representation of its integers (rsa README.md, Laws)
+# rsa's public_form_round_trip_if (rsa/LAWS.bend) at its integers (hr).
+# (rsa's public_form_write_read now has lift_pk_format's shape for every
+# byte string, since rsa's reader takes only the forms its writer writes;
+# an instance law from it is not stated here yet.)
 law rsa_pk_format_if:
   for +n: NB.BnNat
   for +e: NB.BnNat

@@ -71,6 +71,7 @@ Where this differs from the kernel's XArray:
 | `XArray.set_mark(V, t, i, m)`, `XArray.clear_mark(V, t, i, m)` | set (only if `i` holds a value) / clear mark `m` at `i` |
 | `XArray.get_mark(V, t, i, m)` | whether `i` carries `m` |
 | `XArray.find_marked(V, t, s, m)` | the smallest index `>= s` carrying `m` |
+| `XArray.wf(V, t)` | the invariant: whether every index carrying a mark holds a value (every array the defs build has it) |
 | `XArrayError` | `XArrayBusy{}` (open) |
 
 Everything else in `xarray.bend` (`XTree`, `XPath`, `XAt`, and the `XArray.*`
@@ -120,10 +121,10 @@ dozen steps per entry listed.
 
 ## Laws
 
-`LAWS.bend` has 47 laws, all
+`LAWS.bend` has 53 laws, all
 over the public interface.
 
-**41 hold for every array, every index and every value** (and every value
+**47 hold for every array, every index and every value** (and every value
 type `V`), proved by induction over the tree:
 
 * entries: `load_empty`, `load_store` (a load after a store at the same index
@@ -147,7 +148,13 @@ type `V`), proved by induction over the tree:
   `mark_clear_other_index`, `mark_clear_other_mark`) and no value
   (`load_set_mark`, `load_clear_mark`), an erase clears the index's marks and
   no other index's (`mark_erase`, `mark_erase_other`), a store keeps every
-  mark (`mark_store`), and the four search laws for `find_marked`.
+  mark (`mark_store`), and the four search laws for `find_marked`;
+* the marks' invariant `XArray.wf` (every index carrying a mark holds a
+  value): the empty array has it (`wf_empty`), store, erase, set_mark and
+  clear_mark keep it (`wf_store`, `wf_erase`, `wf_set_mark`,
+  `wf_clear_mark`; insert is store, `insert_absent`), so every array built by
+  the defs has it; and on an array that has it, an index carrying any mark
+  holds a value (`wf_mark_present`).
 
 Inequality of indices is stated as `U32.is_eq(i, j) == False`, and order with
 Base's `U32.is_le` / `U32.is_lt`. The proofs relate `U32.cmp` to the order of
@@ -156,11 +163,13 @@ paths once, for every pair of indices, by induction over Base's `Word`.
 **6 are vectors** on a small array: a find, a find_last, a failing find, a
 range over everything, erasing every entry back to empty, and a marked find.
 
-On arrays the defs build, a marked index always holds a value: `set_mark`
-marks only indices holding one, `erase` clears marks, and `store` keeps them.
-The laws state each of these steps, but there is no single law "a mark implies
-a value", since a law quantifies over every value of the type, including ones
-the defs never build; the differential test checks it on every sequence.
+"A mark implies a value" is stated through the invariant rather than for
+every `XArray` value, since a law quantifies over every value of the type,
+including ones the defs never build (an `XArray` whose mark tree holds an
+index its value tree lacks). `XArray.wf` checks it on the trees: a mark
+tree's node is within the value tree's node, read down the path as `load`
+reads it, so a mark-tree node over an empty part of the value tree must be
+empty itself. The differential test checks it on every sequence too.
 
 ## Tests
 

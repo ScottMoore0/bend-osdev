@@ -177,6 +177,14 @@ def streebog512(m):
     return streebog(m, 512)
 
 
+def michael_b(l, r):
+    r ^= rol(l, 17); l = (l + r) & M
+    r ^= ((l & 0xFF00FF00) >> 8) | ((l & 0x00FF00FF) << 8); l = (l + r) & M
+    r ^= rol(l, 3); l = (l + r) & M
+    r ^= rol(l, 30); l = (l + r) & M
+    return l, r
+
+
 def michael(key, m):
     l, r = struct.unpack("<2I", key)
     p = m + b"\x5a" + b"\x00" * (4 + (3 - len(m)) % 4)
@@ -231,11 +239,8 @@ STB_EX1 = ["b383fc2eced4a574" * 8,
            "2754f6908cbbbac5d3ed0f522c50815c954135793fb1f5d905fee4736b3bdae2",
            "5c881fd924695cf196c2e4fec20d14b642026f2a0b1716ebaabb7067d4d59752"
            "3d2db69d6d3794622147a14f19a66e7f9037e1d662d34501a8901a5de7771d7c"]
-# Michael's test vectors, each key the previous MIC: written from memory as
-# IEEE 802.11i's (its Annex H.2), NOT checked against a published copy (none
-# could be read; README.md, Specifications), and michael() above was
-# written from the same memory, so their agreement is no independent
-# evidence
+# Michael's test vectors, each key the previous MIC: IEEE Std 802.11-2024,
+# Annex J.2.1.3, Table J-2 (README.md, Specifications)
 # IEEE Std 802.11-2012, M.6.3 (the TKIP test vector), as hostap's
 # BSD-licensed wlantest/test_vectors.c (test_vector_tkip) reproduces its
 # data: TK = 12 34 56 78 90 repeated (32 bytes), a FromDS data frame with
@@ -256,6 +261,11 @@ assert len(TKIP_M63_MSDU) == 92
 MICHAEL_V = [("0000000000000000", b"", "82925c1ca1d130b8"), ("82925c1ca1d130b8", b"M", "434721ca40639b3f"),
              ("434721ca40639b3f", b"Mi", "e8f9becae97e5d29"), ("e8f9becae97e5d29", b"Mic", "90038fc6cf13c1db"),
              ("90038fc6cf13c1db", b"Mich", "d55e100510128986"), ("d55e100510128986", b"Michael", "0a942b124ecaa546")]
+# Michael's block function b: IEEE Std 802.11-2024, Annex J.2.1.2, Table J-1,
+# ((l, r) in, the number of applications, (l, r) out)
+MICHAEL_B = [((0x00000000, 0x00000000), 1, (0x00000000, 0x00000000)), ((0x00000000, 0x00000001), 1, (0xc00015a8, 0xc0000b95)),
+             ((0x00000001, 0x00000000), 1, (0x6b519593, 0x572b8b8a)), ((0x01234567, 0x83659326), 1, (0x441492c2, 0x1d8427ed)),
+             ((0x00000001, 0x00000000), 1000, (0x9f04c4ad, 0x2ec6c2bf))]
 
 
 def check_vectors():
@@ -278,6 +288,10 @@ def check_vectors():
     assert michael(TKIP_M63_KEY, TKIP_M63_INPUT).hex() == TKIP_M63_MIC
     for k, m, v in MICHAEL_V:
         assert michael(bytes.fromhex(k), m).hex() == v, ("michael", m)
+    for x, n, v in MICHAEL_B:
+        for _ in range(n):
+            x = michael_b(*x)
+        assert x == v, ("michael_b", n)
     # the models Python can check: against hashlib, on a few lengths around
     # the block boundaries
     for n in [0, 1, 55, 56, 63, 64, 65, 119, 120, 128, 200]:

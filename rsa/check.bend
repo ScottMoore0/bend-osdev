@@ -70,6 +70,34 @@ def rn(r: Result<&2, &2, R.RsaError, N.BnNat>) -> String:
     case Done{x}:
       N.BnNat.hex(x)
 
+# a public key form read: n and e in hex and whether the form written for
+# the key is the form read, or the error
+def kf.go(r: Result<&2, &2, R.RsaError, R.RsaPublic>, +o: B.Octets) -> String:
+  match r:
+    case Fail{e}:
+      err(e)
+    case Done{pk}:
+      match pk:
+        case R.RsaPublic{+n, +e}:
+          N.BnNat.hex(n) ++ "," ++ N.BnNat.hex(e) ++ " " ++ bs(B.Octets.is_eq(K.RsaKeys.public_to(R.RsaPublic{n, e}), o))
+
+def kf(xs: List<&2, U32>) -> String:
+  +o = B.Octets.of_list(xs)
+  kf.go(K.RsaKeys.public_of(o), o)
+
+# a private key form read: whether the form written for the key is the form
+# read, or the error
+def kfp.go(r: Result<&2, &2, R.RsaError, R.RsaPrivate>, +o: B.Octets) -> String:
+  match r:
+    case Fail{e}:
+      err(e)
+    case Done{sk}:
+      bs(B.Octets.is_eq(K.RsaKeys.private_to(sk), o))
+
+def kfp(xs: List<&2, U32>) -> String:
+  +o = B.Octets.of_list(xs)
+  kfp.go(K.RsaKeys.private_of(o), o)
+
 def key() -> R.RsaPrivate:
   Result.default(&2, &2, R.RsaError, R.RsaPrivate, R.Rsa.private_of(h("bebc4488b9017a5755bb005e5602d69bf6d9b6a053d0651506108c24944d9085c9eb9b6119fd851fccff9933ec2cb891c7c43ad378202f7b574adb47d6bc9105d340c0380ac2cd76bed6ac4832b4905998f986bd5e5c405ea155bed99adb15f48df25eb8401d3bdf78a869d50d249cf5ac63cb022441ed589552123181032b5b57be10d5aaa136900bb16372842d95f93be5d919bfda1b4c7aafa2647ac38878a2debaefa956fa8d1a4dea1ddae9dd05c75ddad277f27dc4469af2cf91b411bd3d56d144ad92419bc57a7fbacdb5d28e72f71cafbdb598d6b79238a4c648b919e2badea3774ffc3536f0ee84012b12ef9df258eb69fc37cca7c54a25a9f7d9ff"), h("10001"), h("4b39473240fcd33a54866f0bc59252ffa9e88d7d47f0fd9cc00a90aaf08e72bc413999cb3f0bdc900132a1427817df2727893dc61f2f5a6aa3afd331cf000996298df501654514f18b2c713ffc377862cdd14391b6005e26b42c741bb0564d9f68c8391123c023d7ebe747ee0dc3eddf7a80d514e025dc2cbe9f62ab817d35809e07285c1d2259ce45f75a28b680e223c7c1f416a03ca071e0aa29ae656b8d4a3e229b3686102fa33a6d3b64136a7aac67085980372e941d45891ad19a7146e7314e0875c49038ebee903191b6bce5d6cc91a9c1236f4bcd6bab60796e19cdb42c15766ec1dddf42332668ada9033d4677efa6d1417b92a98b7e0ea4eea7ee99"), h("fcc0b70c32ef9edf13afa2206255624b198c73694b59c70db0dae3b5e8b5607d9459c17da623265ba9dccc54bcc16462621f0170a7253ec0b033445a0a12e7f2162a39fda6ac7fb33928895215029622475ebfbb125aca92865ecb922944760807edfc0cb197106d9b2e08fb9f076896d58c250680251b582507897ad1a26995"), h("c12f950ae4313639b6321159192ea1ac1d5c297e88933851d5639ce982c5f4a86dffecb4fbcbfbdb35e6ee7302b28edae7227f5349f9841bdde439ed272be1a2951765d399b37f5e6d0a6be57c11ab4bbaae1490f09007a2bc3b4251319c511d4e6b1f89e74d53ef1f8396d24da0d32f89e4215304a22ba5b96d74baeabf5843")), R.RsaPrivate{N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero(), N.BnNat.zero()})
 
@@ -104,6 +132,8 @@ def main() -> IO(Unit):
     IO.print("pkcs1 v1.5 encryption " ++ ro(Result.bind(&2, &2, R.RsaError, B.Octets, B.Octets, E.RsaEs15.encrypt(pk, m, ps), x => E.RsaEs15.decrypt(sk, x))))
     IO.print("crt " ++ rn(R.Rsa.dp(sk, c)) ++ " plain " ++ rn(R.Rsa.dp_plain(sk, c)))
     IO.print("key form " ++ bs(B.Octets.is_eq(K.RsaKeys.private_to(Result.default(&2, &2, R.RsaError, R.RsaPrivate, K.RsaKeys.private_of(K.RsaKeys.private_to(sk)), key())), K.RsaKeys.private_to(sk))) ++ " " ++ pkv(K.RsaKeys.public_of(K.RsaKeys.public_to(pk)), m, sig_pkcs1()))
+    IO.print("short forms: " ++ kf([0, 0, 0, 1, 197, 0, 0, 0, 1, 3]) ++ "; leading zero in n " ++ kf([0, 0, 0, 2, 0, 197, 0, 0, 0, 1, 3]) ++ ", in e " ++ kf([0, 0, 0, 1, 197, 0, 0, 0, 2, 0, 3]) ++ "; n = 0 as no bytes " ++ kf([0, 0, 0, 0, 0, 0, 0, 1, 3]) ++ ", as a byte " ++ kf([0, 0, 0, 1, 0, 0, 0, 0, 1, 3]))
+    IO.print("private short form " ++ kfp([0, 0, 0, 1, 55, 0, 0, 0, 1, 3, 0, 0, 0, 1, 7, 0, 0, 0, 1, 5, 0, 0, 0, 1, 11]) ++ ", leading zero in d " ++ kfp([0, 0, 0, 1, 55, 0, 0, 0, 1, 3, 0, 0, 0, 2, 0, 7, 0, 0, 0, 1, 5, 0, 0, 0, 1, 11]))
     IO.print("refused " ++ ro(R.Rsa.dp_octets(sk, B.Octets.zeros(257n))) ++ " " ++ eqo(P.RsaPkcs1.sign(~sha256, P.RsaDigestInfo.sha256(), sk, m), B.Octets.empty()))
 #|modulus bits 2048, k 256
 #|pkcs1 sign is cryptography's yes
@@ -114,4 +144,6 @@ def main() -> IO(Unit):
 #|pkcs1 v1.5 encryption abc
 #|crt 8cc913ef5a06ee5b8cb1d53b7e4e704ea7efd317d00428e6de7e62f8bd0ffdec6781ef3cd4575adf71968de27ff0e12866e91305b6b36dc39992593005be23f0ee42e81b5f98bfd2cb3f7dc82cc6d6ef68ee33115bcce2f1d34b6033a053c9f0a170e75e42db969cac9719867e7826729eb8a82d9c2d10af37ca06563714030d3f054cfc481f96438945090f0d06f79d405e1f004f3ef38cfe97deb3a7da3585185c6ca3c4d1b125d14ff9af925c3642e5bf33d37977049b5b4ef932708bf658316ee5ee8df037ea62a70b8f629eaf20a193e86d7ad4531bf340a601785b6ebeee37e74396487a94a4a9469b862c765b40c2c70bd2940231b60cfe071223a0cf plain 8cc913ef5a06ee5b8cb1d53b7e4e704ea7efd317d00428e6de7e62f8bd0ffdec6781ef3cd4575adf71968de27ff0e12866e91305b6b36dc39992593005be23f0ee42e81b5f98bfd2cb3f7dc82cc6d6ef68ee33115bcce2f1d34b6033a053c9f0a170e75e42db969cac9719867e7826729eb8a82d9c2d10af37ca06563714030d3f054cfc481f96438945090f0d06f79d405e1f004f3ef38cfe97deb3a7da3585185c6ca3c4d1b125d14ff9af925c3642e5bf33d37977049b5b4ef932708bf658316ee5ee8df037ea62a70b8f629eaf20a193e86d7ad4531bf340a601785b6ebeee37e74396487a94a4a9469b862c765b40c2c70bd2940231b60cfe071223a0cf
 #|key form yes yes
+#|short forms: c5,3 yes; leading zero in n bad-format, in e bad-format; n = 0 as no bytes bad-key, as a byte bad-format
+#|private short form yes, leading zero in d bad-format
 #|refused out-of-range no

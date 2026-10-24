@@ -13,8 +13,13 @@
 #     function), and EMSA-PSS's verification accepts every encoding
 #     (pss_round_trip, for every hash of a fixed length and every mask
 #     generation function);
-#   * the keys' raw forms read back as the checked keys of their integers,
-#     for every key whose integers read back from their shortest bytes and
+#   * the keys' raw forms: every form the reader accepts is the form the
+#     writer writes for the key it read, and so is read again as that key,
+#     for every byte string (public_form_read_write, private_form_read_write,
+#     public_form_write_read, private_form_write_read: the reader takes an
+#     integer only in its shortest form, the writer's); and the forms
+#     written for keys read back as the checked keys of their integers, for
+#     every key whose integers read back from their shortest bytes and
 #     whose byte counts fit the forms' length field
 #     (public_form_round_trip_if, private_form_round_trip_if: conditional
 #     laws; the hypotheses are bignum's and a 32-bit bound, README.md).
@@ -174,6 +179,27 @@ law private_form_round_trip_if:
   for lp: {U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(p)))) == B.Octets.len(N.BnNat.to_octets_min(p)) : Nat}
   for lq: {U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(q)))) == B.Octets.len(N.BnNat.to_octets_min(q)) : Nat}
   {K.RsaKeys.private_of(K.RsaKeys.private_to(R.RsaPrivate{n, e, d, p, q, dp, dq, qinv})) == R.Rsa.private_of(n, e, d, p, q) : Result<&2, &2, R.RsaError, R.RsaPrivate>}
+
+# Every form the reader accepts is the form the writer writes for the key
+# it reads, for every byte string (where the reader refuses, both sides
+# refuse alike): the reader takes each integer only as the writer writes
+# it, its length and then its shortest bytes (keys.bend)
+law public_form_read_write:
+  for +o: B.Octets
+  {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), K.RsaKeys.public_of(o)) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, K.RsaKeys.public_of(o)) : Result<&2, &2, R.RsaError, B.Octets>}
+
+law private_form_read_write:
+  for +o: B.Octets
+  {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), K.RsaKeys.private_of(o)) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, K.RsaKeys.private_of(o)) : Result<&2, &2, R.RsaError, B.Octets>}
+
+# and so the form written for a key the reader read is read as that key
+law public_form_write_read:
+  for +o: B.Octets
+  {Result.bind(&2, &2, R.RsaError, R.RsaPublic, R.RsaPublic, K.RsaKeys.public_of(o), pk => K.RsaKeys.public_of(K.RsaKeys.public_to(pk))) == K.RsaKeys.public_of(o) : Result<&2, &2, R.RsaError, R.RsaPublic>}
+
+law private_form_write_read:
+  for +o: B.Octets
+  {Result.bind(&2, &2, R.RsaError, R.RsaPrivate, R.RsaPrivate, K.RsaKeys.private_of(o), sk => K.RsaKeys.private_of(K.RsaKeys.private_to(sk))) == K.RsaKeys.private_of(o) : Result<&2, &2, R.RsaError, R.RsaPrivate>}
 
 # Small-parameter exhaustive laws
 

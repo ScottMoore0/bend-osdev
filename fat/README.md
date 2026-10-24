@@ -121,6 +121,7 @@ the result):
 | `wdir.bend` | directories for writing: reading one with where its entries are and which are free, finding, placing a run of new entries, writing and erasing entries |
 | `write.bend` | the writer: `FatW`, opening a volume for writing, the operations by path, and the flush of FAT sectors and FSInfo |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`PROOF.bend` is written by `gen/genproof.py`: `python3 fat/gen/genproof.py`) |
+| `LAWS_alias.bend`, `PROOF_alias.bend` | where the numeric tail's search starts (`first_tail_least`), and its proof (imports only `alias.bend`) |
 | `check.bend` | a runnable check: reading a FAT12 image built with the record writers, and a volume formatted, written and read back |
 | `ref/gen.py`, `ref/harness.bend` | the reader's differential test (`gen.py` writes `ref/cases-NN.bend` and `ref/expected.txt`) |
 | `ref/wgen.py`, `ref/wharness.bend` | the writer's differential test (`wgen.py` writes `ref/wcases.bend` and `ref/wexpected.txt`, and checks the images afterwards) |
@@ -218,6 +219,7 @@ a device error) has written nothing, and the caller keeps the state it had.
 | `FatAlias.check(s)` | a path component as the name stored for it (trimmed), or `FatBadName` (empty, a character a long name cannot hold, more than 255 UCS-2 units) |
 | `FatAlias{short, nt, long}`, `FatAlias.make(nt_case, name, taken)` | what is stored for a new name among entries whose short names are `taken`: the short name, the `DIR_NTRes` case flags, the long name's units (none when the short name shows it) |
 | `FatBasis{base, ext, lossy}`, `FatAlias.basis(xs)`, `FatAlias.with_tail(base, ext, n)`, `FatAlias.taken(s, xs)` | the basis name of a name's code points; a short name with tail `~n`; whether a short name is taken |
+| `FatAlias.first_tail(base, ext, taken)` | where the search for a free tail starts: the smallest n from 1 that no taken name has as its tail (`LAWS_alias.bend`: every tail below it is taken) |
 | `FatAlias.trim`, `FatAlias.codes`, `FatAlias.text`, `FatAlias.long_char` | names as code points |
 
 ### wdir.bend
@@ -411,9 +413,20 @@ formatting's `FatFormatBadType{clusters}` and `FatFormatBadParam`.
 These last two hold by construction: `FatAlias.make` checks a candidate
 against the directory's names before it answers it, and `FatFormat.layout`
 runs the reader's checks on its BPB before it answers it; the laws say that
-no path through the code skips the check. That the tail chosen is the
-smallest free one (`FatAlias.first_tail` starts the search there) is not a
-law: the differential test holds it to the model's search from 1.
+no path through the code skips the check.
+
+`LAWS_alias.bend`, 1 law, for every basis name and list of taken names:
+`first_tail_least`, every tail from 1 below `FatAlias.first_tail`'s answer
+is taken (its short name `with_tail(base, ext, k)` is one of the taken
+names). `make`'s search for a free tail starts at `first_tail` and tries
+each tail after it in turn, taking the first free one, so with this law the
+tail chosen is the smallest free one. Proved through `first_tail`'s three
+steps: each tail read back from a taken name names a taken name
+(`tail_of` compares the name it reads with the name of that tail), sorting
+keeps every element (an induction over Base's merge sort: its runs, passes
+and merges), and every number from 1 below the smallest one missing from a
+list is in the list. The differential test still compares the tail chosen
+with the model's search from 1.
 
 The allocation laws are proved through two phases that are the code's own:
 the first takes each cluster as it finds it and marks it the end of a chain
@@ -593,7 +606,8 @@ chains in its map.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (78 laws: 31 for every input,
-47 witnesses and vectors), `--verdict` ALL PROOFS CHECK, `check.bend`
+47 witnesses and vectors), `PROOF_alias.bend` ALL PROOFS CHECK (1 law),
+`--verdict` ALL PROOFS CHECK for both, `check.bend`
 passes (68 results), `ref/run.sh` matches (reading: 956 cases on 39 images
 in 8 case files, each built natively; writing: 1537 results in 11 cases
 against the model, and 173 image checks: every image byte for byte the

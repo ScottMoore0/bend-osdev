@@ -17,6 +17,8 @@ belong to the caller (`Uuid.make` builds one from its bytes).
 | `uuid.bend` | the package: the `Uuid` type, bytes, the GUID layout, text, version and variant |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `gen/genproof.py` | writes `PROOF.bend` (its bit-split patterns are long): `python3 uuid/gen/genproof.py` |
+| `LAWS_parse.bend`, `PROOF_parse.bend` | the text round trip from the text, and its proof |
+| `gen/genparse.py` | writes `PROOF_parse.bend` (its case trees on a character's bits are long): `python3 uuid/gen/genparse.py`; `--check` fails if the file differs |
 | `check.bend` | a runnable check of the RFC's examples |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's `uuid` module (`gen.py` writes `ref/cases.bend` and `ref/expected.txt`, which `ref/.gitignore` lists) |
 
@@ -91,9 +93,17 @@ its law `octets_to_of` and `mask`.
   System Partition type GUID in the GUID layout); and malformed text and
   bytes, with the failure each gives.
 
-Not proved: that every string `parse` accepts is written back by `show` as
-its lower-case form. The text round trip is proved in the direction that
-starts from a UUID.
+`LAWS_parse.bend`:
+
+* `text_parse_show`: **for every string** `s` that `parse` accepts,
+  `show(parse(s))` is `String.to_lower(s)`: the dashes and decimal digits as
+  they are, the hex letters in lower case. So `parse` and `show` are inverse
+  on the lower-case text form. Proved from a case analysis on the 32 bits of
+  a character (most significant first, stopping where `parse`'s comparisons
+  already fail): a hex digit's value is shown back as the digit in lower
+  case, and a dash is a dash; then by induction over the digits read two at
+  a time, the 16 octets read (each split into its bits) giving back the
+  `Uuid`'s octets, and the four dash positions.
 
 The byte round trips convert a list to `Octets` and back through bytes'
 interface law `octets_to_of`, so no proof depends on how `Octets` stores its
@@ -109,7 +119,8 @@ version field and the variant.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
+Bend 2.0.37: `PROOF.bend` and `PROOF_parse.bend` ALL PROOFS CHECK, `--verdict`
+ALL PROOFS CHECK (`PROOF_parse.bend` under `--verdict`: 0.2 GB peak),
 `check.bend` passes and `ref/run.sh` 112 cases match, both as native binaries
 (`VERDICT=1 scripts/check.sh uuid`: no JavaScript-lane fallback);
 `scripts/deps.sh uuid` ok. Native sizes: `check.bend` builds in 2 s

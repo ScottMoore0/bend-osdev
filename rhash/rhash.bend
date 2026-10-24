@@ -195,6 +195,19 @@ def rh.pow2(n: Nat) -> Nat:
     case 1n+p:
       Nat.double(rh.pow2(p))
 
+# The most a bucket array's log can be: 31, so at most 2^31 buckets (the
+# kernel's max_size). A representation bound, not a policy choice: the
+# migration cursor is a U32 that wraps through the mask 2^log - 1, itself a
+# U32, and a bucket's path is the low log bits of a 32-bit hash; with a log
+# of 32 or more the mask and the paths go wrong. Every size the table takes
+# (RhParams' init_log and max_log, and an explicit resize) is clamped to it.
+def RHash.log_limit() -> Nat:
+  31n
+
+# a log clamped to RHash.log_limit()
+def rh.clamp(+log: Nat) -> Nat:
+  Nat.min(log, RHash.log_limit())
+
 # ---------------------------------------------------------------- trees
 
 # a complete tree of 2^n empty buckets
@@ -473,7 +486,8 @@ def rh.idle(~K: Data, ~V: Data, t: RHash<K, V>) -> Bool:
 def rh.start(~K: Data, ~V: Data, +t: RHash<K, V>, log: Nat, seed: U32) -> RHash<K, V>:
   rh.start.go(~K, ~V, rh.idle(~K, ~V, t), t, log, seed)
 
-# the size the policy asks for, if it asks for one
+# the size the policy asks for, if it asks for one (growth stops at
+# max_log, and at RHash.log_limit() whatever max_log says)
 def rh.want.go(grow: Bool, shrink: Bool, +log: Nat) -> Maybe<&2, Nat>:
   match grow:
     case True{}:
@@ -488,7 +502,7 @@ def rh.want.go(grow: Bool, shrink: Bool, +log: Nat) -> Maybe<&2, Nat>:
 def rh.want(p: RhParams, +n: Nat, +log: Nat) -> Maybe<&2, Nat>:
   match p:
     case RhParams{gp, sp, auto, minl, maxl, il, st, s0, ss}:
-      rh.want.go(Bool.and(Nat.is_lt(log, maxl), Nat.is_lt(Nat.mul(gp, rh.pow2(log)), Nat.mul(n, 100n))), Bool.and(auto, Bool.and(Nat.is_lt(minl, log), Nat.is_lt(Nat.mul(n, 100n), Nat.mul(sp, rh.pow2(log))))), log)
+      rh.want.go(Bool.and(Nat.is_lt(log, rh.clamp(maxl)), Nat.is_lt(Nat.mul(gp, rh.pow2(log)), Nat.mul(n, 100n))), Bool.and(auto, Bool.and(Nat.is_lt(minl, log), Nat.is_lt(Nat.mul(n, 100n), Nat.mul(sp, rh.pow2(log))))), log)
 
 def rh.auto.go(~K: Data, ~V: Data, w: Maybe<&2, Nat>, +t: RHash<K, V>, seed: U32) -> RHash<K, V>:
   match w:
@@ -530,11 +544,12 @@ def rh.old_log(~K: Data, ~V: Data, t: RHash<K, V>) -> Nat:
 
 # ---------------------------------------------------------------- the interface
 
-# an empty table with a policy
+# an empty table with a policy (2^init_log buckets, init_log clamped to
+# RHash.log_limit())
 def RHash.new(~K: Data, ~V: Data, +p: RhParams) -> RHash<K, V>:
   match p:
     case RhParams{gp, sp, auto, minl, maxl, +il, st, +s0, ss}:
-      RHash{RhParams{gp, sp, auto, minl, maxl, il, st, s0, ss}, 0n, RhTab.empty(~K, ~V, il, s0), RhTab{0n, s0, RhLeaf{Nil{}}}, 0}
+      RHash{RhParams{gp, sp, auto, minl, maxl, il, st, s0, ss}, 0n, RhTab.empty(~K, ~V, rh.clamp(il), s0), RhTab{0n, s0, RhLeaf{Nil{}}}, 0}
 
 # the value of a key, if it is present
 def RHash.lookup(~K: Data, ~V: Data, ~kenc: K -> List<&2, U32>, ~hash: U32 -> List<&2, U32> -> U32, t: RHash<K, V>, k: K) -> Maybe<&2, V>:
@@ -584,11 +599,11 @@ def RHash.log(~K: Data, ~V: Data, t: RHash<K, V>) -> Nat:
 def RHash.drain(~K: Data, ~V: Data, ~hash: U32 -> List<&2, U32> -> U32, +t: RHash<K, V>) -> RHash<K, V>:
   rh.steps(~K, ~V, ~hash, rh.pow2(rh.old_log(~K, ~V, t)), t)
 
-# an explicit resize to 2^log buckets with a seed: any resize under way is
-# finished first, and then the new one starts (its steps follow later
-# operations, or RHash.step)
+# an explicit resize to 2^min(log, RHash.log_limit()) buckets with a seed: any resize under
+# way is finished first, and then the new one starts (its steps follow
+# later operations, or RHash.step)
 def RHash.resize(~K: Data, ~V: Data, ~hash: U32 -> List<&2, U32> -> U32, t: RHash<K, V>, log: Nat, seed: U32) -> RHash<K, V>:
-  rh.start(~K, ~V, RHash.drain(~K, ~V, ~hash, t), log, seed)
+  rh.start(~K, ~V, RHash.drain(~K, ~V, ~hash, t), rh.clamp(log), seed)
 
 # one operation
 def RHash.apply(~K: Data, ~V: Data, ~kenc: K -> List<&2, U32>, ~hash: U32 -> List<&2, U32> -> U32, t: RHash<K, V>, op: RhOp<K, V>) -> RHash<K, V>:

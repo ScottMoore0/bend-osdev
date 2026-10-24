@@ -166,6 +166,7 @@ and `Sha3State`), and adds SHAKE256's padding and squeezing.
 | `xdrbg.bend` | the XDRBG conditioner over any XOF, and its parameters |
 | `xdrbg256.bend` | the core with XDRBG-256 over SHAKE256 filled in |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_constant.bend`, `PROOF_constant.bend` | a constant source fails the RCT: the laws and their proofs (imports only the core, not the conditioners) |
 | `check.bend` | examples, with their expected output |
 | `ref/model.py`, `ref/gen.py`, `ref/run.sh` | the model from the documents, and the differential test |
 | `ref/model_xdrbg.py`, `ref/gen_xdrbg.py` | the XDRBG model (on model.py), and the SHAKE256 and XDRBG differential tests |
@@ -277,6 +278,18 @@ loop; 1 is the memory access loop's and 3 both.
   two); vectors `shake256_empty` (the first 32 bytes for the empty message)
   and `shake256_empty_second_block` (its bytes 136 to 143, from the second
   block squeezed), from NIST's example.
+* **A constant source fails the RCT** (`LAWS_constant.bend`, 3 laws):
+  `core_constant_fails` (for every conditioner) and `constant_fails` (with
+  a hash as the conditioner): for every parameter set under which a block
+  needs two or more counted deltas and the RCT's cutoff C is at least 2 and
+  no more than the APT's window and cutoff, every delta d, and m >= C,
+  generating one or more bytes from m copies of d fails with
+  `JitRctFailure`, never `JitNeedMore`. The deltas after the first are stuck
+  so no block comes, the RCT counts the run and trips at the C-th copy, and
+  the APT (in its first window, below its cutoff) has not failed before it.
+  `constant_fails_default`: under the default parameters (C = 91), any 91
+  or more copies; jitterclock's `stopped_clock` composes it with the read's
+  budget.
 * **XDRBG-256 over SHAKE256, for every parameter set, state and delta
   list:** `xdrbg_absorb_append` (the same deltas give the same state
   however they arrive), `xdrbg_block_append` (and so the same block),
@@ -288,10 +301,11 @@ this code), the digest values (crypto's SHA3-256 laws and tests stand for
 them), SHAKE256 in pieces equalling SHAKE256 whole (the absorbing is
 bend-collections-laws-crypto's streaming SHA-3 absorb, whose laws are
 stated for SHA3-256's digest; the tests feed SHAKE256 in pieces), the
-XDRBG's values (the tests stand for them: the documents give none), and
-that a constant source makes `read` fail rather than run out of deltas (it
-does: `stuck_source` and `block_refused` say no block comes; the tests
-show the RCT failing).
+and the XDRBG's values (the tests stand for them: the documents give none).
+That a constant source fails is stated under the conditions above; for
+parameters outside them (an RCT cutoff above the APT's window or cutoff),
+the APT can fail first, and the read then fails with `JitAptFailure`, which
+no law states.
 
 ## Tests
 
@@ -347,6 +361,7 @@ permutation and sponge under `shake.bend`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
+Bend 2.0.37: `PROOF.bend` and `PROOF_constant.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK (`PROOF_constant.bend`: 0.2 GB peak),
 `check.bend` passes, `ref/run.sh` 19 cases (SHA3-256), 72 SHAKE256 reads
 and 18 XDRBG cases match, `scripts/deps.sh` passes.
