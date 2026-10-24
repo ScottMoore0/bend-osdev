@@ -100,6 +100,7 @@ what blockdev's pure helpers answer, for every device and range.
 | `fileov.bend` | `FileOv.*`: an `IOOverlay` on a `FileDev`, its operations named |
 | `filerw.bend` | `FileRW`: an image file read and written in place, of any size, on file effects passed as template arguments; the Base-only defaults `FileRW.base_*` |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`IOP.` lemmas) |
+| `LAWS_write.bend`, `PROOF_write.bend` | the laws of `fold_blocks`, and of the reads and writes on `IOMem` (`IWP.` lemmas), checked in a process of their own |
 | `check.bend` | a runnable check of every file (it writes two files in `/tmp`) |
 | `ref/` | the differential tests (`gen.py`, `run.sh`, `cases.bend`, and `big.bend` over 4 GiB) and the size measurement (`measure.sh`, `measure.bend`, `measure_rw.bend`); they import bend-osdev-fileio for `FileRW`'s effects |
 
@@ -247,18 +248,22 @@ the device is made.
 
 ## Laws
 
-`LAWS.bend`. A law about an IO
-action states what the action gives a continuation `k`, for every `R` and
-`k`: the action run as `m(R, k)`. Effects themselves (`FileDev`, and
-`FileRW` on any effects) are tested, not proved.
+`LAWS.bend` and `LAWS_write.bend` (each proof file checked in its own
+process). A law about an IO action states what the action gives a
+continuation `k`, for every `R` and `k`: the action run as `m(R, k)`.
+Effects themselves (`FileDev`, and `FileRW` on any effects) are tested,
+not proved.
 
 **Block arithmetic, for every block size `1 + bp`, offset and length:**
 `span_start` (`first * bs + skip == off`), `span_skip` (`skip < bs`),
 `span_cover` (`count * bs == skip + len + slack`), `span_slack`
 (`slack < bs`), `span_in_block` (an offset `n * bs + i`, `i < bs`, is in
 block `n`, `i` bytes in), `blocks_cover` (`blocks(bs, size) * bs` is `size`
-plus less than a block). Proved from Base's definitions of `Nat.divmod` (the
-division lemmas are ext2's).
+plus less than a block), `span_within` (a range inside the first `n` blocks,
+`off + len <= n * bs`, has its span inside them: `first + count <= n`) and
+`span_past` (a range that passes their end has a span that does too).
+Proved from Base's definitions of `Nat.divmod` (the division lemmas are
+ext2's).
 
 **The adapters, for every pure device (`~D: Data` and its operations),
 continuation, device and range:** `io_read_blocks` and `io_read_bytes`: the
@@ -266,11 +271,13 @@ IO helpers on the lifted device perform no effect, hand back the device
 unchanged and answer what blockdev's `Dev.read_blocks` and `Dev.read_bytes`
 answer; `io_mem_write_ok`: a good write through `IOMem` is
 `MemDev.update` (from blockdev's `own_write_ok`). With blockdev's own laws,
-the owned helpers answer the same. blockdev has no law that says what
-`Dev.read_blocks` and `Dev.read_bytes` compute for every input, so these two
-proofs follow those public defs' definitions (they name no internal helper);
-a change to how blockdev computes them, even one that keeps their answers,
-would need the proofs redone (`io_mem_write_ok` uses blockdev's law only).
+the owned helpers answer the same, and blockdev's `LAWS_range.bend` says
+what `Dev.read_blocks` and `Dev.read_bytes` compute (`read_bytes_image`, and
+on a valid `MemDev` `read_blocks_mem` and `read_bytes_mem`). These two
+proofs follow those public defs' definitions (they name no internal
+helper); a change to how blockdev computes them, even one that keeps their
+answers, would need the proofs redone (`io_mem_write_ok` uses blockdev's
+law only).
 
 **The overlay:** `ov_read_put`, for every device below (any `Type`, any
 read): reading block `n` after a write of `n` that succeeded answers what was
@@ -285,8 +292,56 @@ the end on `IOMem` and across blocks on `IOImg`; `write_bytes` then a read
 back on `IOMem`; the same on an `IOOverlay` over a `MemDev`, and the device
 below unchanged.
 
-`write_bytes`, `fold_blocks` and `write_blocks` are covered by vectors and
-the differential test, not by laws for every input.
+**Streaming and writing (`LAWS_write.bend`):**
+
+* `io_fold_blocks`, for every pure device, step, accumulator,
+  continuation and range: `IODev.fold_blocks` performs no effect, hands the
+  device back, and answers the step folded, in order, over the blocks
+  blockdev's `Dev.read_list` reads (`fold_list`, defined in the law file),
+  or the first failed read;
+* `io_mem_read_blocks`, `io_mem_read_bytes`: the same as `io_read_blocks`
+  and `io_read_bytes` for `IOMem`'s own operations (`IOMem.read_block`,
+  `IOMem.block_size`), which the kernel cannot identify with the lifted
+  pure ones (no eta rule), so that the laws below compose with them;
+* on `IOMem`, for every valid `MemDev` and continuation (`outcome`,
+  `shape` and `failed`, defined in the law file, are what the laws look at:
+  a write's answer and the device's image; whether the device is valid,
+  its block size and count; the device and whether the answer failed):
+  * `io_mem_write_blocks`, `io_mem_write_blocks_shape`: `count` blocks of
+    data (`len(data) == count * bs`) written from block `first`, inside the
+    device, succeed, leave the image patched at `first * bs` (blockdev's
+    `Dev.patch`) and the device valid with its block size and count;
+    `io_mem_write_blocks_read`: then reading the same blocks back gives
+    the data;
+  * `io_mem_write_bytes`, `io_mem_write_bytes_shape`: `data` written at
+    `off`, inside the device, succeeds and leaves the image patched at
+    `off`, the device valid with its block size and count, for every length
+    (zero included) and every alignment; `io_mem_write_read`: reading
+    `[off, off + len(data))` back gives `data`; `io_mem_write_before`,
+    `io_mem_write_after`: every range wholly before, or wholly after and
+    inside the device, reads as before the write;
+  * `io_mem_write_past_end`: a nonempty write that passes the end, on
+    blocks of `1 + bp` bytes, fails and hands the device back unchanged
+    (the first block's read fails, or the last block's does, before any
+    write).
+  The proofs follow the read-modify-write over the span: the first and
+  last blocks of the span read as slices of the image (blockdev's
+  `read_block_mem`), the bytes kept around the data are the image's own
+  (`take` of the first, `drop` of the last), the span's blocks are written
+  one `MemDev.update` at a time (`to_octets_update`, `patch_patch`), and
+  patching with the kept bytes is patching the data alone (`patch_keep`);
+  the arithmetic is the span laws above.
+
+**Vectors** (`LAWS_write.bend`): a fold that sums the block lengths, and a
+`write_blocks` read back.
+
+What is not proved: `write_bytes`, `write_blocks` and `fold_blocks` on the
+other devices (`IOImg`, `IOOverlay`, `FileDev`, `FileRW`) are covered by
+vectors and the differential test; the laws above are for `IOMem`
+(`fold_blocks`: every pure device). The same proofs would carry over to a
+device with laws like blockdev's `read_block_mem`, `to_octets_update` and
+`own_write_ok`; `ImgDev` has read-after-write laws (`img_read_write`,
+`img_write_other`) but no image function, so it would need its own.
 
 **A note for the proof kernel.** `--verdict`'s kernel has no eta rule, so
 the code writes each IO continuation it builds out in full
@@ -366,7 +421,8 @@ effects fit them). No other: fileio is imported only by the tests in
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
+Bend 2.0.37: `PROOF.bend` and `PROOF_write.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK (each in its own process),
 `check.bend` passes, `ref/run.sh` 518 operations on 40 image files (43
 saves, 40 files written in place) match and 29 operations on a 5 GiB
 sparse image match, natively and on the JavaScript lane;

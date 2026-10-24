@@ -277,12 +277,20 @@ def main():
         p, d, f = rproc(), rfile(), rfile()
         d = (d[0], d[1], d[2] | (0o1000 if rng.random() < 0.5 else 0), True)
         case("delete %d" % n, "yn(S.Perms.may_delete(%s, %s, %s))" % (bproc(p), bfile(d), bfile(f)), yn(may_delete(p, d, f)))
-    with open(os.path.join(here, "cases.bend"), "w") as f:
-        f.write(PRELUDE)
-        parts = [lines[j:j + 40] for j in range(0, len(lines), 40)]
-        for j, part in enumerate(parts):
-            f.write("\ndef part%d() -> IO(Unit):\n  do IO<Unit>:\n" % j + "\n".join(part) + "\n")
-        f.write("\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % j for j in range(len(parts))) + "\n")
+    # several programs of at most 1000 cases (cases_0.bend, cases_1.bend, ...),
+    # which run.sh runs in order: compiled natively as one program, the 6080
+    # cases took clang past 6 GB
+    for old in os.listdir(here):
+        if old.startswith("cases") and old.endswith(".bend"):
+            os.remove(os.path.join(here, old))
+    for k, j0 in enumerate(range(0, len(lines), 1000)):
+        with open(os.path.join(here, "cases_%d.bend" % k), "w") as f:
+            f.write(PRELUDE)
+            chunk = lines[j0:j0 + 1000]
+            parts = [chunk[j:j + 40] for j in range(0, len(chunk), 40)]
+            for j, part in enumerate(parts):
+                f.write("\ndef part%d() -> IO(Unit):\n  do IO<Unit>:\n" % j + "\n".join(part) + "\n")
+            f.write("\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join("    part%d()" % j for j in range(len(parts))) + "\n")
     with open(os.path.join(here, "expected.txt"), "w") as f:
         f.write("\n".join(expect) + "\n")
     print(len(expect), "cases (%d from the kernel, classes: %s)" % (len(kc), ", ".join(sorted(classes)) or "none"))

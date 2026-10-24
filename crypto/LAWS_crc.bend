@@ -65,6 +65,12 @@ law crc32_hash_length:
   for c: U32
   {B.Octets.len(CR.CrCrc32.final(~spec, c)) == 4n : Nat}
 
+# a CRC-64 digest is 8 bytes, for every parameter set and register
+law crc64_hash_length:
+  for ~spec: C.Crc64Spec
+  for c: W.W64
+  {B.Octets.len(CR.CrCrc64.final(~spec, c)) == 8n : Nat}
+
 # HMAC over CRC-32 (the key "key", the message "The quick brown fox"): the
 # value of Python's hmac module over binascii.crc32 (ref/gen.py checks the
 # same construction on random keys and messages)

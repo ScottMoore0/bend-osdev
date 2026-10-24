@@ -73,6 +73,7 @@ ext2 would take `~write_block` as a fourth template argument.
 | `blockdev.bend` | `DevError`; the pure helpers; the adapters; the owned helpers; `MemDev` |
 | `imgdev.bend` | `ImgDev`, the array image device |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`PROOF.bend` holds every lemma: `BP.` for `MemDev` and the adapters, `IP.` for `ImgDev`) |
+| `LAWS_range.bend`, `PROOF_range.bend` | what the pure helpers read, `Dev.patch`, and `MemDev`'s image (lemmas `BR.`), checked in a process of their own |
 | `check.bend` | a runnable check of every device and helper |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`gen.py` writes `ref/cases.bend` and `ref/expected.txt`, which `ref/.gitignore` lists) |
 
@@ -82,6 +83,9 @@ ext2 would take `~write_block` as a fourth template argument.
 |---|---|
 | `Dev.read_blocks(~D, ~read_block, d, count, first)` | pure: `count` blocks from block `first`, joined |
 | `Dev.read_bytes(~D, ~block_size, ~read_block, d, off, len)` | pure: `len` bytes from byte offset `off`, across block boundaries; a zero-length read always succeeds |
+| `Dev.read_list(~D, ~read_block, d, count, first)` | pure: the same blocks as `read_blocks`, as a list |
+| `Dev.uniform(~D, ~block_size, ~read_block, d, n)` | a specification for the laws: whether blocks 0 to `n - 1` each read as exactly `block_size(d)` bytes |
+| `Dev.patch(off, data, o)` | `o` with the bytes from offset `off` replaced by `data` (what writing `data` at `off` does to an image) |
 | `Dev.own_block_size(~D, ~block_size, d)`, `Dev.own_read_block(~D, ~read_block, d, n)`, `Dev.own_write_block(~D, ~write_block, d, n, data)` | the adapters: a pure device's operations on the owned interface |
 | `ODev.read_blocks(~D, ~read_block, count, d, first)` | owned: the same, the device handed back however the reads end |
 | `ODev.read_bytes(~D, ~block_size, ~read_block, d, off, len)` | owned: the same |
@@ -89,6 +93,7 @@ ext2 would take `~write_block` as a fourth template argument.
 | `MemDev.blank(bs, count)` | `count` zero blocks (O(1): a block never written reads as zeros) |
 | `MemDev.block_size`, `MemDev.read_block` | the pure interface, for `MemDev` |
 | `MemDev.block_count`, `MemDev.to_octets` | the device's size, and its whole image |
+| `MemDev.valid(d)` | a specification for the laws: every block of `d` reads as exactly `block_size(d)` bytes (true of every device `of_octets`, `blank` and `update` build) |
 | `MemDev.write_block(d, n, data)` | block `n` replaced, or why not (`Result`) |
 | `MemDev.update(d, n, data)` | the same, total: the device unchanged on a bad write |
 | `MemDev.own_block_size`, `MemDev.own_read_block`, `MemDev.own_write_block` | `MemDev` on the owned interface |
@@ -132,7 +137,8 @@ perfect array of depth below 32 with room for every block.
   adapters that run every pure and owned device through it (laws tie them
   to the pure helpers), `FileDev` and a write overlay.
 * **Writing filesystems:** `write_block` is part of the owned interface;
-  `ODev` helpers for writing ranges can be added beside the reading ones.
+  `ODev` helpers for writing ranges can be added beside the reading ones,
+  and `Dev.patch` (with its laws) is what such a helper does to an image.
 * **Partitions:** a device wrapping another with an offset and a length is a
   natural next package (iso9660's `IsoFence` is one, for reads).
 * **`MemDev`'s tree and `ImgDev`'s layout** are internal and can change
@@ -181,8 +187,61 @@ then bytes' laws (`octets_to_of`, `octets_of_list_idempotent`,
 `of_octets` padding, a read past the end; `MemDev`'s earlier vectors, a
 blank `MemDev`, and an owned read across blocks.
 
-`Dev.read_bytes` itself is covered by vectors and the differential test, not
-by a law for every input.
+`LAWS_range.bend` (proved in `PROOF_range.bend`, its own check process; the
+division lemmas are iodev's, which has them from ext2's, as blockdev can
+import neither):
+
+**What the pure helpers read, on every pure device** (any `Data` type, any
+`block_size` and `read_block`):
+
+* `read_bytes_image`: when the block size is `1 + bp` and the first `n`
+  blocks each read as a whole block (`Dev.uniform`), reading the bytes
+  `[off, off + len)` of a range inside them (`off + len <= n * (1 + bp)`)
+  is taking that slice of the `n` blocks joined:
+  `Dev.read_bytes(d, off, len) == Result.map(o => slice(off, len, o),
+  Dev.read_blocks(d, n, 0))`, for every `len`, zero included. The proof
+  splits the `n` blocks into those before the span, the span's own
+  (`off / bs` to `off / bs + count - 1`) and those after, with the
+  division lemmas;
+* `read_blocks_list`: `Dev.read_blocks` is `Dev.read_list`'s blocks joined
+  (`Octets.concat`), the first failed read included.
+
+**Patching an image (`Dev.patch`), for every offset and byte string:**
+`patch_len` (a patch inside `o` keeps its length), `patch_slice` (the
+patched range reads back as the data), `patch_before` and `patch_after`
+(every slice wholly before or after the patched range is unchanged),
+`patch_patch` (two adjacent patches are one patch of the data joined), and
+`patch_keep` (patching with the `i` bytes before the data and the `j` after
+it as they already are is patching the data alone: what a read-modify-write
+of whole blocks does). Each needs only that the patch starts inside `o`
+(`patch_len` and `patch_keep`: that it ends inside it).
+
+**`MemDev`, for every device, block number and range:**
+
+* `valid_blank`, `valid_of_octets`, `valid_update`: `blank` and `of_octets`
+  build valid devices, and `update` keeps a device valid (`of_octets`: every
+  block it cuts is a whole block, padded, and the tree it builds holds only
+  those; a block never written reads as `bs` zeros);
+* `read_block_out`: a block past the end fails with `DevOutOfRange{n}`;
+* on a valid device, `to_octets_len` (the image is `count * bs` bytes),
+  `read_block_mem`, `read_blocks_mem` and `read_bytes_mem`: a block, a run of
+  blocks and a byte range inside the device read as the slices of
+  `to_octets(d)` they name (`read_bytes_mem` from `read_bytes_image`, for
+  every block size, `0` included);
+* `read_bytes_past_end`: a nonempty byte range that passes the end, on
+  blocks of `1 + bp` bytes, fails with `DevOutOfRange` of the first block it
+  needs past the end, `max(off / (1 + bp), count)` (valid or not);
+* `to_octets_update`: on a valid device, a good write of block `n` (one
+  whole block, `n` in range) patches `to_octets(d)` at `n * bs`.
+
+**Vectors:** the 3-block device is valid; a patch; a read past the end
+fails with block 3.
+
+So a read is now pinned down for every input: inside a valid `MemDev` it
+answers a slice of the image, and past its end it fails, with the block
+named. Devices that are not valid (built by hand from `MemDev`'s internal
+constructors with blocks of the wrong length) are outside these laws; the
+public defs build only valid ones.
 
 ## Tests
 
@@ -216,8 +275,8 @@ proofs). No other.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 140 cases match (60 pure reads on `MemDev`,
+Bend 2.0.37: `PROOF.bend` and `PROOF_range.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK (each in its own process), `check.bend` passes, `ref/run.sh` 140 cases match (60 pure reads on `MemDev`,
 40 owned reads on `ImgDev`, 40 `ImgDev` write sequences),
 `scripts/deps.sh blockdev` ok. The 64 MB `ImgDev` and 2 MB `MemDev` runs
 above were measured separately, natively.

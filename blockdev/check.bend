@@ -32,6 +32,20 @@ def owned(r: D.MemDev & Result<&2, &2, D.DevError, B.Octets>) -> String:
   (d, x) = r
   show(x)
 
+def valid(b: Bool) -> String:
+  match b:
+    case True{}:
+      "valid"
+    case False{}:
+      "not valid"
+
+def blocks(r: Result<&2, &2, D.DevError, List<&2, B.Octets>>) -> String:
+  match r:
+    case Done{+xs}:
+      Nat.show(List.length(&2, B.Octets, xs)) ++ " blocks: " ++ B.Octets.hex(B.Octets.concat(xs))
+    case Fail{e}:
+      "error"
+
 def main() -> IO(Unit):
   do IO<Unit>:
     IO.print(Nat.show(D.MemDev.block_count(dev())))
@@ -48,6 +62,9 @@ def main() -> IO(Unit):
     IO.print(ishow(I.ImgDev.read_block(iwrite(I.ImgDev.write_block(I.ImgDev.blank(1n, 4n), 0n, B.Octets.of_string("xyz"))), 0n)))
     IO.print(ishow(D.ODev.read_bytes(~I.ImgDev, ~I.ImgDev.block_size, ~I.ImgDev.read_block, I.ImgDev.of_octets(1n, B.Octets.of_string("abcdefghij")), 3n, 6n)))
     IO.print(B.Octets.to_string(B.Octets.take(10n, D.MemDev.to_octets(I.ImgDev.freeze(I.ImgDev.of_octets(2n, B.Octets.of_string("abcdefghij")))))))
+    IO.print(valid(D.MemDev.valid(D.MemDev.update(dev(), 1n, B.Octets.of_string("EFGH")))))
+    IO.print(blocks(D.Dev.read_list(~D.MemDev, ~D.MemDev.read_block, dev(), 2n, 1n)))
+    IO.print(B.Octets.to_string(D.Dev.patch(3n, B.Octets.of_string("XYZ"), B.Octets.of_string("abcdefgh"))))
 
 #|3
 #|ok 696a0000
@@ -63,3 +80,6 @@ def main() -> IO(Unit):
 #|ok 00000000
 #|ok 646566676869
 #|abcdefghij
+#|valid
+#|2 blocks: 65666768696a0000
+#|abcXYZgh

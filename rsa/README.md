@@ -93,7 +93,7 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
 
 ## Laws
 
-`LAWS.bend` has 7 laws, all proved (`PROOF.bend`) and all accepted by
+`LAWS.bend` has 9 laws, all proved (`PROOF.bend`) and all accepted by
 `--verdict`.
 
 * **For every input:**
@@ -110,7 +110,19 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
     M and M');
   * `pkcs1_sign_verify_if`: an RSASSA-PKCS1-v1_5 signature verifies, for
     every hash, prefix, key and message, wherever the encoding succeeds and
-    RSAVP1 undoes RSASP1 on the encoded message (hypotheses).
+    RSAVP1 undoes RSASP1 on the encoded message (hypotheses);
+  * `public_form_round_trip_if`, `private_form_round_trip_if`: the keys'
+    raw forms (`keys.bend`) read back: the form of `RsaPublic{n, e}` is
+    read as `Rsa.public_of(n, e)`, and the form of a private key as
+    `Rsa.private_of(n, e, d, p, q)` (the key checked and its CRT values
+    recomputed, whatever dP, dQ and qInv it held), for every key whose
+    integers each read back from their shortest big-endian bytes
+    (hypotheses `hn`, `he`, ...: `BnNat.of_octets(BnNat.to_octets_min(x))`
+    is x) and whose byte counts fit the four-byte length field (`ln`,
+    `le`, ...: `U32.from_nat` of each count is exact). Each field is read
+    back from bytes' laws: the length at offset 0 of the joined bytes,
+    then the integer's bytes and the rest cut at that length. pubkey's RSA
+    instance states its pk_format law from the public one.
 * **Small-parameter exhaustive** (`gen/exhaustive.py`): `toy_round_trip`:
   for the key p = 5, q = 11, e = 3, every message below 55 goes through
   RSADP and back through RSAEP and the other way, and the CRT's RSADP equals
@@ -124,6 +136,28 @@ the integers that bignum's limbs stand for, which is not formalised here
 `check.bend` and `ref/run.sh` test it against cryptography. Unconditional
 sign-then-verify laws for PSS and PKCS #1 v1.5 follow from it and are
 likewise not stated for every key.
+
+The form laws' hypotheses are not proved here:
+
+* that an integer reads back from its shortest bytes is a law bignum would
+  state, and it needs a number's bit length (`BnNat.byte_len`, from its top
+  limb's bits) related to its limbs, which bignum does not reason about for
+  every value (its README, Laws). It holds for every `BnNat` without zero
+  limbs on top, which is every value bignum's arithmetic, `of_hex` and a
+  shortest form make; but **not** for one read from bytes with leading zero
+  bytes, which `BnNat.of_octets` keeps as zero limbs on top. Such a key is
+  read back equal by value (`BnNat.is_eq`) but in another representation,
+  so a key read from *any* bytes is not read again, the same, from the
+  bytes written for it (as ecc's `point_round_trip` has it for SEC 1's
+  form): `RsaKeys.public_of` accepts `00000002 00c5 00000001 03` (n = 197
+  written with a leading zero byte, e = 3), and `public_to` writes that
+  key as `00000001 c5 00000001 03`. The reader accepts integers that are
+  not in their shortest form, which the form asks for (`keys.bend`: each
+  integer as a four-byte length and then its shortest big-endian bytes);
+  refusing them would change its behaviour, and is left to the maintainer.
+* that a byte count fits the length field is a bound of 2^32, which a key
+  read from a form always meets but which cannot be stated as a closed
+  number (u32's README, Laws, "Stating the bounds").
 
 ## Tests
 

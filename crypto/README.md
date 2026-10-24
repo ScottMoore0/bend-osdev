@@ -330,7 +330,7 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | CMAC over every 128-bit cipher above | MAC | accepts, agrees (for every cipher) | RFC 4493 examples 1 to 4; vs cryptography (AES, SM4, Camellia) and RFC 4493 over the models; a changed tag refused |
 | CCM over every 128-bit cipher above, any tag length | AEAD | round_trip (`ccm_aead_round_trip`, from cipher-modes' `ccm_round_trip`: below) | RFC 3610 packets 1 to 3; vs cryptography's AESCCM, and RFC 3610 over the others; changed tag, ciphertext and associated data refused |
 | CRC-32 of any parameter set (CRC-32, CRC-32C, ...) | hash | streaming, split (for every parameter set), length; check values | vs binascii.crc32 and a Rocksoft-model CRC-32C, in pieces |
-| CRC-64 of any parameter set (CRC-64/XZ, ...) | hash | streaming, split; check value | length; vs a Rocksoft-model CRC-64/XZ, in pieces |
+| CRC-64 of any parameter set (CRC-64/XZ, ...) | hash | streaming, split (for every parameter set), length; check value | vs a Rocksoft-model CRC-64/XZ, in pieces |
 | SHA-256, SHA-512 (bend-collections; `CrSha2State`) | hash | the one-shot digest is FIPS 180-4's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA-256 of "abc" | streaming for every state (bend-collections proves pieces only from the start); FIPS 180-4's examples whole and in pieces; vs hashlib, in pieces |
 | SHA3-256 (bend-collections; `CrSha3State`) | hash | the one-shot digest is FIPS 202's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA3-256 of "abc" | streaming for every state (as for SHA-2); NIST's examples whole and in pieces; vs hashlib, in pieces |
 | HMAC over each hash above | MAC | accepts, agrees (for every hash); split (in pieces equals one call) over CRC-32, CRC-64, SHA-256, SHA-512 and SHA3-256; streaming of HMAC's state over CRC-32 and CRC-64; RFC 4231 test case 2 for HMAC-SHA-256; one HMAC-CRC-32 vector | RFC 4231 test cases 1 to 7 for HMAC-SHA-256 and HMAC-SHA-512; vs Python's hmac over hashlib's SHA-256, SHA-512 and SHA3-256 and over CRC-32, CRC-32C and CRC-64/XZ, keys from 0 to 200 bytes |
@@ -472,7 +472,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-214 laws, in six pairs of law and proof files. Each proof file imports its
+215 laws, in six pairs of law and proof files. Each proof file imports its
 law file as `Laws` and only the proofs its laws rest on, and each is checked
 in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 
@@ -481,7 +481,7 @@ in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 | `LAWS.bend`, `PROOF.bend` | 23: the generic laws `xor_*`, `ctr_*`, `mac_verify_tag_*`, `hmac_accepts`, `xcbc_accepts`, `vmac_accepts`, `pbkdf2_length`, `pbkdf2_stream_*`, `kbkdf_*` (but `kbkdf_hmac_sha256_vector`), and the conditional `lift_round_trip`, `sign_verify_bytes_if`, `kex_agree_if` | bytes' laws |
 | `LAWS_cm.bend`, `PROOF_cm.bend` | 13: `cmblock_*`, `cmac_accepts`, `ccm_round_trip_if`, `ccm_aead_round_trip`, `aes_fips197_c1`, and the AES rows (`aes_*`, `aes_enc_key_length`) | cipher-modes' laws (and through them gf's), the generic laws |
 | `LAWS_lc.bend`, `PROOF_lc.bend` | 93: `lcblock64_*`, the refusals `rc4_empty_key`, `rc4_iv_refused`, `ctr_bad_iv`, `blocks_of_not_whole`, and the rows of DES to FCrypt and of RC4 | legacy-ciphers' laws |
-| `LAWS_crc.bend`, `PROOF_crc.bend` | 16: `crc32_*`, `crc32c_hash_check`, `crc64_*`, `hkdf_too_long`, `hmac_crc32_vector`, and the CRC rows (`hmac_crc32_*`, `hmac_crc64_*`) | crc's laws |
+| `LAWS_crc.bend`, `PROOF_crc.bend` | 17: `crc32_*`, `crc32c_hash_check`, `crc64_*`, `hkdf_too_long`, `hmac_crc32_vector`, and the CRC rows (`hmac_crc32_*`, `hmac_crc64_*`) | crc's laws |
 | `LAWS_sha.bend`, `PROOF_sha.bend` | 21: `sha256_*`, `sha512_*`, `sha3_256_*`, `hkdf_sha256_too_long`, `hmac_sha256_rfc4231_2`, `pbkdf2_hmac_sha256_rfc7914_1`, `kbkdf_hmac_sha256_vector`, and the SHA rows (`hmac_sha256_split`, `hmac_sha512_split`, `hmac_sha3_256_split`) | bend-collections-laws-crypto's laws, bytes' laws |
 | `LAWS_hs.bend`, `PROOF_hs.bend` | 48: `michael_*`, `pbkdf2_zero_iterations`, `pbkdf2_hmac_sha1_rfc6070_*`, and the `hs_row`s (`<h>_hash_*`, `hmac_<h>_*`) | the hashes package's laws, the generic laws |
 
@@ -510,8 +510,8 @@ cipher), `vmac_accepts` (every block cipher and nonce length); `ccm_aead_round_t
 (CCM as an AEAD, every 128-bit cipher, key, tag length, nonce, associated
 data and message); `crc32_hash_streaming`,
 `crc32_hash_split`, `crc32_hash_split3`, `crc32_hash_length`,
-`crc64_hash_streaming`, `crc64_hash_split`, `crc64_hash_split3` (every
-parameter set); `sha256_spec`, `sha256_hash_split`, `sha256_hash_split3`,
+`crc64_hash_streaming`, `crc64_hash_split`, `crc64_hash_split3`,
+`crc64_hash_length` (every parameter set); `sha256_spec`, `sha256_hash_split`, `sha256_hash_split3`,
 `sha256_hash_length` and the same for SHA-512 and SHA3-256 (every
 message), from
 bend-collections-laws-crypto's laws; `michael_accepts` (every key and
@@ -578,12 +578,10 @@ length), for every block size; those lemmas are not done in this version
 kernel's cts(cbc(aes)) and `ref/gen.py`'s CS3); the byte layer of PCBC and
 LRW (as of ECB and CBC: the laws are on lists of blocks); VMAC's and XCBC's
 values (the MAC laws hold whatever the tag is; the values are tested on
-the specifications' vectors); the CCM round trip unconditionally (above);
-an AEAD's and a MAC's refusal of changed input (a forgery succeeds with probability
+the specifications' vectors); an AEAD's and a MAC's refusal of changed input (a forgery succeeds with probability
 2^-8tlen, so it is no law for every input; tested on every instance); the
 KDF laws for HKDF (its length needs arithmetic on ceilings not done here;
-PBKDF2's are proved, above); CRC-64's
-digest length; SHA-2's and SHA3-256's streaming law for every state (bend-collections
+PBKDF2's are proved, above); SHA-2's and SHA3-256's streaming law for every state (bend-collections
 proves the pieces from the start state only, which is what the split laws
 and HMAC need); the byte layer of ECB and CBC (`CrModes.blocks_of` and
 `octets_of` for every block size); the CTR counter's increment (the stream
