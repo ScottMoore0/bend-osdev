@@ -42,8 +42,11 @@ Written from the public specifications only:
 | `aes.bend` | AES-128, AES-192 and AES-256 as a block cipher: the key, encryption (bend-collections), decryption (here) |
 | `aes_modes.bend` | the named defaults: every mode with AES, taking the raw key |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_pkcs7.bend`, `PROOF_pkcs7.bend` | the PKCS #7 padding laws, and their proofs (from bytes' laws only) |
+| `LAWS_padded.bend`, `PROOF_padded.bend` | padded CBC's round trip, and its proof (from the two pairs above) |
 | `check.bend` | the specifications' vectors, with expected output |
 | `gen/aes_proof.py` | writes the AES round-trip proof (the "aes" region of `PROOF.bend`; `--check` checks it is current) |
+| `gen/pkcs7_proof.py` | writes the generated regions of `PROOF_pkcs7.bend` (a byte's bits, and the values 0 to 255; `--check` checks they are current) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's `cryptography` |
 
 Bend imports do not re-export, so import the files you use. A mode file never
@@ -230,6 +233,13 @@ answer `Maybe`.
 
 ## Laws
 
+Three pairs of law and proof files, each proof file checked in a process of
+its own (CONVENTIONS.md, Laws): `LAWS.bend` with `PROOF.bend` (the modes and
+AES, below), `LAWS_pkcs7.bend` with `PROOF_pkcs7.bend` (PKCS #7 padding, from
+bytes' laws only, so a proof that uses them takes in none of AES's), and
+`LAWS_padded.bend` with `PROOF_padded.bend` (padded CBC, from both). A proof
+elsewhere that uses a law imports the pair that holds it.
+
 `LAWS.bend`. Laws that need decryption to undo encryption take the
 hypothesis `inv: @xs -> {CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs}` at
 the law's key (`k`, or XTS's data key `k1`): for every list of blocks, each
@@ -302,12 +312,39 @@ four mode laws hold for AES with no hypothesis: bend-osdev-cm-instances
 states them (`aes_cbc_round_trip`, `aes_xts_round_trip`, ...), and crypto's
 AES rows use it (`aes_block_round_trip`, ECB, CBC, PCBC and LRW over AES).
 
+**PKCS #7** (`LAWS_pkcs7.bend`), for every block size `bs` and message `m`:
+
+* `pkcs7_round_trip`: `bind(pad(bs, m), c => unpad(bs, c)) == map(c => m,
+  pad(bs, m))`: for a block size the padding takes (1 to 255), unpadding
+  the padded message gives `m`; for any other, both refuse alike
+  (`CmBadBlockSize`);
+* `pkcs7_pad_blocks`: a padded message is a whole number of blocks (its
+  length mod `bs` is 0).
+
+The arithmetic is on Base's `Nat.divmod` (as kmath's division lemmas are):
+with `bs = 1 + q` and `L` the message's length, `L mod bs` is at most `q`,
+so the padding `p = bs - L mod bs` is `1 + (q - L mod bs)`, from 1 to `bs`,
+and `L + p` is a multiple of `bs` (`pk.mod_le`, `pk.mod_pad`, by induction
+on Base's `Nat.divmod.go`). Unpadding reads the last byte back as `p`
+(`U32.to_nat` of the byte of `U32.from_nat(p)` is `p` for every `p` up to
+255, checked value by value: `gen/pkcs7_proof.py`'s "u8" region), the last
+`p` bytes all equal it (each XOR itself is 0, bit by bit), and the first `L`
+bytes are `m` (bytes' laws on `take`, `drop` and `at` of an append).
+
+**Padded CBC** (`LAWS_padded.bend`): `cbc_padded_round_trip`: for every
+cipher and key with `inv`, every 16-byte IV and every message (of any
+length), `Cbc.encrypt_padded` succeeds and `Cbc.decrypt_padded` gives the
+message back: from `cbc_round_trip` on the padded message (whole blocks, by
+`pkcs7_pad_blocks`) and `pkcs7_round_trip`; decryption's first check, that
+the ciphertext is not empty, holds because an empty one would decrypt to
+the empty string, which unpadding refuses.
+
 **Not proved:** AES encryption undoes decryption (the reverse direction; it
 holds, since AES is a permutation, but would need MixColumns after
-InvMixColumns and the S-box after its inverse, which nothing here uses);
-the PKCS #7 round trip (`unpad(pad(m)) == m`, and so padded CBC), which needs
-modular arithmetic on the message length that is not done yet; it is covered
-by the vectors and the differential test.
+InvMixColumns and the S-box after its inverse, which nothing here uses).
+That unpadding refuses every bad padding is not a law either (it is
+covered by the vectors `pkcs7_unpad_zero` and `pkcs7_unpad_mixed`, and by
+the differential test); see "Side channels" on padding oracles.
 
 ## Tests
 
@@ -376,7 +413,11 @@ InvMixColumns in `aes.bend`, and its field laws in the proof) and
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 2 minutes, 1.6 GB),
 `--verdict` ALL PROOFS CHECK (about 5 minutes, 1.9 GB peak; both include
-bend-osdev-gf's proofs, and the kernel takes about 3 minutes of it),
+bend-osdev-gf's proofs, and the kernel takes about 3 minutes of it);
+`PROOF_pkcs7.bend` ALL PROOFS CHECK and under `--verdict` (4 s, 0.31 GB
+peak); `PROOF_padded.bend` ALL PROOFS CHECK (4 minutes, 1.24 GB) and under
+`--verdict` (8.5 minutes, 1.29 GB peak; it takes in `PROOF.bend`'s proofs),
+each in a process of its own; `gen/pkcs7_proof.py --check` up to date;
 `check.bend` passes, `ref/run.sh` 264 cases match, `gen/aes_proof.py
 --check` up to date, `scripts/deps.sh` passes. (`--verdict` failed here
 until the four round-trip laws took their hypothesis as the ordinary `inv`
