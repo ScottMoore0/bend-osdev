@@ -117,14 +117,59 @@ another codeword when the word is within t of one.
   detected, the 52 and 104 parity bits of the t = 4 and t = 8 NAND codes,
   both bit orders, the padding, and the length refusals.
 
+The laws' small cases are computed one def each (the kernel has a step
+budget per def); `gen/proof.py` writes them (`python3 gen/proof.py
+--check` fails if a generated part is not what it writes).
+
+`LAWS_errors.bend`, proved for every input in `PROOF_errors.bend` (a pair
+of its own, checked in a process of its own: its proofs take in
+`PROOF.bend`'s, whose `small15_syndromes` and `codeword_message` they
+use, and 121 computed patterns), for the (15,7) code (t = 2) and every
+message of 7 bits:
+
+* `small15_syndromes_shift`: the codeword with any bits flipped
+  (`Bch.flip`, at any positions) has the syndromes of the zero word with
+  the same bits flipped;
+* `small15_decode_shift`, the reduction: whenever the zero word with
+  some bits flipped decodes to the zero message, the codeword with the
+  same bits flipped decodes to the message. The decoder's error positions
+  are a function of the syndromes (`Bch.locate`), which are the flips';
+  flipping bits of the codeword plus the flips (bit by bit) flips the
+  flips; and the final check reads the corrected word's syndromes, which
+  are the flips corrected's;
+* `small15_two_errors`: the codeword with any two of its bits flipped
+  (`Bch.flip_at` twice: two errors, or none when the indexes are equal;
+  an index past the end flips nothing) decodes to the message. So every
+  pattern of at most t = 2 flipped bits is corrected, for all 128
+  messages.
+
+How: the syndromes are linear in the bits (Horner's rule over GF(16),
+from (x + y) k = x k + y k for each of the syndromes' points k = 2, 4, 8
+and 3, tried on all 256 pairs of elements), so a codeword plus e has e's
+syndromes. A codeword with two bits flipped is the codeword plus the
+pattern of the two flips; each of the 121 patterns of at most two flipped
+bits (1 + 15 + 105) is corrected alone in a def of its own, on literals
+(`proof_pat15.bend`, written whole by `gen/proof.py`, with the GF(16)
+facts), and the law takes the two indexes apart into them. The code's
+closed facts (deg g = 8, the syndromes' points, the length check, the
+zero word passing the final check) are computed in defs of their own and
+rewritten in, and the decoding is unfolded for a code given as a
+parameter: `--verdict`'s kernel computes closed terms far faster than
+terms with unknowns, and runs out of fuel on such a computation (the
+cyclotomic cosets behind deg g, above all) inside a proof about unknown
+words.
+
 Not proved: that every pattern of at most t flipped bits is corrected for
-codes with t > 1. For the (15,7) code that is 128 messages times 121
-patterns; it is tested exhaustively instead (see Tests). The laws' small
-cases are computed one def each (the kernel has a step budget per def);
-`gen/proof.py` writes them. The t = 16 NAND code's parity size and the
-NAND codes' ECC bytes are left to the tests (`check.bend` and `ref/`):
-the GF(2^13) generators of those are too large a computation for the
-proof checkers.
+the (15,7) code's shortened words (messages of fewer than 7 bits) and for
+the other codes with t > 1 ((15,5) and the NAND codes); they are left to
+the tests (see Tests). The method above takes one def per pattern, so
+each shortened length needs patterns of its own; it would serve the
+(15,5) code too (576 patterns of weight at most 3, and the syndromes'
+linearity at its two further points), which is not done yet; the NAND
+codes have far too many patterns for it. The t = 16 NAND code's parity
+size and the NAND codes' ECC bytes are left to the tests (`check.bend`
+and `ref/`): the GF(2^13) generators of those are too large a
+computation for the proof checkers.
 
 ## Tests
 
@@ -144,5 +189,9 @@ of Berlekamp-Massey).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 65 cases match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` and `PROOF_errors.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK for both, `check.bend` passes, `ref/run.sh`
+65 cases match, `scripts/deps.sh` passes. `PROOF_errors.bend` takes in
+`PROOF.bend`'s proofs: alone it checks in about 16 minutes at 0.45 GB
+peak, and its `--verdict` takes about 35 minutes (the kernel's part about
+19) at about 0.55 GB; `PROOF.bend`'s alone takes about 9 and 24 minutes.
