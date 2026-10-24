@@ -3,8 +3,8 @@
 # wrote, for every block size, and so ECB, CBC, PCBC and LRW on bytes undo
 # themselves wherever they do on blocks. In a pair of their own
 # (CONVENTIONS.md, Laws): their proofs rest on bytes' laws and on
-# legacy-ciphers' 64-bit block format (block64_octets_round_trip), and take
-# in no cipher's proofs.
+# legacy-ciphers' 64-bit block format (block64_octets_round_trip, so they
+# take in legacy-ciphers' proofs), and on no other package's.
 #
 # The byte layer cuts a byte string into pieces of the block size and reads
 # each through the block format (~blk_of), and writes blocks back through

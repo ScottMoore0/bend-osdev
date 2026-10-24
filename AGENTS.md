@@ -29,7 +29,7 @@ package: copy its shape.
    using them import. Import only the proofs the laws rest on: a package
    whose proofs would outgrow one check process splits its laws into pairs,
    `LAWS_<part>.bend` with `PROOF_<part>.bend`, each checked on its own
-   (CONVENTIONS.md, Laws; crypto has six).
+   (CONVENTIONS.md, Laws; crypto has ten).
 5. Write `x/check.bend`: an `IO` main that prints results, followed by the
    expected output as `#|` lines.
 6. Write `x/ref/gen.py` and `x/ref/run.sh` if anything outside this
@@ -163,7 +163,7 @@ around it.
   computation on symbolic bits (AES rounds, GF(2^128) multiplication) is
   out of reach even when it would terminate (cipher-modes `README.md`,
   "AES and bend-collections"; gf `README.md`, Laws).
-- **`--verdict` memory:** crypto's laws are in six pairs of law and proof
+- **`--verdict` memory:** crypto's laws are in ten pairs of law and proof
   files, each checked on its own (under `--verdict`, 0.3 to 1.3 GB peak;
   in one file they peaked at 3.26 GB); a new law goes in the pair whose
   proofs it rests on, or in a new pair (crypto `README.md`, Laws and
