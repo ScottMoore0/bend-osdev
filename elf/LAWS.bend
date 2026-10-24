@@ -240,6 +240,19 @@ law rel_info64:
 law rel_info32:
   {(R.ElfReloc.info(False{}, 4, 6), R.ElfReloc.sym(False{}, R.ElfReloc{W.W64.zero(), W.W64.from_parts(0, 1030), W.W64.zero()}), R.ElfReloc.type(False{}, R.ElfReloc{W.W64.zero(), W.W64.from_parts(0, 1030), W.W64.zero()})) == (W.W64.from_parts(0, 1030), 4, 6) : W.W64 & U32 & U32}
 
+# ELF32_R_INFO's symbol and type come back out of r_info, for every symbol
+# and type: the symbol's low 24 bits (ELF32_R_SYM keeps 24) and the type's
+# low 8 bits (ELF32_R_TYPE keeps 8)
+law rel_info32_sym:
+  for +sym: U32
+  for +kind: U32
+  {R.ElfReloc.sym(False{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(False{}, sym, kind), W.W64.zero()}) == U32.and(16777215, sym) : U32}
+
+law rel_info32_type:
+  for +sym: U32
+  for +kind: U32
+  {R.ElfReloc.type(False{}, R.ElfReloc{W.W64.zero(), R.ElfReloc.info(False{}, sym, kind), W.W64.zero()}) == U32.and(255, kind) : U32}
+
 # an Elf32_Rela, little-endian: r_offset 16, r_info 0x102, r_addend -4,
 # sign-extended
 law rela32_negative_addend:

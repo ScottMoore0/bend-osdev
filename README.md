@@ -15,8 +15,7 @@ GPL source was read.
 
 - **Laws reviewed.** The maintainer reviews every package's laws as they
   are written. They are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
-  all except four laws in cipher-modes that its kernel cannot yet model
-  (see that README).
+  all.
 - **Bend 2.0.37**, pinned in `BEND_VERSION`.
 - **Publishing on BendHub**, every package at version 0.1.0.0, as
   `bend-osdev-<package>`: so far acpi, aead, algo, apparmor, array, bpf,
@@ -31,6 +30,7 @@ GPL source was read.
 
 | Package | What it is |
 |---|---|
+| [u32](u32/) | Laws for Base's `U32` and `Word(n)` as `Nat` arithmetic: comparison, addition, subtraction, increment and shifts, wrapping or not |
 | [word64](word64/) | 64-bit words: arithmetic modulo 2^64, bits, halves, text |
 | [bytes](bytes/) | Byte strings (`Octets`) and fixed-width fields: the shared byte layer |
 | [byte](byte/) | Typed 8- and 16-bit words (`ByteU8`, `ByteU16`) and a `U32`'s bytes, from bendlang/bend#1660, with an adapter note for packages with their own `U8` |
@@ -85,8 +85,9 @@ GPL source was read.
 | [iso9660](iso9660/) | ISO 9660 with Rock Ridge, Joliet and El Torito, read-only |
 | [ext2](ext2/) | ext2, ext3 and ext4 (extents, checksums), read and write: mkfs, files, directories, links, rename, write and truncate, fsck |
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
-| [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES by default |
+| [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES (128, 192, 256; decryption proved to undo encryption for every key and block) by default |
 | [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
+| [cm-instances](cm-instances/) | cipher-modes' CBC and XTS round-trip laws written out and proved for AES and each of legacy-ciphers' 128-bit ciphers, for every key and input |
 | [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
 | [siphash](siphash/) | SipHash-c-d (64- and 128-bit output) and HalfSipHash-c-d (32- and 64-bit) for any number of rounds, streaming and one-shot, with Linux's SipHash-2-4, SipHash-1-3 and HalfSipHash-1-3 named; streaming, split and output length proved for every input; all 256 published vectors, checked against openssl |
 | [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |

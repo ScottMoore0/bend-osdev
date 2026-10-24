@@ -24,7 +24,9 @@ ref/expected.txt (the same values from Python):
     author** (written from the same specification; no outside AEGIS-128
     implementation is reachable here), so these cases check the Bend code
     against a second reading of the specification, not against an
-    independent one.
+    independent one; the model itself agrees with the four published
+    AEGIS-128 vectors of Wu and Preneel's SAC 2013 paper (Appendix A.1),
+    which it checks when imported.
 """
 import hashlib, hmac, os, random, socket, struct, sys, warnings
 

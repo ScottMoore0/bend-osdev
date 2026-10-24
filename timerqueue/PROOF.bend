@@ -461,6 +461,9 @@ def Laws.tq_issued_expire(tq, now):
     case Q.TimerQueue{q, n}:
       {==}
 
+def Laws.tq_time_cmp(a, b):
+  O.tm.w64(a, b)
+
 def Laws.tq_vec():
   {==}
 

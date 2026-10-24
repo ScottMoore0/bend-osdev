@@ -141,9 +141,43 @@ law v_rs_order:
 law v_div:
   {G.Gf8.mul(G.Gf8.aes(), G.Gf8.div(G.Gf8.aes(), 87, 131), 131) == 87 : U32}
 
-# The tables (tables.bend) give the reference's results on these vectors;
-# they are tied to the reference for every input by the exhaustive runtime
-# check in check.bend and by ref/run.sh (see the README).
+# The tables (tables.bend), for the named fields and every input: the
+# table built by Gf8Tab.new is handed back unchanged beside each result, and
+# the result is the reference's: a product is Gf8.mul, a logarithm Gf8.log,
+# and the exponential of i (below 510) is Gf8.exp. They also give the
+# reference's results on these vectors.
+
+law tab_mul_aes:
+  for +a: U32
+  for +b: U32
+  {T.Gf8Tab.mul(T.Gf8Tab.new(G.Gf8.aes()), a, b) == (T.Gf8Tab.new(G.Gf8.aes()), G.Gf8.mul(G.Gf8.aes(), a, b)) : T.Gf8Tab & U32}
+
+law tab_mul_rs:
+  for +a: U32
+  for +b: U32
+  {T.Gf8Tab.mul(T.Gf8Tab.new(G.Gf8.rs()), a, b) == (T.Gf8Tab.new(G.Gf8.rs()), G.Gf8.mul(G.Gf8.rs(), a, b)) : T.Gf8Tab & U32}
+
+law tab_log_aes:
+  for +a: U32
+  {T.Gf8Tab.log(T.Gf8Tab.new(G.Gf8.aes()), a) == (T.Gf8Tab.new(G.Gf8.aes()), U32.from_nat(G.Gf8.log(G.Gf8.aes(), a))) : T.Gf8Tab & U32}
+
+law tab_log_rs:
+  for +a: U32
+  {T.Gf8Tab.log(T.Gf8Tab.new(G.Gf8.rs()), a) == (T.Gf8Tab.new(G.Gf8.rs()), U32.from_nat(G.Gf8.log(G.Gf8.rs(), a))) : T.Gf8Tab & U32}
+
+law tab_exp_aes:
+  for +i: U32
+  for +hi: {Nat.is_lt(U32.to_nat(i), 510n) == True{} : Bool}
+  {T.Gf8Tab.exp(T.Gf8Tab.new(G.Gf8.aes()), i) == (T.Gf8Tab.new(G.Gf8.aes()), G.Gf8.exp(G.Gf8.aes(), U32.to_nat(i))) : T.Gf8Tab & U32}
+
+law tab_exp_rs:
+  for +i: U32
+  for +hi: {Nat.is_lt(U32.to_nat(i), 510n) == True{} : Bool}
+  {T.Gf8Tab.exp(T.Gf8Tab.new(G.Gf8.rs()), i) == (T.Gf8Tab.new(G.Gf8.rs()), G.Gf8.exp(G.Gf8.rs(), U32.to_nat(i))) : T.Gf8Tab & U32}
+
+# a witness for tab_exp's hypothesis: the last entry, 509
+law witness_tab_exp:
+  {Nat.is_lt(U32.to_nat(509), 510n) == True{} : Bool}
 
 law v_tab_mul_aes:
   {Pair.snd(T.Gf8Tab, U32, T.Gf8Tab.mul(T.Gf8Tab.new(G.Gf8.aes()), 87, 131)) == 193 : U32}

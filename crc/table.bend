@@ -1,10 +1,11 @@
 # bend-osdev-crc, the table-driven fast path: one table lookup per byte
 # instead of eight bit steps (about 3x faster for CRC32C on native builds).
 #
-# The bitwise engines in crc.bend are the reference; these must give the same
-# results, which the vectors in LAWS.bend and ref/run.sh check (a law for
-# every input is out of reach: it would need lemmas about Array's internals).
-# The table is an Array, so it is built once per call and threaded through.
+# The bitwise engines in crc.bend are the reference; these give the same
+# results for every parameter set and input (LAWS.bend's fast_update32 and
+# fast_update64, proved through bend-osdev-array's laws in proof_fast.bend
+# and proof_fast64.bend), and ref/run.sh checks them too. The table is an
+# Array, so it is built once per call and threaded through.
 import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B

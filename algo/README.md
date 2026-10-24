@@ -41,7 +41,7 @@ Bits are numbered from the least significant, 0 to 31 (63).
 | `bitmap.bend` | bitmaps: `bitmap.*`, on the bit sequences of `bitseq.*` |
 | `bsearch.bend` | binary search: the list reference and the `Array<U32>` implementation |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
-| `proof_u32.bend` | lemmas `PROOF.bend` uses: `U32` subtraction, addition, increment and halving as `Nat` arithmetic when nothing wraps (prefixed `uq.`) |
+| `proof_u32.bend` | lemmas `PROOF.bend` uses: a word's value is below 2^n, and the `Nat` facts the search's bounds rest on (prefixed `uq.`) |
 | `proof_bsearch.bend` | lemmas `PROOF.bend` uses: the `Array` search on a reflected array is the same search on Data, and the `Nat` and list facts its proof rests on (prefixed `bq.`) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -134,9 +134,11 @@ into `Arrays.of_list(d, l, 0)` for a Data list `l` (bend-osdev-array's
 `reflect`); by array's `of_list_get` each read of the search is a literal
 pair of the same array and the element of `l`, so the search is a search on
 Data (`bq.run`, `proof_bsearch.bend`) that hands the array back. Its indices
-are followed as `Nat`s: `mid = lo + (hi - lo) / 2` (`proof_u32.bend`: `U32`
-subtraction, halving and addition compute on the values when nothing
-wraps), and array's `index_of_u32` reads the slot of `mid`'s value. The
+are followed as `Nat`s: `mid = lo + (hi - lo) / 2` (`U32` subtraction,
+halving and addition compute on the values when nothing wraps:
+bend-osdev-u32's laws `u32_sub_value`, `u32_shr_value`, `u32_add_value`
+and `u32_inc_value`, which generalise the lemmas this package first proved
+in `proof_u32.bend`; `DEPS` lists u32 for them), and array's `index_of_u32` reads the slot of `mid`'s value. The
 invariant `lo <= lower_bound <= hi <= n` holds throughout (an element below
 the key sits before the lower bound, `lower_bound_below`, and on a sorted
 list one not below it sits from the lower bound on, `lower_bound_above`),

@@ -15,6 +15,12 @@ at a time, since a byte does not fit at the register's top); `Crc64Spec` covers 
 |---|---|
 | `crc.bend` | the parameter model, the bitwise engines (the reference), the named CRCs, streaming |
 | `table.bend` | the table-driven fast path: `Crc32Spec.update_fast` / `compute_fast` and `Crc64Spec.update_fast` / `compute_fast` |
+| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `proof_word.bend` | proof helpers: bitwise identities on `U32` (XOR a group, AND over XOR, the shifts over XOR), by induction over Base's `Word(n)` |
+| `proof_engine.bend` | proof helpers: the 32-bit engines' steps commute with XOR; the most-significant-first byte step for every width |
+| `proof_fast.bend` | the 32-bit fast path is the reference: the tables as lists through bend-osdev-array's laws, one byte step, the loops |
+| `proof_engine64.bend`, `proof_fast64.bend` | the same at 64 bits, on bend-osdev-word64's words taken apart into their halves |
+| `proof_cases.bend`, `proof_cases64.bend` | the case-split lemmas of those proofs, by computation on words split into their bits (written by `gen/proof.py`) |
 
 ## The named CRCs
 
@@ -54,9 +60,11 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
 * **Streaming:** `start`/`update`/`finish` let a caller feed data in pieces
   (a block at a time, a packet at a time), with the law that pieces give the
   whole's CRC.
-* **Fast paths:** `table.bend` is the first, kept beside the bitwise reference.
-  Others (several bytes per step, a table kept between calls) can be added the
-  same way, each tied to the reference.
+* **Fast paths:** `table.bend` is the first, kept beside the bitwise reference
+  and proved equal to it. Others (several bytes per step, a table kept
+  between calls) can be added the same way, each tied to the reference; the
+  table proofs (`proof_fast.bend`) and the linearity of the engines
+  (`proof_engine.bend`) are the parts such a proof reuses.
 
 ## Laws
 
@@ -68,11 +76,50 @@ final XOR; `Crc32Spec.compute` is the three in a row. The same for
   through bytes' interface law `octets_append_list`;
 * **vectors:** the catalogue's check value for each named CRC, and the empty
   input;
+* **the fast path, for every input and every parameter set:** the
+  table-driven update is the bitwise one, `update_fast(spec, c, o) ==
+  update(spec, c, o)` for every spec, register `c` and `Octets` `o`, at both
+  word sizes (`fast_update32`, `fast_update64`), and so `compute_fast` is
+  `compute` (`fast_compute32`, `fast_compute64`). This holds for every
+  `Crc32Spec`, whatever its width: below 8 a most-significant-first CRC's
+  fast path is the bitwise engine; from 8 to 32 the table holds the eight
+  steps on each byte placed at the register's top; above 32 (no catalogue
+  CRC) the top bit and the input byte are shifted out of the register, and
+  both paths only shift.
 * **the fast path, as vectors:** the check values computed table-driven, and
-  agreement with the reference on a longer input. Below width 8, a
-  most-significant-first CRC's fast path is the bitwise engine (no table).
-  A law for every input would need lemmas about `Array`'s internals, so the fast path is tied to the
-  reference by these vectors and by the differential test.
+  agreement with the reference on a longer input.
+
+How the fast path is proved (`proof_fast.bend`, `proof_fast64.bend`), the
+method of bend-osdev-blockdev's `ImgDev` and bend-osdev-ringbuf:
+
+* **the tables are lists.** bend-osdev-array's `of_list_new` and
+  `of_list_set` turn the table fill, write by write, into
+  `Arrays.of_list(8, l, 0)` for a Data list `l` whose entry `i` is the
+  engine's eight steps on the byte `i` (the fill's counter is
+  `U32.from_nat(i)`, since adding 1 is Base's `U32.inc`, and the list is
+  computed once from the writes' model); every read in the
+  loop is then `of_list_get`, a literal pair of the same table and `l`'s
+  entry. A read at any index is the entry at its low byte (256 cases).
+* **one byte step.** The register XOR the input byte splits into the byte
+  the table looks up (in place) and the rest. Eight engine steps commute
+  with XOR (a step is linear over GF(2): it shifts and adds the polynomial
+  when the bit leaving is set), so they are the table's entry XOR eight
+  steps on the rest; and on the rest, whose byte to come is clear, the
+  steps only shift, which is the fast path's shift by 8. Most significant
+  bit first, the byte sits at bits `w - 8` to `w - 1`, so the split and the
+  shift are proved for each width from 8 to 32 by computation on a
+  register split into its 32 bits (`proof_cases.bend`).
+* **64 bits.** A `W64` is taken apart with bend-osdev-word64's `parts_of`
+  law, and word64's defs work on the halves. word64's shifts join the
+  halves with an OR; the 64-bit engines are restated with shifts built from
+  the bits themselves (`proof_engine64.bend`), and the two are equal by
+  computation, splitting the bits that cross between the halves
+  (`proof_cases64.bend`).
+
+The proofs check under `--verdict`'s kernel too: they are written so that
+the kernel compares terms as written and never runs a table fill (it
+compares two sides by running them whenever they differ, and a fill is 256
+array writes whose counters it would recompute).
 
 ## Tests
 
@@ -122,6 +169,12 @@ Most of the memory is the input `Octets` (about 80 bytes per byte held,
 natively) and its list form, so the CRC itself adds little.
 `check.bend` runs CRC32C both ways and CRC-64/XZ
 table-driven over 100 KB as a regression test.
+
+## Dependencies
+
+bend-osdev-word64 (`W64`), bend-osdev-bytes (`Octets`), and
+bend-osdev-array, whose laws the fast-path proofs use (no run-time code
+imports it).
 
 ## Status
 

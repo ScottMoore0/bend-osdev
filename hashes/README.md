@@ -77,7 +77,39 @@ Written from the public specifications only; no GPL source was read.
   same memory, so the model's agreement with them is not independent
   evidence. They are laws (`michael_vector_1` to `_6`), which proves that
   `michael.bend` computes those values, not that the values are the
-  standard's.
+  standard's. Sources tried for them, none readable here (October 2026):
+  * IEEE 802.11i-2004 itself: IEEE's old GET IEEE 802 download URL
+    (https://standards.ieee.org/getieee802/download/802.11i-2004.pdf) now
+    answers the GET Program's landing page, and the Internet Archive's
+    copies cannot be fetched from here; no other public copy of 802.11i,
+    802.11-2007 or 802.11-2012 was found (smartgrid.gov's page for 802.11-2007
+    no longer resolves).
+  * The IEEE 802.11 TGi documents behind the annex: N. Ferguson,
+    *Michael: an improved MIC for 802.11 WEP*, IEEE 802.11-02/020r0
+    (January 2002), and M. Sabin and P. Lambert, *Proposed Test Vectors
+    for IEEE 802.11 TGi*, IEEE 802.11-02/362 (r0 to r6, 2002), are on
+    https://mentor.ieee.org/802.11/dcn/02/, which refuses the fetch (HTTP
+    418); a library mirror of the same documents (bibliotheek.ehb.be, on
+    port 3499) was refused by this session's permission checks, and both
+    are Word files.
+  * Permissively licensed test data: FreeBSD's
+    `tools/regression/net80211/tkip/test_tkip.c` (Sam Leffler, 2004;
+    BSD-3-Clause, or GPL v2 at the recipient's choice; read as data only;
+    https://github.com/freebsd/freebsd-src/blob/main/tools/regression/net80211/tkip/test_tkip.c) has 802.11i's TKIP MPDU, whose MIC is the same
+    68 81 a3 f3 d6 48 d0 3c as M.6.3's above, but not the six chained
+    vectors; hostap's `wlantest/test_vectors.c` likewise (above). No
+    BSD-, MIT- or Apache-licensed project with the chained vectors was
+    found; the copies the searches found are GPL (the Linux kernel's
+    crypto self-tests), which are not read.
+  * Published papers: M. Beck, *Enhanced TKIP Michael Attacks*
+    (arXiv:1410.6295, 2014) prints none.
+
+  To settle them, obtain the current IEEE Std 802.11 through the IEEE GET
+  Program (free, with an IEEE account sign-in;
+  https://standards.ieee.org/about/get/802/802.11.html; superseded
+  editions such as 802.11i-2004 are sold, not in the programme) and
+  compare the Michael test vectors of its TKIP annex (802.11i-2004's
+  Annex H.2.1) with `michael_vector_1` to `_6`.
 
 **SM3 and bend-collections.** bend-collections-laws-crypto@1.0.0.0 (an
 allowed hub package) was searched file by file for SM3 (and MD4, MD5,

@@ -99,6 +99,9 @@ How this package relates to the documented behaviour:
 | `RateLimit.within(interval, now, t)` | whether `t` is within the window at `now` |
 | `RateLimit.recent(s, now)` | the allowed events the next check at `now` counts against `burst` |
 | `RateLimit.held(s)` | the allowed events the state holds at all (at most `burst`) |
+| `RateLimit.allowed_times(ts, xs)` | the times of `ts` whose answers in `xs` (a run's `allowed`) are `True` |
+| `RateLimit.in_window(interval, now, ts)` | how many times of `ts` are within the window ending at `now` |
+| `RateLimit.sorted_upto(ts, now)` | whether the times of `ts`, then `now`, never decrease |
 
 ## Extension points
 
@@ -148,16 +151,31 @@ every time and every list of times:
   (`ratelimit_vec_report`), and the documented printk defaults
   (`ratelimit_vec_printk`).
 
-**Not proved: the window law over a whole run** ("in any stretch of length
-`interval`, at most `burst` events are allowed", for nondecreasing times).
-The laws above give it step by step: every check refuses when the window
-already holds `burst` allowed events, and every allowed event is held. What
-joins the steps is arithmetic on times: that an event within the window at a
-later check was within it at every check between. That needs laws of `W64`
-subtraction and order (monotonicity, for nondecreasing times), which
-bend-osdev-word64 does not state (its arithmetic is tested against Python's
-integers, not proved), and this package uses `W64` only through word64's
-laws. The differential test checks the run form on every random sequence.
+* **The window law over a whole run** (`ratelimit_run_window`), for the
+  sliding policy: for times that never decrease, up to and including
+  `now` (`sorted_upto(ts, now)`), the allowed events of a run from a new
+  state that lie within the window of length `interval` ending at `now`
+  are at most `burst`. Taking `now` to be the last allowed event in any
+  stretch of length `interval`, every other allowed event of the stretch
+  is within its window, so no stretch of length `interval` holds more than
+  `burst` allowed events. With witnesses and a vector
+  (`ratelimit_window_wit`, `ratelimit_vec_window`).
+
+  How it is proved: at a fixed `now`, what the state holds against `now`
+  (`recent`) grows by one at each allowed event within the window ending
+  at `now`, and by nothing at any other check, because the times a check at
+  `t` drops (outside the window at `t`) are outside the window at `now`
+  too: for `u <= t <= now`, `now - u < interval` gives `t - u < interval`.
+  That step is arithmetic on times, done through bend-osdev-word64's laws
+  of `W64` subtraction and order (`sub_value`, `lt_value`, `le_value`,
+  `eq_value`), never inside `W64`. So the count at `now` is what the final
+  state holds against `now`, at most what it holds, at most `burst`
+  (`ratelimit_recent_le_held`, `ratelimit_run_bound`).
+
+The fixed policy has no such law: a stretch straddling two fixed windows
+can hold `2 * burst` allowed events (`ratelimit_vec_policies`). Every
+property stated is proved; the differential test also checks the run form
+on every random sequence.
 
 ## Tests
 
@@ -179,6 +197,6 @@ laws. The differential test checks the run form on every random sequence.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (21 laws), `--verdict` ALL
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (24 laws), `--verdict` ALL
 PROOFS CHECK, `check.bend` passes, `ref/run.sh` 3566 events in 40 sequences
 match, `scripts/deps.sh ratelimit` ok.

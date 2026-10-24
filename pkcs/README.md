@@ -75,7 +75,7 @@ no kernel source was read.
 | `signer.bend` | SignerInfo and SignerIdentifier |
 | `signed.bend` | signed octets, the signature and digest checks, the signer's certificate |
 | `p8.bend` | PKCS #8 keys |
-| `LAWS.bend`, `PROOF.bend`, `proof_pkcs.bend` | the laws, their proofs, lemmas |
+| `LAWS.bend`, `PROOF.bend`, `proof_pkcs.bend`, `proof_octets.bend` | the laws, their proofs, lemmas (`proof_octets.bend`: the octets a parse keeps) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh`, `ref/show.bend.in` | the differential test (`ref/.gitignore` lists what it generates) |
 
@@ -129,14 +129,42 @@ Defs named `pk.*` are internal.
   signature of `Cms.signed_message` verifies under the signer's key bytes;
 * `find_attr_type`: `Cms.find_attr` answers only an attribute of the type
   asked for;
+* `signed_data_slice`: the SignedData's octets (`CmsSignedData.raw`) are a
+  slice of the input; `signed_attrs_slice`: so are each signer's signed
+  attributes' octets (`CmsAttrs.raw`, what the signature is over, 5.4);
+  `certificate_slice`: so is each certificate's (`CmsSignedData.certificates`,
+  where `Cms.signer_certificate` finds the signer's key);
+* `signed_attrs_der`: under the `attrs_der` rule (as in `Pkcs.rules()`),
+  for a signer with signed attributes, `Cms.signed_message` is the DER of a
+  SET (`Asn1.encode(Asn1Cons{Asn1Tag.set(), ns})`): the attributes'
+  elements with SET's tag in place of the IMPLICIT [0], whatever the
+  content given;
 * vector: signed attributes retagged A0 to 31 (5.4).
 
-**Not stated as laws** (tested only): that the fields read are the
-message's, and that with signed attributes `Cms.signed_message` is their
-DER under the SET OF tag (`ref/run.sh` checks the octets by verifying the
-signature over them with Python cryptography); a law would need laws
-about the octets bend-osdev-asn1 keeps per element, which it does not
-state yet.
+**How the octets laws are proved** (`proof_octets.bend`): `Cms.parse`
+matches the input against ContentInfo's schema, then the content's octets
+against SignedData's; following each step of the readers' Result chains
+(`pq.then`) shows the octets kept are the octets of the matches at those
+fields, and asn1's `match_input` places each in the content's octets and
+those in the input. For `signed_attrs_der`: the parse's checks passed
+(`cms_parsed_conforms`), so under `attrs_der` the signed attributes'
+octets matched `pk.s.attrs(0)` again under DER; asn1's `match_whole`,
+`match_der` and `match_of_node` make them the DER of a constructed [0]
+element, and `encode_retag` with `vec_identifier` (A0 and 31) makes
+`Cms.set_tagged` of them the DER of the SET of the same elements. The few
+facts about joining `Octets` that bytes does not state yet (associativity,
+slices of slices) are proved privately there from bytes' interface laws.
+
+**Not stated as laws** (tested only): that the values read from the
+fields are the message's (versions, digest and signature algorithms,
+content type, the eContent's octets, signer identifiers, signatures, the
+attributes' values): these go through bend-osdev-asn1's typed readers
+(INTEGER, OCTET STRING, OBJECT IDENTIFIER nodes) and x509's readers, which
+have no laws about their values yet, so only the octets the parse keeps
+are proved. Without the `attrs_der` rule the signed attributes are kept
+as read, and nothing is stated about their DER. `ref/run.sh` checks the
+signed octets by verifying the signature over them with Python
+cryptography.
 
 ## Tests
 

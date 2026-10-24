@@ -122,3 +122,36 @@ package: copy its shape.
   closed `Nat` computations run out of kernel fuel.
 - **Checker memory:** a check process is killed at about 3 GB; keep each
   generated proof or case file to a few hundred KB.
+
+## Proof limits documented in package READMEs (Bend 2.0.37)
+
+Each is explained where it was met; read that section before working
+around it.
+
+- **A step budget per def** in the kernel: split a large computation into
+  one def per case (bch `README.md`, Laws; gf `README.md`, Laws: 32 cases
+  per def to stay within `--verdict`'s fuel).
+- **No eta rule:** a pair is not equal to the pair of its projections, so
+  laws state what a pair *is* (array `README.md`, Laws, "Pairs"); a
+  continuation or lambda passed on (as a template argument, or to `IO`)
+  is written out in full, in the code and in the proofs (iodev
+  `README.md`, Laws, "A note for the proof kernel").
+- **A proof passed as a hypothesis is not `Data`:** a function from
+  elements to proofs can be used only once, and `--verdict` cannot model
+  one passed as a template, so laws quantify over a concrete order instead
+  (ksort `README.md`, Laws, "What is not proved, and why").
+- **`Nat` is unary inside the checkers:** keep vector numbers small
+  (kmath, ext2 and algo `README.md`, Laws). A *closed* large `Nat` (2^32,
+  `Nat.add(4294967295n, 1n)`, `U32.to_nat(4294967295)`) in a type is
+  expanded whenever the checker compares that type by computation, and
+  overflows its stack, even beside unknown values; so state bounds as "no
+  more than a word's value", and powers of two as `U32Nat.dbl(n, x)` with
+  `n` a variable or `x` unknown (u32 `README.md`, Laws, "Stating the
+  bounds"; word64 `README.md`, Laws).
+- **The kernel is slow on computation with free variables:** a large
+  computation on symbolic bits (AES rounds, GF(2^128) multiplication) is
+  out of reach even when it would terminate (cipher-modes `README.md`,
+  "AES and bend-collections"; gf `README.md`, Laws).
+- **`--verdict` memory:** crypto's `PROOF.bend` peaks at about 2.31 GB
+  under `--verdict`, near the 3 GB at which a check is killed; add to it
+  with care (crypto `README.md`, Status and Laws).
