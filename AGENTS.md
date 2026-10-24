@@ -84,6 +84,11 @@ package: copy its shape.
   a pure main is normalised by the checker, which is slow.
 - **Imports:** siblings by relative path (`import ../bytes/bytes.bend as B`);
   hub packages by name (`import bend-kit-int@0.2.0.0/int.bend as Int`).
+- **File names differ by more than case.** The repository is checked on a
+  case-insensitive file system (`/mnt/c` under WSL), so a lemma file
+  `proof_fill.bend` is the same file as `PROOF_fill.bend` and overwrites it.
+  Name lemma files for their lemmas (`proof_counts.bend`), never after a
+  proof pair.
 
 ## Runtime and checker limits (Bend 2.0.37)
 
