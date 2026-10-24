@@ -41,6 +41,7 @@ with the openssl command's named groups.
 | `dh.bend` | the errors, groups, private keys, public keys, validation, the primitive and agreement, and the public key's bytes |
 | `groups.bend` | the named groups (generated region) |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_agree.bend`, `PROOF_agree.bend` | the agreement law for every group and pair of keys, and its proof |
 | `check.bend` | ffdhe2048 agreement, validation and refusals, with expected output |
 | `gen/groups.py` | writes `groups.bend`'s primes from the RFCs' formulas (`--check` checks them) |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs |
@@ -86,11 +87,23 @@ Everything named `dh.*` is internal.
   Legendre symbol equals validation by y^q mod p = 1 for every y below 23,
   which is footnote 22's claim at that group).
 
-**Not proved, and tested:** that the exponentiations commute for every
-group and key ((g^y)^x = g^(xy) = (g^x)^y mod p) is number theory on the
-integers bignum's limbs stand for, which is not formalised (bignum's
-README); likewise footnote 22's equivalence for every safe prime. Both are
-tested on every named group against cryptography (`ref/run.sh`).
+`LAWS_agree.bend` has 1 law, proved (`PROOF_agree.bend`) and accepted by
+`--verdict`, **for every group and pair of keys**: `agree` (for a group (p,
+g, q) whose p is valid, odd and above 1, a valid g and valid private keys x
+and y, `Dh.primitive(grp, x, Dh.public(grp, y))` equals
+`Dh.primitive(grp, y, Dh.public(grp, x))`: the same shared secret, or the
+same refusal). It needs no hypothesis on the exponentiations: (g^y mod
+p)^x mod p and (g^x mod p)^y mod p are the same number by bignum's
+`exp_exp_comm` (bignum's `LAWS_mont.bend`: both are g^(x y) mod p, and
+Montgomery's result is normalised). Every named group's p is an odd prime,
+and keys read from bytes are valid numbers. `agree_if` stays, for groups
+outside these hypotheses.
+
+**Not proved, and tested:** footnote 22's equivalence (validation by the
+Legendre symbol equals y^q mod p = 1) for every safe prime, which is
+Euler's criterion (bignum's next stage); and so that the two parties'
+validation of each other's public keys agree. Both are tested on every
+named group against cryptography (`ref/run.sh`).
 
 ## Tests
 
@@ -128,6 +141,7 @@ exponentiation, the Jacobi symbol).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 136 cases match, `scripts/deps.sh`
-passes.
+Bend 2.0.37: `PROOF.bend` and `PROOF_agree.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 3 min 48 s, peak
+0.49 GB; `PROOF_agree.bend` about 10 s, peak 0.56 GB), `check.bend` passes,
+`ref/run.sh` 136 cases match, `scripts/deps.sh` passes.
