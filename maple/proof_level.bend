@@ -12,6 +12,8 @@ import ./node.bend as N
 import ./tree.bend as T
 import ./maple.bend as X
 import ./proof_order.bend as O
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 def Nd(-V: Data) -> Data:
   N.MapleNode<U32, V>
@@ -325,19 +327,6 @@ def tl.norm(-V: Data, +h: Nat, c: Nd(V), +o: Nat, +e: {lv(V, c, h) == True{} : B
 
 # Heights: the taller tree's height is the shorter's plus their difference
 
-def nt.sub_add(a: Nat, b: Nat, +e: {Nat.is_le(b, a) == True{} : Bool}) -> {Nat.add(Nat.sub(a, b), b) == a : Nat}:
-  match a b:
-    case 0n 0n:
-      {==}
-    case 0n 1n+q:
-      Empty.absurd({Nat.add(0n, 1n+q) == 0n : Nat}, O.ab.ft(e))
-    case 1n+p 0n:
-      O.nt.add_zero(1n+p)
-    case 1n+(+p) 1n+(+q):
-      %Equal.sym(Nat, Nat.add(Nat.sub(p, q), 1n+q), 1n+Nat.add(Nat.sub(p, q), q), O.nt.add_succ(Nat.sub(p, q), q)) : {_ == 1n+p : Nat}
-      %nt.sub_add(p, q, e) : {1n+Nat.add(Nat.sub(p, q), q) == 1n+_ : Nat}
-      {==}
-
 def nt.le_flip(+a: Nat, +b: Nat, +e: {Nat.is_le(a, b) == False{} : Bool}) -> {Nat.is_le(b, a) == True{} : Bool}:
   %Equal.sym(Cmp, Nat.cmp(b, a), O.cm.flip(Nat.cmp(a, b)), O.nt.flip(a, b)) : {Cmp.is_le(_) == True{} : Bool}
   O.cm.le_of_lt(O.cm.flip(Nat.cmp(a, b)), O.cm.lt_flip(Nat.cmp(a, b), e))
@@ -355,10 +344,10 @@ def lv.rw(-V: Data, -x: Nat, -y: Nat, +n: Nd(V), +e: {x == y : Nat}, +s: {lv(V, 
 def tlj.tall(right: Bool, -V: Data, +h1: Nat, +n1: Nd(V), +h2: Nat, +n2: Nd(V), +o: Nat, +s1: {sn(V, h1, n1) == True{} : Bool}, +s2: {sn(V, h2, n2) == True{} : Bool}, +er: {Nat.is_le(h2, h1) == right : Bool}) -> {tl(V, T.MapleTree.join.tall(U32, V, right, h1, n1, h2, n2, o)) == True{} : Bool}:
   match right:
     case True{}:
-      +sa = nt.sub_add(h1, h2, er)
+      +sa = UL.nat_le_witness(h2, h1, er)
       tl.norm(V, h1, T.MapleTree.join_right(U32, V, Nat.sub(h1, h2), n1, n2, o), o, lv.rw(V, Nat.add(Nat.sub(h1, h2), h2), h1, T.MapleTree.join_right(U32, V, Nat.sub(h1, h2), n1, n2, o), sa, lv.jr(V, Nat.sub(h1, h2), h2, n1, n2, o, sn.rw(V, Nat.add(Nat.sub(h1, h2), h2), h1, n1, sa, s1), sw(V, h2, n2, s2))))
     case False{}:
-      +sa = nt.sub_add(h2, h1, nt.le_flip(h2, h1, er))
+      +sa = UL.nat_le_witness(h1, h2, nt.le_flip(h2, h1, er))
       tl.norm(V, h2, T.MapleTree.join_left(U32, V, Nat.sub(h2, h1), n1, n2, o), o, lv.rw(V, Nat.add(Nat.sub(h2, h1), h1), h2, T.MapleTree.join_left(U32, V, Nat.sub(h2, h1), n1, n2, o), sa, lv.jl(V, Nat.sub(h2, h1), h1, n1, n2, o, sw(V, h1, n1, s1), sn.rw(V, Nat.add(Nat.sub(h2, h1), h1), h2, n2, sa, s2))))
 
 def or_false_l(x: Bool, -y: Bool, +ex: {x == False{} : Bool}, +e: {Bool.or(x, y) == True{} : Bool}) -> {y == True{} : Bool}:

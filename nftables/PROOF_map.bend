@@ -27,6 +27,8 @@ import ./sets.bend as S
 import ./LAWS.bend as NL
 import ./PROOF.bend as P
 import ./LAWS_map.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Comparisons
 
@@ -277,10 +279,6 @@ def cm.u32_flip(+x: U32, +y: U32) -> {U32.cmp(y, x) == cm.flip(U32.cmp(x, y)) : 
   %Equal.sym(Cmp, U32.cmp(x, y), Nat.cmp(U32.to_nat(x), U32.to_nat(y)), UL.u32_cmp_value(x, y)) : {Nat.cmp(U32.to_nat(y), U32.to_nat(x)) == cm.flip(_) : Cmp}
   cm.nat_flip(U32.to_nat(x), U32.to_nat(y))
 
-def cm.u32_refl(+x: U32) -> {U32.cmp(x, x) == EQ{} : Cmp}:
-  %Equal.sym(Cmp, U32.cmp(x, x), Nat.cmp(U32.to_nat(x), U32.to_nat(x)), UL.u32_cmp_value(x, x)) : {_ == EQ{} : Cmp}
-  cm.nat_refl(U32.to_nat(x))
-
 # Byte lists
 
 def cm.list_ck(a: List<&2, U32>, b: List<&2, U32>, c: List<&2, U32>) -> {cm.ck(S.NftKey.cmp.list(a, b), S.NftKey.cmp.list(b, c), S.NftKey.cmp.list(a, c)) == True{} : Bool}:
@@ -320,7 +318,7 @@ def cm.list_refl(a: List<&2, U32>) -> {S.NftKey.cmp.list(a, a) == EQ{} : Cmp}:
     case Nil{}:
       {==}
     case Con{+x, +xs}:
-      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, cm.u32_refl(x)) : {S.NftKey.cmp.pick(_, S.NftKey.cmp.list(xs, xs)) == EQ{} : Cmp}
+      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {S.NftKey.cmp.pick(_, S.NftKey.cmp.list(xs, xs)) == EQ{} : Cmp}
       cm.list_refl(xs)
 
 # Keys

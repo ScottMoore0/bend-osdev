@@ -25,6 +25,10 @@ import ./model.bend as M
 import ./node.bend as N
 import ./tree.bend as T
 import ./maple.bend as X
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions and Bool
 
@@ -110,17 +114,6 @@ def nt.succ_eq(-a: Nat, -b: Nat, +e: {a == b : Nat}) -> {1n+a == 1n+b : Nat}:
   %e : {1n+a == 1n+_ : Nat}
   {==}
 
-def nt.pred(n: Nat) -> Nat:
-  match n:
-    case 0n:
-      0n
-    case 1n+p:
-      p
-
-def nt.succ_inj(-a: Nat, -b: Nat, +e: {1n+a == 1n+b : Nat}) -> {a == b : Nat}:
-  %e : {nt.pred(1n+a) == nt.pred(_) : Nat}
-  {==}
-
 def nt.eq_refl(+a: Nat) -> {Nat.is_eq(a, a) == True{} : Bool}:
   match a:
     case 0n:
@@ -143,34 +136,12 @@ def nt.eq_of(+a: Nat, +b: Nat, +e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == 
         case 1n+(+q):
           nt.succ_eq(p, q, nt.eq_of(p, q, e))
 
-def nt.le_refl(+a: Nat) -> {Nat.is_le(a, a) == True{} : Bool}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      nt.le_refl(p)
-
 def nt.le_zero(+a: Nat) -> {Nat.is_le(0n, a) == True{} : Bool}:
   match a:
     case 0n:
       {==}
     case 1n+p:
       {==}
-
-def nt.le_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_le(a, b) == True{} : Bool}, +h2: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a:
-    case 0n:
-      nt.le_zero(c)
-    case 1n+(+p):
-      match b:
-        case 0n:
-          Empty.absurd({Nat.is_le(1n+p, c) == True{} : Bool}, ab.ft(h1))
-        case 1n+(+q):
-          match c:
-            case 0n:
-              Empty.absurd({Nat.is_le(1n+p, 0n) == True{} : Bool}, ab.ft(h2))
-            case 1n+(+r):
-              nt.le_trans(p, q, r, h1, h2)
 
 def nt.le_succ(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a:
@@ -192,69 +163,27 @@ def nt.le_rw_r(-a: Nat, -b: Nat, -c: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}
   %e : {Nat.is_le(a, _) == True{} : Bool}
   h
 
-def nt.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      nt.succ_eq(Nat.add(p, 0n), p, nt.add_zero(p))
-
-def nt.add_succ(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      nt.succ_eq(Nat.add(p, 1n+b), 1n+Nat.add(p, b), nt.add_succ(p, b))
-
 def nt.add_one(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
-  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, nt.add_succ(a, 0n), nt.succ_eq(Nat.add(a, 0n), a, nt.add_zero(a)))
+  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, UL.nat_add_succ(a, 0n), nt.succ_eq(Nat.add(a, 0n), a, UL.nat_add_zero(a)))
 
 def nt.add_two(+a: Nat) -> {Nat.add(a, 2n) == 2n+a : Nat}:
-  Equal.trans(Nat, Nat.add(a, 2n), 1n+Nat.add(a, 1n), 2n+a, nt.add_succ(a, 1n), nt.succ_eq(Nat.add(a, 1n), 1n+a, nt.add_one(a)))
-
-def nt.add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      nt.succ_eq(Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), nt.add_assoc(p, b, c))
+  Equal.trans(Nat, Nat.add(a, 2n), 1n+Nat.add(a, 1n), 2n+a, UL.nat_add_succ(a, 1n), nt.succ_eq(Nat.add(a, 1n), 1n+a, nt.add_one(a)))
 
 def nt.add_cong_l(-x: Nat, -y: Nat, -z: Nat, +e: {x == y : Nat}) -> {Nat.add(x, z) == Nat.add(y, z) : Nat}:
   %e : {Nat.add(x, z) == Nat.add(_, z) : Nat}
   {==}
-
-def nt.add_cancel(+a: Nat, -b: Nat, -c: Nat, +e: {Nat.add(a, b) == Nat.add(a, c) : Nat}) -> {b == c : Nat}:
-  match a:
-    case 0n:
-      e
-    case 1n+(+p):
-      nt.add_cancel(p, b, c, nt.succ_inj(Nat.add(p, b), Nat.add(p, c), e))
 
 def nt.add_dbl(+a: Nat) -> {Nat.add(a, a) == Nat.double(a) : Nat}:
   match a:
     case 0n:
       {==}
     case 1n+(+p):
-      nt.succ_eq(Nat.add(p, 1n+p), 1n+Nat.double(p), Equal.trans(Nat, Nat.add(p, 1n+p), 1n+Nat.add(p, p), 1n+Nat.double(p), nt.add_succ(p, p), nt.succ_eq(Nat.add(p, p), Nat.double(p), nt.add_dbl(p))))
-
-def nt.le_add_r(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      nt.le_zero(b)
-    case 1n+(+p):
-      nt.le_add_r(p, b)
-
-def nt.le_add_l(+a: Nat, +b: Nat) -> {Nat.is_le(b, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      nt.le_refl(b)
-    case 1n+(+p):
-      nt.le_succ(b, Nat.add(p, b), nt.le_add_l(p, b))
+      nt.succ_eq(Nat.add(p, 1n+p), 1n+Nat.double(p), Equal.trans(Nat, Nat.add(p, 1n+p), 1n+Nat.add(p, p), 1n+Nat.double(p), UL.nat_add_succ(p, p), nt.succ_eq(Nat.add(p, p), Nat.double(p), nt.add_dbl(p))))
 
 def nt.le_add_mono(+a: Nat, +b: Nat, +c: Nat, +d: Nat, +h1: {Nat.is_le(a, c) == True{} : Bool}, +h2: {Nat.is_le(b, d) == True{} : Bool}) -> {Nat.is_le(Nat.add(a, b), Nat.add(c, d)) == True{} : Bool}:
   match a:
     case 0n:
-      nt.le_trans(b, d, Nat.add(c, d), h2, nt.le_add_l(c, d))
+      UO.nat_le_trans(b, d, Nat.add(c, d), h2, UL.nat_le_add(d, c))
     case 1n+(+p):
       match c:
         case 0n:
@@ -293,7 +222,7 @@ def nt.lt_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.i
           nt.lt_le(p, q, h)
 
 def nt.lt_to_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(a, b) == True{} : Bool}:
-  nt.le_trans(a, 1n+a, b, nt.le_succ(a, a, nt.le_refl(a)), nt.lt_le(a, b, h))
+  UO.nat_le_trans(a, 1n+a, b, nt.le_succ(a, a, UL.nat_le_refl(a)), nt.lt_le(a, b, h))
 
 # not a < b is b <= a
 def nt.not_lt(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == False{} : Bool}) -> {Nat.is_le(b, a) == True{} : Bool}:
@@ -326,21 +255,6 @@ def nt.le_flip(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == False{} : Bool}) -> {Na
           {==}
         case 1n+(+q):
           nt.le_flip(p, q, h)
-
-def nt.sub_add(+a: Nat, +b: Nat, +h: {Nat.is_le(b, a) == True{} : Bool}) -> {Nat.add(Nat.sub(a, b), b) == a : Nat}:
-  match a:
-    case 0n:
-      match b:
-        case 0n:
-          {==}
-        case 1n+q:
-          Empty.absurd({Nat.add(0n, 1n+q) == 0n : Nat}, ab.ft(h))
-    case 1n+(+p):
-      match b:
-        case 0n:
-          nt.add_zero(1n+p)
-        case 1n+(+q):
-          Equal.trans(Nat, Nat.add(Nat.sub(p, q), 1n+q), 1n+Nat.add(Nat.sub(p, q), q), 1n+p, nt.add_succ(Nat.sub(p, q), q), nt.succ_eq(Nat.add(Nat.sub(p, q), q), p, nt.sub_add(p, q, h)))
 
 # Halves
 
@@ -387,7 +301,7 @@ def nt.half_sum(+k: Nat) -> {Nat.add(hf(k), hf(1n+k)) == k : Nat}:
         case 0n:
           {==}
         case 1n+(+q):
-          nt.succ_eq(Nat.add(hf(q), 1n+hf(1n+q)), 1n+q, Equal.trans(Nat, Nat.add(hf(q), 1n+hf(1n+q)), 1n+Nat.add(hf(q), hf(1n+q)), 1n+q, nt.add_succ(hf(q), hf(1n+q)), nt.succ_eq(Nat.add(hf(q), hf(1n+q)), q, nt.half_sum(q))))
+          nt.succ_eq(Nat.add(hf(q), 1n+hf(1n+q)), 1n+q, Equal.trans(Nat, Nat.add(hf(q), 1n+hf(1n+q)), 1n+Nat.add(hf(q), hf(1n+q)), 1n+q, UL.nat_add_succ(hf(q), hf(1n+q)), nt.succ_eq(Nat.add(hf(q), hf(1n+q)), q, nt.half_sum(q))))
 
 def nt.half_dbl(+a: Nat) -> {hf(Nat.double(a)) == a : Nat}:
   match a:
@@ -420,13 +334,13 @@ def nt.two_le_L(+o: Nat, +h: {Nat.is_le(3n, o) == True{} : Bool}) -> {Nat.is_le(
               nt.le_zero(hf(m))
 
 def nt.one_le_L(+o: Nat, +h: {Nat.is_le(3n, o) == True{} : Bool}) -> {Nat.is_le(1n, hf(1n+o)) == True{} : Bool}:
-  nt.le_trans(1n, 2n, hf(1n+o), {==}, nt.two_le_L(o, h))
+  UO.nat_le_trans(1n, 2n, hf(1n+o), {==}, nt.two_le_L(o, h))
 
 def nt.one_le(+o: Nat, +h: {Nat.is_le(3n, o) == True{} : Bool}) -> {Nat.is_le(1n, o) == True{} : Bool}:
-  nt.le_trans(1n, 3n, o, {==}, h)
+  UO.nat_le_trans(1n, 3n, o, {==}, h)
 
 def nt.two_le(+o: Nat, +h: {Nat.is_le(3n, o) == True{} : Bool}) -> {Nat.is_le(2n, o) == True{} : Bool}:
-  nt.le_trans(2n, 3n, o, {==}, h)
+  UO.nat_le_trans(2n, 3n, o, {==}, h)
 
 # the count after a split: with o < k <= 2o, both halves of k are L to o
 def nt.split_a(+o: Nat, +k: Nat, +h1: {Nat.is_lt(o, k) == True{} : Bool}, +h2: {Nat.is_le(k, Nat.double(o)) == True{} : Bool}) -> {Bool.and(Nat.is_le(hf(1n+o), hf(k)), Nat.is_le(hf(k), o)) == True{} : Bool}:
@@ -438,16 +352,16 @@ def nt.split_b(+o: Nat, +k: Nat, +h1: {Nat.is_lt(o, k) == True{} : Bool}, +h2: {
 # the count of a chain that lost a slot and gained one or two: from
 # L <= 1 + a <= o and 1 <= b <= 2, L <= a + b <= 2o (and b + a likewise)
 def nt.gain_lo(+L: Nat, +a: Nat, +b: Nat, +h1: {Nat.is_le(L, 1n+a) == True{} : Bool}, +h3: {Nat.is_le(1n, b) == True{} : Bool}) -> {Nat.is_le(L, Nat.add(a, b)) == True{} : Bool}:
-  nt.le_trans(L, 1n+a, Nat.add(a, b), h1, nt.le_rw_l(1n+a, Nat.add(a, 1n), Nat.add(a, b), Equal.sym(Nat, Nat.add(a, 1n), 1n+a, nt.add_one(a)), nt.le_add_mono(a, 1n, a, b, nt.le_refl(a), h3)))
+  UO.nat_le_trans(L, 1n+a, Nat.add(a, b), h1, nt.le_rw_l(1n+a, Nat.add(a, 1n), Nat.add(a, b), Equal.sym(Nat, Nat.add(a, 1n), 1n+a, nt.add_one(a)), nt.le_add_mono(a, 1n, a, b, UL.nat_le_refl(a), h3)))
 
 def nt.gain_hi(+o: Nat, +a: Nat, +b: Nat, +h2: {Nat.is_le(1n+a, o) == True{} : Bool}, +h4: {Nat.is_le(b, 2n) == True{} : Bool}, +h5: {Nat.is_le(1n, o) == True{} : Bool}) -> {Nat.is_le(Nat.add(a, b), Nat.double(o)) == True{} : Bool}:
-  nt.le_trans(Nat.add(a, b), 2n+a, Nat.double(o), nt.le_rw_r(Nat.add(a, b), Nat.add(a, 2n), 2n+a, nt.le_add_mono(a, b, a, 2n, nt.le_refl(a), h4), nt.add_two(a)), nt.le_trans(2n+a, 1n+o, Nat.double(o), h2, nt.succ_le_double(o, h5)))
+  UO.nat_le_trans(Nat.add(a, b), 2n+a, Nat.double(o), nt.le_rw_r(Nat.add(a, b), Nat.add(a, 2n), 2n+a, nt.le_add_mono(a, b, a, 2n, UL.nat_le_refl(a), h4), nt.add_two(a)), UO.nat_le_trans(2n+a, 1n+o, Nat.double(o), h2, nt.succ_le_double(o, h5)))
 
 def nt.gain_lo_l(+L: Nat, +a: Nat, +b: Nat, +h1: {Nat.is_le(L, 1n+a) == True{} : Bool}, +h3: {Nat.is_le(1n, b) == True{} : Bool}) -> {Nat.is_le(L, Nat.add(b, a)) == True{} : Bool}:
-  nt.le_trans(L, 1n+a, Nat.add(b, a), h1, nt.le_add_mono(1n, a, b, a, h3, nt.le_refl(a)))
+  UO.nat_le_trans(L, 1n+a, Nat.add(b, a), h1, nt.le_add_mono(1n, a, b, a, h3, UL.nat_le_refl(a)))
 
 def nt.gain_hi_l(+o: Nat, +a: Nat, +b: Nat, +h2: {Nat.is_le(1n+a, o) == True{} : Bool}, +h4: {Nat.is_le(b, 2n) == True{} : Bool}, +h5: {Nat.is_le(1n, o) == True{} : Bool}) -> {Nat.is_le(Nat.add(b, a), Nat.double(o)) == True{} : Bool}:
-  nt.le_trans(Nat.add(b, a), 2n+a, Nat.double(o), nt.le_add_mono(b, a, 2n, a, h4, nt.le_refl(a)), nt.le_trans(2n+a, 1n+o, Nat.double(o), h2, nt.succ_le_double(o, h5)))
+  UO.nat_le_trans(Nat.add(b, a), 2n+a, Nat.double(o), nt.le_add_mono(b, a, 2n, a, h4, UL.nat_le_refl(a)), UO.nat_le_trans(2n+a, 1n+o, Nat.double(o), h2, nt.succ_le_double(o, h5)))
 
 # two counts of at most o are at most 2o together
 def nt.two_o(+o: Nat, +a: Nat, +b: Nat, +ha: {Nat.is_le(a, o) == True{} : Bool}, +hb: {Nat.is_le(b, o) == True{} : Bool}) -> {Nat.is_le(Nat.add(a, b), Nat.double(o)) == True{} : Bool}:
@@ -989,7 +903,7 @@ def sp.ca(-V: Data, +n: Nd(V)) -> {cnt(V, take(V, n, hf(cnt(V, n)))) == hf(cnt(V
   cnt.take(V, n, hf(cnt(V, n)), nt.half_le(cnt(V, n)))
 
 def sp.cb(-V: Data, +n: Nd(V)) -> {cnt(V, drop(V, n, hf(cnt(V, n)))) == hf(1n+cnt(V, n)) : Nat}:
-  nt.add_cancel(hf(cnt(V, n)), cnt(V, drop(V, n, hf(cnt(V, n)))), hf(1n+cnt(V, n)), Equal.trans(Nat, Nat.add(hf(cnt(V, n)), cnt(V, drop(V, n, hf(cnt(V, n))))), cnt(V, n), Nat.add(hf(cnt(V, n)), hf(1n+cnt(V, n))), cnt.drop(V, n, hf(cnt(V, n)), nt.half_le(cnt(V, n))), Equal.sym(Nat, Nat.add(hf(cnt(V, n)), hf(1n+cnt(V, n))), cnt(V, n), nt.half_sum(cnt(V, n)))))
+  UL.nat_add_cancel(hf(cnt(V, n)), cnt(V, drop(V, n, hf(cnt(V, n)))), hf(1n+cnt(V, n)), Equal.trans(Nat, Nat.add(hf(cnt(V, n)), cnt(V, drop(V, n, hf(cnt(V, n))))), cnt(V, n), Nat.add(hf(cnt(V, n)), hf(1n+cnt(V, n))), cnt.drop(V, n, hf(cnt(V, n)), nt.half_le(cnt(V, n))), Equal.sym(Nat, Nat.add(hf(cnt(V, n)), hf(1n+cnt(V, n))), cnt(V, n), nt.half_sum(cnt(V, n)))))
 
 def sp.fa(-V: Data, +n: Nd(V), +o: Nat, +eo: {Nat.is_lt(o, cnt(V, n)) == True{} : Bool}, +eU: {Nat.is_le(cnt(V, n), Nat.double(o)) == True{} : Bool}) -> {fc(o, cnt(V, take(V, n, hf(cnt(V, n))))) == True{} : Bool}:
   fc.rw(o, cnt(V, take(V, n, hf(cnt(V, n)))), hf(cnt(V, n)), sp.ca(V, n), nt.split_a(o, cnt(V, n), eo, eU))
@@ -998,7 +912,7 @@ def sp.fb(-V: Data, +n: Nd(V), +o: Nat, +eo: {Nat.is_lt(o, cnt(V, n)) == True{} 
   fc.rw(o, cnt(V, drop(V, n, hf(cnt(V, n)))), hf(1n+cnt(V, n)), sp.cb(V, n), nt.split_b(o, cnt(V, n), eo, eU))
 
 def fc.one(+o: Nat, +k: Nat, +ho: {Nat.is_le(3n, o) == True{} : Bool}, +f: {fc(o, k) == True{} : Bool}) -> {Nat.is_le(1n, k) == True{} : Bool}:
-  nt.le_trans(1n, hf(1n+o), k, nt.one_le_L(o, ho), fc.lo(o, k, f))
+  UO.nat_le_trans(1n, hf(1n+o), k, nt.one_le_L(o, ho), fc.lo(o, k, f))
 
 def fit.full.go(over: Bool, -V: Data, +h: Nat, +n: Nd(V), +o: Nat, +ho: {Nat.is_le(3n, o) == True{} : Bool}, +eo: {Nat.is_lt(o, cnt(V, n)) == over : Bool}, +w: {wn(V, h, n, o) == True{} : Bool}, +eL: {Nat.is_le(hf(1n+o), cnt(V, n)) == True{} : Bool}, +eU: {Nat.is_le(cnt(V, n), Nat.double(o)) == True{} : Bool}) -> {fitok(V, h, N.MapleNode.fit.go(U32, V, over, n, hf(cnt(V, n))), o) == True{} : Bool}:
   match over:
@@ -1060,7 +974,7 @@ def jl(-V: Data, d: Nat, n1: Nd(V), +n2: Nd(V), +o: Nat) -> Nd(V):
   T.MapleTree.join_left(U32, V, d, n1, n2, o)
 
 def fn.chain_nil(-V: Data, +h: Nat, +o: Nat, +ho: {Nat.is_le(3n, o) == True{} : Bool}, +f: {fnode(V, 1n+h, N.MapleNil{}, o) == True{} : Bool}) -> Empty:
-  ab.ft(nt.le_trans(1n, hf(1n+o), 0n, nt.one_le_L(o, ho), fc.lo(o, 0n, bo.and_l(fc(o, 0n), shp(V, N.MapleNil{}, h, o), f))))
+  ab.ft(UO.nat_le_trans(1n, hf(1n+o), 0n, nt.one_le_L(o, ho), fc.lo(o, 0n, bo.and_l(fc(o, 0n), shp(V, N.MapleNil{}, h, o), f))))
 
 # n2 (a weak node of at most o items) merged into the right edge of n1, a
 # full node d levels higher: a chain of one or two full nodes
@@ -1070,7 +984,7 @@ def rs.jr(-V: Data, d: Nat, +h2: Nat, +n1: Nd(V), +n2: Nd(V), +o: Nat, +ho: {Nat
       +w1 = fn.wn(V, h2, n1, o, f1)
       +fc1 = fn.fc(V, h2, n1, o, f1)
       +cm = cnt.merge(h2, V, n1, n2, o, w1, w2)
-      fit.full(V, h2, mrg(V, n1, n2), o, ho, wn.merge(h2, V, n1, n2, o, w1, w2), nt.le_rw_r(hf(1n+o), Nat.add(cnt(V, n1), cnt(V, n2)), cnt(V, mrg(V, n1, n2)), nt.le_trans(hf(1n+o), cnt(V, n1), Nat.add(cnt(V, n1), cnt(V, n2)), fc.lo(o, cnt(V, n1), fc1), nt.le_add_r(cnt(V, n1), cnt(V, n2))), Equal.sym(Nat, cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), cm)), nt.le_rw_l(cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), Nat.double(o), cm, nt.two_o(o, cnt(V, n1), cnt(V, n2), fc.hi(o, cnt(V, n1), fc1), c2)))
+      fit.full(V, h2, mrg(V, n1, n2), o, ho, wn.merge(h2, V, n1, n2, o, w1, w2), nt.le_rw_r(hf(1n+o), Nat.add(cnt(V, n1), cnt(V, n2)), cnt(V, mrg(V, n1, n2)), UO.nat_le_trans(hf(1n+o), cnt(V, n1), Nat.add(cnt(V, n1), cnt(V, n2)), fc.lo(o, cnt(V, n1), fc1), UO.nat_le_add_r(cnt(V, n1), cnt(V, n2))), Equal.sym(Nat, cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), cm)), nt.le_rw_l(cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), Nat.double(o), cm, nt.two_o(o, cnt(V, n1), cnt(V, n2), fc.hi(o, cnt(V, n1), fc1), c2)))
     case 1n+(+e):
       match n1:
         case N.MapleLeaf{es}:
@@ -1095,7 +1009,7 @@ def rs.jl(-V: Data, d: Nat, +h1: Nat, +n1: Nd(V), +n2: Nd(V), +o: Nat, +ho: {Nat
       +w2 = fn.wn(V, h1, n2, o, f2)
       +fc2 = fn.fc(V, h1, n2, o, f2)
       +cm = cnt.merge(h1, V, n1, n2, o, w1, w2)
-      fit.full(V, h1, mrg(V, n1, n2), o, ho, wn.merge(h1, V, n1, n2, o, w1, w2), nt.le_rw_r(hf(1n+o), Nat.add(cnt(V, n1), cnt(V, n2)), cnt(V, mrg(V, n1, n2)), nt.le_trans(hf(1n+o), cnt(V, n2), Nat.add(cnt(V, n1), cnt(V, n2)), fc.lo(o, cnt(V, n2), fc2), nt.le_add_l(cnt(V, n1), cnt(V, n2))), Equal.sym(Nat, cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), cm)), nt.le_rw_l(cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), Nat.double(o), cm, nt.two_o(o, cnt(V, n1), cnt(V, n2), c1, fc.hi(o, cnt(V, n2), fc2))))
+      fit.full(V, h1, mrg(V, n1, n2), o, ho, wn.merge(h1, V, n1, n2, o, w1, w2), nt.le_rw_r(hf(1n+o), Nat.add(cnt(V, n1), cnt(V, n2)), cnt(V, mrg(V, n1, n2)), UO.nat_le_trans(hf(1n+o), cnt(V, n2), Nat.add(cnt(V, n1), cnt(V, n2)), fc.lo(o, cnt(V, n2), fc2), UL.nat_le_add(cnt(V, n2), cnt(V, n1))), Equal.sym(Nat, cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), cm)), nt.le_rw_l(cnt(V, mrg(V, n1, n2)), Nat.add(cnt(V, n1), cnt(V, n2)), Nat.double(o), cm, nt.two_o(o, cnt(V, n1), cnt(V, n2), c1, fc.hi(o, cnt(V, n2), fc2))))
     case 1n+(+e):
       match n2:
         case N.MapleLeaf{es}:
@@ -1191,11 +1105,11 @@ def rs.tall_l(-V: Data, d: Nat, +h1: Nat, +n1: Nd(V), +n2: Nd(V), +o: Nat, +ho: 
 def rs.tall(right: Bool, -V: Data, +h1: Nat, +n1: Nd(V), +h2: Nat, +n2: Nd(V), +o: Nat, +ho: {Nat.is_le(3n, o) == True{} : Bool}, +er: {Nat.is_le(h2, h1) == right : Bool}, +r1: {rsh(V, h1, n1, o) == True{} : Bool}, +r2: {rsh(V, h2, n2, o) == True{} : Bool}) -> {rs(V, o, T.MapleTree.join.tall(U32, V, right, h1, n1, h2, n2, o)) == True{} : Bool}:
   match right:
     case True{}:
-      +sa = nt.sub_add(h1, h2, er)
+      +sa = UL.nat_le_witness(h2, h1, er)
       %sa : {rs(V, o, norm(V, 1n+_, jr(V, Nat.sub(h1, h2), n1, n2, o), o)) == True{} : Bool}
       rs.tall_r(V, Nat.sub(h1, h2), h2, n1, n2, o, ho, rsh.rw(V, Nat.add(Nat.sub(h1, h2), h2), h1, n1, o, sa, r1), r2)
     case False{}:
-      +sa = nt.sub_add(h2, h1, nt.le_flip(h2, h1, er))
+      +sa = UL.nat_le_witness(h1, h2, nt.le_flip(h2, h1, er))
       %sa : {rs(V, o, norm(V, 1n+_, jl(V, Nat.sub(h2, h1), n1, n2, o), o)) == True{} : Bool}
       rs.tall_l(V, Nat.sub(h2, h1), h1, n1, n2, o, ho, r1, rsh.rw(V, Nat.add(Nat.sub(h2, h1), h1), h2, n2, o, sa, r2))
 
@@ -1276,21 +1190,21 @@ def rs.lo(-V: Data, n: Nd(V), +h: Nat, +a: U32, +pre: Nd(V), c: Cmp, +o: Nat, +h
           match c:
             case LT{}:
               +cp = cnt.append(V, pre, N.MapleSlot{p, ch, N.MapleNil{}}, g, o, pp)
-              rs.lo(V, r, 1n+g, a, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}}), probe(V, r, a), o, ho, sh.r(V, g, p, ch, r, o, w), shp.append(V, pre, N.MapleSlot{p, ch, N.MapleNil{}}, g, o, pp, sh.intro(V, g, p, ch, N.MapleNil{}, o, sh.c(V, g, p, ch, r, o, w), {==})), nt.le_rw_l(Nat.add(cnt(V, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}})), cnt(V, r)), Nat.add(Nat.add(cnt(V, pre), 1n), cnt(V, r)), o, nt.add_cong_l(cnt(V, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}})), Nat.add(cnt(V, pre), 1n), cnt(V, r), cp), nt.le_rw_l(Nat.add(Nat.add(cnt(V, pre), 1n), cnt(V, r)), Nat.add(cnt(V, pre), Nat.add(1n, cnt(V, r))), o, nt.add_assoc(cnt(V, pre), 1n, cnt(V, r)), ec)))
+              rs.lo(V, r, 1n+g, a, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}}), probe(V, r, a), o, ho, sh.r(V, g, p, ch, r, o, w), shp.append(V, pre, N.MapleSlot{p, ch, N.MapleNil{}}, g, o, pp, sh.intro(V, g, p, ch, N.MapleNil{}, o, sh.c(V, g, p, ch, r, o, w), {==})), nt.le_rw_l(Nat.add(cnt(V, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}})), cnt(V, r)), Nat.add(Nat.add(cnt(V, pre), 1n), cnt(V, r)), o, nt.add_cong_l(cnt(V, app(V, pre, N.MapleSlot{p, ch, N.MapleNil{}})), Nat.add(cnt(V, pre), 1n), cnt(V, r), cp), nt.le_rw_l(Nat.add(Nat.add(cnt(V, pre), 1n), cnt(V, r)), Nat.add(cnt(V, pre), Nat.add(1n, cnt(V, r))), o, UL.nat_add_assoc(cnt(V, pre), 1n, cnt(V, r)), ec)))
             case EQ{}:
               +fch = sh.c(V, g, p, ch, r, o, w)
-              rs.join(V, norm(V, 1n+g, pre, o), lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o), o, ho, rse.of(V, o, norm(V, 1n+g, pre, o), norm.chain(V, pre, g, o, ho, pp, nt.le_trans(cnt(V, pre), Nat.add(cnt(V, pre), 1n+cnt(V, r)), o, nt.le_add_r(cnt(V, pre), 1n+cnt(V, r)), ec))), rs.lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o, ho, fn.wn(V, g, ch, o, fch), pre_ok.nil(V, g, o), fc.hi(o, cnt(V, ch), fn.fc(V, g, ch, o, fch))))
+              rs.join(V, norm(V, 1n+g, pre, o), lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o), o, ho, rse.of(V, o, norm(V, 1n+g, pre, o), norm.chain(V, pre, g, o, ho, pp, UO.nat_le_trans(cnt(V, pre), Nat.add(cnt(V, pre), 1n+cnt(V, r)), o, UO.nat_le_add_r(cnt(V, pre), 1n+cnt(V, r)), ec))), rs.lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o, ho, fn.wn(V, g, ch, o, fch), pre_ok.nil(V, g, o), fc.hi(o, cnt(V, ch), fn.fc(V, g, ch, o, fch))))
             case GT{}:
               +fch = sh.c(V, g, p, ch, r, o, w)
-              rs.join(V, norm(V, 1n+g, pre, o), lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o), o, ho, rse.of(V, o, norm(V, 1n+g, pre, o), norm.chain(V, pre, g, o, ho, pp, nt.le_trans(cnt(V, pre), Nat.add(cnt(V, pre), 1n+cnt(V, r)), o, nt.le_add_r(cnt(V, pre), 1n+cnt(V, r)), ec))), rs.lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o, ho, fn.wn(V, g, ch, o, fch), pre_ok.nil(V, g, o), fc.hi(o, cnt(V, ch), fn.fc(V, g, ch, o, fch))))
+              rs.join(V, norm(V, 1n+g, pre, o), lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o), o, ho, rse.of(V, o, norm(V, 1n+g, pre, o), norm.chain(V, pre, g, o, ho, pp, UO.nat_le_trans(cnt(V, pre), Nat.add(cnt(V, pre), 1n+cnt(V, r)), o, UO.nat_le_add_r(cnt(V, pre), 1n+cnt(V, r)), ec))), rs.lo(V, ch, g, a, N.MapleNil{}, probe(V, ch, a), o, ho, fn.wn(V, g, ch, o, fch), pre_ok.nil(V, g, o), fc.hi(o, cnt(V, ch), fn.fc(V, g, ch, o, fch))))
     case N.MapleNil{}:
       match h:
         case 0n:
           Empty.absurd({rs(V, o, norm(V, 0n, pre, o)) == True{} : Bool}, ab.ft(w))
         case 1n+(+g):
-          norm.chain(V, pre, g, o, ho, pp, nt.le_rw_l(cnt(V, pre), Nat.add(cnt(V, pre), 0n), o, Equal.sym(Nat, Nat.add(cnt(V, pre), 0n), cnt(V, pre), nt.add_zero(cnt(V, pre))), ec))
+          norm.chain(V, pre, g, o, ho, pp, nt.le_rw_l(cnt(V, pre), Nat.add(cnt(V, pre), 0n), o, Equal.sym(Nat, Nat.add(cnt(V, pre), 0n), cnt(V, pre), UL.nat_add_zero(cnt(V, pre))), ec))
     case N.MapleLeaf{+es}:
-      rs.join(V, norm(V, h, pre, o), N.MapleTree{o, 0n, N.MapleLeaf{below(V, es, a)}}, o, ho, rse.norm(V, h, pre, o, ho, pp, nt.le_trans(cnt(V, pre), Nat.add(cnt(V, pre), len(V, es)), o, nt.le_add_r(cnt(V, pre), len(V, es)), ec)), bo.and_intro(Nat.is_eq(o, o), rsh(V, 0n, N.MapleLeaf{below(V, es, a)}, o), nt.eq_refl(o), bo.and_intro(Nat.is_le(0n, len(V, below(V, es, a))), Nat.is_le(len(V, below(V, es, a)), o), nt.le_zero(len(V, below(V, es, a))), nt.le_trans(len(V, below(V, es, a)), len(V, es), o, li.len_below(V, es, a), nt.le_trans(len(V, es), Nat.add(cnt(V, pre), len(V, es)), o, nt.le_add_l(cnt(V, pre), len(V, es)), ec)))))
+      rs.join(V, norm(V, h, pre, o), N.MapleTree{o, 0n, N.MapleLeaf{below(V, es, a)}}, o, ho, rse.norm(V, h, pre, o, ho, pp, UO.nat_le_trans(cnt(V, pre), Nat.add(cnt(V, pre), len(V, es)), o, UO.nat_le_add_r(cnt(V, pre), len(V, es)), ec)), bo.and_intro(Nat.is_eq(o, o), rsh(V, 0n, N.MapleLeaf{below(V, es, a)}, o), nt.eq_refl(o), bo.and_intro(Nat.is_le(0n, len(V, below(V, es, a))), Nat.is_le(len(V, below(V, es, a)), o), nt.le_zero(len(V, below(V, es, a))), UO.nat_le_trans(len(V, below(V, es, a)), len(V, es), o, li.len_below(V, es, a), UO.nat_le_trans(len(V, es), Nat.add(cnt(V, pre), len(V, es)), o, UL.nat_le_add(len(V, es), cnt(V, pre)), ec)))))
 
 # the part of n (a weak node of height h, at most o items) above b is a root
 def rs.hi(-V: Data, n: Nd(V), +h: Nat, +b: U32, c: Cmp, +o: Nat, +ho: {Nat.is_le(3n, o) == True{} : Bool}, +w: {wn(V, h, n, o) == True{} : Bool}, +ec: {Nat.is_le(cnt(V, n), o) == True{} : Bool}) -> {rs(V, o, hi(V, n, h, b, c, o)) == True{} : Bool}:
@@ -1302,19 +1216,19 @@ def rs.hi(-V: Data, n: Nd(V), +h: Nat, +b: U32, c: Cmp, +o: Nat, +ho: {Nat.is_le
         case 1n+(+g):
           match c:
             case GT{}:
-              +ecr = nt.le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), nt.le_refl(cnt(V, r))), ec)
+              +ecr = UO.nat_le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), UL.nat_le_refl(cnt(V, r))), ec)
               +fch = sh.c(V, g, p, ch, r, o, w)
               rs.join(V, hi(V, ch, g, b, probe(V, ch, b), o), norm(V, 1n+g, r, o), o, ho, rse.of(V, o, hi(V, ch, g, b, probe(V, ch, b), o), rs.hi(V, ch, g, b, probe(V, ch, b), o, ho, fn.wn(V, g, ch, o, fch), fc.hi(o, cnt(V, ch), fn.fc(V, g, ch, o, fch)))), norm.chain(V, r, g, o, ho, sh.r(V, g, p, ch, r, o, w), ecr))
             case LT{}:
-              +ecr = nt.le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), nt.le_refl(cnt(V, r))), ec)
+              +ecr = UO.nat_le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), UL.nat_le_refl(cnt(V, r))), ec)
               rs.hi(V, r, 1n+g, b, probe(V, r, b), o, ho, sh.r(V, g, p, ch, r, o, w), ecr)
             case EQ{}:
-              +ecr = nt.le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), nt.le_refl(cnt(V, r))), ec)
+              +ecr = UO.nat_le_trans(cnt(V, r), 1n+cnt(V, r), o, nt.le_succ(cnt(V, r), cnt(V, r), UL.nat_le_refl(cnt(V, r))), ec)
               rs.hi(V, r, 1n+g, b, probe(V, r, b), o, ho, sh.r(V, g, p, ch, r, o, w), ecr)
     case N.MapleNil{}:
       rs.empty(V, o)
     case N.MapleLeaf{+es}:
-      bo.and_intro(Nat.is_eq(o, o), rsh(V, 0n, N.MapleLeaf{above(V, es, b)}, o), nt.eq_refl(o), bo.and_intro(Nat.is_le(0n, len(V, above(V, es, b))), Nat.is_le(len(V, above(V, es, b)), o), nt.le_zero(len(V, above(V, es, b))), nt.le_trans(len(V, above(V, es, b)), len(V, es), o, li.len_above(V, es, b), ec)))
+      bo.and_intro(Nat.is_eq(o, o), rsh(V, 0n, N.MapleLeaf{above(V, es, b)}, o), nt.eq_refl(o), bo.and_intro(Nat.is_le(0n, len(V, above(V, es, b))), Nat.is_le(len(V, above(V, es, b)), o), nt.le_zero(len(V, above(V, es, b))), UO.nat_le_trans(len(V, above(V, es, b)), len(V, es), o, li.len_above(V, es, b), ec)))
 
 # Storing and erasing
 
@@ -1494,15 +1408,8 @@ def ord.erase.go(-V: Data, m: Maybe<&2, M.MapleEntry<U32, V>>, +t: Tr(V)) -> {or
 # The size bound: a balanced tree of height g + 1 holds at least 2 m^(g+1)
 # entries, for every m with 2m <= order + 1
 
-def nt.mul_one(+a: Nat) -> {Nat.mul(a, 1n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      nt.succ_eq(Nat.mul(p, 1n), p, nt.mul_one(p))
-
 def nt.pow_one(+m: Nat) -> {Nat.pow(m, 1n) == m : Nat}:
-  nt.mul_one(m)
+  UL.nat_mul_one(m)
 
 def nt.mul_mono_l(+a: Nat, +b: Nat, +c: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(Nat.mul(a, c), Nat.mul(b, c)) == True{} : Bool}:
   match a:
@@ -1513,7 +1420,7 @@ def nt.mul_mono_l(+a: Nat, +b: Nat, +c: Nat, +h: {Nat.is_le(a, b) == True{} : Bo
         case 0n:
           Empty.absurd({Nat.is_le(Nat.mul(1n+p, c), 0n) == True{} : Bool}, ab.ft(h))
         case 1n+(+q):
-          nt.le_add_mono(c, Nat.mul(p, c), c, Nat.mul(q, c), nt.le_refl(c), nt.mul_mono_l(p, q, c, h))
+          nt.le_add_mono(c, Nat.mul(p, c), c, Nat.mul(q, c), UL.nat_le_refl(c), nt.mul_mono_l(p, q, c, h))
 
 def nt.m_le_L(+m: Nat, +o: Nat, +h: {Nat.is_le(Nat.double(m), 1n+o) == True{} : Bool}) -> {Nat.is_le(m, hf(1n+o)) == True{} : Bool}:
   nt.le_rw_l(m, hf(Nat.double(m)), hf(1n+o), Equal.sym(Nat, hf(Nat.double(m)), m, nt.half_dbl(m)), nt.half_mono(Nat.double(m), 1n+o, h))
@@ -1523,13 +1430,13 @@ def eo(-V: Data, n: Nd(V), acc: Es(V)) -> Es(V):
 
 # p + (k + a) bounds from k + a <= b and p + b <= c
 def nt.step(+p: Nat, +k: Nat, +a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_le(Nat.add(k, a), b) == True{} : Bool}, +h2: {Nat.is_le(Nat.add(p, b), c) == True{} : Bool}) -> {Nat.is_le(Nat.add(Nat.add(p, k), a), c) == True{} : Bool}:
-  nt.le_rw_l(Nat.add(Nat.add(p, k), a), Nat.add(p, Nat.add(k, a)), c, nt.add_assoc(p, k, a), nt.le_trans(Nat.add(p, Nat.add(k, a)), Nat.add(p, b), c, nt.le_add_mono(p, Nat.add(k, a), p, b, nt.le_refl(p), h1), h2))
+  nt.le_rw_l(Nat.add(Nat.add(p, k), a), Nat.add(p, Nat.add(k, a)), c, UL.nat_add_assoc(p, k, a), UO.nat_le_trans(Nat.add(p, Nat.add(k, a)), Nat.add(p, b), c, nt.le_add_mono(p, Nat.add(k, a), p, b, UL.nat_le_refl(p), h1), h2))
 
 # a full leaf holds at least m entries
 def ents.leaf(-V: Data, c: Nd(V), +acc: Es(V), +m: Nat, +o: Nat, +hm: {Nat.is_le(Nat.double(m), 1n+o) == True{} : Bool}, +lf: {N.MapleNode.leaf_ok(U32, V, c, o) == True{} : Bool}) -> {Nat.is_le(Nat.add(Nat.pow(m, 1n), len(V, acc)), len(V, eo(V, c, acc))) == True{} : Bool}:
   match c:
     case N.MapleLeaf{+es}:
-      nt.le_rw_r(Nat.add(Nat.pow(m, 1n), len(V, acc)), Nat.add(len(V, es), len(V, acc)), len(V, eo(V, N.MapleLeaf{es}, acc)), nt.le_add_mono(Nat.pow(m, 1n), len(V, acc), len(V, es), len(V, acc), nt.le_rw_l(Nat.pow(m, 1n), m, len(V, es), nt.pow_one(m), nt.le_trans(m, hf(1n+o), len(V, es), nt.m_le_L(m, o, hm), fc.lo(o, len(V, es), lf))), nt.le_refl(len(V, acc))), Equal.sym(Nat, len(V, eo(V, N.MapleLeaf{es}, acc)), Nat.add(len(V, es), len(V, acc)), li.len_append(V, es, acc)))
+      nt.le_rw_r(Nat.add(Nat.pow(m, 1n), len(V, acc)), Nat.add(len(V, es), len(V, acc)), len(V, eo(V, N.MapleLeaf{es}, acc)), nt.le_add_mono(Nat.pow(m, 1n), len(V, acc), len(V, es), len(V, acc), nt.le_rw_l(Nat.pow(m, 1n), m, len(V, es), nt.pow_one(m), UO.nat_le_trans(m, hf(1n+o), len(V, es), nt.m_le_L(m, o, hm), fc.lo(o, len(V, es), lf))), UL.nat_le_refl(len(V, acc))), Equal.sym(Nat, len(V, eo(V, N.MapleLeaf{es}, acc)), Nat.add(len(V, es), len(V, acc)), li.len_append(V, es, acc)))
     case N.MapleNil{}:
       Empty.absurd({Nat.is_le(Nat.add(Nat.pow(m, 1n), len(V, acc)), len(V, acc)) == True{} : Bool}, ab.ft(lf))
     case N.MapleSlot{p, d, r}:
@@ -1541,14 +1448,14 @@ def ents.lo(-V: Data, n: Nd(V), +g: Nat, +acc: Es(V), +m: Nat, +o: Nat, +hm: {Na
     case N.MapleLeaf{es}:
       Empty.absurd({Nat.is_le(Nat.add(Nat.mul(len(V, es), Nat.pow(m, 1n+g)), len(V, acc)), len(V, eo(V, N.MapleLeaf{es}, acc))) == True{} : Bool}, ab.ft(e))
     case N.MapleNil{}:
-      nt.le_refl(len(V, acc))
+      UL.nat_le_refl(len(V, acc))
     case N.MapleSlot{+p, +c, +r}:
       match g:
         case 0n:
           nt.step(Nat.pow(m, 1n), Nat.mul(cnt(V, r), Nat.pow(m, 1n)), len(V, acc), len(V, eo(V, r, acc)), len(V, eo(V, c, eo(V, r, acc))), ents.lo(V, r, 0n, acc, m, o, hm, sh.r(V, 0n, p, c, r, o, e)), ents.leaf(V, c, eo(V, r, acc), m, o, hm, sh.c(V, 0n, p, c, r, o, e)))
         case 1n+(+f):
           +fq = sh.c(V, 1n+f, p, c, r, o, e)
-          nt.step(Nat.pow(m, 2n+f), Nat.mul(cnt(V, r), Nat.pow(m, 2n+f)), len(V, acc), len(V, eo(V, r, acc)), len(V, eo(V, c, eo(V, r, acc))), ents.lo(V, r, 1n+f, acc, m, o, hm, sh.r(V, 1n+f, p, c, r, o, e)), nt.le_trans(Nat.add(Nat.pow(m, 2n+f), len(V, eo(V, r, acc))), Nat.add(Nat.mul(cnt(V, c), Nat.pow(m, 1n+f)), len(V, eo(V, r, acc))), len(V, eo(V, c, eo(V, r, acc))), nt.le_add_mono(Nat.pow(m, 2n+f), len(V, eo(V, r, acc)), Nat.mul(cnt(V, c), Nat.pow(m, 1n+f)), len(V, eo(V, r, acc)), nt.mul_mono_l(m, cnt(V, c), Nat.pow(m, 1n+f), nt.le_trans(m, hf(1n+o), cnt(V, c), nt.m_le_L(m, o, hm), fc.lo(o, cnt(V, c), bo.and_l(fc(o, cnt(V, c)), shp(V, c, f, o), fq)))), nt.le_refl(len(V, eo(V, r, acc)))), ents.lo(V, c, f, eo(V, r, acc), m, o, hm, bo.and_r(fc(o, cnt(V, c)), shp(V, c, f, o), fq))))
+          nt.step(Nat.pow(m, 2n+f), Nat.mul(cnt(V, r), Nat.pow(m, 2n+f)), len(V, acc), len(V, eo(V, r, acc)), len(V, eo(V, c, eo(V, r, acc))), ents.lo(V, r, 1n+f, acc, m, o, hm, sh.r(V, 1n+f, p, c, r, o, e)), UO.nat_le_trans(Nat.add(Nat.pow(m, 2n+f), len(V, eo(V, r, acc))), Nat.add(Nat.mul(cnt(V, c), Nat.pow(m, 1n+f)), len(V, eo(V, r, acc))), len(V, eo(V, c, eo(V, r, acc))), nt.le_add_mono(Nat.pow(m, 2n+f), len(V, eo(V, r, acc)), Nat.mul(cnt(V, c), Nat.pow(m, 1n+f)), len(V, eo(V, r, acc)), nt.mul_mono_l(m, cnt(V, c), Nat.pow(m, 1n+f), UO.nat_le_trans(m, hf(1n+o), cnt(V, c), nt.m_le_L(m, o, hm), fc.lo(o, cnt(V, c), bo.and_l(fc(o, cnt(V, c)), shp(V, c, f, o), fq)))), UL.nat_le_refl(len(V, eo(V, r, acc)))), ents.lo(V, c, f, eo(V, r, acc), m, o, hm, bo.and_r(fc(o, cnt(V, c)), shp(V, c, f, o), fq))))
 
 def tsize(-V: Data, t: Tr(V)) -> Nat:
   X.Maple.size(U32, V, t)
@@ -1559,4 +1466,4 @@ def size.ok(-V: Data, t: Tr(V), +m: Nat, +g: Nat, +e: {tb(V, t) == True{} : Bool
       +r1 = rsh.rw(V, 1n+g, h2, root, o, Equal.sym(Nat, h2, 1n+g, h), e)
       +rest = bo.and_r(N.MapleNode.is_chain(U32, V, root), Bool.and(N.MapleNode.fill_ok(o, True{}, 2n, cnt(V, root)), shp(V, root, g, o)), r1)
       +fl = bo.and_l(N.MapleNode.fill_ok(o, True{}, 2n, cnt(V, root)), shp(V, root, g, o), rest)
-      nt.le_trans(Nat.mul(2n, Nat.pow(m, 1n+g)), Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), len(V, eo(V, root, Nil{})), nt.mul_mono_l(2n, cnt(V, root), Nat.pow(m, 1n+g), bo.and_l(Nat.is_le(2n, cnt(V, root)), Nat.is_le(cnt(V, root), o), fl)), nt.le_rw_l(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), Nat.add(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), 0n), len(V, eo(V, root, Nil{})), Equal.sym(Nat, Nat.add(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), 0n), Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), nt.add_zero(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)))), ents.lo(V, root, g, Nil{}, m, o, f, bo.and_r(N.MapleNode.fill_ok(o, True{}, 2n, cnt(V, root)), shp(V, root, g, o), rest))))
+      UO.nat_le_trans(Nat.mul(2n, Nat.pow(m, 1n+g)), Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), len(V, eo(V, root, Nil{})), nt.mul_mono_l(2n, cnt(V, root), Nat.pow(m, 1n+g), bo.and_l(Nat.is_le(2n, cnt(V, root)), Nat.is_le(cnt(V, root), o), fl)), nt.le_rw_l(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), Nat.add(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), 0n), len(V, eo(V, root, Nil{})), Equal.sym(Nat, Nat.add(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), 0n), Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)), UL.nat_add_zero(Nat.mul(cnt(V, root), Nat.pow(m, 1n+g)))), ents.lo(V, root, g, Nil{}, m, o, f, bo.and_r(N.MapleNode.fill_ok(o, True{}, 2n, cnt(V, root)), shp(V, root, g, o), rest))))

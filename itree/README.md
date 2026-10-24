@@ -248,6 +248,11 @@ usual argument for interval trees: a subtree is searched only if its largest
 that every later entry starts after the query. The laws prove the answers,
 not these costs.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` (35 laws) and `PROOF_balance.bend` (7 laws) ALL

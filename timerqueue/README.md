@@ -60,7 +60,7 @@ each is a choice made here:
 | `sorted.bend` | the default store: a sorted list (`TqSorted.*`) |
 | `timerqueue.bend` | the entry file: the queue over any store (`TimerQueue.*`) and the named default (`TimerQueueList.*`) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
-| `proof_order.bend` | the order lemmas `PROOF.bend` uses: Base's Bool, Cmp, Word and U32 order lemmas (copied from bend-osdev-maple's `proof_order.bend`), and the order of times and timers built on them |
+| `proof_order.bend` | the order lemmas `PROOF.bend` uses: Base's Bool and Cmp lemmas, the U32 order through bend-osdev-u32's `LAWS_order.bend`, and the order of times and timers built on them |
 | `gen/proof.py` | generates `PROOF.bend` (its lemmas repeat long terms); `--check` tells whether the file is up to date |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -176,6 +176,11 @@ also compares the fired order with Python's integers.
   queue to compare with); as it runs it also asserts that every expiry is in
   order, all due and none deleted, that the timers left expire later, and
   that the next expiry is the minimum.
+
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of the order of `Nat` and words
+(`LAWS_order.bend`).
 
 ## Status
 

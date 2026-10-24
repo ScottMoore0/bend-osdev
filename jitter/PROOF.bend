@@ -14,6 +14,10 @@ import ../crypto/inst_sha3.bend as S3
 import bend-collections-laws-crypto@1.0.0.0/src/crypto/keccak/types.bend as TK
 import bend-collections-laws-crypto@1.0.0.0/src/crypto/keccak/permutation.bend as P
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # ---------------------------------------------------------------- logic
 
@@ -48,28 +52,10 @@ def and_false_r(y: Bool) -> {Bool.and(y, False{}) == False{} : Bool}:
 
 # ---------------------------------------------------------------- samples
 
-def bool_cmp_self(b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def word_cmp_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{},
-            Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, word_cmp_self(p, t)),
-            bool_cmp_self(b))
-
 def u32_eq_self(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 # every sample equals itself
@@ -78,27 +64,6 @@ def sample_eq_self(+t: W.W64) -> {Sm.JitSample.eq(t, t) == True{} : Bool}:
   u32_eq_self(W.W64.hi(t))
 
 # ---------------------------------------------------------------- Nat
-
-def nat.add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, 0n), p, nat.add_zero(p))
-
-def nat.add_succ(m: Nat, +b: Nat) -> {Nat.add(m, 1n+b) == 1n+Nat.add(m, b) : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+ +q:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(q, 1n+b), 1n+Nat.add(q, b), nat.add_succ(q, b))
-
-def nat.le_refl(n: Nat) -> {Nat.is_le(n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      nat.le_refl(p)
 
 def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a b:
@@ -148,18 +113,18 @@ def nat.lt_of_le(a: Nat, +d: Nat, w: Nat, h: {Nat.is_le(1n+Nat.add(d, a), w) == 
         case 0n:
           Empty.absurd({Nat.is_lt(1n+q, 0n) == True{} : Bool}, ab.ft(h))
         case 1n+ +v:
-          nat.lt_of_le(q, d, v, Equal.trans(Bool, Nat.is_le(1n+Nat.add(d, q), v), Nat.is_le(1n+Nat.add(d, 1n+q), 1n+v), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, 1n+v), 1n+Nat.add(d, q), Nat.add(d, 1n+q), Equal.sym(Nat, Nat.add(d, 1n+q), 1n+Nat.add(d, q), nat.add_succ(d, q))), h))
+          nat.lt_of_le(q, d, v, Equal.trans(Bool, Nat.is_le(1n+Nat.add(d, q), v), Nat.is_le(1n+Nat.add(d, 1n+q), 1n+v), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, 1n+v), 1n+Nat.add(d, q), Nat.add(d, 1n+q), Equal.sym(Nat, Nat.add(d, 1n+q), 1n+Nat.add(d, q), UL.nat_add_succ(d, q))), h))
 
 # 2 + k <= 1 + (k + 1)
 def h_cut(+k: Nat) -> {Nat.is_le(2n+k, 1n+Nat.add(k, 1n)) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(k, 1n), 1n+Nat.add(k, 0n), nat.add_succ(k, 0n)) : {Nat.is_le(2n+k, 1n+_) == True{} : Bool}
-  %Equal.sym(Nat, Nat.add(k, 0n), k, nat.add_zero(k)) : {Nat.is_le(2n+k, 2n+_) == True{} : Bool}
-  nat.le_refl(2n+k)
+  %Equal.sym(Nat, Nat.add(k, 1n), 1n+Nat.add(k, 0n), UL.nat_add_succ(k, 0n)) : {Nat.is_le(2n+k, 1n+_) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(k, 0n), k, UL.nat_add_zero(k)) : {Nat.is_le(2n+k, 2n+_) == True{} : Bool}
+  UL.nat_le_refl(2n+k)
 
 # not 2 + k <= k + 1
 def h_below(+k: Nat) -> {Nat.is_le(2n+k, Nat.add(k, 1n)) == False{} : Bool}:
-  %Equal.sym(Nat, Nat.add(k, 1n), 1n+Nat.add(k, 0n), nat.add_succ(k, 0n)) : {Nat.is_le(2n+k, _) == False{} : Bool}
-  %Equal.sym(Nat, Nat.add(k, 0n), k, nat.add_zero(k)) : {Nat.is_le(2n+k, 1n+_) == False{} : Bool}
+  %Equal.sym(Nat, Nat.add(k, 1n), 1n+Nat.add(k, 0n), UL.nat_add_succ(k, 0n)) : {Nat.is_le(2n+k, _) == False{} : Bool}
+  %Equal.sym(Nat, Nat.add(k, 0n), k, UL.nat_add_zero(k)) : {Nat.is_le(2n+k, 1n+_) == False{} : Bool}
   nat.succ_not_le(1n+k)
 
 # ---------------------------------------------------------------- the stuck test
@@ -205,7 +170,7 @@ def rctA(m: Nat, +x: W.W64, +b: Nat, f: Bool, +c: Nat, h: {Nat.is_le(c, 1n+Nat.a
       or_true_r(f)
     case 1n+ +q:
       %Equal.sym(Bool, Sm.JitSample.eq(x, x), True{}, sample_eq_self(x)) : {Ht.JitRct.failed(Ht.jit.rct.run(List.replicate(W.W64, 1n+q, x), c, Ht.jit.rct.same(_, c, x, b, f, x))) == True{} : Bool}
-      rctA(q, x, 1n+b, Bool.or(f, Nat.is_le(c, 1n+b)), c, Equal.trans(Bool, Nat.is_le(c, 1n+Nat.add(q, 1n+b)), Nat.is_le(c, 2n+Nat.add(q, b)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, 1n+z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), nat.add_succ(q, b)), h))
+      rctA(q, x, 1n+b, Bool.or(f, Nat.is_le(c, 1n+b)), c, Equal.trans(Bool, Nat.is_le(c, 1n+Nat.add(q, 1n+b)), Nat.is_le(c, 2n+Nat.add(q, b)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, 1n+z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), UL.nat_add_succ(q, b)), h))
 
 # m more copies, with not c <= m + b, do not fail
 def rctB(m: Nat, +x: W.W64, +b: Nat, +c: Nat, h: {Nat.is_le(c, Nat.add(m, b)) == False{} : Bool}) -> {Ht.JitRct.failed(Ht.jit.rct.run(List.replicate(W.W64, m, x), c, Ht.JitRct{x, b, True{}, False{}})) == False{} : Bool}:
@@ -213,7 +178,7 @@ def rctB(m: Nat, +x: W.W64, +b: Nat, +c: Nat, h: {Nat.is_le(c, Nat.add(m, b)) ==
     case 0n:
       {==}
     case 1n+ +q:
-      +h2 = Equal.trans(Bool, Nat.is_le(c, Nat.add(q, 1n+b)), Nat.is_le(c, 1n+Nat.add(q, b)), False{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), nat.add_succ(q, b)), h)
+      +h2 = Equal.trans(Bool, Nat.is_le(c, Nat.add(q, 1n+b)), Nat.is_le(c, 1n+Nat.add(q, b)), False{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), UL.nat_add_succ(q, b)), h)
       %Equal.sym(Bool, Sm.JitSample.eq(x, x), True{}, sample_eq_self(x)) : {Ht.JitRct.failed(Ht.jit.rct.run(List.replicate(W.W64, q, x), c, Ht.jit.rct.same(_, c, x, b, False{}, x))) == False{} : Bool}
       %Equal.sym(Bool, Nat.is_le(c, 1n+b), False{}, nat.le_false(c, 1n+b, q, h2)) : {Ht.JitRct.failed(Ht.jit.rct.run(List.replicate(W.W64, q, x), c, Ht.JitRct{x, 1n+b, True{}, _})) == False{} : Bool}
       rctB(q, x, 1n+b, c, h2)
@@ -258,13 +223,13 @@ def aptA(m: Nat, +x: W.W64, +b: Nat, f: Bool, +c: Nat, +w: Nat, h1: {Nat.is_le(c
       %Equal.sym(Bool, Nat.is_le(c, 1n+b), True{}, h1) : {Bool.or(f, _) == True{} : Bool}
       or_true_r(f)
     case 1n+ +q:
-      +h2b = Equal.trans(Bool, Nat.is_le(1n+Nat.add(q, 1n+b), w), Nat.is_le(2n+Nat.add(q, b), w), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, w), Nat.add(q, 1n+b), 1n+Nat.add(q, b), nat.add_succ(q, b)), h2)
+      +h2b = Equal.trans(Bool, Nat.is_le(1n+Nat.add(q, 1n+b), w), Nat.is_le(2n+Nat.add(q, b), w), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, w), Nat.add(q, 1n+b), 1n+Nat.add(q, b), UL.nat_add_succ(q, b)), h2)
       %Equal.sym(Bool, Sm.JitSample.eq(x, x), True{}, sample_eq_self(x)) : {Ht.JitApt.failed(Ht.jit.apt.run(List.replicate(W.W64, 1n+q, x), w, c, Ht.jit.apt.same(_, w, c, x, b, 1n+b, f))) == True{} : Bool}
       %Equal.sym(Bool, Nat.is_lt(1n+b, w), True{}, nat.lt_of_le(1n+b, q, w, h2b)) : {Ht.JitApt.failed(Ht.jit.apt.run(List.replicate(W.W64, 1n+q, x), w, c, Ht.JitApt{x, 1n+b, 1n+b, _, Bool.or(f, Nat.is_le(c, 1n+b))})) == True{} : Bool}
-      aptA(q, x, 1n+b, Bool.or(f, Nat.is_le(c, 1n+b)), c, w, Equal.trans(Bool, Nat.is_le(c, 1n+Nat.add(q, 1n+b)), Nat.is_le(c, 2n+Nat.add(q, b)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, 1n+z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), nat.add_succ(q, b)), h1), h2b)
+      aptA(q, x, 1n+b, Bool.or(f, Nat.is_le(c, 1n+b)), c, w, Equal.trans(Bool, Nat.is_le(c, 1n+Nat.add(q, 1n+b)), Nat.is_le(c, 2n+Nat.add(q, b)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(c, 1n+z), Nat.add(q, 1n+b), 1n+Nat.add(q, b), UL.nat_add_succ(q, b)), h1), h2b)
 
 def Laws.apt_trips(x, k, w, h):
-  +hw = Equal.trans(Bool, Nat.is_le(1n+Nat.add(k, 1n), w), Nat.is_le(2n+k, w), True{}, Equal.trans(Bool, Nat.is_le(1n+Nat.add(k, 1n), w), Nat.is_le(2n+Nat.add(k, 0n), w), Nat.is_le(2n+k, w), Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, w), Nat.add(k, 1n), 1n+Nat.add(k, 0n), nat.add_succ(k, 0n)), Equal.cong(Nat, Bool, z => Nat.is_le(2n+z, w), Nat.add(k, 0n), k, nat.add_zero(k))), h)
+  +hw = Equal.trans(Bool, Nat.is_le(1n+Nat.add(k, 1n), w), Nat.is_le(2n+k, w), True{}, Equal.trans(Bool, Nat.is_le(1n+Nat.add(k, 1n), w), Nat.is_le(2n+Nat.add(k, 0n), w), Nat.is_le(2n+k, w), Equal.cong(Nat, Bool, z => Nat.is_le(1n+z, w), Nat.add(k, 1n), 1n+Nat.add(k, 0n), UL.nat_add_succ(k, 0n)), Equal.cong(Nat, Bool, z => Nat.is_le(2n+z, w), Nat.add(k, 0n), k, UL.nat_add_zero(k))), h)
   %Equal.sym(Bool, Nat.is_lt(1n, w), True{}, nat.lt_of_le(1n, k, w, hw)) : {Ht.JitApt.failed(Ht.jit.apt.run(List.replicate(W.W64, 1n+k, x), w, 2n+k, Ht.JitApt{x, 1n, 1n, _, False{}})) == True{} : Bool}
   aptA(k, x, 1n, False{}, 2n+k, w, h_cut(k), hw)
 

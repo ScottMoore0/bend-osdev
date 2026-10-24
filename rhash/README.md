@@ -218,6 +218,9 @@ asks for 2^40 buckets and gets 2^31.
 
 `khash` (lookup3, the default hash). No other.
 
+bend-osdev-u32, in the proofs only: its laws of the order of `Nat` and words
+(`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

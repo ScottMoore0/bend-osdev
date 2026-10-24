@@ -359,6 +359,9 @@ the package), and `bend-collections-laws-crypto@1.0.0.0` (pure Bend, MIT;
 the package crypto's SHA3-256 already comes from), for the Keccak-f[1600]
 permutation and sponge under `shake.bend`.
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` and `PROOF_constant.bend` ALL PROOFS CHECK,

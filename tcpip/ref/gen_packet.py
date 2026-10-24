@@ -45,6 +45,8 @@ import ../netheaders/PROOF_sum.bend as NSP
 import ./udp.bend as U
 import ./icmp.bend as IC
 import ./LAWS_packet.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Words in 16-bit halves
 
@@ -55,31 +57,6 @@ def tp.lo16(s: U32) -> Word(16n):
 
 def tp.mk(a: Word(16n), b: Word(16n)) -> U32:
   U32{{W.W64.bits.cat(16n, 16n, a, b)}}
-
-def tp.and_comm_w(n: Nat, a: Word(n), b: Word(n)) -> {{Word.and(n, a, b) == Word.and(n, b, a) : Word(n)}}:
-  match n:
-    case 0n:
-      {{==}}
-    case 1n+ +p:
-      match a b:
-        case WCon{{False{{}}, +at}} WCon{{False{{}}, +bt}}:
-          %tp.and_comm_w(p, at, bt) : {{WCon{{False{{}}, Word.and(p, at, bt)}} == WCon{{False{{}}, _}} : Word(1n+p)}}
-          {{==}}
-        case WCon{{False{{}}, +at}} WCon{{True{{}}, +bt}}:
-          %tp.and_comm_w(p, at, bt) : {{WCon{{False{{}}, Word.and(p, at, bt)}} == WCon{{False{{}}, _}} : Word(1n+p)}}
-          {{==}}
-        case WCon{{True{{}}, +at}} WCon{{False{{}}, +bt}}:
-          %tp.and_comm_w(p, at, bt) : {{WCon{{False{{}}, Word.and(p, at, bt)}} == WCon{{False{{}}, _}} : Word(1n+p)}}
-          {{==}}
-        case WCon{{True{{}}, +at}} WCon{{True{{}}, +bt}}:
-          %tp.and_comm_w(p, at, bt) : {{WCon{{True{{}}, Word.and(p, at, bt)}} == WCon{{True{{}}, _}} : Word(1n+p)}}
-          {{==}}
-
-def tp.and_comm(a: U32, b: U32) -> {{U32.and(a, b) == U32.and(b, a) : U32}}:
-  match a b:
-    case U32{{+x}} U32{{+y}}:
-      %tp.and_comm_w(32n, x, y) : {{U32{{Word.and(32n, x, y)}} == U32{{_}} : U32}}
-      {{==}}
 
 def tp.or_zero_r(n: Nat, a: Word(n)) -> {{Word.or(n, a, Word.zero(n)) == a : Word(n)}}:
   match n:
@@ -128,7 +105,7 @@ def tp.and_mask(x: U32) -> {{U32.and(65535, x) == {mk(lo("x"), Z16)} : U32}}:
       {{==}}
 
 def tp.and16(+x: U32) -> {{U32.and(x, 65535) == {mk(lo("x"), Z16)} : U32}}:
-  %tp.and_comm(65535, x) : {{_ == {mk(lo("x"), Z16)} : U32}}
+  %UL.u32_and_comm(65535, x) : {{_ == {mk(lo("x"), Z16)} : U32}}
   tp.and_mask(x)
 
 def tp.shl16(x: U32) -> {{U32.shln({mk(lo("x"), Z16)}, 16n) == {mk(Z16, lo("x"))} : U32}}:
@@ -147,7 +124,7 @@ def tp.and_back.m(x: U32, y: U32) -> {{U32.and(65535, {mk(lo("x"), lo("y"))}) ==
       {{==}}
 
 def tp.and_back(+x: U32, +y: U32) -> {{U32.and({mk(lo("x"), lo("y"))}, 65535) == {mk(lo("x"), Z16)} : U32}}:
-  %tp.and_comm(65535, {mk(lo("x"), lo("y"))}) : {{_ == {mk(lo("x"), Z16)} : U32}}
+  %UL.u32_and_comm(65535, {mk(lo("x"), lo("y"))}) : {{_ == {mk(lo("x"), Z16)} : U32}}
   tp.and_back.m(x, y)
 
 # ICMP's rest-of-header for an echo: the low halves of seq and id, joined

@@ -93,7 +93,7 @@ Where the documented interface leaves room, this package chooses:
 | `maple.bend` | the entry file: the public operations, generic (`Maple.*`) and on `U32` (`Maple32.*`) |
 | `gap.bend` | the gap search (`Maple.empty_area`, `Maple32.empty_area`) |
 | `LAWS.bend`, `PROOF.bend` | the laws of contents, lookups, the invariant and the depth of the leaves, and their proofs |
-| `proof_order.bend`, `proof_lists.bend`, `proof_trees.bend`, `proof_level.bend` | the lemmas `PROOF.bend` uses: U32's order and arithmetic; the list model; the tree against the model; every leaf at one depth |
+| `proof_order.bend`, `proof_lists.bend`, `proof_trees.bend`, `proof_level.bend` | the lemmas `PROOF.bend` uses: U32's successor and arithmetic (its order through bend-osdev-u32's `LAWS_order.bend`); the list model; the tree against the model; every leaf at one depth |
 | `LAWS_fill.bend`, `PROOF_fill.bend` | the laws of the fill bounds (`balanced`), the order and the height bound, and their proofs |
 | `proof_counts.bend` | the lemmas `PROOF_fill.bend` uses: `Nat` arithmetic on counts and halves; the counts that appending, taking, dropping, merging, splitting and joining nodes produce |
 | `check.bend` | examples, with their expected output |
@@ -316,6 +316,11 @@ per level. Every loop over a list of entries is bounded by the order, and
 the recursion depth by the height, so there is no length limit beyond
 memory. `valid` scans all pairs of entries, so it is a check for tests, not
 for large trees; `leveled` and `balanced` are linear.
+
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 

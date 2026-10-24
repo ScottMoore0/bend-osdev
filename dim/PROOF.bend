@@ -2,6 +2,10 @@ import Base
 import ../word64/word64.bend as W
 import ./dim.bend as D
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions and Bool
 
@@ -61,13 +65,6 @@ def bo.or_still(a: Bool, -b: Bool, +e: {Bool.or(a, b) == True{} : Bool}, +u: {a 
 
 # Nat
 
-def nat.le_refl(n: Nat) -> {Nat.is_le(n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.eq_refl(n: Nat) -> {Nat.is_eq(n, n) == True{} : Bool}:
   match n:
     case 0n:
@@ -110,22 +107,7 @@ def nat.le_sub1(n: Nat) -> {Nat.is_le(n, 1n+Nat.sub(n, 1n)) == True{} : Bool}:
       {==}
     case 1n+ +p:
       %Equal.sym(Nat, Nat.sub(p, 0n), p, nat.sub_zero(p)) : {Nat.is_le(1n+p, 1n+_) == True{} : Bool}
-      nat.le_refl(p)
-
-def nat.lt_le_trans(a: Nat, b: Nat, c: Nat, +e: {Nat.is_le(a, b) == True{} : Bool}, +f: {Nat.is_lt(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n 0n c:
-      f
-    case 0n 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, ab.ft(f))
-    case 0n 1n+bp 1n+cp:
-      {==}
-    case 1n+ap 0n c:
-      Empty.absurd({Nat.is_lt(1n+ap, c) == True{} : Bool}, ab.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(1n+ap, 0n) == True{} : Bool}, ab.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.lt_le_trans(ap, bp, cp, e, f)
+      UL.nat_le_refl(p)
 
 def nat.sub1_le_self(n: Nat) -> {Nat.is_le(Nat.sub(n, 1n), n) == True{} : Bool}:
   match n:
@@ -136,7 +118,7 @@ def nat.sub1_le_self(n: Nat) -> {Nat.is_le(Nat.sub(n, 1n), n) == True{} : Bool}:
       nat.le_succ_self(p)
 
 def nat.lt_sub1(+ix: Nat, +n: Nat, +h: {Nat.is_lt(ix, n) == True{} : Bool}) -> {Nat.is_lt(Nat.sub(ix, 1n), n) == True{} : Bool}:
-  nat.lt_le_trans(Nat.sub(ix, 1n), ix, n, nat.sub1_le_self(ix), h)
+  UO.nat_le_lt_trans(Nat.sub(ix, 1n), ix, n, nat.sub1_le_self(ix), h)
 
 def nat.eq_zero(n: Nat, +e: {Nat.is_eq(n, 0n) == True{} : Bool}) -> {n == 0n : Nat}:
   match n:
@@ -157,63 +139,10 @@ def nat.eq_of(a: Nat, b: Nat, +e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b
       %nat.eq_of(ap, bp, e) : {1n+ap == 1n+_ : Nat}
       {==}
 
-def nat.le_zero(n: Nat) -> {Nat.is_le(0n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      {==}
-
-def nat.le_add(a: Nat, b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      nat.le_zero(b)
-    case 1n+p:
-      nat.le_add(p, b)
-
-def nat.le_succ(a: Nat, b: Nat, +e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
-  match a b:
-    case 0n _:
-      {==}
-    case 1n+ap 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 1n) == True{} : Bool}, ab.ft(e))
-    case 1n+ap 1n+bp:
-      nat.le_succ(ap, bp, e)
-
-def nat.add_succ(a: Nat, -b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+b), 1n+Nat.add(p, b), nat.add_succ(p, b)) : {1n+_ == 2n+Nat.add(p, b) : Nat}
-      {==}
-
 # U32: a word equals itself (Base's word order, bit by bit)
 
-def wd.fin_refl(x: Bool) -> {Word.cmp.fin(x, x, EQ{}) == EQ{} : Cmp}:
-  match x:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def wd.refl(n: Nat, a: Word(n)) -> {Word.cmp(n, a, a) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match a:
-        case WCon{+x, +at}:
-          %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{}, wd.refl(p, at)) : {Word.cmp.fin(x, x, _) == EQ{} : Cmp}
-          wd.fin_refl(x)
-
-def u.refl(a: U32) -> {U32.cmp(a, a) == EQ{} : Cmp}:
-  match a:
-    case U32{+w}:
-      wd.refl(32n, w)
-
 def u.eq_refl(+a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, u.refl(a)) : {Cmp.is_eq(_) == True{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, UO.u32_cmp_refl(a)) : {Cmp.is_eq(_) == True{} : Bool}
   {==}
 
 # An interval compares the same as itself
@@ -230,21 +159,6 @@ def cmp.same(cs: List<&2, D.DimCriterion>, +pct: U32, +a: D.DimRates) -> {D.Dim.
       cmp.same(rest, pct, a)
 
 # More Nat
-
-def nat.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nat.le_add_r(a: Nat, +b: Nat) -> {Nat.is_le(b, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      nat.le_refl(b)
-    case 1n+ +p:
-      nat.le_succ(b, Nat.add(p, b), nat.le_add_r(p, b))
 
 def nat.lt0_false(n: Nat, +e: {Nat.is_lt(0n, n) == False{} : Bool}) -> {n == 0n : Nat}:
   match n:
@@ -353,7 +267,7 @@ def ns.same(+ix: Nat, -m: D.DimMode, -r: D.DimRates) -> {dp.ns(ix, D.Dim.mk(ix, 
   ns.core(ix)
 
 def ns.up(+ix: Nat, -m: D.DimMode, -r: D.DimRates) -> {dp.ns(ix, D.Dim.mk(1n+ix, m, r, True{})) == True{} : Bool}:
-  bo.and_intro(Bool.and(Nat.is_le(1n+ix, 1n+ix), Nat.is_le(ix, 2n+ix)), Bool.or(True{}, Nat.is_eq(1n+ix, ix)), bo.and_intro(Nat.is_le(1n+ix, 1n+ix), Nat.is_le(ix, 2n+ix), nat.le_refl(1n+ix), nat.le_succ2(ix)), {==})
+  bo.and_intro(Bool.and(Nat.is_le(1n+ix, 1n+ix), Nat.is_le(ix, 2n+ix)), Bool.or(True{}, Nat.is_eq(1n+ix, ix)), bo.and_intro(Nat.is_le(1n+ix, 1n+ix), Nat.is_le(ix, 2n+ix), UL.nat_le_refl(1n+ix), nat.le_succ2(ix)), {==})
 
 def ns.down(+ix: Nat, -m: D.DimMode, -r: D.DimRates) -> {dp.ns(ix, D.Dim.mk(Nat.sub(ix, 1n), m, r, True{})) == True{} : Bool}:
   bo.and_intro(Bool.and(Nat.is_le(Nat.sub(ix, 1n), 1n+ix), Nat.is_le(ix, 1n+Nat.sub(ix, 1n))), Bool.or(True{}, Nat.is_eq(Nat.sub(ix, 1n), ix)), bo.and_intro(Nat.is_le(Nat.sub(ix, 1n), 1n+ix), Nat.is_le(ix, 1n+Nat.sub(ix, 1n)), nat.sub1_le(ix), nat.le_sub1(ix)), {==})
@@ -577,12 +491,12 @@ def cv.flip(p: Bool, +ix: Nat, +n: Nat, +hl: {Nat.is_lt(1n, n) == True{} : Bool}
       nat.pos_of(ix, n, hl, ec)
 
 def cv.h_next(+lim: Nat, +jp: Nat, +t: Nat, +h: {Nat.is_le(lim, 1n+Nat.add(jp, t)) == True{} : Bool}) -> {Nat.is_le(lim, Nat.add(jp, 1n+t)) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(jp, 1n+t), 1n+Nat.add(jp, t), nat.add_succ(jp, t)) : {Nat.is_le(lim, _) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(jp, 1n+t), 1n+Nat.add(jp, t), UL.nat_add_succ(jp, t)) : {Nat.is_le(lim, _) == True{} : Bool}
   h
 
 def cv.h2(+e: Nat, +lim: Nat) -> {Nat.is_le(lim, Nat.add(Nat.add(e, lim), 0n)) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(Nat.add(e, lim), 0n), Nat.add(e, lim), nat.add_zero(Nat.add(e, lim))) : {Nat.is_le(lim, _) == True{} : Bool}
-  nat.le_add_r(e, lim)
+  %Equal.sym(Nat, Nat.add(Nat.add(e, lim), 0n), Nat.add(e, lim), UL.nat_add_zero(Nat.add(e, lim))) : {Nat.is_le(lim, _) == True{} : Bool}
+  UL.nat_le_add(lim, e)
 
 # second phase: parked tired where the verifying step can be taken; at
 # rest after 2 + e samples, when lim <= e + k
@@ -612,7 +526,7 @@ def cv.p1y_step(+ix: Nat, +p: Bool, +k: Nat, +ps: List<&2, D.DimProfile>, +sx: N
 
 def cv.p1y(+p: Bool, +k: Nat, +ix: Nat, +e: Nat, +ps: List<&2, D.DimProfile>, +sx: Nat, +pct: U32, +lim: Nat, +mx: Nat, +cs: List<&2, D.DimCriterion>, +pk: U32, +by: U32, +ev: U32, +co: U32, +el: U32, +nz: {U32.is_zero(el) == False{} : Bool}, +hm: {Nat.is_le(2n, mx) == True{} : Bool}, +hl: {Nat.is_lt(1n, List.length(&2, D.DimProfile, ps)) == True{} : Bool}, +eo: {Nat.is_le(lim, k) == True{} : Bool}, +ecn: {D.Dim.can(List.length(&2, D.DimProfile, ps), Bool.not(p), ix) == False{} : Bool}) -> {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 2n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el})), D.DimSample{pk, by, ev, co, el})) == D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 2n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el})) : D.Dim}:
   %Equal.sym(D.Dim, D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, D.DimSample{pk, by, ev, co, el})), D.Dim{ix, D.DimParkedTired{Bool.not(p), 0n}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, cv.p1y_step(ix, p, k, ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, nz, eo, ecn)) : {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run.go(List.replicate(D.DimSample, 1n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el}), D.DimParams{ps, sx, pct, lim, mx, cs}, _), D.DimSample{pk, by, ev, co, el})) == D.Dim.run.go(List.replicate(D.DimSample, 1n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el}), D.DimParams{ps, sx, pct, lim, mx, cs}, _) : D.Dim}
-  %Equal.sym(Nat, Nat.add(e, 1n+lim), 1n+Nat.add(e, lim), nat.add_succ(e, lim)) : {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{Bool.not(p), 0n}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 1n+_, D.DimSample{pk, by, ev, co, el})), D.DimSample{pk, by, ev, co, el})) == D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{Bool.not(p), 0n}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 1n+_, D.DimSample{pk, by, ev, co, el})) : D.Dim}
+  %Equal.sym(Nat, Nat.add(e, 1n+lim), 1n+Nat.add(e, lim), UL.nat_add_succ(e, lim)) : {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{Bool.not(p), 0n}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 1n+_, D.DimSample{pk, by, ev, co, el})), D.DimSample{pk, by, ev, co, el})) == D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{Bool.not(p), 0n}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 1n+_, D.DimSample{pk, by, ev, co, el})) : D.Dim}
   cv.p2(Nat.add(e, lim), 0n, Bool.not(p), ix, ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, nz, hm, cv.flip(p, ix, List.length(&2, D.DimProfile, ps), hl, ecn), cv.h2(e, lim))
 
 def cv.p1x(cn: Bool, +k: Nat, +p: Bool, +ix: Nat, +e: Nat, +ps: List<&2, D.DimProfile>, +sx: Nat, +pct: U32, +lim: Nat, +mx: Nat, +cs: List<&2, D.DimCriterion>, +pk: U32, +by: U32, +ev: U32, +co: U32, +el: U32, +nz: {U32.is_zero(el) == False{} : Bool}, +hm: {Nat.is_le(2n, mx) == True{} : Bool}, +hl: {Nat.is_lt(1n, List.length(&2, D.DimProfile, ps)) == True{} : Bool}, +eo: {Nat.is_le(lim, k) == True{} : Bool}, +ecn: {D.Dim.can(List.length(&2, D.DimProfile, ps), Bool.not(p), ix) == cn : Bool}) -> {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 2n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el})), D.DimSample{pk, by, ev, co, el})) == D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, List.replicate(D.DimSample, 2n+Nat.add(e, 1n+lim), D.DimSample{pk, by, ev, co, el})) : D.Dim}:
@@ -654,7 +568,7 @@ def cv.primed(y: D.Dim, +ps: List<&2, D.DimProfile>, +sx: Nat, +pct: U32, +lim: 
       cv.fixed_run(D.Dim{ix, D.DimParkedTop{}, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}}, 2n+Nat.add(lim, 1n+lim), ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, cv.top(ix, ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, nz))
     case D.Dim{+ix, D.DimParkedTired{+p, +k}, +pv}:
       %Equal.sym(Maybe<&2, D.DimRates>, pv, Some{D.Dim.rates(D.DimSample{pk, by, ev, co, el})}, hp) : {D.DimStep.state(D.Dim.step(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, _}, List.replicate(D.DimSample, 2n+Nat.add(lim, 1n+lim), D.DimSample{pk, by, ev, co, el})), D.DimSample{pk, by, ev, co, el})) == D.Dim.run(D.DimParams{ps, sx, pct, lim, mx, cs}, D.Dim{ix, D.DimParkedTired{p, k}, _}, List.replicate(D.DimSample, 2n+Nat.add(lim, 1n+lim), D.DimSample{pk, by, ev, co, el})) : D.Dim}
-      cv.p1(lim, k, p, ix, ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, nz, hm, hl, nat.le_add(lim, k))
+      cv.p1(lim, k, p, ix, ps, sx, pct, lim, mx, cs, pk, by, ev, co, el, nz, hm, hl, UO.nat_le_add_r(lim, k))
 
 # one step with a sample of some time leaves the state holding its rates
 

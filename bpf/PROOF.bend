@@ -6,6 +6,8 @@ import ./validate.bend as V
 import ./bpf.bend as R
 import ./seccomp.bend as S
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions
 
@@ -189,32 +191,18 @@ def go_ok(xs: List<&2, I.BpfOp>, cur: R.BpfStep, +inp: R.BpfInput, +pc: Nat, +v:
 # for the instructions' checks. They equal the structural forms the proofs
 # above use, for every program (F_count, F_check).
 
-def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+n), 1n+Nat.add(p, n), add_succ(p, n))
-
-def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
-
 def g_count(+xs: List<&2, I.BpfOp>, +n: Nat) -> {V.bpf_count.go(xs, n) == Nat.add(List.length(&2, I.BpfOp, xs), n) : Nat}:
   match xs:
     case Nil{}:
       {==}
     case Con{h, t}:
       Equal.trans(Nat, V.bpf_count.go(t, 1n+n), Nat.add(List.length(&2, I.BpfOp, t), 1n+n), 1n+Nat.add(List.length(&2, I.BpfOp, t), n),
-        g_count(t, 1n+n), add_succ(List.length(&2, I.BpfOp, t), n))
+        g_count(t, 1n+n), UL.nat_add_succ(List.length(&2, I.BpfOp, t), n))
 
 def F_count(+xs: List<&2, I.BpfOp>) -> {List.length(&2, I.BpfOp, xs) == V.bpf_count(xs) : Nat}:
   Equal.sym(Nat, V.bpf_count(xs), List.length(&2, I.BpfOp, xs),
     Equal.trans(Nat, V.bpf_count.go(xs, 0n), Nat.add(List.length(&2, I.BpfOp, xs), 0n), List.length(&2, I.BpfOp, xs),
-      g_count(xs, 0n), add_zero(List.length(&2, I.BpfOp, xs))))
+      g_count(xs, 0n), UL.nat_add_zero(List.length(&2, I.BpfOp, xs))))
 
 # the tail form, from any verdict so far, with n the length
 def g_check(xs: List<&2, I.BpfOp>, +pc: Nat, ok: Result<&2, &2, I.BpfError, Unit>) -> {V.bpf_check.go(xs, pc, ok, List.length(&2, I.BpfOp, xs)) == V.bpf_both(ok, V.bpf_check.all(xs, pc)) : Result<&2, &2, I.BpfError, Unit>}:

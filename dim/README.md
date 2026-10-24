@@ -204,6 +204,11 @@ outcomes matter, and an equal pair is recognised before any arithmetic.
     the hypotheses hold, it asserts that the sequence is at rest after the
     settle bound.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (15 laws), `--verdict` ALL

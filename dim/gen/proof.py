@@ -76,6 +76,10 @@ text = f'''import Base
 import ../word64/word64.bend as W
 import ./dim.bend as D
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions and Bool
 
@@ -135,13 +139,6 @@ def bo.or_still(a: Bool, -b: Bool, +e: {tt(OR("a", "b"))}, +u: {ff("a")}) -> {tt
 
 # Nat
 
-def nat.le_refl(n: Nat) -> {tt(LE("n", "n"))}:
-  match n:
-    case 0n:
-      {{==}}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.eq_refl(n: Nat) -> {tt(EQN("n", "n"))}:
   match n:
     case 0n:
@@ -184,22 +181,7 @@ def nat.le_sub1(n: Nat) -> {tt(LE("n", "1n+Nat.sub(n, 1n)"))}:
       {{==}}
     case 1n+ +p:
       %Equal.sym(Nat, Nat.sub(p, 0n), p, nat.sub_zero(p)) : {tt(LE("1n+p", "1n+_"))}
-      nat.le_refl(p)
-
-def nat.lt_le_trans(a: Nat, b: Nat, c: Nat, +e: {tt(LE("a", "b"))}, +f: {tt(LTN("b", "c"))}) -> {tt(LTN("a", "c"))}:
-  match a b c:
-    case 0n 0n c:
-      f
-    case 0n 1n+bp 0n:
-      Empty.absurd({tt(LTN("0n", "0n"))}, ab.ft(f))
-    case 0n 1n+bp 1n+cp:
-      {{==}}
-    case 1n+ap 0n c:
-      Empty.absurd({tt(LTN("1n+ap", "c"))}, ab.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({tt(LTN("1n+ap", "0n"))}, ab.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.lt_le_trans(ap, bp, cp, e, f)
+      UL.nat_le_refl(p)
 
 def nat.sub1_le_self(n: Nat) -> {tt(LE("Nat.sub(n, 1n)", "n"))}:
   match n:
@@ -210,7 +192,7 @@ def nat.sub1_le_self(n: Nat) -> {tt(LE("Nat.sub(n, 1n)", "n"))}:
       nat.le_succ_self(p)
 
 def nat.lt_sub1(+ix: Nat, +n: Nat, +h: {tt(LTN("ix", "n"))}) -> {tt(LTN("Nat.sub(ix, 1n)", "n"))}:
-  nat.lt_le_trans(Nat.sub(ix, 1n), ix, n, nat.sub1_le_self(ix), h)
+  UO.nat_le_lt_trans(Nat.sub(ix, 1n), ix, n, nat.sub1_le_self(ix), h)
 
 def nat.eq_zero(n: Nat, +e: {tt(EQN("n", "0n"))}) -> {{n == 0n : Nat}}:
   match n:
@@ -231,63 +213,10 @@ def nat.eq_of(a: Nat, b: Nat, +e: {tt(EQN("a", "b"))}) -> {{a == b : Nat}}:
       %nat.eq_of(ap, bp, e) : {{1n+ap == 1n+_ : Nat}}
       {{==}}
 
-def nat.le_zero(n: Nat) -> {tt(LE("0n", "n"))}:
-  match n:
-    case 0n:
-      {{==}}
-    case 1n+p:
-      {{==}}
-
-def nat.le_add(a: Nat, b: Nat) -> {tt(LE("a", "Nat.add(a, b)"))}:
-  match a:
-    case 0n:
-      nat.le_zero(b)
-    case 1n+p:
-      nat.le_add(p, b)
-
-def nat.le_succ(a: Nat, b: Nat, +e: {tt(LE("a", "b"))}) -> {tt(LE("a", "1n+b"))}:
-  match a b:
-    case 0n _:
-      {{==}}
-    case 1n+ap 0n:
-      Empty.absurd({tt(LE("1n+ap", "1n"))}, ab.ft(e))
-    case 1n+ap 1n+bp:
-      nat.le_succ(ap, bp, e)
-
-def nat.add_succ(a: Nat, -b: Nat) -> {{Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}}:
-  match a:
-    case 0n:
-      {{==}}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+b), 1n+Nat.add(p, b), nat.add_succ(p, b)) : {{1n+_ == 2n+Nat.add(p, b) : Nat}}
-      {{==}}
-
 # U32: a word equals itself (Base's word order, bit by bit)
 
-def wd.fin_refl(x: Bool) -> {{Word.cmp.fin(x, x, EQ{{}}) == EQ{{}} : Cmp}}:
-  match x:
-    case True{{}}:
-      {{==}}
-    case False{{}}:
-      {{==}}
-
-def wd.refl(n: Nat, a: Word(n)) -> {{Word.cmp(n, a, a) == EQ{{}} : Cmp}}:
-  match n:
-    case 0n:
-      {{==}}
-    case 1n+ +p:
-      match a:
-        case WCon{{+x, +at}}:
-          %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{{}}, wd.refl(p, at)) : {{Word.cmp.fin(x, x, _) == EQ{{}} : Cmp}}
-          wd.fin_refl(x)
-
-def u.refl(a: U32) -> {{U32.cmp(a, a) == EQ{{}} : Cmp}}:
-  match a:
-    case U32{{+w}}:
-      wd.refl(32n, w)
-
 def u.eq_refl(+a: U32) -> {tt("U32.is_eq(a, a)")}:
-  %Equal.sym(Cmp, U32.cmp(a, a), EQ{{}}, u.refl(a)) : {tt("Cmp.is_eq(_)")}
+  %Equal.sym(Cmp, U32.cmp(a, a), EQ{{}}, UO.u32_cmp_refl(a)) : {tt("Cmp.is_eq(_)")}
   {{==}}
 
 # An interval compares the same as itself
@@ -306,21 +235,6 @@ def cmp.same(cs: List<&2, D.DimCriterion>, +pct: U32, +a: {RAT}) -> {{{CMPW("cs"
 '''
 
 body = f'''# More Nat
-
-def nat.add_zero(a: Nat) -> {{Nat.add(a, 0n) == a : Nat}}:
-  match a:
-    case 0n:
-      {{==}}
-    case 1n+p:
-      %nat.add_zero(p) : {{1n+Nat.add(p, 0n) == 1n+_ : Nat}}
-      {{==}}
-
-def nat.le_add_r(a: Nat, +b: Nat) -> {tt(LE("b", "Nat.add(a, b)"))}:
-  match a:
-    case 0n:
-      nat.le_refl(b)
-    case 1n+ +p:
-      nat.le_succ(b, Nat.add(p, b), nat.le_add_r(p, b))
 
 def nat.lt0_false(n: Nat, +e: {ff(LTN("0n", "n"))}) -> {{n == 0n : Nat}}:
   match n:
@@ -429,7 +343,7 @@ def ns.same(+ix: Nat, -m: D.DimMode, -r: {RAT}) -> {B(MK("ix", "m", "r", "False{
   ns.core(ix)
 
 def ns.up(+ix: Nat, -m: D.DimMode, -r: {RAT}) -> {B(MK("1n+ix", "m", "r", "True{}"))}:
-  bo.and_intro({AND(LE("1n+ix", "1n+ix"), LE("ix", "2n+ix"))}, {OR("True{}", EQN("1n+ix", "ix"))}, bo.and_intro({LE("1n+ix", "1n+ix")}, {LE("ix", "2n+ix")}, nat.le_refl(1n+ix), nat.le_succ2(ix)), {{==}})
+  bo.and_intro({AND(LE("1n+ix", "1n+ix"), LE("ix", "2n+ix"))}, {OR("True{}", EQN("1n+ix", "ix"))}, bo.and_intro({LE("1n+ix", "1n+ix")}, {LE("ix", "2n+ix")}, UL.nat_le_refl(1n+ix), nat.le_succ2(ix)), {{==}})
 
 def ns.down(+ix: Nat, -m: D.DimMode, -r: {RAT}) -> {B(MK("Nat.sub(ix, 1n)", "m", "r", "True{}"))}:
   bo.and_intro({AND(LE("Nat.sub(ix, 1n)", "1n+ix"), LE("ix", "1n+Nat.sub(ix, 1n)"))}, {OR("True{}", EQN("Nat.sub(ix, 1n)", "ix"))}, bo.and_intro({LE("Nat.sub(ix, 1n)", "1n+ix")}, {LE("ix", "1n+Nat.sub(ix, 1n)")}, nat.sub1_le(ix), nat.le_sub1(ix)), {{==}})
@@ -653,12 +567,12 @@ def cv.flip(p: Bool, +ix: Nat, +n: Nat, +hl: {tt(LTN("1n", "n"))}, +ec: {ff(CAN(
       nat.pos_of(ix, n, hl, ec)
 
 def cv.h_next(+lim: Nat, +jp: Nat, +t: Nat, +h: {tt(LE("lim", "1n+Nat.add(jp, t)"))}) -> {tt(LE("lim", "Nat.add(jp, 1n+t)"))}:
-  %Equal.sym(Nat, Nat.add(jp, 1n+t), 1n+Nat.add(jp, t), nat.add_succ(jp, t)) : {tt(LE("lim", "_"))}
+  %Equal.sym(Nat, Nat.add(jp, 1n+t), 1n+Nat.add(jp, t), UL.nat_add_succ(jp, t)) : {tt(LE("lim", "_"))}
   h
 
 def cv.h2(+e: Nat, +lim: Nat) -> {tt(LE("lim", "Nat.add(Nat.add(e, lim), 0n)"))}:
-  %Equal.sym(Nat, Nat.add(Nat.add(e, lim), 0n), Nat.add(e, lim), nat.add_zero(Nat.add(e, lim))) : {tt(LE("lim", "_"))}
-  nat.le_add_r(e, lim)
+  %Equal.sym(Nat, Nat.add(Nat.add(e, lim), 0n), Nat.add(e, lim), UL.nat_add_zero(Nat.add(e, lim))) : {tt(LE("lim", "_"))}
+  UL.nat_le_add(lim, e)
 
 # second phase: parked tired where the verifying step can be taken; at
 # rest after 2 + e samples, when lim <= e + k
@@ -688,7 +602,7 @@ def cv.p1y_step(+ix: Nat, +p: Bool, +k: Nat, {SIG}, {NZ}, +eo: {tt(LE("lim", "k"
 
 def cv.p1y(+p: Bool, +k: Nat, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, {HL}, +eo: {tt(LE("lim", "k"))}, +ecn: {ff(CAN(N, "Bool.not(p)", "ix"))}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
   %Equal.sym(D.Dim, {STEP(PT("p", "k"))}, {PT("Bool.not(p)", "0n")}, cv.p1y_step(ix, p, k, {ARGS}, nz, eo, ecn)) : {FIX(RUNGO("1n+" + XE, "_"))}
-  %Equal.sym(Nat, {XE}, 1n+Nat.add(e, lim), nat.add_succ(e, lim)) : {FIX(RUN(PT("Bool.not(p)", "0n"), "1n+_"))}
+  %Equal.sym(Nat, {XE}, 1n+Nat.add(e, lim), UL.nat_add_succ(e, lim)) : {FIX(RUN(PT("Bool.not(p)", "0n"), "1n+_"))}
   cv.p2(Nat.add(e, lim), 0n, Bool.not(p), ix, {ARGS}, nz, hm, cv.flip(p, ix, {N}, hl, ecn), cv.h2(e, lim))
 
 def cv.p1x(cn: Bool, +k: Nat, +p: Bool, +ix: Nat, +e: Nat, {SIG}, {NZ}, {HM}, {HL}, +eo: {tt(LE("lim", "k"))}, +ecn: {eqb(CAN(N, "Bool.not(p)", "ix"), "cn")}) -> {FIX(RUN(PT("p", "k"), "2n+" + XE))}:
@@ -730,7 +644,7 @@ def cv.primed(y: D.Dim, {SIG}, {NZ}, {HM}, {HL}, +hp: {{{PRV("y")} == Some{{{R}}
       cv.fixed_run({TOPY()}, 2n+{X}, {ARGS}, cv.top(ix, {ARGS}, nz))
     case D.Dim{{+ix, D.DimParkedTired{{+p, +k}}, +pv}}:
       %Equal.sym({MB}, pv, Some{{{R}}}, hp) : {FIX(RUN("D.Dim{ix, D.DimParkedTired{p, k}, _}", "2n+" + X))}
-      cv.p1(lim, k, p, ix, {ARGS}, nz, hm, hl, nat.le_add(lim, k))
+      cv.p1(lim, k, p, ix, {ARGS}, nz, hm, hl, UO.nat_le_add_r(lim, k))
 
 # one step with a sample of some time leaves the state holding its rates
 

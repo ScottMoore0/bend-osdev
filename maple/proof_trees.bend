@@ -17,6 +17,8 @@ import ./maple.bend as X
 import ./gap.bend as G
 import ./proof_order.bend as O
 import ./proof_lists.bend as P
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Shorthands for the U32 instance
 
@@ -253,10 +255,10 @@ def kis.some(m: Maybe<&2, U32>, +p: U32, +e: {kis(m, p) == True{} : Bool}) -> {m
     case None{}:
       Empty.absurd({None{} == Some{p} : Maybe<&2, U32>}, O.ab.ft(e))
     case Some{+k}:
-      Equal.cong(U32, Maybe<&2, U32>, z => Some{z}, k, p, O.u.eq(k, p, O.cm.eq_of(U32.cmp(k, p), e)))
+      Equal.cong(U32, Maybe<&2, U32>, z => Some{z}, k, p, UO.u32_cmp_eq(k, p, O.cm.eq_of(U32.cmp(k, p), e)))
 
 def kis.refl(+p: U32) -> {kis(Some{p}, p) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(p, p), EQ{}, O.u.refl(p)) : {Cmp.is_eq(_) == True{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(p, p), EQ{}, UO.u32_cmp_refl(p)) : {Cmp.is_eq(_) == True{} : Bool}
   {==}
 
 def pk.k(-V: Data, +p: U32, +c: Nd(V), +r: Nd(V), +h: {pok(V, N.MapleSlot{p, c, r}) == True{} : Bool}) -> {kis(nlk(V, c), p) == True{} : Bool}:
@@ -512,7 +514,7 @@ def cmp.not_le_gt(+a: U32, +b: U32, +e: {U32.cmp(a, b) == GT{} : Cmp}) -> {O.ule
   {==}
 
 def cmp.gt_le(+a: U32, +b: U32, +e: {U32.cmp(a, b) == GT{} : Cmp}) -> {O.ule(b, a) == True{} : Bool}:
-  O.u.le_of_lt(b, a, O.u.not_le(a, b, cmp.not_le_gt(a, b, e)))
+  UO.u32_lt_le(b, a, UO.u32_not_le(a, b, cmp.not_le_gt(a, b, e)))
 
 def lo(-V: Data, n: Nd(V), h: Nat, +a: U32, pre: Nd(V), c: Cmp, +o: Nat) -> Tr(V):
   T.MapleTree.lo(~U32, ~U32.cmp, ~M.MapleKey32.dec, V, n, h, a, pre, c, o)
@@ -548,9 +550,9 @@ def tr.lo.slot(c: Cmp, -V: Data, +p: U32, +ch: Nd(V), +r: Nd(V), +g: Nat, +a: U3
     case LT{}:
       tr.lo.lt(V, p, ch, r, g, a, pre, o, w, hp, cmp.lt_lt(p, a, e), ihr)
     case EQ{}:
-      tr.lo.ge(V, p, ch, r, g, a, pre, o, w, hp, O.u.not_lt(p, a, cmp.not_lt_eq(p, a, e)), ihc)
+      tr.lo.ge(V, p, ch, r, g, a, pre, o, w, hp, UO.u32_not_lt(p, a, cmp.not_lt_eq(p, a, e)), ihc)
     case GT{}:
-      tr.lo.ge(V, p, ch, r, g, a, pre, o, w, hp, O.u.not_lt(p, a, cmp.not_lt_gt(p, a, e)), ihc)
+      tr.lo.ge(V, p, ch, r, g, a, pre, o, w, hp, UO.u32_not_lt(p, a, cmp.not_lt_gt(p, a, e)), ihc)
 
 # cutting below a: pre, then every entry cut to its part below a
 def tr.lo(-V: Data, n: Nd(V), +h: Nat, +a: U32, +pre: Nd(V), +o: Nat, +w: {P.wf(V, L(V, n)) == True{} : Bool}, +hp: {pok(V, n) == True{} : Bool}) -> {TL(V, lo(V, n, h, a, pre, probe(V, n, a), o)) == P.app(V, L(V, pre), P.below(V, L(V, n), a)) : P.Es(V)}:
@@ -784,9 +786,9 @@ def nd.load.slot(c: Cmp, -V: Data, +p: U32, +ch: Nd(V), +r: Nd(V), +i: U32, +e: 
     case LT{}:
       nd.load.lt(V, p, ch, r, i, w, hp, cmp.lt_lt(p, i, e), ihr)
     case EQ{}:
-      nd.load.ge(V, p, ch, r, i, w, hp, O.u.not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
+      nd.load.ge(V, p, ch, r, i, w, hp, UO.u32_not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
     case GT{}:
-      nd.load.ge(V, p, ch, r, i, w, hp, O.u.not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
+      nd.load.ge(V, p, ch, r, i, w, hp, UO.u32_not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
 
 def nd.load(-V: Data, n: Nd(V), +i: U32, +w: {P.wf(V, L(V, n)) == True{} : Bool}, +hp: {pok(V, n) == True{} : Bool}) -> {nload(V, n, i) == P.mload(V, L(V, n), i) : Maybe<&2, V>}:
   match n:
@@ -830,9 +832,9 @@ def nd.find.slot(c: Cmp, -V: Data, +p: U32, +ch: Nd(V), +r: Nd(V), +i: U32, +e: 
     case LT{}:
       nd.find.lt(V, p, ch, r, i, w, hp, cmp.lt_lt(p, i, e), ihr)
     case EQ{}:
-      nd.find.ge(V, p, ch, r, i, w, hp, O.u.not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
+      nd.find.ge(V, p, ch, r, i, w, hp, UO.u32_not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
     case GT{}:
-      nd.find.ge(V, p, ch, r, i, w, hp, O.u.not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
+      nd.find.ge(V, p, ch, r, i, w, hp, UO.u32_not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
 
 def nd.find(-V: Data, n: Nd(V), +i: U32, +w: {P.wf(V, L(V, n)) == True{} : Bool}, +hp: {pok(V, n) == True{} : Bool}) -> {nfind(V, n, i) == P.mfind(V, L(V, n), i) : Maybe<&2, P.Ent(V)>}:
   match n:
@@ -940,9 +942,9 @@ def nd.prev.slot(c: Cmp, -V: Data, +p: U32, +ch: Nd(V), +r: Nd(V), +i: U32, +sib
     case LT{}:
       nd.prev.lt(V, p, ch, r, i, sib, w, hp, cmp.lt_lt(p, i, e), ihr)
     case EQ{}:
-      nd.prev.ge(V, p, ch, r, i, sib, w, hp, hs, ls, O.u.not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
+      nd.prev.ge(V, p, ch, r, i, sib, w, hp, hs, ls, UO.u32_not_lt(p, i, cmp.not_lt_eq(p, i, e)), ihc)
     case GT{}:
-      nd.prev.ge(V, p, ch, r, i, sib, w, hp, hs, ls, O.u.not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
+      nd.prev.ge(V, p, ch, r, i, sib, w, hp, hs, ls, UO.u32_not_lt(p, i, cmp.not_lt_gt(p, i, e)), ihc)
 
 def nd.prev(-V: Data, n: Nd(V), +i: U32, +sib: Nd(V), +w: {P.wf(V, P.app(V, L(V, sib), L(V, n))) == True{} : Bool}, +hn: {pok(V, n) == True{} : Bool}, +hs: {pok(V, sib) == True{} : Bool}, +ls: {P.lasts_lt(V, L(V, sib), i) == True{} : Bool}) -> {nprev(V, n, i, sib) == P.mprev(V, P.app(V, L(V, sib), L(V, n)), i) : Maybe<&2, P.Ent(V)>}:
   match n:
@@ -990,7 +992,7 @@ def mlookup.none_aft(-V: Data, xs: P.Es(V), +k: U32, +i: U32, +h: {P.aft(V, k, x
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Maybe<&2, P.Ent(V)>, P.pk(V, P.holds(V, x, i), x, P.mlookup(V, r, i)), P.mlookup(V, r, i), None{}, P.pk.false(V, P.holds(V, x, i), x, P.mlookup(V, r, i), O.bo.and_false_l(O.ule(P.fst(V, x), i), O.ule(i, P.lst(V, x)), O.u.lt_not_le(i, P.fst(V, x), O.u.le_lt(i, k, P.fst(V, x), g, P.aft.head(V, k, x, r, h))))), mlookup.none_aft(V, r, k, i, P.aft.tail(V, k, x, r, h), g))
+      Equal.trans(Maybe<&2, P.Ent(V)>, P.pk(V, P.holds(V, x, i), x, P.mlookup(V, r, i)), P.mlookup(V, r, i), None{}, P.pk.false(V, P.holds(V, x, i), x, P.mlookup(V, r, i), O.bo.and_false_l(O.ule(P.fst(V, x), i), O.ule(i, P.lst(V, x)), UO.u32_lt_not_le(i, P.fst(V, x), UO.u32_le_lt_trans(i, k, P.fst(V, x), g, P.aft.head(V, k, x, r, h))))), mlookup.none_aft(V, r, k, i, P.aft.tail(V, k, x, r, h), g))
 
 def lf.go(c: Bool, -V: Data, +x: P.Ent(V), +r: P.Es(V), +i: U32, +e: {O.ule(i, P.lst(V, x)) == c : Bool}, +w: {P.wf(V, Con{x, r}) == True{} : Bool}, +ih: {lgo(V, P.mfind(V, r, i), i) == P.mlookup(V, r, i) : Maybe<&2, P.Ent(V)>}) -> {lgo(V, P.pk(V, c, x, P.mfind(V, r, i)), i) == P.pk(V, P.holds(V, x, i), x, P.mlookup(V, r, i)) : Maybe<&2, P.Ent(V)>}:
   match c:

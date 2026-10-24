@@ -1,6 +1,8 @@
 import Base
 import ./errseq.bend as E
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions
 
@@ -35,13 +37,6 @@ def nat.eq_refl(n: Nat) -> {Nat.is_eq(n, n) == True{} : Bool}:
     case 1n+p:
       nat.eq_refl(p)
 
-def nat.le_refl(n: Nat) -> {Nat.is_le(n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a b:
     case 0n _:
@@ -74,7 +69,7 @@ def nat.sub_one_le(n: Nat) -> {Nat.is_le(Nat.sub(n, 1n), n) == True{} : Bool}:
       {==}
     case 1n+ +p:
       %Equal.sym(Nat, Nat.sub(p, 0n), p, nat.sub_zero(p)) : {Nat.is_le(_, 1n+p) == True{} : Bool}
-      nat.le_succ(p, p, nat.le_refl(p))
+      nat.le_succ(p, p, UL.nat_le_refl(p))
 
 # Sampling
 
@@ -138,7 +133,7 @@ def adv.valid(b: Bool, +n: Nat, -e: U32, -f: Bool, +k: Nat, v: {Nat.is_le(k, n) 
     case True{}:
       v
     case False{}:
-      nat.le_refl(n)
+      UL.nat_le_refl(n)
 
 def adv.other_valid(b: Bool, -n: Nat, -e: U32, -f: Bool, -k: Nat, d: E.ErrseqCursor) -> {E.Errseq.cursor_valid(E.ErrseqCheck.state(E.Errseq.advance.go(b, n, e, f, k)), d) == E.Errseq.cursor_valid(E.Errseq{n, e, f}, d) : Bool}:
   match b:
@@ -171,7 +166,7 @@ def sample.le(b: Bool, +n: Nat) -> {Nat.is_le(E.Errseq.sample.back(b, n), n) == 
     case True{}:
       nat.sub_one_le(n)
     case False{}:
-      nat.le_refl(n)
+      UL.nat_le_refl(n)
 
 def set.valid(z: Bool, +n: Nat, -o: U32, -f: Bool, +k: Nat, -e: U32, v: {Nat.is_le(k, n) == True{} : Bool}) -> {E.Errseq.cursor_valid(E.Errseq.set.go(z, E.Errseq{n, o, f}, e), E.ErrseqCursor{k}) == True{} : Bool}:
   match z:
@@ -191,7 +186,7 @@ def Laws.errseq_fresh_sees_next(s, e, h):
   match s:
     case E.Errseq{+n, o, f}:
       %Equal.sym(Bool, U32.is_zero(e), False{}, h) : {E.Errseq.check(E.Errseq.set.go(_, E.Errseq{n, o, f}, e), E.ErrseqCursor{n}) == Some{e} : Maybe<&2, U32>}
-      check.below(n, n, e, False{}, nat.le_refl(n))
+      check.below(n, n, e, False{}, UL.nat_le_refl(n))
 
 def Laws.errseq_new_error_seen(s, c, e, v, h):
   match s c:
@@ -257,7 +252,7 @@ def Laws.errseq_kernel_unseen(s, e, h):
     case E.Errseq{+n, o, f}:
       %Equal.sym(Bool, U32.is_zero(e), False{}, h) : {E.Errseq.check(E.Errseq.set.go(_, E.Errseq{n, o, f}, e), E.Errseq.sample(E.ErrseqOptions.kernel(), E.Errseq.set.go(_, E.Errseq{n, o, f}, e))) == Some{e} : Maybe<&2, U32>}
       %Equal.sym(Nat, Nat.sub(n, 0n), n, nat.sub_zero(n)) : {E.Errseq.check(E.Errseq{1n+n, e, False{}}, E.ErrseqCursor{_}) == Some{e} : Maybe<&2, U32>}
-      check.below(n, n, e, False{}, nat.le_refl(n))
+      check.below(n, n, e, False{}, UL.nat_le_refl(n))
 
 def Laws.errseq_kernel_seen_quiet(s, c, e, v, h):
   match s c:

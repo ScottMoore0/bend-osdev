@@ -31,6 +31,8 @@ import ./proof_lists.bend as P
 import ./proof_trees.bend as R
 import ./proof_level.bend as LV
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Small helpers
 
@@ -109,15 +111,15 @@ def Laws.clear_range_entries(V, t, a, b, e):
   R.tr.clear_range(V, t, a, b, e)
 
 def Laws.set_range_inverted(V, t, a, b, v, e):
-  %Equal.sym(Bool, O.ule(a, b), False{}, O.u.lt_not_le(b, a, e)) : {R.tsr.go(V, _, t, a, b, v) == t : R.Tr(V)}
+  %Equal.sym(Bool, O.ule(a, b), False{}, UO.u32_lt_not_le(b, a, e)) : {R.tsr.go(V, _, t, a, b, v) == t : R.Tr(V)}
   {==}
 
 def Laws.clear_range_inverted(V, t, a, b, e):
-  %Equal.sym(Bool, O.ule(a, b), False{}, O.u.lt_not_le(b, a, e)) : {R.tcr.go(V, _, t, a, b) == t : R.Tr(V)}
+  %Equal.sym(Bool, O.ule(a, b), False{}, UO.u32_lt_not_le(b, a, e)) : {R.tcr.go(V, _, t, a, b) == t : R.Tr(V)}
   {==}
 
 def Laws.store_range_inverted(V, t, a, b, v, e):
-  %Equal.sym(Bool, O.ule(a, b), False{}, O.u.lt_not_le(b, a, e)) : {T.Maple.store_range.go(~U32, ~U32.cmp, ~M.MapleKey32.inc, ~M.MapleKey32.dec, V, _, t, a, b, v) == Fail{M.MapleInverted{a, b}} : Result<&2, &2, M.MapleError<U32>, R.Tr(V)>}
+  %Equal.sym(Bool, O.ule(a, b), False{}, UO.u32_lt_not_le(b, a, e)) : {T.Maple.store_range.go(~U32, ~U32.cmp, ~M.MapleKey32.inc, ~M.MapleKey32.dec, V, _, t, a, b, v) == Fail{M.MapleInverted{a, b}} : Result<&2, &2, M.MapleError<U32>, R.Tr(V)>}
   {==}
 
 def Laws.store_range_ok(V, t, a, b, v, e):
@@ -305,8 +307,8 @@ def ed.go(zs: Bool, inv: Bool, -V: Data, +xs: P.Es(V), +min: U32, +max: U32, +si
       match inv:
         case True{}:
           +rest = O.bo.and_r(O.ule(min, s), Bool.and(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max)), g)
-          +smax = O.u.le_trans(s, U32.add(s, U32.sub(size, 1)), max, O.bo.and_l(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max), rest), O.bo.and_r(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max), rest))
-          Empty.absurd({False{} == True{} : Bool}, O.u.lt_le_absurd(max, min, ei, O.u.le_trans(min, s, max, O.bo.and_l(O.ule(min, s), Bool.and(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max)), g), smax)))
+          +smax = UO.u32_le_trans(s, U32.add(s, U32.sub(size, 1)), max, O.bo.and_l(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max), rest), O.bo.and_r(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max), rest))
+          Empty.absurd({False{} == True{} : Bool}, O.u.lt_le_absurd(max, min, ei, UO.u32_le_trans(min, s, max, O.bo.and_l(O.ule(min, s), Bool.and(O.ule(s, U32.add(s, U32.sub(size, 1))), O.ule(U32.add(s, U32.sub(size, 1)), max)), g), smax)))
         case False{}:
           ga.done(P.GR(V, xs, min, U32.sub(size, 1), max), s, P.gcomplete(V, xs, min, s, U32.sub(size, 1), max, w, g, hm))
 

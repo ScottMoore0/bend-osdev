@@ -5,6 +5,8 @@
 import Base
 import ./model.bend as M
 import ./proof_order.bend as O
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Shorthands for the U32 instance (they unfold to the package's defs)
 
@@ -163,7 +165,7 @@ def aft.weaken(-V: Data, +k: U32, +k2: U32, xs: Es(V), +g: {O.ule(k, k2) == True
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      O.bo.and_intro(O.ult(k, fst(V, x)), aft(V, k, r), O.u.le_lt(k, k2, fst(V, x), g, aft.head(V, k2, x, r, h)), aft.weaken(V, k, k2, r, g, aft.tail(V, k2, x, r, h)))
+      O.bo.and_intro(O.ult(k, fst(V, x)), aft(V, k, r), UO.u32_le_lt_trans(k, k2, fst(V, x), g, aft.head(V, k2, x, r, h)), aft.weaken(V, k, k2, r, g, aft.tail(V, k2, x, r, h)))
 
 # all starting at or after a, and k < a: all after k
 def aft.of_ge(-V: Data, +k: U32, +a: U32, xs: Es(V), +g: {O.ult(k, a) == True{} : Bool}, +h: {firsts_ge(V, xs, a) == True{} : Bool}) -> {aft(V, k, xs) == True{} : Bool}:
@@ -171,7 +173,7 @@ def aft.of_ge(-V: Data, +k: U32, +a: U32, xs: Es(V), +g: {O.ult(k, a) == True{} 
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      O.bo.and_intro(O.ult(k, fst(V, x)), aft(V, k, r), O.u.lt_le(k, a, fst(V, x), g, O.bo.and_l(O.ule(a, fst(V, x)), firsts_ge(V, r, a), h)), aft.of_ge(V, k, a, r, g, O.bo.and_r(O.ule(a, fst(V, x)), firsts_ge(V, r, a), h)))
+      O.bo.and_intro(O.ult(k, fst(V, x)), aft(V, k, r), UO.u32_lt_le_trans(k, a, fst(V, x), g, O.bo.and_l(O.ule(a, fst(V, x)), firsts_ge(V, r, a), h)), aft.of_ge(V, k, a, r, g, O.bo.and_r(O.ule(a, fst(V, x)), firsts_ge(V, r, a), h)))
 
 # all after k, and a <= k: all start at or after a
 def ge.of_aft(-V: Data, +a: U32, +k: U32, xs: Es(V), +g: {O.ule(a, k) == True{} : Bool}, +h: {aft(V, k, xs) == True{} : Bool}) -> {firsts_ge(V, xs, a) == True{} : Bool}:
@@ -179,7 +181,7 @@ def ge.of_aft(-V: Data, +a: U32, +k: U32, xs: Es(V), +g: {O.ule(a, k) == True{} 
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      O.bo.and_intro(O.ule(a, fst(V, x)), firsts_ge(V, r, a), O.u.le_of_lt(a, fst(V, x), O.u.le_lt(a, k, fst(V, x), g, aft.head(V, k, x, r, h))), ge.of_aft(V, a, k, r, g, aft.tail(V, k, x, r, h)))
+      O.bo.and_intro(O.ule(a, fst(V, x)), firsts_ge(V, r, a), UO.u32_lt_le(a, fst(V, x), UO.u32_le_lt_trans(a, k, fst(V, x), g, aft.head(V, k, x, r, h))), ge.of_aft(V, a, k, r, g, aft.tail(V, k, x, r, h)))
 
 def wf.app_l(-V: Data, xs: Es(V), +ys: Es(V), +h: {wf(V, app(V, xs, ys)) == True{} : Bool}) -> {wf(V, xs) == True{} : Bool}:
   match xs:
@@ -359,7 +361,7 @@ def mload.none_le(-V: Data, xs: Es(V), +p: U32, +i: U32, +h: {lasts_le(V, xs, p)
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_r(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), O.u.lt_not_le(lst(V, x), i, O.u.le_lt(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)))), mload.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
+      Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_r(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), UO.u32_lt_not_le(lst(V, x), i, UO.u32_le_lt_trans(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)))), mload.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
 
 # every entry starts after k >= i: none holds i
 def mload.none_aft(-V: Data, xs: Es(V), +k: U32, +i: U32, +h: {aft(V, k, xs) == True{} : Bool}, +g: {O.ule(i, k) == True{} : Bool}) -> {mload(V, xs, i) == None{} : Maybe<&2, V>}:
@@ -367,7 +369,7 @@ def mload.none_aft(-V: Data, xs: Es(V), +k: U32, +i: U32, +h: {aft(V, k, xs) == 
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_l(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), O.u.lt_not_le(i, fst(V, x), O.u.le_lt(i, k, fst(V, x), g, aft.head(V, k, x, r, h))))), mload.none_aft(V, r, k, i, aft.tail(V, k, x, r, h), g))
+      Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_l(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), UO.u32_lt_not_le(i, fst(V, x), UO.u32_le_lt_trans(i, k, fst(V, x), g, aft.head(V, k, x, r, h))))), mload.none_aft(V, r, k, i, aft.tail(V, k, x, r, h), g))
 
 # Cutting below a and above b: what each index loads
 
@@ -387,9 +389,9 @@ def lbl.go(-V: Data, eb: Bool, sb: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +a:
     case False{}:
       match sb:
         case True{}:
-          pv.cong(V, hs(V, f, U32.sub(a, 1), v, i), hs(V, f, l, v, i), v, mload(V, below(V, r, a), i), mload(V, r, i), Equal.trans(Bool, Bool.and(O.ule(f, i), O.ule(i, U32.sub(a, 1))), O.ule(f, i), Bool.and(O.ule(f, i), O.ule(i, l)), bo.and_true_r(O.ule(f, i), O.ule(i, U32.sub(a, 1)), O.u.dec_le(i, a, h)), Equal.sym(Bool, Bool.and(O.ule(f, i), O.ule(i, l)), O.ule(f, i), bo.and_true_r(O.ule(f, i), O.ule(i, l), O.u.le_of_lt(i, l, O.u.lt_le(i, a, l, h, O.u.not_lt(l, a, e1)))))), ih)
+          pv.cong(V, hs(V, f, U32.sub(a, 1), v, i), hs(V, f, l, v, i), v, mload(V, below(V, r, a), i), mload(V, r, i), Equal.trans(Bool, Bool.and(O.ule(f, i), O.ule(i, U32.sub(a, 1))), O.ule(f, i), Bool.and(O.ule(f, i), O.ule(i, l)), bo.and_true_r(O.ule(f, i), O.ule(i, U32.sub(a, 1)), O.u.dec_le(i, a, h)), Equal.sym(Bool, Bool.and(O.ule(f, i), O.ule(i, l)), O.ule(f, i), bo.and_true_r(O.ule(f, i), O.ule(i, l), UO.u32_lt_le(i, l, UO.u32_lt_le_trans(i, a, l, h, UO.u32_not_lt(l, a, e1)))))), ih)
         case False{}:
-          Equal.trans(Maybe<&2, V>, mload(V, below(V, r, a), i), mload(V, r, i), pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), ih, Equal.sym(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), mload(V, r, i), pv.false(V, hs(V, f, l, v, i), v, mload(V, r, i), O.bo.and_false_l(O.ule(f, i), O.ule(i, l), O.u.lt_not_le(i, f, O.u.lt_le(i, a, f, h, O.u.not_lt(f, a, e2)))))))
+          Equal.trans(Maybe<&2, V>, mload(V, below(V, r, a), i), mload(V, r, i), pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), ih, Equal.sym(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), mload(V, r, i), pv.false(V, hs(V, f, l, v, i), v, mload(V, r, i), O.bo.and_false_l(O.ule(f, i), O.ule(i, l), UO.u32_lt_not_le(i, f, UO.u32_lt_le_trans(i, a, f, h, UO.u32_not_lt(f, a, e2)))))))
 
 # below a, an index under a loads as before
 def load_below_lt(-V: Data, xs: Es(V), +a: U32, +i: U32, +h: {O.ult(i, a) == True{} : Bool}) -> {mload(V, below(V, xs, a), i) == mload(V, xs, i) : Maybe<&2, V>}:
@@ -402,11 +404,11 @@ def load_below_lt(-V: Data, xs: Es(V), +a: U32, +i: U32, +h: {O.ult(i, a) == Tru
 def lbg.go(-V: Data, eb: Bool, sb: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +a: U32, +i: U32, +e1: {O.ult(l, a) == eb : Bool}, +e2: {O.ult(f, a) == sb : Bool}, +h: {O.ule(a, i) == True{} : Bool}, +ih: {mload(V, below(V, r, a), i) == None{} : Maybe<&2, V>}) -> {mload(V, cutlo(V, eb, sb, M.MapleEntry{f, l, v}, U32.sub(a, 1), below(V, r, a)), i) == None{} : Maybe<&2, V>}:
   match eb:
     case True{}:
-      Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, below(V, r, a), i)), mload(V, below(V, r, a), i), None{}, pv.false(V, hs(V, f, l, v, i), v, mload(V, below(V, r, a), i), O.bo.and_false_r(O.ule(f, i), O.ule(i, l), O.u.lt_not_le(l, i, O.u.lt_le(l, a, i, e1, h)))), ih)
+      Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, below(V, r, a), i)), mload(V, below(V, r, a), i), None{}, pv.false(V, hs(V, f, l, v, i), v, mload(V, below(V, r, a), i), O.bo.and_false_r(O.ule(f, i), O.ule(i, l), UO.u32_lt_not_le(l, i, UO.u32_lt_le_trans(l, a, i, e1, h)))), ih)
     case False{}:
       match sb:
         case True{}:
-          Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, U32.sub(a, 1), v, i), v, mload(V, below(V, r, a), i)), mload(V, below(V, r, a), i), None{}, pv.false(V, hs(V, f, U32.sub(a, 1), v, i), v, mload(V, below(V, r, a), i), O.bo.and_false_r(O.ule(f, i), O.ule(i, U32.sub(a, 1)), O.u.lt_not_le(U32.sub(a, 1), i, O.u.lt_le(U32.sub(a, 1), a, i, O.u.dec_lt(f, a, e2), h)))), ih)
+          Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, U32.sub(a, 1), v, i), v, mload(V, below(V, r, a), i)), mload(V, below(V, r, a), i), None{}, pv.false(V, hs(V, f, U32.sub(a, 1), v, i), v, mload(V, below(V, r, a), i), O.bo.and_false_r(O.ule(f, i), O.ule(i, U32.sub(a, 1)), UO.u32_lt_not_le(U32.sub(a, 1), i, UO.u32_lt_le_trans(U32.sub(a, 1), a, i, O.u.dec_lt(f, a, e2), h)))), ih)
         case False{}:
           ih
 
@@ -425,9 +427,9 @@ def lag.go(-V: Data, sa: Bool, ea: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +b:
     case False{}:
       match ea:
         case True{}:
-          pv.cong(V, hs(V, U32.inc(b), l, v, i), hs(V, f, l, v, i), v, mload(V, above(V, r, b), i), mload(V, r, i), Equal.trans(Bool, Bool.and(O.ule(U32.inc(b), i), O.ule(i, l)), O.ule(i, l), Bool.and(O.ule(f, i), O.ule(i, l)), bo.and_true_l(O.ule(U32.inc(b), i), O.ule(i, l), O.u.inc_le(b, i, h)), Equal.sym(Bool, Bool.and(O.ule(f, i), O.ule(i, l)), O.ule(i, l), bo.and_true_l(O.ule(f, i), O.ule(i, l), O.u.le_of_lt(f, i, O.u.le_lt(f, b, i, O.u.not_lt(b, f, e1), h))))), ih)
+          pv.cong(V, hs(V, U32.inc(b), l, v, i), hs(V, f, l, v, i), v, mload(V, above(V, r, b), i), mload(V, r, i), Equal.trans(Bool, Bool.and(O.ule(U32.inc(b), i), O.ule(i, l)), O.ule(i, l), Bool.and(O.ule(f, i), O.ule(i, l)), bo.and_true_l(O.ule(U32.inc(b), i), O.ule(i, l), O.u.inc_le(b, i, h)), Equal.sym(Bool, Bool.and(O.ule(f, i), O.ule(i, l)), O.ule(i, l), bo.and_true_l(O.ule(f, i), O.ule(i, l), UO.u32_lt_le(f, i, UO.u32_le_lt_trans(f, b, i, UO.u32_not_lt(b, f, e1), h))))), ih)
         case False{}:
-          Equal.trans(Maybe<&2, V>, mload(V, above(V, r, b), i), mload(V, r, i), pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), ih, Equal.sym(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), mload(V, r, i), pv.false(V, hs(V, f, l, v, i), v, mload(V, r, i), O.bo.and_false_r(O.ule(f, i), O.ule(i, l), O.u.lt_not_le(l, i, O.u.le_lt(l, b, i, O.u.not_lt(b, l, e2), h))))))
+          Equal.trans(Maybe<&2, V>, mload(V, above(V, r, b), i), mload(V, r, i), pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), ih, Equal.sym(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, r, i)), mload(V, r, i), pv.false(V, hs(V, f, l, v, i), v, mload(V, r, i), O.bo.and_false_r(O.ule(f, i), O.ule(i, l), UO.u32_lt_not_le(l, i, UO.u32_le_lt_trans(l, b, i, UO.u32_not_lt(b, l, e2), h))))))
 
 # above b, an index over b loads as before
 def load_above_gt(-V: Data, xs: Es(V), +b: U32, +i: U32, +h: {O.ult(b, i) == True{} : Bool}) -> {mload(V, above(V, xs, b), i) == mload(V, xs, i) : Maybe<&2, V>}:
@@ -440,11 +442,11 @@ def load_above_gt(-V: Data, xs: Es(V), +b: U32, +i: U32, +h: {O.ult(b, i) == Tru
 def lal.go(-V: Data, sa: Bool, ea: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +b: U32, +i: U32, +e1: {O.ult(b, f) == sa : Bool}, +e2: {O.ult(b, l) == ea : Bool}, +h: {O.ule(i, b) == True{} : Bool}, +ih: {mload(V, above(V, r, b), i) == None{} : Maybe<&2, V>}) -> {mload(V, cuthi(V, sa, ea, M.MapleEntry{f, l, v}, U32.inc(b), above(V, r, b)), i) == None{} : Maybe<&2, V>}:
   match sa:
     case True{}:
-      Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, above(V, r, b), i)), mload(V, above(V, r, b), i), None{}, pv.false(V, hs(V, f, l, v, i), v, mload(V, above(V, r, b), i), O.bo.and_false_l(O.ule(f, i), O.ule(i, l), O.u.lt_not_le(i, f, O.u.le_lt(i, b, f, h, e1)))), ih)
+      Equal.trans(Maybe<&2, V>, pv(V, hs(V, f, l, v, i), v, mload(V, above(V, r, b), i)), mload(V, above(V, r, b), i), None{}, pv.false(V, hs(V, f, l, v, i), v, mload(V, above(V, r, b), i), O.bo.and_false_l(O.ule(f, i), O.ule(i, l), UO.u32_lt_not_le(i, f, UO.u32_le_lt_trans(i, b, f, h, e1)))), ih)
     case False{}:
       match ea:
         case True{}:
-          Equal.trans(Maybe<&2, V>, pv(V, hs(V, U32.inc(b), l, v, i), v, mload(V, above(V, r, b), i)), mload(V, above(V, r, b), i), None{}, pv.false(V, hs(V, U32.inc(b), l, v, i), v, mload(V, above(V, r, b), i), O.bo.and_false_l(O.ule(U32.inc(b), i), O.ule(i, l), O.u.lt_not_le(i, U32.inc(b), O.u.le_lt(i, b, U32.inc(b), h, O.u.inc_gt(b, l, e2))))), ih)
+          Equal.trans(Maybe<&2, V>, pv(V, hs(V, U32.inc(b), l, v, i), v, mload(V, above(V, r, b), i)), mload(V, above(V, r, b), i), None{}, pv.false(V, hs(V, U32.inc(b), l, v, i), v, mload(V, above(V, r, b), i), O.bo.and_false_l(O.ule(U32.inc(b), i), O.ule(i, l), UO.u32_lt_not_le(i, U32.inc(b), UO.u32_le_lt_trans(i, b, U32.inc(b), h, O.u.inc_gt(b, l, e2))))), ih)
         case False{}:
           ih
 
@@ -477,7 +479,7 @@ def sli.go(-V: Data, ok: Bool, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +e:
       %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), None{}, load_below_ge(V, xs, a, i, f)) : {orv(V, _, mload(V, Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, i)) == Some{v} : Maybe<&2, V>}
       pv.true(V, hs(V, a, b, v, i), v, mload(V, above(V, xs, b), i), O.bo.and_intro(O.ule(a, i), O.ule(i, b), f, g))
     case False{}:
-      Empty.absurd({mload(V, xs, i) == Some{v} : Maybe<&2, V>}, O.bo.not_true(O.ule(a, b), O.u.le_trans(a, i, b, f, g), e))
+      Empty.absurd({mload(V, xs, i) == Some{v} : Maybe<&2, V>}, O.bo.not_true(O.ule(a, b), UO.u32_le_trans(a, i, b, f, g), e))
 
 # after set_range(a, b, v), an index of [a, b] loads v
 def set_load_in(-V: Data, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +f: {O.ule(a, i) == True{} : Bool}, +g: {O.ule(i, b) == True{} : Bool}) -> {mload(V, msr(V, xs, a, b, v), i) == Some{v} : Maybe<&2, V>}:
@@ -487,7 +489,7 @@ def slo.lt(-V: Data, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +ok: {O.ule(a
   %Equal.sym(Maybe<&2, V>, mload(V, app(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}), i), orv(V, mload(V, below(V, xs, a), i), mload(V, Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, i)), mload.app(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, i)) : {_ == mload(V, xs, i) : Maybe<&2, V>}
   %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), mload(V, xs, i), load_below_lt(V, xs, a, i, lt)) : {orv(V, _, mload(V, Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, i)) == mload(V, xs, i) : Maybe<&2, V>}
   %Equal.sym(Maybe<&2, V>, pv(V, hs(V, a, b, v, i), v, mload(V, above(V, xs, b), i)), mload(V, above(V, xs, b), i), pv.false(V, hs(V, a, b, v, i), v, mload(V, above(V, xs, b), i), O.bo.and_false_l(O.ule(a, i), O.ule(i, b), nf))) : {orv(V, mload(V, xs, i), _) == mload(V, xs, i) : Maybe<&2, V>}
-  %Equal.sym(Maybe<&2, V>, mload(V, above(V, xs, b), i), None{}, load_above_le(V, xs, b, i, O.u.le_of_lt(i, b, O.u.lt_le(i, a, b, lt, ok)))) : {orv(V, mload(V, xs, i), _) == mload(V, xs, i) : Maybe<&2, V>}
+  %Equal.sym(Maybe<&2, V>, mload(V, above(V, xs, b), i), None{}, load_above_le(V, xs, b, i, UO.u32_lt_le(i, b, UO.u32_lt_le_trans(i, a, b, lt, ok)))) : {orv(V, mload(V, xs, i), _) == mload(V, xs, i) : Maybe<&2, V>}
   orv.none(V, mload(V, xs, i))
 
 def slo.gt(-V: Data, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +ai: {O.ule(a, i) == True{} : Bool}, +gt: {O.ult(b, i) == True{} : Bool}, +nh: {hs(V, a, b, v, i) == False{} : Bool}) -> {mload(V, app(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}), i) == mload(V, xs, i) : Maybe<&2, V>}:
@@ -499,9 +501,9 @@ def slo.gt(-V: Data, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +ai: {O.ule(a
 def slo.ai(-V: Data, c: Bool, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +ok: {O.ule(a, b) == True{} : Bool}, +e: {O.ule(a, i) == c : Bool}, +f: {Bool.and(O.ule(a, i), O.ule(i, b)) == False{} : Bool}) -> {mload(V, app(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}), i) == mload(V, xs, i) : Maybe<&2, V>}:
   match c:
     case False{}:
-      slo.lt(V, xs, a, b, v, i, ok, O.u.not_le(a, i, e), e)
+      slo.lt(V, xs, a, b, v, i, ok, UO.u32_not_le(a, i, e), e)
     case True{}:
-      slo.gt(V, xs, a, b, v, i, e, O.u.not_le(i, b, O.bo.and_false_rest(O.ule(a, i), O.ule(i, b), f, e)), f)
+      slo.gt(V, xs, a, b, v, i, e, UO.u32_not_le(i, b, O.bo.and_false_rest(O.ule(a, i), O.ule(i, b), f, e)), f)
 
 def slo.go(-V: Data, ok: Bool, +xs: Es(V), +a: U32, +b: U32, +v: V, +i: U32, +e: {O.ule(a, b) == ok : Bool}, +f: {Bool.and(O.ule(a, i), O.ule(i, b)) == False{} : Bool}) -> {mload(V, msr.go(V, ok, xs, a, b, v), i) == mload(V, xs, i) : Maybe<&2, V>}:
   match ok:
@@ -521,7 +523,7 @@ def cli.go(-V: Data, ok: Bool, +xs: Es(V), +a: U32, +b: U32, +i: U32, +e: {O.ule
       %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), None{}, load_below_ge(V, xs, a, i, f)) : {orv(V, _, mload(V, above(V, xs, b), i)) == None{} : Maybe<&2, V>}
       load_above_le(V, xs, b, i, g)
     case False{}:
-      Empty.absurd({mload(V, xs, i) == None{} : Maybe<&2, V>}, O.bo.not_true(O.ule(a, b), O.u.le_trans(a, i, b, f, g), e))
+      Empty.absurd({mload(V, xs, i) == None{} : Maybe<&2, V>}, O.bo.not_true(O.ule(a, b), UO.u32_le_trans(a, i, b, f, g), e))
 
 # after clear_range(a, b), an index of [a, b] loads nothing
 def clear_load_in(-V: Data, +xs: Es(V), +a: U32, +b: U32, +i: U32, +f: {O.ule(a, i) == True{} : Bool}, +g: {O.ule(i, b) == True{} : Bool}) -> {mload(V, mcr(V, xs, a, b), i) == None{} : Maybe<&2, V>}:
@@ -531,13 +533,13 @@ def clo.ai(-V: Data, c: Bool, +xs: Es(V), +a: U32, +b: U32, +i: U32, +ok: {O.ule
   match c:
     case False{}:
       %Equal.sym(Maybe<&2, V>, mload(V, app(V, below(V, xs, a), above(V, xs, b)), i), orv(V, mload(V, below(V, xs, a), i), mload(V, above(V, xs, b), i)), mload.app(V, below(V, xs, a), above(V, xs, b), i)) : {_ == mload(V, xs, i) : Maybe<&2, V>}
-      %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), mload(V, xs, i), load_below_lt(V, xs, a, i, O.u.not_le(a, i, e))) : {orv(V, _, mload(V, above(V, xs, b), i)) == mload(V, xs, i) : Maybe<&2, V>}
-      %Equal.sym(Maybe<&2, V>, mload(V, above(V, xs, b), i), None{}, load_above_le(V, xs, b, i, O.u.le_of_lt(i, b, O.u.lt_le(i, a, b, O.u.not_le(a, i, e), ok)))) : {orv(V, mload(V, xs, i), _) == mload(V, xs, i) : Maybe<&2, V>}
+      %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), mload(V, xs, i), load_below_lt(V, xs, a, i, UO.u32_not_le(a, i, e))) : {orv(V, _, mload(V, above(V, xs, b), i)) == mload(V, xs, i) : Maybe<&2, V>}
+      %Equal.sym(Maybe<&2, V>, mload(V, above(V, xs, b), i), None{}, load_above_le(V, xs, b, i, UO.u32_lt_le(i, b, UO.u32_lt_le_trans(i, a, b, UO.u32_not_le(a, i, e), ok)))) : {orv(V, mload(V, xs, i), _) == mload(V, xs, i) : Maybe<&2, V>}
       orv.none(V, mload(V, xs, i))
     case True{}:
       %Equal.sym(Maybe<&2, V>, mload(V, app(V, below(V, xs, a), above(V, xs, b)), i), orv(V, mload(V, below(V, xs, a), i), mload(V, above(V, xs, b), i)), mload.app(V, below(V, xs, a), above(V, xs, b), i)) : {_ == mload(V, xs, i) : Maybe<&2, V>}
       %Equal.sym(Maybe<&2, V>, mload(V, below(V, xs, a), i), None{}, load_below_ge(V, xs, a, i, e)) : {orv(V, _, mload(V, above(V, xs, b), i)) == mload(V, xs, i) : Maybe<&2, V>}
-      load_above_gt(V, xs, b, i, O.u.not_le(i, b, O.bo.and_false_rest(O.ule(a, i), O.ule(i, b), f, e)))
+      load_above_gt(V, xs, b, i, UO.u32_not_le(i, b, O.bo.and_false_rest(O.ule(a, i), O.ule(i, b), f, e)))
 
 def clo.go(-V: Data, ok: Bool, +xs: Es(V), +a: U32, +b: U32, +i: U32, +e: {O.ule(a, b) == ok : Bool}, +f: {Bool.and(O.ule(a, i), O.ule(i, b)) == False{} : Bool}) -> {mload(V, mcr.go(V, ok, xs, a, b), i) == mload(V, xs, i) : Maybe<&2, V>}:
   match ok:
@@ -578,7 +580,7 @@ def aab.go(-V: Data, sa: Bool, ea: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +k:
     case False{}:
       match ea:
         case True{}:
-          O.bo.and_intro(O.ult(k, U32.inc(b)), aft(V, k, above(V, r, b)), O.u.lt_trans(k, b, U32.inc(b), O.u.lt_le(k, f, b, h1, O.u.not_lt(b, f, e1)), O.u.inc_gt(b, l, e2)), ih)
+          O.bo.and_intro(O.ult(k, U32.inc(b)), aft(V, k, above(V, r, b)), UO.u32_lt_trans(k, b, U32.inc(b), UO.u32_lt_le_trans(k, f, b, h1, UO.u32_not_lt(b, f, e1)), O.u.inc_gt(b, l, e2)), ih)
         case False{}:
           ih
 
@@ -645,8 +647,8 @@ def below.nil(-V: Data, xs: Es(V), +k: U32, +a: U32, +w: {wf(V, xs) == True{} : 
     case Nil{}:
       {==}
     case Con{M.MapleEntry{+f, +l, +v}, +r}:
-      +af = O.u.le_lt(a, k, f, g, aft.head(V, k, M.MapleEntry{f, l, v}, r, h))
-      bnil.go(V, O.ult(l, a), O.ult(f, a), f, l, v, r, a, {==}, {==}, O.u.le_not_lt(a, l, O.u.le_of_lt(a, l, O.u.lt_le(a, f, l, af, wf.le(V, M.MapleEntry{f, l, v}, r, w)))), O.u.le_not_lt(a, f, O.u.le_of_lt(a, f, af)), below.nil(V, r, k, a, wf.tail(V, M.MapleEntry{f, l, v}, r, w), aft.tail(V, k, M.MapleEntry{f, l, v}, r, h), g))
+      +af = UO.u32_le_lt_trans(a, k, f, g, aft.head(V, k, M.MapleEntry{f, l, v}, r, h))
+      bnil.go(V, O.ult(l, a), O.ult(f, a), f, l, v, r, a, {==}, {==}, UO.u32_le_not_lt(a, l, UO.u32_lt_le(a, l, UO.u32_lt_le_trans(a, f, l, af, wf.le(V, M.MapleEntry{f, l, v}, r, w)))), UO.u32_le_not_lt(a, f, UO.u32_lt_le(a, f, af)), below.nil(V, r, k, a, wf.tail(V, M.MapleEntry{f, l, v}, r, w), aft.tail(V, k, M.MapleEntry{f, l, v}, r, h), g))
 
 def wbl.go(-V: Data, eb: Bool, sb: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +a: U32, +e1: {O.ult(l, a) == eb : Bool}, +e2: {O.ult(f, a) == sb : Bool}, +w: {wf(V, Con{M.MapleEntry{f, l, v}, r}) == True{} : Bool}, +ih: {wf(V, below(V, r, a)) == True{} : Bool}) -> {wf(V, cutlo(V, eb, sb, M.MapleEntry{f, l, v}, U32.sub(a, 1), below(V, r, a))) == True{} : Bool}:
   match eb:
@@ -655,7 +657,7 @@ def wbl.go(-V: Data, eb: Bool, sb: Bool, +f: U32, +l: U32, +v: V, +r: Es(V), +a:
     case False{}:
       match sb:
         case True{}:
-          %Equal.sym(Es(V), below(V, r, a), Nil{}, below.nil(V, r, l, a, wf.tail(V, M.MapleEntry{f, l, v}, r, w), wf.aft(V, M.MapleEntry{f, l, v}, r, w), O.u.not_lt(l, a, e1))) : {wf(V, Con{M.MapleEntry{f, U32.sub(a, 1), v}, _}) == True{} : Bool}
+          %Equal.sym(Es(V), below(V, r, a), Nil{}, below.nil(V, r, l, a, wf.tail(V, M.MapleEntry{f, l, v}, r, w), wf.aft(V, M.MapleEntry{f, l, v}, r, w), UO.u32_not_lt(l, a, e1))) : {wf(V, Con{M.MapleEntry{f, U32.sub(a, 1), v}, _}) == True{} : Bool}
           O.bo.and_intro(O.ule(f, U32.sub(a, 1)), Bool.and(True{}, True{}), O.u.dec_le(f, a, e2), {==})
         case False{}:
           ih
@@ -688,7 +690,7 @@ def wf.above(-V: Data, xs: Es(V), +b: U32, +w: {wf(V, xs) == True{} : Bool}) -> 
 def wsr.go(-V: Data, ok: Bool, +xs: Es(V), +a: U32, +b: U32, +v: V, +e: {O.ule(a, b) == ok : Bool}, +w: {wf(V, xs) == True{} : Bool}) -> {wf(V, msr.go(V, ok, xs, a, b, v)) == True{} : Bool}:
   match ok:
     case True{}:
-      wf.app_intro(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, a, wf.below(V, xs, a, w), wf.intro(V, M.MapleEntry{a, b, v}, above(V, xs, b), e, firsts.above(V, xs, b), wf.above(V, xs, b, w)), lasts.below(V, xs, a), O.bo.and_intro(O.ule(a, a), firsts_ge(V, above(V, xs, b), a), O.u.le_refl(a), ge.of_aft(V, a, b, above(V, xs, b), e, firsts.above(V, xs, b))))
+      wf.app_intro(V, below(V, xs, a), Con{M.MapleEntry{a, b, v}, above(V, xs, b)}, a, wf.below(V, xs, a, w), wf.intro(V, M.MapleEntry{a, b, v}, above(V, xs, b), e, firsts.above(V, xs, b), wf.above(V, xs, b, w)), lasts.below(V, xs, a), O.bo.and_intro(O.ule(a, a), firsts_ge(V, above(V, xs, b), a), UO.u32_le_refl(a), ge.of_aft(V, a, b, above(V, xs, b), e, firsts.above(V, xs, b))))
     case False{}:
       w
 
@@ -736,18 +738,18 @@ def aft.lt_key(-V: Data, +k: U32, r: Es(V), +p: U32, -q: U32, +h1: {aft(V, k, r)
     case Nil{}:
       Empty.absurd({O.ult(k, p) == True{} : Bool}, O.ab.none_some(U32, q, em))
     case Con{+y, +r2}:
-      O.u.lt_le(k, fst(V, y), p, aft.head(V, k, y, r2, h1), O.u.le_trans(fst(V, y), lst(V, y), p, wf.le(V, y, r2, w), O.bo.and_l(O.ule(lst(V, y), p), lasts_le(V, r2, p), h2)))
+      UO.u32_lt_le_trans(k, fst(V, y), p, aft.head(V, k, y, r2, h1), UO.u32_le_trans(fst(V, y), lst(V, y), p, wf.le(V, y, r2, w), O.bo.and_l(O.ule(lst(V, y), p), lasts_le(V, r2, p), h2)))
 
 def lle.go(-V: Data, m: Maybe<&2, U32>, +x: Ent(V), +r: Es(V), +p: U32, +w: {wf(V, Con{x, r}) == True{} : Bool}, +em: {lkey(V, r) == m : Maybe<&2, U32>}, +e: {Maybe.or(&2, U32, m, Some{lst(V, x)}) == Some{p} : Maybe<&2, U32>}, ih: {lkey(V, r) == Some{p} : Maybe<&2, U32>} -> {lasts_le(V, r, p) == True{} : Bool}) -> {lasts_le(V, Con{x, r}, p) == True{} : Bool}:
   match m:
     case None{}:
       %Equal.sym(Es(V), r, Nil{}, lkey.none_nil(V, r, em)) : {lasts_le(V, Con{x, _}, p) == True{} : Bool}
       %some.inj(U32, lst(V, x), p, e) : {Bool.and(O.ule(lst(V, x), _), True{}) == True{} : Bool}
-      O.bo.and_intro(O.ule(lst(V, x), lst(V, x)), True{}, O.u.le_refl(lst(V, x)), {==})
+      O.bo.and_intro(O.ule(lst(V, x), lst(V, x)), True{}, UO.u32_le_refl(lst(V, x)), {==})
     case Some{+q}:
       +ep = Equal.trans(Maybe<&2, U32>, lkey(V, r), Some{q}, Some{p}, em, Equal.cong(U32, Maybe<&2, U32>, z => Some{z}, q, p, some.inj(U32, q, p, e)))
       +lr = ih(ep)
-      O.bo.and_intro(O.ule(lst(V, x), p), lasts_le(V, r, p), O.u.le_of_lt(lst(V, x), p, aft.lt_key(V, lst(V, x), r, p, p, wf.aft(V, x, r, w), lr, wf.tail(V, x, r, w), ep)), lr)
+      O.bo.and_intro(O.ule(lst(V, x), p), lasts_le(V, r, p), UO.u32_lt_le(lst(V, x), p, aft.lt_key(V, lst(V, x), r, p, p, wf.aft(V, x, r, w), lr, wf.tail(V, x, r, w), ep)), lr)
 
 # an ordered list whose last key is p: every entry ends by p
 def lasts.of_key(-V: Data, xs: Es(V), +p: U32, +w: {wf(V, xs) == True{} : Bool}, +e: {lkey(V, xs) == Some{p} : Maybe<&2, U32>}) -> {lasts_le(V, xs, p) == True{} : Bool}:
@@ -778,7 +780,7 @@ def lasts.lt_of_le(-V: Data, xs: Es(V), +p: U32, +i: U32, +h: {lasts_le(V, xs, p
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      O.bo.and_intro(O.ult(lst(V, x), i), lasts_lt(V, r, i), O.u.le_lt(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g), lasts.lt_of_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
+      O.bo.and_intro(O.ult(lst(V, x), i), lasts_lt(V, r, i), UO.u32_le_lt_trans(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g), lasts.lt_of_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
 
 # Find, next and prev on lists that end before or start after the index
 
@@ -787,28 +789,28 @@ def mfind.none_le(-V: Data, xs: Es(V), +p: U32, +i: U32, +h: {lasts_le(V, xs, p)
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ule(i, lst(V, x)), x, mfind(V, r, i)), mfind(V, r, i), None{}, pk.false(V, O.ule(i, lst(V, x)), x, mfind(V, r, i), O.u.lt_not_le(lst(V, x), i, O.u.le_lt(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))), mfind.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
+      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ule(i, lst(V, x)), x, mfind(V, r, i)), mfind(V, r, i), None{}, pk.false(V, O.ule(i, lst(V, x)), x, mfind(V, r, i), UO.u32_lt_not_le(lst(V, x), i, UO.u32_le_lt_trans(lst(V, x), p, i, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))), mfind.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g))
 
 def mfind.head(-V: Data, ys: Es(V), +k: U32, +i: U32, +h: {aft(V, k, ys) == True{} : Bool}, +w: {wf(V, ys) == True{} : Bool}, +g: {O.ule(i, k) == True{} : Bool}) -> {mfind(V, ys, i) == List.head(&2, Ent(V), ys) : Maybe<&2, Ent(V)>}:
   match ys:
     case Nil{}:
       {==}
     case Con{+y, +r}:
-      pk.true(V, O.ule(i, lst(V, y)), y, mfind(V, r, i), O.u.le_of_lt(i, lst(V, y), O.u.lt_le(i, fst(V, y), lst(V, y), O.u.le_lt(i, k, fst(V, y), g, aft.head(V, k, y, r, h)), wf.le(V, y, r, w))))
+      pk.true(V, O.ule(i, lst(V, y)), y, mfind(V, r, i), UO.u32_lt_le(i, lst(V, y), UO.u32_lt_le_trans(i, fst(V, y), lst(V, y), UO.u32_le_lt_trans(i, k, fst(V, y), g, aft.head(V, k, y, r, h)), wf.le(V, y, r, w))))
 
 def mnext.none_le(-V: Data, xs: Es(V), +p: U32, +i: U32, +h: {lasts_le(V, xs, p) == True{} : Bool}, +w: {wf(V, xs) == True{} : Bool}, +g: {O.ule(p, i) == True{} : Bool}) -> {mnext(V, xs, i) == None{} : Maybe<&2, Ent(V)>}:
   match xs:
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(i, fst(V, x)), x, mnext(V, r, i)), mnext(V, r, i), None{}, pk.false(V, O.ult(i, fst(V, x)), x, mnext(V, r, i), O.u.le_not_lt(fst(V, x), i, O.u.le_trans(fst(V, x), p, i, O.u.le_trans(fst(V, x), lst(V, x), p, wf.le(V, x, r, w), O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h)), g))), mnext.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), wf.tail(V, x, r, w), g))
+      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(i, fst(V, x)), x, mnext(V, r, i)), mnext(V, r, i), None{}, pk.false(V, O.ult(i, fst(V, x)), x, mnext(V, r, i), UO.u32_le_not_lt(fst(V, x), i, UO.u32_le_trans(fst(V, x), p, i, UO.u32_le_trans(fst(V, x), lst(V, x), p, wf.le(V, x, r, w), O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h)), g))), mnext.none_le(V, r, p, i, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), wf.tail(V, x, r, w), g))
 
 def mnext.head(-V: Data, ys: Es(V), +k: U32, +i: U32, +h: {aft(V, k, ys) == True{} : Bool}, +g: {O.ule(i, k) == True{} : Bool}) -> {mnext(V, ys, i) == List.head(&2, Ent(V), ys) : Maybe<&2, Ent(V)>}:
   match ys:
     case Nil{}:
       {==}
     case Con{+y, +r}:
-      pk.true(V, O.ult(i, fst(V, y)), y, mnext(V, r, i), O.u.le_lt(i, k, fst(V, y), g, aft.head(V, k, y, r, h)))
+      pk.true(V, O.ult(i, fst(V, y)), y, mnext(V, r, i), UO.u32_le_lt_trans(i, k, fst(V, y), g, aft.head(V, k, y, r, h)))
 
 # every entry ends before i: prev is the last entry
 def mprev.all(-V: Data, xs: Es(V), +i: U32, +h: {lasts_lt(V, xs, i) == True{} : Bool}) -> {mprev(V, xs, i) == elast(V, xs) : Maybe<&2, Ent(V)>}:
@@ -823,7 +825,7 @@ def mprev.none_aft(-V: Data, ys: Es(V), +k: U32, +i: U32, +h: {aft(V, k, ys) == 
     case Nil{}:
       {==}
     case Con{+y, +r}:
-      Equal.trans(Maybe<&2, Ent(V)>, later(V, mprev(V, r, i), pk(V, O.ult(lst(V, y), i), y, None{})), later(V, None{}, pk(V, O.ult(lst(V, y), i), y, None{})), None{}, later.cong_l(V, mprev(V, r, i), None{}, pk(V, O.ult(lst(V, y), i), y, None{}), mprev.none_aft(V, r, k, i, aft.tail(V, k, y, r, h), wf.tail(V, y, r, w), g)), pk.false(V, O.ult(lst(V, y), i), y, None{}, O.u.le_not_lt(i, lst(V, y), O.u.le_of_lt(i, lst(V, y), O.u.lt_le(i, fst(V, y), lst(V, y), O.u.le_lt(i, k, fst(V, y), g, aft.head(V, k, y, r, h)), wf.le(V, y, r, w))))))
+      Equal.trans(Maybe<&2, Ent(V)>, later(V, mprev(V, r, i), pk(V, O.ult(lst(V, y), i), y, None{})), later(V, None{}, pk(V, O.ult(lst(V, y), i), y, None{})), None{}, later.cong_l(V, mprev(V, r, i), None{}, pk(V, O.ult(lst(V, y), i), y, None{}), mprev.none_aft(V, r, k, i, aft.tail(V, k, y, r, h), wf.tail(V, y, r, w), g)), pk.false(V, O.ult(lst(V, y), i), y, None{}, UO.u32_le_not_lt(i, lst(V, y), UO.u32_lt_le(i, lst(V, y), UO.u32_lt_le_trans(i, fst(V, y), lst(V, y), UO.u32_le_lt_trans(i, k, fst(V, y), g, aft.head(V, k, y, r, h)), wf.le(V, y, r, w))))))
 
 def later.some_r(-V: Data, m: Maybe<&2, Ent(V)>, -x: Ent(V), -n: Maybe<&2, Ent(V)>) -> {later(V, later(V, m, Some{x}), n) == later(V, m, Some{x}) : Maybe<&2, Ent(V)>}:
   match m:
@@ -844,11 +846,11 @@ def mfk.go(-V: Data, m: Maybe<&2, U32>, +x: Ent(V), +r: Es(V), +k: U32, +w: {wf(
     case None{}:
       %Equal.sym(Es(V), r, Nil{}, lkey.none_nil(V, r, em)) : {mfind(V, Con{x, _}, k) == elast(V, Con{x, _}) : Maybe<&2, Ent(V)>}
       %some.inj(U32, lst(V, x), k, e) : {pk(V, O.ule(_, lst(V, x)), x, None{}) == Some{x} : Maybe<&2, Ent(V)>}
-      pk.true(V, O.ule(lst(V, x), lst(V, x)), x, None{}, O.u.le_refl(lst(V, x)))
+      pk.true(V, O.ule(lst(V, x), lst(V, x)), x, None{}, UO.u32_le_refl(lst(V, x)))
     case Some{+q}:
       +ek = Equal.trans(Maybe<&2, U32>, lkey(V, r), Some{q}, Some{k}, em, Equal.cong(U32, Maybe<&2, U32>, z => Some{z}, q, k, some.inj(U32, q, k, e)))
       +lr = lasts.of_key(V, r, k, wf.tail(V, x, r, w), ek)
-      +f = Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ule(k, lst(V, x)), x, mfind(V, r, k)), mfind(V, r, k), elast(V, r), pk.false(V, O.ule(k, lst(V, x)), x, mfind(V, r, k), O.u.lt_not_le(lst(V, x), k, aft.lt_key(V, lst(V, x), r, k, k, wf.aft(V, x, r, w), lr, wf.tail(V, x, r, w), ek))), ih(ek))
+      +f = Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ule(k, lst(V, x)), x, mfind(V, r, k)), mfind(V, r, k), elast(V, r), pk.false(V, O.ule(k, lst(V, x)), x, mfind(V, r, k), UO.u32_lt_not_le(lst(V, x), k, aft.lt_key(V, lst(V, x), r, k, k, wf.aft(V, x, r, w), lr, wf.tail(V, x, r, w), ek))), ih(ek))
       Equal.trans(Maybe<&2, Ent(V)>, mfind(V, Con{x, r}, k), elast(V, r), later(V, elast(V, r), Some{x}), f, Equal.sym(Maybe<&2, Ent(V)>, later(V, elast(V, r), Some{x}), elast(V, r), elast.absorb(V, r, Some{x}, k, ek)))
 
 # in an ordered list, the first entry ending at or after the last key is the last entry
@@ -866,25 +868,25 @@ def it.find_first(-V: Data, +x: Ent(V), +ys: Es(V)) -> {mfind(V, Con{x, ys}, 0) 
 
 # z before x in an ordered list: next(last of x) does not pick z
 def it.before(-V: Data, +z: Ent(V), +x: Ent(V), +rs: Es(V), +ts: Es(V), +w: {wf(V, Con{z, app(V, rs, Con{x, ts})}) == True{} : Bool}, +wx: {wf(V, Con{x, ts}) == True{} : Bool}) -> {O.ult(lst(V, x), fst(V, z)) == False{} : Bool}:
-  O.u.le_not_lt(fst(V, z), lst(V, x), O.u.le_of_lt(fst(V, z), lst(V, x), O.u.le_lt(fst(V, z), lst(V, z), lst(V, x), wf.le(V, z, app(V, rs, Con{x, ts}), w), O.u.lt_le(lst(V, z), fst(V, x), lst(V, x), aft.head(V, lst(V, z), x, ts, aft.app_r(V, lst(V, z), rs, Con{x, ts}, wf.aft(V, z, app(V, rs, Con{x, ts}), w))), wf.le(V, x, ts, wx)))))
+  UO.u32_le_not_lt(fst(V, z), lst(V, x), UO.u32_lt_le(fst(V, z), lst(V, x), UO.u32_le_lt_trans(fst(V, z), lst(V, z), lst(V, x), wf.le(V, z, app(V, rs, Con{x, ts}), w), UO.u32_lt_le_trans(lst(V, z), fst(V, x), lst(V, x), aft.head(V, lst(V, z), x, ts, aft.app_r(V, lst(V, z), rs, Con{x, ts}, wf.aft(V, z, app(V, rs, Con{x, ts}), w))), wf.le(V, x, ts, wx)))))
 
 def it.next_after(-V: Data, xs: Es(V), +x: Ent(V), +y: Ent(V), +ys: Es(V), +w: {wf(V, app(V, xs, Con{x, Con{y, ys}})) == True{} : Bool}) -> {mnext(V, app(V, xs, Con{x, Con{y, ys}}), lst(V, x)) == Some{y} : Maybe<&2, Ent(V)>}:
   match xs:
     case Nil{}:
-      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(lst(V, x), fst(V, x)), x, mnext(V, Con{y, ys}, lst(V, x))), mnext(V, Con{y, ys}, lst(V, x)), Some{y}, pk.false(V, O.ult(lst(V, x), fst(V, x)), x, mnext(V, Con{y, ys}, lst(V, x)), O.u.le_not_lt(fst(V, x), lst(V, x), wf.le(V, x, Con{y, ys}, w))), pk.true(V, O.ult(lst(V, x), fst(V, y)), y, mnext(V, ys, lst(V, x)), aft.head(V, lst(V, x), y, ys, wf.aft(V, x, Con{y, ys}, w))))
+      Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(lst(V, x), fst(V, x)), x, mnext(V, Con{y, ys}, lst(V, x))), mnext(V, Con{y, ys}, lst(V, x)), Some{y}, pk.false(V, O.ult(lst(V, x), fst(V, x)), x, mnext(V, Con{y, ys}, lst(V, x)), UO.u32_le_not_lt(fst(V, x), lst(V, x), wf.le(V, x, Con{y, ys}, w))), pk.true(V, O.ult(lst(V, x), fst(V, y)), y, mnext(V, ys, lst(V, x)), aft.head(V, lst(V, x), y, ys, wf.aft(V, x, Con{y, ys}, w))))
     case Con{+z, +rs}:
       Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(lst(V, x), fst(V, z)), z, mnext(V, app(V, rs, Con{x, Con{y, ys}}), lst(V, x))), mnext(V, app(V, rs, Con{x, Con{y, ys}}), lst(V, x)), Some{y}, pk.false(V, O.ult(lst(V, x), fst(V, z)), z, mnext(V, app(V, rs, Con{x, Con{y, ys}}), lst(V, x)), it.before(V, z, x, rs, Con{y, ys}, w, wf.app_r(V, rs, Con{x, Con{y, ys}}, wf.tail(V, z, app(V, rs, Con{x, Con{y, ys}}), w)))), it.next_after(V, rs, x, y, ys, wf.tail(V, z, app(V, rs, Con{x, Con{y, ys}}), w)))
 
 def it.next_none(-V: Data, xs: Es(V), +x: Ent(V), +w: {wf(V, app(V, xs, Con{x, Nil{}})) == True{} : Bool}) -> {mnext(V, app(V, xs, Con{x, Nil{}}), lst(V, x)) == None{} : Maybe<&2, Ent(V)>}:
   match xs:
     case Nil{}:
-      pk.false(V, O.ult(lst(V, x), fst(V, x)), x, None{}, O.u.le_not_lt(fst(V, x), lst(V, x), wf.le(V, x, Nil{}, w)))
+      pk.false(V, O.ult(lst(V, x), fst(V, x)), x, None{}, UO.u32_le_not_lt(fst(V, x), lst(V, x), wf.le(V, x, Nil{}, w)))
     case Con{+z, +rs}:
       Equal.trans(Maybe<&2, Ent(V)>, pk(V, O.ult(lst(V, x), fst(V, z)), z, mnext(V, app(V, rs, Con{x, Nil{}}), lst(V, x))), mnext(V, app(V, rs, Con{x, Nil{}}), lst(V, x)), None{}, pk.false(V, O.ult(lst(V, x), fst(V, z)), z, mnext(V, app(V, rs, Con{x, Nil{}}), lst(V, x)), it.before(V, z, x, rs, Nil{}, w, wf.app_r(V, rs, Con{x, Nil{}}, wf.tail(V, z, app(V, rs, Con{x, Nil{}}), w)))), it.next_none(V, rs, x, wf.tail(V, z, app(V, rs, Con{x, Nil{}}), w)))
 
 def it.prev_pair(-V: Data, +x: Ent(V), +y: Ent(V), +ys: Es(V), +w: {wf(V, Con{x, Con{y, ys}}) == True{} : Bool}) -> {mprev(V, Con{x, Con{y, ys}}, fst(V, y)) == Some{x} : Maybe<&2, Ent(V)>}:
   +wy = wf.tail(V, x, Con{y, ys}, w)
-  +py = Equal.trans(Maybe<&2, Ent(V)>, mprev(V, Con{y, ys}, fst(V, y)), later(V, None{}, pk(V, O.ult(lst(V, y), fst(V, y)), y, None{})), None{}, later.cong_l(V, mprev(V, ys, fst(V, y)), None{}, pk(V, O.ult(lst(V, y), fst(V, y)), y, None{}), mprev.none_aft(V, ys, lst(V, y), fst(V, y), wf.aft(V, y, ys, wy), wf.tail(V, y, ys, wy), wf.le(V, y, ys, wy))), pk.false(V, O.ult(lst(V, y), fst(V, y)), y, None{}, O.u.le_not_lt(fst(V, y), lst(V, y), wf.le(V, y, ys, wy))))
+  +py = Equal.trans(Maybe<&2, Ent(V)>, mprev(V, Con{y, ys}, fst(V, y)), later(V, None{}, pk(V, O.ult(lst(V, y), fst(V, y)), y, None{})), None{}, later.cong_l(V, mprev(V, ys, fst(V, y)), None{}, pk(V, O.ult(lst(V, y), fst(V, y)), y, None{}), mprev.none_aft(V, ys, lst(V, y), fst(V, y), wf.aft(V, y, ys, wy), wf.tail(V, y, ys, wy), wf.le(V, y, ys, wy))), pk.false(V, O.ult(lst(V, y), fst(V, y)), y, None{}, UO.u32_le_not_lt(fst(V, y), lst(V, y), wf.le(V, y, ys, wy))))
   Equal.trans(Maybe<&2, Ent(V)>, mprev(V, Con{x, Con{y, ys}}, fst(V, y)), later(V, None{}, pk(V, O.ult(lst(V, x), fst(V, y)), x, None{})), Some{x}, later.cong_l(V, mprev(V, Con{y, ys}, fst(V, y)), None{}, pk(V, O.ult(lst(V, x), fst(V, y)), x, None{}), py), pk.true(V, O.ult(lst(V, x), fst(V, y)), x, None{}, aft.head(V, lst(V, x), y, ys, wf.aft(V, x, Con{y, ys}, w))))
 
 def it.prev_before(-V: Data, +xs: Es(V), +x: Ent(V), +y: Ent(V), +ys: Es(V), +w: {wf(V, app(V, xs, Con{x, Con{y, ys}})) == True{} : Bool}) -> {mprev(V, app(V, xs, Con{x, Con{y, ys}}), fst(V, y)) == Some{x} : Maybe<&2, Ent(V)>}:
@@ -987,24 +989,24 @@ def GA(+t: U32, r: Result<&2, &2, M.MapleError<U32>, U32>) -> Data:
 def gb.end(c: Bool, +cur: U32, +d: U32, +max: U32, +e: {gfit(cur, d, max) == c : Bool}) -> GB(cur, d, max, gendgo(c, cur)):
   match c:
     case True{}:
-      O.bo.and_intro(O.ule(cur, cur), gfit(cur, d, max), O.u.le_refl(cur), e)
+      O.bo.and_intro(O.ule(cur, cur), gfit(cur, d, max), UO.u32_le_refl(cur), e)
     case False{}:
       Unit{}
 
 def gb.weak(r: Result<&2, &2, M.MapleError<U32>, U32>, +c1: U32, +c2: U32, +d: U32, +max: U32, +h: {O.ule(c1, c2) == True{} : Bool}, +g: GB(c2, d, max, r)) -> GB(c1, d, max, r):
   match r:
     case Done{+s}:
-      O.bo.and_intro(O.ule(c1, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), O.u.le_trans(c1, c2, s, h, O.bo.and_l(O.ule(c2, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), g)), O.bo.and_r(O.ule(c2, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), g))
+      O.bo.and_intro(O.ule(c1, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), UO.u32_le_trans(c1, c2, s, h, O.bo.and_l(O.ule(c2, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), g)), O.bo.and_r(O.ule(c2, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), g))
     case Fail{e}:
       Unit{}
 
 def gb.found(+cur: U32, +d: U32, +max: U32, +fx: U32, +e: {gfit2(cur, d, max, fx) == True{} : Bool}) -> HB(cur, cur, d, max):
-  O.bo.and_intro(O.ule(cur, cur), gfit(cur, d, max), O.u.le_refl(cur), O.bo.and_intro(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), O.bo.and_l(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), e), O.bo.and_r(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max), O.bo.and_r(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), e))))
+  O.bo.and_intro(O.ule(cur, cur), gfit(cur, d, max), UO.u32_le_refl(cur), O.bo.and_intro(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), O.bo.and_l(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), e), O.bo.and_r(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max), O.bo.and_r(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), e))))
 
 def gb.move(c3: Bool, -V: Data, +r: Es(V), +cur: U32, +lx: U32, +d: U32, +max: U32, +e3: {O.ult(lx, max) == c3 : Bool}, +hc: {O.ule(cur, lx) == True{} : Bool}, +ih: GB(U32.inc(lx), d, max, GR(V, r, U32.inc(lx), d, max))) -> GB(cur, d, max, gend(gscan(V, r, gmove(c3, lx), d, max), d, max)):
   match c3:
     case True{}:
-      gb.weak(GR(V, r, U32.inc(lx), d, max), cur, U32.inc(lx), d, max, O.u.le_of_lt(cur, U32.inc(lx), O.u.le_lt(cur, lx, U32.inc(lx), hc, O.u.inc_gt(lx, max, e3))), ih)
+      gb.weak(GR(V, r, U32.inc(lx), d, max), cur, U32.inc(lx), d, max, UO.u32_lt_le(cur, U32.inc(lx), UO.u32_le_lt_trans(cur, lx, U32.inc(lx), hc, O.u.inc_gt(lx, max, e3))), ih)
     case False{}:
       %Equal.sym(M.MapleGap<U32>, gscan(V, r, M.MapleGapBusy{}, d, max), M.MapleGapBusy{}, gscan.busy(V, r, d, max)) : GB(cur, d, max, gend(_, d, max))
       Unit{}
@@ -1022,7 +1024,7 @@ def gb.step(before: Bool, -V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +d: U32, +
     case True{}:
       ihc
     case False{}:
-      gb.try(gfit2(cur, d, max, fst(V, x)), V, r, cur, lst(V, x), fst(V, x), d, max, {==}, O.u.not_lt(lst(V, x), cur, e0), ihn)
+      gb.try(gfit2(cur, d, max, fst(V, x)), V, r, cur, lst(V, x), fst(V, x), d, max, {==}, UO.u32_not_lt(lst(V, x), cur, e0), ihn)
 
 # every answer lies within the bounds
 def gbound(-V: Data, xs: Es(V), +cur: U32, +d: U32, +max: U32) -> GB(cur, d, max, GR(V, xs, cur, d, max)):
@@ -1044,13 +1046,13 @@ def gf.end(c: Bool, -V: Data, +cur: U32, +d: U32) -> GF(V, Nil{}, d, gendgo(c, c
 def gf.ext(-V: Data, r: Result<&2, &2, M.MapleError<U32>, U32>, +x: Ent(V), +xs: Es(V), +d: U32, +max: U32, +c: U32, +lt: {O.ult(lst(V, x), c) == True{} : Bool}, +gb: GB(c, d, max, r), gf: GF(V, xs, d, r)) -> GF(V, Con{x, xs}, d, r):
   match r:
     case Done{+s}:
-      +i => +h1 => +h2 => Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, xs, i)), mload(V, xs, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, xs, i), O.bo.and_false_r(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), O.u.lt_not_le(lst(V, x), i, O.u.lt_le(lst(V, x), c, i, lt, O.u.le_trans(c, s, i, O.bo.and_l(O.ule(c, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), gb), h1))))), gf(i)(h1)(h2))
+      +i => +h1 => +h2 => Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, xs, i)), mload(V, xs, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, xs, i), O.bo.and_false_r(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), UO.u32_lt_not_le(lst(V, x), i, UO.u32_lt_le_trans(lst(V, x), c, i, lt, UO.u32_le_trans(c, s, i, O.bo.and_l(O.ule(c, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), gb), h1))))), gf(i)(h1)(h2))
     case Fail{e}:
       Unit{}
 
 def gf.found.at(-V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +d: U32, +max: U32, +i: U32, +w: {wf(V, Con{x, r}) == True{} : Bool}, +e2: {gfit2(cur, d, max, fst(V, x)) == True{} : Bool}, +h2: {O.ule(i, U32.add(cur, d)) == True{} : Bool}) -> {mload(V, Con{x, r}, i) == None{} : Maybe<&2, V>}:
-  +ltf = O.u.le_lt(i, U32.add(cur, d), fst(V, x), h2, O.bo.and_l(O.ult(U32.add(cur, d), fst(V, x)), O.ule(U32.add(cur, d), max), O.bo.and_r(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fst(V, x)), O.ule(U32.add(cur, d), max)), e2)))
-  Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_l(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), O.u.lt_not_le(i, fst(V, x), ltf))), mload.none_aft(V, r, lst(V, x), i, wf.aft(V, x, r, w), O.u.le_of_lt(i, lst(V, x), O.u.lt_le(i, fst(V, x), lst(V, x), ltf, wf.le(V, x, r, w)))))
+  +ltf = UO.u32_le_lt_trans(i, U32.add(cur, d), fst(V, x), h2, O.bo.and_l(O.ult(U32.add(cur, d), fst(V, x)), O.ule(U32.add(cur, d), max), O.bo.and_r(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fst(V, x)), O.ule(U32.add(cur, d), max)), e2)))
+  Equal.trans(Maybe<&2, V>, pv(V, holds(V, x, i), val(V, x), mload(V, r, i)), mload(V, r, i), None{}, pv.false(V, holds(V, x, i), val(V, x), mload(V, r, i), O.bo.and_false_l(O.ule(fst(V, x), i), O.ule(i, lst(V, x)), UO.u32_lt_not_le(i, fst(V, x), ltf))), mload.none_aft(V, r, lst(V, x), i, wf.aft(V, x, r, w), UO.u32_lt_le(i, lst(V, x), UO.u32_lt_le_trans(i, fst(V, x), lst(V, x), ltf, wf.le(V, x, r, w)))))
 
 def gf.found(-V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +d: U32, +max: U32, +w: {wf(V, Con{x, r}) == True{} : Bool}, +e2: {gfit2(cur, d, max, fst(V, x)) == True{} : Bool}) -> Free(V, Con{x, r}, cur, d):
   +i => +h1 => +h2 => gf.found.at(V, x, r, cur, d, max, i, w, e2, h2)
@@ -1091,12 +1093,12 @@ def gfree(-V: Data, xs: Es(V), +cur: U32, +d: U32, +max: U32, +w: {wf(V, xs) == 
 
 def gc.fits(+cur: U32, +s: U32, +d: U32, +max: U32, +hb: HB(cur, s, d, max)) -> {gfit(cur, d, max) == True{} : Bool}:
   +am = O.u.am(cur, s, d, O.bo.and_l(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb), O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb)))
-  O.bo.and_intro(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), O.bo.and_l(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), O.u.le_trans(U32.add(cur, d), U32.add(s, d), max, O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), O.bo.and_r(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb))))
+  O.bo.and_intro(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), O.bo.and_l(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), UO.u32_le_trans(U32.add(cur, d), U32.add(s, d), max, O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), O.bo.and_r(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb))))
 
 def gc.fits2(+cur: U32, +s: U32, +d: U32, +max: U32, +fx: U32, +hb: HB(cur, s, d, max), +e: {O.ult(U32.add(s, d), fx) == True{} : Bool}) -> {gfit2(cur, d, max, fx) == True{} : Bool}:
   +am = O.u.am(cur, s, d, O.bo.and_l(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb), O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb)))
   +fit = gc.fits(cur, s, d, max, hb)
-  O.bo.and_intro(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), O.bo.and_l(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), fit), O.bo.and_intro(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max), O.u.le_lt(U32.add(cur, d), U32.add(s, d), fx, O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), e), O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), fit)))
+  O.bo.and_intro(O.ule(cur, U32.add(cur, d)), Bool.and(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max)), O.bo.and_l(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), fit), O.bo.and_intro(O.ult(U32.add(cur, d), fx), O.ule(U32.add(cur, d), max), UO.u32_le_lt_trans(U32.add(cur, d), U32.add(s, d), fx, O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), U32.add(s, d)), am), e), O.bo.and_r(O.ule(cur, U32.add(cur, d)), O.ule(U32.add(cur, d), max), fit)))
 
 def gc.end(c: Bool, +cur: U32, +s: U32, +d: U32, +max: U32, +e: {gfit(cur, d, max) == c : Bool}, +hb: HB(cur, s, d, max)) -> GA(s, gendgo(c, cur)):
   match c:
@@ -1124,14 +1126,14 @@ def gc.c6(c6: Bool, -V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +s: U32, +d: U32
     case True{}:
       O.bo.not_true(gfit2(cur, d, max, fst(V, x)), gc.fits2(cur, s, d, max, fst(V, x), hb, e6), e2)
     case False{}:
-      held(V, x, r, fst(V, x), O.bo.and_intro(O.ule(fst(V, x), fst(V, x)), O.ule(fst(V, x), lst(V, x)), O.u.le_refl(fst(V, x)), wf.le(V, x, r, w)), hf(fst(V, x))(O.u.le_of_lt(s, fst(V, x), e5))(O.u.not_lt(U32.add(s, d), fst(V, x), e6)))
+      held(V, x, r, fst(V, x), O.bo.and_intro(O.ule(fst(V, x), fst(V, x)), O.ule(fst(V, x), lst(V, x)), UO.u32_le_refl(fst(V, x)), wf.le(V, x, r, w)), hf(fst(V, x))(UO.u32_lt_le(s, fst(V, x), e5))(UO.u32_not_lt(U32.add(s, d), fst(V, x), e6)))
 
 def gc.c5(c5: Bool, -V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +s: U32, +d: U32, +max: U32, +w: {wf(V, Con{x, r}) == True{} : Bool}, +e5: {O.ult(s, fst(V, x)) == c5 : Bool}, +e4: {O.ult(lst(V, x), s) == False{} : Bool}, +e2: {gfit2(cur, d, max, fst(V, x)) == False{} : Bool}, +hb: HB(cur, s, d, max), hf: Free(V, Con{x, r}, s, d)) -> Empty:
   match c5:
     case True{}:
       gc.c6(O.ult(U32.add(s, d), fst(V, x)), V, x, r, cur, s, d, max, w, {==}, e5, e2, hb, hf)
     case False{}:
-      held(V, x, r, s, O.bo.and_intro(O.ule(fst(V, x), s), O.ule(s, lst(V, x)), O.u.not_lt(s, fst(V, x), e5), O.u.not_lt(lst(V, x), s, e4)), hf(s)(O.u.le_refl(s))(O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb))))
+      held(V, x, r, s, O.bo.and_intro(O.ule(fst(V, x), s), O.ule(s, lst(V, x)), UO.u32_not_lt(s, fst(V, x), e5), UO.u32_not_lt(lst(V, x), s, e4)), hf(s)(UO.u32_le_refl(s))(O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb))))
 
 def gc.move(c3: Bool, -V: Data, +x: Ent(V), +r: Es(V), +s: U32, +d: U32, +max: U32, +e3: {O.ult(lst(V, x), max) == c3 : Bool}, +t: {O.ult(lst(V, x), max) == True{} : Bool}, +hb: HB(U32.inc(lst(V, x)), s, d, max), hf: Free(V, Con{x, r}, s, d), ihn: HB(U32.inc(lst(V, x)), s, d, max) -> Free(V, r, s, d) -> GA(s, GR(V, r, U32.inc(lst(V, x)), d, max))) -> GA(s, gend(gscan(V, r, gmove(c3, lst(V, x)), d, max), d, max)):
   match c3:
@@ -1144,8 +1146,8 @@ def gc.dec(c4: Bool, -V: Data, +x: Ent(V), +r: Es(V), +cur: U32, +s: U32, +d: U3
   match c4:
     case True{}:
       +rest = O.bo.and_r(O.ule(cur, s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), hb)
-      +smax = O.u.le_trans(s, U32.add(s, d), max, O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), rest), O.bo.and_r(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), rest))
-      gc.move(O.ult(lst(V, x), max), V, x, r, s, d, max, {==}, O.u.lt_le(lst(V, x), s, max, e4, smax), O.bo.and_intro(O.ule(U32.inc(lst(V, x)), s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), O.u.inc_le(lst(V, x), s, e4), rest), hf, ihn)
+      +smax = UO.u32_le_trans(s, U32.add(s, d), max, O.bo.and_l(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), rest), O.bo.and_r(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max), rest))
+      gc.move(O.ult(lst(V, x), max), V, x, r, s, d, max, {==}, UO.u32_lt_le_trans(lst(V, x), s, max, e4, smax), O.bo.and_intro(O.ule(U32.inc(lst(V, x)), s), Bool.and(O.ule(s, U32.add(s, d)), O.ule(U32.add(s, d), max)), O.u.inc_le(lst(V, x), s, e4), rest), hf, ihn)
     case False{}:
       Empty.absurd(GA(s, gend(gscan(V, r, gmove(O.ult(lst(V, x), max), lst(V, x)), d, max), d, max)), gc.c5(O.ult(s, fst(V, x)), V, x, r, cur, s, d, max, w, {==}, e4, e2, hb, hf))
 
@@ -1247,7 +1249,7 @@ def below.all(-V: Data, xs: Es(V), +p: U32, +a: U32, +h: {lasts_le(V, xs, p) == 
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      Equal.trans(Es(V), cutlo(V, O.ult(lst(V, x), a), O.ult(fst(V, x), a), x, U32.sub(a, 1), below(V, r, a)), Con{x, below(V, r, a)}, Con{x, r}, cutlo.true(V, O.ult(lst(V, x), a), O.ult(fst(V, x), a), x, U32.sub(a, 1), below(V, r, a), O.u.le_lt(lst(V, x), p, a, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)), Equal.cong(Es(V), Es(V), q => Con{x, q}, below(V, r, a), r, below.all(V, r, p, a, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)))
+      Equal.trans(Es(V), cutlo(V, O.ult(lst(V, x), a), O.ult(fst(V, x), a), x, U32.sub(a, 1), below(V, r, a)), Con{x, below(V, r, a)}, Con{x, r}, cutlo.true(V, O.ult(lst(V, x), a), O.ult(fst(V, x), a), x, U32.sub(a, 1), below(V, r, a), UO.u32_le_lt_trans(lst(V, x), p, a, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)), Equal.cong(Es(V), Es(V), q => Con{x, q}, below(V, r, a), r, below.all(V, r, p, a, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)))
 
 # everything starts after b: nothing is cut above b
 def above.all(-V: Data, xs: Es(V), +b: U32, +h: {aft(V, b, xs) == True{} : Bool}) -> {above(V, xs, b) == xs : Es(V)}:
@@ -1263,8 +1265,8 @@ def above.nil(-V: Data, xs: Es(V), +p: U32, +b: U32, +h: {lasts_le(V, xs, p) == 
     case Nil{}:
       {==}
     case Con{+x, +r}:
-      +lb = O.u.le_trans(lst(V, x), p, b, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)
-      Equal.trans(Es(V), cuthi(V, O.ult(b, fst(V, x)), O.ult(b, lst(V, x)), x, U32.inc(b), above(V, r, b)), above(V, r, b), Nil{}, cuthi.ff(V, O.ult(b, fst(V, x)), O.ult(b, lst(V, x)), x, U32.inc(b), above(V, r, b), O.u.le_not_lt(fst(V, x), b, O.u.le_trans(fst(V, x), lst(V, x), b, wf.le(V, x, r, w), lb)), O.u.le_not_lt(lst(V, x), b, lb)), above.nil(V, r, p, b, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), wf.tail(V, x, r, w), g))
+      +lb = UO.u32_le_trans(lst(V, x), p, b, O.bo.and_l(O.ule(lst(V, x), p), lasts_le(V, r, p), h), g)
+      Equal.trans(Es(V), cuthi(V, O.ult(b, fst(V, x)), O.ult(b, lst(V, x)), x, U32.inc(b), above(V, r, b)), above(V, r, b), Nil{}, cuthi.ff(V, O.ult(b, fst(V, x)), O.ult(b, lst(V, x)), x, U32.inc(b), above(V, r, b), UO.u32_le_not_lt(fst(V, x), b, UO.u32_le_trans(fst(V, x), lst(V, x), b, wf.le(V, x, r, w), lb)), UO.u32_le_not_lt(lst(V, x), b, lb)), above.nil(V, r, p, b, O.bo.and_r(O.ule(lst(V, x), p), lasts_le(V, r, p), h), wf.tail(V, x, r, w), g))
 
 def mor.none(-A: Data, m: Maybe<&2, A>) -> {Maybe.or(&2, A, m, None{}) == m : Maybe<&2, A>}:
   match m:
