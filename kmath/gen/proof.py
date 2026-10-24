@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Writes kmath/PROOF.bend, the proofs of LAWS.bend's laws, and the further
 proof files PROOF_div.bend (64-bit division, gen/proof_div64.py),
-PROOF_fls.bend (the number of bits, gen/proof_recip.py) and PROOF_recip.bend
-(reciprocal division, gen/proof_krecip.py). PROOF.bend's proofs:
+PROOF_fls.bend (the number of bits, gen/proof_recip.py), PROOF_recip.bend
+(reciprocal division, gen/proof_krecip.py) and PROOF_prime.bend (primality,
+gen/proof_prime.py). PROOF.bend's proofs:
 
   * Nat arithmetic: addition's identities, commutativity and associativity,
     and multiplication's distributivity and associativity, by induction;
@@ -12,6 +13,7 @@ PROOF_fls.bend (the number of bits, gen/proof_recip.py) and PROOF_recip.bend
     induction on its counting loop with the invariant m + r = bp;
   * gcd: by induction on Euclid's fuel, which stays at least b; at each step
     the witnesses for (b, a mod b) give those for (a, b), since a = q b + r;
+    its greatest-ness, homogeneity and the lcm laws in gen/proof_gcd.py;
   * isqrt: by induction on the bits, with the invariant r^2 <= n <
     (r + 2^(b+1))^2 before bit b.
 
@@ -27,6 +29,8 @@ import natproof as N  # noqa: E402
 import proof_div64  # noqa: E402
 import proof_recip  # noqa: E402
 import proof_krecip  # noqa: E402
+import proof_gcd  # noqa: E402
+import proof_prime  # noqa: E402
 
 N.CFG["law"] = "UL."
 N.OUT.prefix = "km.r"
@@ -542,11 +546,15 @@ def main():
     emit("import ./rational.bend as Q")
     emit("import ./cordic.bend as C")
     emit("import ./prime.bend as P")
+    emit("import ../u32/u32.bend as U")
+    emit("import ../u32/LAWS.bend as UL")
+    emit("import ../u32/PROOF.bend as UP")
     emit("import ./LAWS.bend as Laws")
     emit()
     nat_lemmas()
     divmod_lemmas()
     gcd_lemmas()
+    proof_gcd.more(emit)
     isqrt_lemmas()
     emit("# vectors, by computation")
     for v in VECTORS:
@@ -565,6 +573,9 @@ def main():
          U32_IMPORTS + ["import ../word64/LAWS_mul.bend as WM", "import ../word64/PROOF_mul.bend as WMP", "import ./reciprocal.bend as R",
                         "import ./LAWS_fls.bend as KF", "import ./PROOF_fls.bend as KFP"],
          [helpers, proof_krecip.recip], {"Laws.fls_": "KF.fls_"})
+    part("prime", "primality", ["import ../u32/u32.bend as U", "import ../u32/LAWS.bend as UL", "import ../u32/PROOF.bend as UP",
+                                "import ./prime.bend as P"],
+         [proof_prime.prime])
 
 if __name__ == "__main__":
     main()

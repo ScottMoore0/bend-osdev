@@ -19,7 +19,10 @@ C99 7.19.6.1 for the printf conversions. No GPL source was read.
 | `options.bend` | `KStrPattern`, `KStrMatch`; `KStr.match_one`, `KStr.match_token`, `KStr.match_int`, `KStr.match_uint`, `KStr.match_octal`, `KStr.match_hex`, `KStr.split_options` |
 | `LAWS.bend`, `PROOF.bend` | the hex round trip and the vectors, and their proofs |
 | `LAWS_dec.bend`, `PROOF_dec.bend` | the decimal round trips |
-| `gen/proof.py` | writes both proof files (`gen/proof_dec.py`; ring identities by `scripts/natproof.py`) |
+| `LAWS_oct.bend`, `PROOF_oct.bend` | the octal round trips |
+| `LAWS_hex.bend`, `PROOF_hex.bend` | the hexadecimal round trips (`%x` and `%X`) |
+| `LAWS_pad.bend`, `PROOF_pad.bend` | the field width's padding |
+| `gen/proof.py` | writes the five proof files (`gen/proof_dec.py`, `gen/proof_fmt.py`, `gen/proof_pad.py`; ring identities by `scripts/natproof.py`) |
 
 ## API
 
@@ -105,8 +108,42 @@ printed the 64-bit two's complement (`%u` of 4294967295 gave
 reads a 32-bit value as signed. It now extends with zeros for the other
 conversions (`kfmt.hi32`), and `check.bend` tests the four cases.
 
-Not proved for every input: the other formats (widths, flags, `%d`, `%x`
-and `%o` text) and the signed parsers; `ref/run.sh` checks them.
+`LAWS_oct.bend` and `LAWS_hex.bend`, **for every input:** the same round
+trips in base 8 and base 16: `to_u64(format(KFmt.plain(KConvO{}), v), 8)
+= Done{v}` and `to_u32(format32(KFmt.plain(KConvO{}), v), 8) = Done{v}`
+(`oct64_round_trip`, `oct32_round_trip`); with `KConvX{}` and
+`KConvXUpper{}` in base 16 (`x64_round_trip`, `x32_round_trip`,
+`xu64_round_trip`, `xu32_round_trip`). `gen/proof_fmt.py` runs the decimal
+generator with its base and its letters' case set, and adds what differs: a
+remainder from 10 to 15 is a letter (87 + r for `%x`, 55 + r for `%X`) and
+reads back as `KTDigit{r}` (its 16 cases); base 16's front end looks for an
+`x` at the second token, and the digits' second token is a digit or there
+is none; and the 32-bit accumulator shifts the digit in, in base 8 and 16,
+instead of multiplying. With q·B + r = v < 2^32, q < 2^29 (2^28), so the
+accumulator's top bits are clear and the test passes, and the shifted value
+is q·2^3 + r (u32's `shln`, `or` and low-bits laws) or, for base 16's
+`kstr.ins4` (the bits of r below those of q), r + 2^4·q: a word's value is
+that of its low m bits plus 2^m that of the rest (on a copy of word64's bit
+concatenation).
+
+`LAWS_pad.bend`, **for every input** of `KStr.format` (every conversion,
+flags, width and value; `sprintf` pads each conversion with the same
+`kfmt.list`), with u the unpadded form (the same conversion and sign flags,
+width 0): the output has max(w, len(u)) bytes (`pad_len`); left-justified,
+its first len(u) bytes are u (`pad_left`); right-justified with spaces,
+dropping its first w − len(u) bytes leaves u (`pad_right`). `kfmt.pad`
+puts sign ++ digits ++ fill spaces, sign ++ fill zeros ++ digits, or fill
+spaces ++ sign ++ digits, with fill = w − len(sign ++ digits); the proofs
+(`gen/proof_pad.py`) take the lengths of an append and of `kfmt.repeat`,
+show that the bytes of a list append are the append of the bytes (from
+bytes' `octets_to_of`, `octets_append_list` and `octets_of_to`), and cut
+with bytes' take and drop laws.
+
+Not proved for every input: where zero padding puts its zeros (between the
+sign and the digits: its length is in `pad_len`), the text of `%d` (the
+sign and the magnitude of a negative value), what the padding bytes are,
+`KStr.sprintf`'s reading of a format string, and the signed parsers;
+`ref/run.sh` checks them.
 
 ## Tests
 
@@ -120,7 +157,10 @@ sizes and orders against a model of the documented layout.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (20 laws) and `PROOF_dec.bend` (2) ALL PROOFS
-CHECK; `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 8 s, peak
-0.43 GB; `PROOF_dec.bend` about 6 s, 0.54 GB); `check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh`
+Bend 2.0.37: `PROOF.bend` (20 laws), `PROOF_dec.bend` (2), `PROOF_hex.bend`
+(4), `PROOF_oct.bend` (2) and `PROOF_pad.bend` (3) ALL PROOFS CHECK;
+`--verdict` ALL PROOFS CHECK on each (`PROOF.bend` about 8 s, peak 0.43 GB;
+`PROOF_dec.bend` about 6 s, 0.54 GB; `PROOF_hex.bend` about 6 s, 0.56 GB;
+`PROOF_oct.bend` about 6 s, 0.52 GB; `PROOF_pad.bend` about 5 s, 0.38 GB);
+`check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh`
 passes.
