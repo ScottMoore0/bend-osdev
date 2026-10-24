@@ -131,8 +131,15 @@ Written from the public specifications only:
 | `kbkdf.bend` | the SP 800-108 KDFs over any MAC: counter and feedback mode, checked, as the KDF interface's `~derive`, and the unchecked streams |
 | `inst_kbkdf.bend` | KBKDF-HMAC-SHA-256 in counter and feedback mode (32-bit counter and [L]_2) |
 | `inst_michael.bend` | Michael (hashes/michael.bend) as a MAC: its key error mapped onto `CrError` |
-| `gen/instances.py` | the table of instances and the law schemas: writes the per-instance laws in `LAWS.bend` and their proofs in `PROOF.bend` (`--check` checks they are up to date) |
-| `gen/proof.py` | writes the lemmas proved on a word's 32 bits (the "bits" region of `PROOF.bend`) |
+| `LAWS.bend`, `PROOF.bend` | the generic laws (for every algorithm of an interface's shape) and the conditional ones, and their proofs |
+| `LAWS_cm.bend`, `PROOF_cm.bend` | the laws of cipher-modes' algorithms through the interfaces (AES, CMAC, CCM, the 128-bit block format), and their proofs, from cipher-modes' laws |
+| `LAWS_lc.bend`, `PROOF_lc.bend` | the same for legacy-ciphers' (its block ciphers, RC4, the 64-bit block format), from legacy-ciphers' laws |
+| `LAWS_crc.bend`, `PROOF_crc.bend` | the same for crc's CRCs as hashes, and HMAC and HKDF over them, from crc's laws |
+| `LAWS_sha.bend`, `PROOF_sha.bend` | the same for bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs over them, from bend-collections-laws-crypto's laws |
+| `LAWS_hs.bend`, `PROOF_hs.bend` | the same for the hashes package's hashes and Michael, and HMAC and PBKDF2 over them, from that package's laws |
+| `proof_bits.bend`, `proof_modes.bend` | lemmas the proof files share: on bits, words, bytes, lists and the two block formats; and the loops of ECB, CBC, PCBC and LRW as their structural forms |
+| `gen/instances.py` | the table of instances and the law schemas: writes the per-instance laws in each `LAWS_<part>.bend` and their proofs in its `PROOF_<part>.bend` (`--check` checks they are up to date) |
+| `gen/proof.py` | writes the lemmas proved on a word's 32 bits (the "bits" region of `proof_bits.bend`) |
 
 Bend imports do not re-export, so import the files you use: a program that
 needs HMAC over its own hash imports `hash.bend`, `mac.bend` and
@@ -257,7 +264,9 @@ laws come in three forms:
   block cipher (from `CrXor`'s, for every keystream generator), the MAC
   default verify's two laws for every `~compute` (so HMAC over any hash and
   CMAC over any cipher accept what they compute), the CRC hash laws for every
-  parameter set.
+  parameter set (in `LAWS.bend`, but those about another package's
+  algorithms, such as CMAC's and the CRCs', in that package's pair: Laws,
+  below).
 * **Conditional laws** take the algorithm's property at the very arguments
   they need, as an ordinary hypothesis used once (`--verdict` accepts these):
   `lift_round_trip` (an AEAD's round trip survives mapping its errors onto
@@ -267,7 +276,8 @@ laws come in three forms:
   themselves because the cipher does, block by block; HMAC in pieces because
   the hash streams) is a schema in `gen/instances.py`: a statement and a
   proof with the instance's defs and the name of the law its own package
-  proves filled in. The script writes one law and one proof per instance;
+  proves filled in. The script writes one law and one proof per instance,
+  in the pair of law and proof files of the package the instance comes from;
   there the property is a call of a global law, which may be used any number
   of times.
 
@@ -337,7 +347,7 @@ the AEAD round trip of `CrCcm.seal` and `CrCcm.open` from it, at the same
 arguments, and `ccm_aead_round_trip` joins the two: the AEAD round trip for
 every CCM instance, with no hypothesis. (They were kept apart while
 cipher-modes' `PROOF.bend` failed `--verdict`; since its round-trip laws
-take an ordinary hypothesis, `PROOF.bend` here imports it, and `--verdict`
+take an ordinary hypothesis, `PROOF_cm.bend` here imports it, and `--verdict`
 passes with it.)
 
 **Not instances.** XXH64 (zstd) fits the hash interface's shape, but zstd
@@ -360,7 +370,7 @@ proofs (`Split.sha256`, `Incremental.sha256`, `Sha256.length`,
 imports the same file for SHA3-256. Bend names a def by the package
 it comes from, so those laws hold of that package's copy and not of
 bend-collections@1.0.0.0's: importing the copy they are about is what lets
-`LAWS.bend` cite them.
+`LAWS_sha.bend` cite them.
 
 **Why the cipher-modes adapter is here.** `inst_cm.bend`, `inst_aes.bend`,
 `inst_cmac.bend` and `inst_ccm.bend` adapt cipher-modes to the interfaces
@@ -422,12 +432,16 @@ type from `@x: A -> ...`).
   own error type maps it with `CrError.lift`, as `CrLc.key` and `CrCm.key`
   do), and the interface's functions, none taking a `+` parameter. Then:
   1. a row in `gen/instances.py` (`BLOCK`, `STREAM` or `HASH`) with its
-     defs and the names of the laws its own package proves (for a block
+     defs, the names of the laws its own package proves (for a block
      cipher, decryption undoes encryption; for a hash, split and split3, and
-     streaming where it has one);
+     streaming where it has one), and its part: the pair of law and proof
+     files for the package it comes from (Laws, below; a package with no
+     pair yet gets a new one, `LAWS_<part>.bend` and `PROOF_<part>.bend`
+     with the two generated regions, importing that package's laws and
+     proofs, and its name in `PARTS`);
   2. `python3 gen/instances.py`: it writes the instance's laws (round trip,
      key length, ECB and CBC round trips; or the stream laws; or HMAC in
-     pieces) and their proofs;
+     pieces) and their proofs into that pair;
   3. its vectors in `check.bend` and its cases in `ref/gen.py`.
   A cipher of a new block size brings its block format (`~blk_of`,
   `~blk_to`, `~bxor`, and their two laws, as `inst_cm.bend` does for
@@ -436,6 +450,11 @@ type from `@x: A -> ...`).
   uses. A law it needs from the algorithm becomes a schema in
   `gen/instances.py` (a function writing a statement and a proof, given an
   instance's row), or a conditional law if it uses the property once.
+* **New laws** go in the pair whose proofs they rest on: a generic law in
+  `LAWS.bend`, a law about another package's algorithm in that package's
+  pair. Laws whose proofs take in proofs no pair has yet go in a new pair,
+  so that no proof file takes in more than its own laws need (Laws,
+  below).
 * **Keystream generators:** any `~next: S -> CrKsStep<S>` is a stream cipher
   through `CrXor`, with its three laws already proved (as CTR is).
 * **PBKDF2's PRF** is any MAC (`~K`, `~key`, `~compute`) with its tag
@@ -453,7 +472,32 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-`LAWS.bend` has 214 laws.
+214 laws, in six pairs of law and proof files. Each proof file imports its
+law file as `Laws` and only the proofs its laws rest on, and each is checked
+in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
+
+| Pair | Laws | Its proofs rest on (and import) |
+|---|---|---|
+| `LAWS.bend`, `PROOF.bend` | 23: the generic laws `xor_*`, `ctr_*`, `mac_verify_tag_*`, `hmac_accepts`, `xcbc_accepts`, `vmac_accepts`, `pbkdf2_length`, `pbkdf2_stream_*`, `kbkdf_*` (but `kbkdf_hmac_sha256_vector`), and the conditional `lift_round_trip`, `sign_verify_bytes_if`, `kex_agree_if` | bytes' laws |
+| `LAWS_cm.bend`, `PROOF_cm.bend` | 13: `cmblock_*`, `cmac_accepts`, `ccm_round_trip_if`, `ccm_aead_round_trip`, `aes_fips197_c1`, and the AES rows (`aes_*`, `aes_enc_key_length`) | cipher-modes' laws (and through them gf's), the generic laws |
+| `LAWS_lc.bend`, `PROOF_lc.bend` | 93: `lcblock64_*`, the refusals `rc4_empty_key`, `rc4_iv_refused`, `ctr_bad_iv`, `blocks_of_not_whole`, and the rows of DES to FCrypt and of RC4 | legacy-ciphers' laws |
+| `LAWS_crc.bend`, `PROOF_crc.bend` | 16: `crc32_*`, `crc32c_hash_check`, `crc64_*`, `hkdf_too_long`, `hmac_crc32_vector`, and the CRC rows (`hmac_crc32_*`, `hmac_crc64_*`) | crc's laws |
+| `LAWS_sha.bend`, `PROOF_sha.bend` | 21: `sha256_*`, `sha512_*`, `sha3_256_*`, `hkdf_sha256_too_long`, `hmac_sha256_rfc4231_2`, `pbkdf2_hmac_sha256_rfc7914_1`, `kbkdf_hmac_sha256_vector`, and the SHA rows (`hmac_sha256_split`, `hmac_sha512_split`, `hmac_sha3_256_split`) | bend-collections-laws-crypto's laws, bytes' laws |
+| `LAWS_hs.bend`, `PROOF_hs.bend` | 48: `michael_*`, `pbkdf2_zero_iterations`, `pbkdf2_hmac_sha1_rfc6070_*`, and the `hs_row`s (`<h>_hash_*`, `hmac_<h>_*`) | the hashes package's laws, the generic laws |
+
+A proof elsewhere that uses a law imports the pair that holds it: x509 and
+pkcs use `sign_verify_bytes_if` through `../crypto/LAWS.bend` and
+`../crypto/PROOF.bend`, which take in none of the algorithm packages'
+proofs. **Why several pairs:** a check takes in the proofs of every package
+the proof file imports (under `--verdict` alone, on the machine of the
+Status line: cipher-modes' about 1.2 GB, crc's 0.68 GB, hashes' 0.63 GB,
+legacy-ciphers' 0.59 GB, bend-collections-laws-crypto's 0.50 GB, bytes'
+0.25 GB), and with all of them in one `PROOF.bend` its `--verdict` peaked
+at about 3.26 GB and 12 minutes, past where a check is killed under memory
+pressure. Split by what the proofs rest on, each file takes in one
+package's proofs; the lemmas they share are in `proof_bits.bend` and
+`proof_modes.bend`. The per-instance laws below are written by
+`gen/instances.py` into the pair of the package the instance comes from.
 
 **Generic, for every input and every algorithm of the shape:**
 `xor_involution`, `xor_streaming_data`, `xor_streaming_state` (CrXor, every
@@ -529,9 +573,8 @@ output past 255 digests, over CRC-32 and over SHA-256).
 proof needs `CrOct.pieces` of a concatenation of encrypted blocks to give
 those blocks back (every block's length through the format, the stolen
 bytes' `take` and `drop`, the XOR with a zero-padded piece undone over its
-length), for every block size; those lemmas are not done in this version,
-and `PROOF.bend` already takes over 2 GB of the checker's memory under
-`--verdict` (tested: RFC 3962's vectors both ways, and 32 cases against the
+length), for every block size; those lemmas are not done in this version
+(tested: RFC 3962's vectors both ways, and 32 cases against the
 kernel's cts(cbc(aes)) and `ref/gen.py`'s CS3); the byte layer of PCBC and
 LRW (as of ECB and CBC: the laws are on lists of blocks); VMAC's and XCBC's
 values (the MAC laws hold whatever the tag is; the values are tested on
@@ -675,22 +718,29 @@ shared with other checks).
 slicing of the 128-bit format, `W64` for CRC-64 and VMAC), `gf` (GF(2^128)
 for LRW's tweaks), `cipher-modes` (AES,
 CMAC, CCM and the `CmBlock` type, for the instances, and its laws and
-proofs for `ccm_aead_round_trip`), `legacy-ciphers` (its
-ciphers and RC4, and their laws), `crc` (its CRCs and their laws), `hashes`
-(its hashes and Michael, and their laws, for the instances; only the
-`inst_*` files, `check.bend` and the laws and proofs import it), and the
+proofs for `ccm_aead_round_trip` and the AES rows, in `PROOF_cm.bend`),
+`legacy-ciphers` (its ciphers and RC4, and their laws, in `PROOF_lc.bend`),
+`crc` (its CRCs and their laws, in `PROOF_crc.bend`), `hashes` (its hashes
+and Michael, and their laws, for the instances; only the `inst_*` files,
+`check.bend`, `LAWS_hs.bend` and `PROOF_hs.bend` import it), and the
 hub package `bend-collections-laws-crypto@1.0.0.0` (SHA-256, SHA-512 and
 SHA3-256 and their laws, above; MIT). The interface and generic files
 (`crypto.bend` to `hkdf.bend`, `pbkdf2.bend` and `kbkdf.bend`) import only `bytes`; only
-`inst_sha2.bend`, `inst_sha3.bend` (and `PROOF.bend`) import
-bend-collections-laws-crypto, and only
+`inst_sha2.bend`, `inst_sha3.bend` (and `LAWS_sha.bend` and
+`PROOF_sha.bend`) import bend-collections-laws-crypto, and only
 `inst_aes.bend` reaches bend-collections, through cipher-modes' `aes.bend`.
+`LAWS.bend` and `PROOF.bend` import none of the algorithm packages (only
+bytes and its proofs, and this package's interface and generic files), so a
+proof elsewhere that uses a generic law takes in none of their proofs.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 4 min, the hashes and
-cipher-modes packages' proofs included), `--verdict` ALL PROOFS CHECK (about
-8 min, 2.82 GB peak, with cipher-modes' proofs, AES's round trip among them,
-joined for `ccm_aead_round_trip` and the AES rows; 2.31 GB before),
-`check.bend` passes, `ref/run.sh` 499 cases
+Bend 2.0.37: each of the six proof files ALL PROOFS CHECK, and ALL PROOFS
+CHECK under `--verdict`, each in a process of its own (`--verdict`, on WSL2
+shared with other checks: `PROOF.bend` 4 s and 0.29 GB peak, `PROOF_lc.bend`
+34 s and 0.66 GB, `PROOF_hs.bend` 83 s and 0.72 GB, `PROOF_sha.bend` 56 s
+and 0.91 GB, `PROOF_crc.bend` 135 s and 0.71 GB, `PROOF_cm.bend` 7.7 min
+and 1.30 GB, nearly all of it cipher-modes' proofs; in one `PROOF.bend`
+they peaked at about 3.26 GB in 12 min), `gen/instances.py --check` and
+`gen/proof.py --check` up to date, `check.bend` passes, `ref/run.sh` 499 cases
 match, `scripts/deps.sh` passes.
