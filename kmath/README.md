@@ -103,14 +103,6 @@ The further pairs, each proof file checked in a process of its own:
   shifts compute that quotient ((t + ((a - t) >> 1)) >> (l - 1) = (a + t)
   >> l for l >= 1, and a itself for l = 0, d = 1).
 
-**`--verdict` and word64's division.** `PROOF_div.bend` and
-`PROOF_recip.bend` ALL PROOFS CHECK but cannot pass `--verdict` while they
-import bend-osdev-word64's `PROOF_div.bend`, whose `divmod_value` the
-kernel cannot check (word64's README, "`PROOF_div.bend` and the kernel");
-the edge vectors, `check.bend`'s run-time check (every d from 1 to 2^16
-with three a each, and 262,144 values of a with d = 3, 7 and 641) and
-`ref/run.sh` hold them under the kernel too.
-
 Not proved for every input, and why:
 
 * **Signed 64-bit division** (`div64_s64_rem`, `div_s64_rem`): the sign
@@ -136,7 +128,7 @@ division for primes, on random and edge inputs.
 
 Bend 2.0.37: `PROOF.bend` (28 laws), `PROOF_div.bend` (10), `PROOF_fls.bend`
 (3) and `PROOF_recip.bend` (1) ALL PROOFS CHECK; `--verdict` ALL PROOFS
-CHECK on `PROOF.bend` (about 22 s, peak 0.21 GB) and `PROOF_fls.bend`
-(about 1 s, 0.26 GB), and does not finish on `PROOF_div.bend` and
-`PROOF_recip.bend` (word64's division, above); `check.bend` passes,
+CHECK on each (`PROOF.bend` about 22 s, peak 0.21 GB; `PROOF_div.bend`
+about 4 s, 0.41 GB; `PROOF_fls.bend` about 1 s, 0.26 GB; `PROOF_recip.bend`
+about 6 s, 0.59 GB); `check.bend` passes,
 `ref/run.sh` 653 cases match, `scripts/deps.sh` passes.
