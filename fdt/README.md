@@ -76,6 +76,7 @@ Choices this package makes where the specification leaves room:
 | `layout.bend` | internal: sizes, padding, alignment, NUL scanning |
 | `strindex.bend` | internal: the indexes of the strings block, by offset (`FdtIx`, for the reader) and by name (`FdtDict`, for the deduplicating writer) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_lookup.bend`, `PROOF_lookup.bend` | the lookups' laws (phandles, paths, aliases, children, `reg`) and their proofs, checked in a process of their own |
 | `check.bend` | examples with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -284,11 +285,66 @@ error ref/gen.py's reader gives. The option variants: NOPs refused,
 properties after children allowed, version 16 refused by
 `FdtV17Only`.
 
-The `FdtStringsDedup` writer's layout (its agreement with dtc),
-`FdtNode.find`'s alias and base-name rules, `find_phandle` and the `reg`
-decoder are covered by vectors and the differential test, not by laws for
-every input; the indexed form of that writer is proved equal to its
-searching form (`dedup_fast`, above).
+The `FdtStringsDedup` writer's layout (its agreement with dtc) is covered
+by vectors and the differential test, not by a law for every input; the
+indexed form of that writer is proved equal to its searching form
+(`dedup_fast`, above).
+
+`LAWS_lookup.bend` has 19 laws, proved in `PROOF_lookup.bend` (checked in
+a process of its own; it imports bytes' and word64's proofs, not
+`PROOF.bend`, and repeats the few lemmas of `PROOF.bend` it needs, among
+them `cells_round_trip`'s). Most say that a public def equals a
+specification written in the law file over the public interface only
+(`FdtNode.get`, `FdtNode.prop`, `FdtNode.child`, `FdtProp.u32`,
+`FdtProp.string`), in the plainest structural form.
+
+**Properties, for every input (14):**
+
+* `find_phandle_first`: `FdtNode.find_phandle(root, ph)` is the first node
+  of `fdtlaw.nodes([root])` (the tree in depth-first order: a node, then
+  each child's subtree in turn) whose `phandle` property, or else its
+  `linux,phandle` property, is the `<u32>` `ph` (the first property of
+  each name, as `FdtNode.get` reads it); `find_phandle_none`: when no node
+  of the tree has it, the answer is `None`; `find_phandle_head`: a node
+  whose first property is `phandle = <ph>` is found by `ph`. The proof
+  turns the search's recursion into the walk over the depth-first list
+  (`ph_go`), splitting the list at each node's children (`first_app`).
+* `child_rule`: `FdtNode.child(n, k)` is the first child named `k`, or,
+  when there is none and `k` has no `@`, the first child whose name before
+  its first `@` is `k`.
+* `find_absolute`: for a path that starts with `/`, `FdtNode.find` walks
+  `fdtlaw.components(path)` from the root, each component naming a child
+  through `FdtNode.child`; the components are the path's pieces between
+  its `/`s (`fdtlaw.parts`, structural) without the empty ones (from a
+  leading `/`, from `//` or from a final `/`). `find_alias`: any other
+  path's first component is an alias, a property of the root's child
+  `aliases` whose `<string>` value is a path; that path's components, then
+  the path's other components, are walked from the root (no alias, no
+  string, or no components: `None`). The proof shows that the code's
+  splitting, with an accumulator (the component being read, reversed, and
+  the components so far, reversed), gives the structural specification's
+  components for every path (`sp.S`, `sp.comp`).
+* `reg_round_trip`: `FdtProp.reg(ac, sc, FdtProp.of_reg(ac, sc, rs)) ==
+  Done{rs}` for every count of 0, 1 or 2 address and size cells (not both
+  0) and every list of pairs whose addresses fit `ac` cells and sizes fit
+  `sc` cells (`fdtlaw.reg_fits`: 0 cells hold only 0, one cell a value
+  below 2^32). The proof is on top of `cells_round_trip`: the decoder's
+  counter reaches `ac + sc` at each pair's last cell (`rg.piece`), so the
+  cells are cut into the pairs of_reg wrote (`rg.group`, `rg.M`).
+  `reg_address_cells_bad`, `reg_size_cells_bad`, `reg_no_cells`: more
+  than 2 address cells, more than 2 size cells, or none at all are refused
+  with `FdtBadCells`, whatever the value.
+* `address_cells_value`, `size_cells_value`: a node's `#address-cells`
+  and `#size-cells` `<u32>`s are its cell counts; `node_reg`,
+  `node_reg_none`: `FdtNode.reg(parent, node)` decodes the node's `reg`
+  with its parent's cell counts, and is `Done{[]}` without one.
+
+**Satisfiability witnesses (4) and a vector (1):** the hypotheses of
+`find_phandle_none`, `find_absolute`, `find_alias` and `reg_round_trip`
+hold for ordinary inputs (`find_phandle_none_example`,
+`find_absolute_example`, `find_alias_example`, `reg_fits_example`);
+`components_example`: `"/cpus//cpu@0/"` has the components `cpus` and
+`cpu@0`.
 
 ## Tests
 
@@ -345,14 +401,18 @@ needs the apt package `device-tree-compiler`.
 
 * The proofs reach `Octets` only through bytes' interface laws and its list
   layer (with its fast-form laws `len_fast`, `take_fast` and
-  `append_fast`), and `W64` only through word64's `parts_of`, with one
-  exception.
+  `append_fast`), and `W64` only through word64's `parts_of`, with two
+  exceptions.
   The proof of `rsv_round_trip` (and so of `parse_build`) computes that the
   all-zero entry is the terminator, `FdtRsv.is_end` of the two words read
   from zero bytes, through word64's definitions. This is a closed
-  computation, like a vector. The header, token and property proofs
-  compute through `B.be32`, `B.mask` and `B.be32_at` on words split into
-  their bits, as bytes' own proofs do. These proofs would need revisiting
+  computation, like a vector. The proof of `reg_round_trip`
+  (`PROOF_lookup.bend`, `rg.co_num`) splits a W64 into its halves with
+  `parts_of`, and then takes `W64.from_parts(0, x)` to be
+  `W64.from_u32(x)`, and `W64.from_parts(0, 0)` to be `W64.zero()`, by
+  word64's definitions (word64 states no law relating them). The header,
+  token and property proofs compute through `B.be32`, `B.mask` and
+  `B.be32_at` on words split into their bits, as bytes' own proofs do. These proofs would need revisiting
   if those packages' representations changed; the laws would not change.
 * `Fdt.build` does not refuse a tree that `Fdt.buildable` rejects (a name
   with a NUL, a blob of 4 GiB or more); such a blob does not read back.
@@ -440,6 +500,6 @@ Sizes and offsets are `Nat`.
 ## Status
 
 Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
-`PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
-passes, `ref/run.sh` 839 cases match (with dtc 1.7.0 and fdtdump
+`PROOF.bend` and `PROOF_lookup.bend` ALL PROOFS CHECK, `--verdict` ALL
+PROOFS CHECK, `check.bend` passes, `ref/run.sh` 839 cases match (with dtc 1.7.0 and fdtdump
 installed), `scripts/deps.sh fdt` ok.
