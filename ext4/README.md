@@ -435,7 +435,7 @@ What the laws do not cover, and what stands in for it:
 
 The codec's proofs read the blocks only through bytes' laws (fields read
 inside joined and patched bytes). `Jbd2.two32` is written as the successor
-of the literal `4294967295n` rather than `65536 × 65536`: the same value, but
+of the literal `4294967295n` rather than `65536 Ã— 65536`: the same value, but
 the checker compares it as a literal, where it would expand the product to
 unary when the proofs compare block numbers' halves (`Jbd2.lo`, `Jbd2.hi`).
 
@@ -587,6 +587,9 @@ writer's public interface: `Ext2Op.run`, `Ext2Op`, `Ext2WriteOptions`,
 contents; the package's crc32c comes through ext2's `Ext2Csum`). ext2 does
 not depend on this package, so the journalled writer lives here, beside
 the journal it writes.
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 
