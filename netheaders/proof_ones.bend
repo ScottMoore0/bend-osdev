@@ -1118,6 +1118,177 @@ def os.ge_zero(x: Nat) -> {Cmp.is_ge(Nat.cmp(x, 0n)) == True{} : Bool}:
     case 1n+p:
       {==}
 
+# Writing a field's own value back changes nothing
+
+def os.of_mask(+a: List<&2, U32>, +b: List<&2, U32>, +e: {B.mask(a) == B.mask(b) : List<&2, U32>}) -> {B.Octets.of_list(a) == B.Octets.of_list(b) : B.Octets}:
+  %BL.octets_of_list_idempotent(a) : {_ == B.Octets.of_list(b) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(a)), B.mask(a), BL.octets_to_of(a)) : {B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}
+  %Equal.sym(List<&2, U32>, B.mask(a), B.mask(b), e) : {B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}
+  %BL.octets_to_of(b) : {B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}
+  BL.octets_of_list_idempotent(b)
+
+def os.some_get(m: Maybe<&2, U32>, +d: U32) -> U32:
+  match m:
+    case Some{x}:
+      x
+    case None{}:
+      d
+
+def os.be16_word(a: U32, b: U32) -> U32:
+  U32{W.W64.bits.cat(16n, 16n, W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)), Word.zero(16n))}
+
+def os.be16_ab(a: U32, b: U32) -> {B.mask(B.be16(os.be16_word(a, b))) == B.mask([a, b]) : List<&2, U32>}:
+  match a b:
+    case U32{WCon{a0, WCon{a1, WCon{a2, WCon{a3, WCon{a4, WCon{a5, WCon{a6, WCon{a7, ah}}}}}}}}} U32{WCon{b0, WCon{b1, WCon{b2, WCon{b3, WCon{b4, WCon{b5, WCon{b6, WCon{b7, bh}}}}}}}}}:
+      {==}
+
+# a two-byte list read as a 16-bit field c: its bytes are c's
+def os.be16_self.l(ys: List<&2, U32>, +c: U32, +eY: {B.be16.head(ys) == Some{c} : Maybe<&2, U32>}, +eL: {B.len(ys) == 2n : Nat}) -> {B.Octets.of_list(B.be16(c)) == B.Octets.of_list(ys) : B.Octets}:
+  match ys:
+    case Nil{}:
+      Empty.absurd({B.Octets.of_list(B.be16(c)) == B.Octets.of_list(Nil{}) : B.Octets}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 0n), 2n, 0n, Equal.sym(Nat, 0n, 2n, eL))))
+    case Con{+a, t}:
+      match t:
+        case Nil{}:
+          Empty.absurd({B.Octets.of_list(B.be16(c)) == B.Octets.of_list([a]) : B.Octets}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 1n), 2n, 1n, Equal.sym(Nat, 1n, 2n, eL))))
+        case Con{+b, t2}:
+          match t2:
+            case Nil{}:
+              %Equal.cong(Maybe<&2, U32>, U32, z => os.some_get(z, c), Some{os.be16_word(a, b)}, Some{c}, eY) : {B.Octets.of_list(B.be16(_)) == B.Octets.of_list([a, b]) : B.Octets}
+              os.of_mask(B.be16(os.be16_word(a, b)), [a, b], os.be16_ab(a, b))
+            case Con{+d, +t3}:
+              Empty.absurd({B.Octets.of_list(B.be16(c)) == B.Octets.of_list(Con{a, Con{b, Con{d, t3}}}) : B.Octets}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 2n), 3n+B.len(t3), 2n, eL)))
+
+def os.le_sub(off: Nat, +k: Nat, +n: Nat, +h: {Nat.is_le(Nat.add(off, k), n) == True{} : Bool}) -> {Nat.is_le(k, Nat.sub(n, off)) == True{} : Bool}:
+  match off:
+    case 0n:
+      Equal.trans(Bool, Nat.is_le(k, Nat.sub(n, 0n)), Nat.is_le(k, n), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.sub(n, 0n), n, os.sub_zero(n)), h)
+    case 1n+ +p:
+      match n:
+        case 0n:
+          Empty.absurd({Nat.is_le(k, Nat.sub(0n, 1n+p)) == True{} : Bool}, os.ft(h))
+        case 1n+ +q:
+          os.le_sub(p, k, q, h)
+
+# the 2 bytes at the start of D read as c are c's bytes
+def os.be16_self(+D: B.Octets, +c: U32, +hc: {B.Octets.be16_at(D, 0n) == Some{c} : Maybe<&2, U32>}, +hl: {Nat.is_le(2n, B.Octets.len(D)) == True{} : Bool}) -> {B.Octets.be16(c) == B.Octets.take(2n, D) : B.Octets}:
+  %BL.octets_of_to(B.Octets.take(2n, D)) : {B.Octets.be16(c) == _ : B.Octets}
+  os.be16_self.l(B.Octets.to_list(B.Octets.take(2n, D)), c, Equal.trans(Maybe<&2, U32>, B.be16.head(B.Octets.to_list(B.Octets.take(2n, D))), B.Octets.be16_at(D, 0n), Some{c}, Equal.cong(B.Octets, Maybe<&2, U32>, z => B.be16.head(B.Octets.to_list(B.Octets.take(2n, z))), D, B.Octets.drop(0n, D), Equal.sym(B.Octets, B.Octets.drop(0n, D), D, BL.octets_drop_zero(D))), hc), Equal.trans(Nat, B.len(B.Octets.to_list(B.Octets.take(2n, D))), B.Octets.len(B.Octets.take(2n, D)), 2n, Equal.sym(Nat, B.Octets.len(B.Octets.take(2n, D)), B.len(B.Octets.to_list(B.Octets.take(2n, D))), BL.octets_len_list(B.Octets.take(2n, D))), BL.octets_len_take_le(2n, D, hl)))
+
+# writing a field's own value back gives the bytes back
+def os.put16_self(+o: B.Octets, +off: Nat, +c: U32, +hc: {B.Octets.be16_at(o, off) == Some{c} : Maybe<&2, U32>}, +hl: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}) -> {K.inet_put16(o, off, c) == o : B.Octets}:
+  %BL.octets_take_drop(off, o) : {K.inet_put16(o, off, c) == _ : B.Octets}
+  %BL.octets_take_drop(2n, B.Octets.drop(off, o)) : {K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), _) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.drop(2n, B.Octets.drop(off, o)), B.Octets.drop(Nat.add(off, 2n), o), BL.octets_drop_drop(off, 2n, o)) : {K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), B.Octets.append(B.Octets.take(2n, B.Octets.drop(off, o)), _)) : B.Octets}
+  %os.be16_self(B.Octets.drop(off, o), c, Equal.trans(Maybe<&2, U32>, B.Octets.be16_at(B.Octets.drop(off, o), 0n), B.Octets.be16_at(o, off), Some{c}, Equal.trans(Maybe<&2, U32>, B.Octets.be16_at(B.Octets.drop(off, o), 0n), B.Octets.be16_at(o, Nat.add(off, 0n)), B.Octets.be16_at(o, off), BL.octets_be16_at_drop(off, o, 0n), Equal.cong(Nat, Maybe<&2, U32>, z => B.Octets.be16_at(o, z), Nat.add(off, 0n), off, os.add_zero(off))), hc), Equal.trans(Bool, Nat.is_le(2n, B.Octets.len(B.Octets.drop(off, o))), Nat.is_le(2n, Nat.sub(B.Octets.len(o), off)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(2n, z), B.Octets.len(B.Octets.drop(off, o)), Nat.sub(B.Octets.len(o), off), BL.octets_len_drop(off, o)), os.le_sub(off, 2n, B.Octets.len(o), hl))) : {K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), B.Octets.append(_, B.Octets.drop(Nat.add(off, 2n), o))) : B.Octets}
+  {==}
+
+# More Nat facts
+
+def os.nat_eq(x: Nat, y: Nat, +h: {Nat.is_eq(x, y) == True{} : Bool}) -> {x == y : Nat}:
+  match x y:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({0n == 1n+q : Nat}, os.ft(h))
+    case 1n+p 0n:
+      Empty.absurd({1n+p == 0n : Nat}, os.ft(h))
+    case 1n+ +p 1n+ +q:
+      os.succ_cong(p, q, os.nat_eq(p, q, h))
+
+# x <= y and y <= x: x is y
+def os.le_antisym(x: Nat, y: Nat, +h1: {Nat.is_le(x, y) == True{} : Bool}, +h2: {Nat.is_le(y, x) == True{} : Bool}) -> {Nat.is_eq(x, y) == True{} : Bool}:
+  match x y:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({Nat.is_eq(0n, 1n+q) == True{} : Bool}, os.ft(h2))
+    case 1n+p 0n:
+      Empty.absurd({Nat.is_eq(1n+p, 0n) == True{} : Bool}, os.ft(h1))
+    case 1n+ +p 1n+ +q:
+      os.le_antisym(p, q, h1, h2)
+
+def os.add_cancel_r(+x: Nat, +y: Nat, k: Nat, +e: {Nat.add(x, k) == Nat.add(y, k) : Nat}) -> {x == y : Nat}:
+  match k:
+    case 0n:
+      Equal.trans(Nat, x, Nat.add(x, 0n), y, Equal.sym(Nat, Nat.add(x, 0n), x, os.add_zero(x)), Equal.trans(Nat, Nat.add(x, 0n), Nat.add(y, 0n), y, e, os.add_zero(y)))
+    case 1n+ +q:
+      os.add_cancel_r(x, y, q, os.succ_inj(Nat.add(x, q), Nat.add(y, q), Equal.trans(Nat, 1n+Nat.add(x, q), Nat.add(x, 1n+q), 1n+Nat.add(y, q), Equal.sym(Nat, Nat.add(x, 1n+q), 1n+Nat.add(x, q), os.add_succ(x, q)), Equal.trans(Nat, Nat.add(x, 1n+q), Nat.add(y, 1n+q), 1n+Nat.add(y, q), e, os.add_succ(y, q)))))
+
+# s + x = 2d with s <= d: d <= x
+def os.big_x(+d: Nat, +s: Nat, +x: Nat, +hs: {Nat.is_le(s, d) == True{} : Bool}, +e: {Nat.add(s, x) == Nat.add(d, d) : Nat}) -> {Nat.is_le(d, x) == True{} : Bool}:
+  Equal.trans(Bool, Nat.is_le(d, x), Nat.is_le(Nat.add(d, d), Nat.add(d, x)), True{}, Equal.sym(Bool, Nat.is_le(Nat.add(d, d), Nat.add(d, x)), Nat.is_le(d, x), os.le_cancel_l(d, d, x)), Equal.trans(Bool, Nat.is_le(Nat.add(d, d), Nat.add(d, x)), Nat.is_le(Nat.add(s, x), Nat.add(d, x)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, Nat.add(d, x)), Nat.add(d, d), Nat.add(s, x), Equal.sym(Nat, Nat.add(s, x), Nat.add(d, d), e)), os.le_add_mono(s, x, d, x, hs, os.le_refl(x))))
+
+# rep(s + x) = d with s, x <= d and x not d: s + x = d
+def os.rep_eq_d.go(b: Bool, +d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +s: Nat, +x: Nat, +eb: {Nat.is_le(Nat.add(s, x), d) == b : Bool}, +hs: {Nat.is_le(s, d) == True{} : Bool}, +hx: {Nat.is_le(x, d) == True{} : Bool}, +hne: {Nat.is_eq(x, d) == False{} : Bool}, +h: {os.rep(d, Nat.add(s, x)) == d : Nat}) -> {Nat.add(s, x) == d : Nat}:
+  match b:
+    case True{}:
+      Equal.trans(Nat, Nat.add(s, x), os.rep(d, Nat.add(s, x)), d, Equal.sym(Nat, os.rep(d, Nat.add(s, x)), Nat.add(s, x), os.rep_small(d, Nat.add(s, x), eb)), h)
+    case False{}:
+      +j = Nat.sub(Nat.add(s, x), 1n+d)
+      +eX = os.sub_split(Nat.add(s, x), d, eb)
+      +hab = os.le_add_mono(s, x, d, d, hs, hx)
+      +h1 = os.end_le(d, j, Nat.add(s, x), eX, hab)
+      +r1 = Equal.trans(Nat, os.rep(d, Nat.add(s, x)), os.rep(d, Nat.add(1n+j, d)), 1n+j, Equal.cong(Nat, Nat, z => os.rep(d, z), Nat.add(s, x), Nat.add(1n+j, d), eX), Equal.trans(Nat, os.rep(d, Nat.add(1n+j, d)), os.rep(d, 1n+j), 1n+j, os.rep_period1(d, j, hd), os.rep_small(d, 1n+j, h1)))
+      +ejd = Equal.trans(Nat, 1n+j, os.rep(d, Nat.add(s, x)), d, Equal.sym(Nat, os.rep(d, Nat.add(s, x)), 1n+j, r1), h)
+      +e2 = Equal.trans(Nat, Nat.add(s, x), Nat.add(1n+j, d), Nat.add(d, d), eX, Equal.cong(Nat, Nat, z => Nat.add(z, d), 1n+j, d, ejd))
+      Empty.absurd({Nat.add(s, x) == d : Nat}, os.tf(Equal.trans(Bool, True{}, Nat.is_eq(x, d), False{}, Equal.sym(Bool, Nat.is_eq(x, d), True{}, os.le_antisym(x, d, hx, os.big_x(d, s, x, hs, e2))), hne)))
+
+def os.rep_eq_d(+d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +s: Nat, +x: Nat, +hs: {Nat.is_le(s, d) == True{} : Bool}, +hx: {Nat.is_le(x, d) == True{} : Bool}, +hne: {Nat.is_eq(x, d) == False{} : Bool}, +h: {os.rep(d, Nat.add(s, x)) == d : Nat}) -> {Nat.add(s, x) == d : Nat}:
+  os.rep_eq_d.go(Nat.is_le(Nat.add(s, x), d), d, hd, s, x, {==}, hs, hx, hne, h)
+
+# A field read by be16_at is a 16-bit value
+
+def os.mpick(m: Maybe<&2, U32>, t: Type, f: Type) -> Type:
+  match m:
+    case Some{x}:
+      t
+    case None{}:
+      f
+
+def os.be16_fits.l(+d: Nat, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, ys: List<&2, U32>, +c: U32, +eY: {B.be16.head(ys) == Some{c} : Maybe<&2, U32>}) -> {Nat.is_le(U32.to_nat(c), d) == True{} : Bool}:
+  match ys:
+    case Nil{}:
+      %eY : os.mpick(_, {Nat.is_le(U32.to_nat(c), d) == True{} : Bool}, Unit)
+      Unit{}
+    case Con{+a, t}:
+      match t:
+        case Nil{}:
+          %eY : os.mpick(_, {Nat.is_le(U32.to_nat(c), d) == True{} : Bool}, Unit)
+          Unit{}
+        case Con{+b, +t2}:
+          %Equal.cong(Maybe<&2, U32>, U32, z => os.some_get(z, c), Some{os.be16_word(a, b)}, Some{c}, eY) : {Nat.is_le(U32.to_nat(_), d) == True{} : Bool}
+          %Equal.sym(Nat, U32.to_nat(os.mk(W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)), Word.zero(16n))), Word.to_nat(16n, W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a))), os.mk_zero_value(W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)))) : {Nat.is_le(_, d) == True{} : Bool}
+          os.w16_le(d, hD, W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)))
+
+def os.be16_fits(+d: Nat, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, +o: B.Octets, +off: Nat, +c: U32, +hc: {B.Octets.be16_at(o, off) == Some{c} : Maybe<&2, U32>}) -> {Nat.is_le(U32.to_nat(c), d) == True{} : Bool}:
+  os.be16_fits.l(d, hD, B.Octets.to_list(B.Octets.slice(off, 2n, o)), c, hc)
+
+# o's field at off verified (pseudo ++ o sums to d): the sum with the field
+# 0, plus the field, goes round to d
+def os.verified_sum(+d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, +hE: {U32.to_nat(65535) == d : Nat}, +pseudo: B.Octets, +o: B.Octets, +off: Nat, +c: U32, +eP: {K.inet_even(pseudo) == True{} : Bool}, +eT: {K.inet_even(B.Octets.take(off, o)) == True{} : Bool}, +hc: {B.Octets.be16_at(o, off) == Some{c} : Maybe<&2, U32>}, +hl: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}, +hv: {K.inet_verify(B.Octets.append(pseudo, o)) == True{} : Bool}) -> {os.rep(d, Nat.add(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c))) == d : Nat}:
+  +es = os.put16_self(o, off, c, hc, hl)
+  +fc = os.be16_fits(d, hD, o, off, c, hc)
+  +f0 = os.sum0_fits(d, hd, hD, hE, pseudo, o, off, eP, eT)
+  +hv1 = Equal.trans(Bool, K.inet_verify(B.Octets.append(pseudo, K.inet_put16(o, off, c))), K.inet_verify(B.Octets.append(pseudo, o)), True{}, Equal.cong(B.Octets, Bool, z => K.inet_verify(B.Octets.append(pseudo, z)), K.inet_put16(o, off, c), o, es), hv)
+  +vS1 = Equal.trans(Nat, U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), U32.to_nat(65535), d, os.nat_eq(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), U32.to_nat(65535), Equal.trans(Bool, Nat.is_eq(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), U32.to_nat(65535)), U32.is_eq(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c))), 65535), True{}, Equal.sym(Bool, U32.is_eq(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c))), 65535), Nat.is_eq(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), U32.to_nat(65535)), UL.u32_eq_value(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c))), 65535)), hv1)), hE)
+  +r1 = Equal.trans(Nat, os.rep(d, Nat.add(os.K3(pseudo, o, off), U32.to_nat(c))), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), d, Equal.sym(Nat, U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), os.rep(d, Nat.add(os.K3(pseudo, o, off), U32.to_nat(c))), Equal.trans(Nat, U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))), os.rep(d, Nat.add(os.K3(pseudo, o, off), os.ws(B.Octets.to_list(B.Octets.be16(c))))), os.rep(d, Nat.add(os.K3(pseudo, o, off), U32.to_nat(c))), os.sum_put(d, hd, hD, hE, pseudo, o, off, c, eP, eT), Equal.cong(Nat, Nat, z => os.rep(d, Nat.add(os.K3(pseudo, o, off), z)), os.ws(B.Octets.to_list(B.Octets.be16(c))), U32.to_nat(c), os.be16_ws(d, hD, c, fc)))), vS1)
+  Equal.trans(Nat, os.rep(d, Nat.add(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c))), os.rep(d, Nat.add(os.rep(d, os.K3(pseudo, o, off)), U32.to_nat(c))), d, Equal.cong(Nat, Nat, z => os.rep(d, Nat.add(z, U32.to_nat(c))), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), os.rep(d, os.K3(pseudo, o, off)), os.sum0(d, hd, hD, hE, pseudo, o, off, eP, eT)), Equal.trans(Nat, os.rep(d, Nat.add(os.rep(d, os.K3(pseudo, o, off)), U32.to_nat(c))), os.rep(d, Nat.add(os.K3(pseudo, o, off), U32.to_nat(c))), d, os.rep_fold(d, os.K3(pseudo, o, off), U32.to_nat(c), hd), r1))
+
+# and the field is not 0xffff: the checksum inet_fill computes is that
+# field, so inet_fill gives o back
+def os.fill_self(+d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, +hE: {U32.to_nat(65535) == d : Nat}, +pseudo: B.Octets, +o: B.Octets, +off: Nat, +c: U32, +eP: {K.inet_even(pseudo) == True{} : Bool}, +eT: {K.inet_even(B.Octets.take(off, o)) == True{} : Bool}, +hc: {B.Octets.be16_at(o, off) == Some{c} : Maybe<&2, U32>}, +hl: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}, +hv: {K.inet_verify(B.Octets.append(pseudo, o)) == True{} : Bool}, +hk: {U32.is_eq(c, 65535) == False{} : Bool}) -> {K.inet_fill(pseudo, o, off) == o : B.Octets}:
+  +es = os.put16_self(o, off, c, hc, hl)
+  +fc = os.be16_fits(d, hD, o, off, c, hc)
+  +f0 = os.sum0_fits(d, hd, hD, hE, pseudo, o, off, eP, eT)
+  +r2 = os.verified_sum(d, hd, hD, hE, pseudo, o, off, c, eP, eT, hc, hl, hv)
+  +hne = Equal.trans(Bool, Nat.is_eq(U32.to_nat(c), d), Nat.is_eq(U32.to_nat(c), U32.to_nat(65535)), False{}, Equal.cong(Nat, Bool, z => Nat.is_eq(U32.to_nat(c), z), d, U32.to_nat(65535), Equal.sym(Nat, U32.to_nat(65535), d, hE)), Equal.trans(Bool, Nat.is_eq(U32.to_nat(c), U32.to_nat(65535)), U32.is_eq(c, 65535), False{}, Equal.sym(Bool, U32.is_eq(c, 65535), Nat.is_eq(U32.to_nat(c), U32.to_nat(65535)), UL.u32_eq_value(c, 65535)), hk))
+  +e1 = os.rep_eq_d(d, hd, U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c), f0, fc, hne, r2)
+  +e3 = Equal.trans(Nat, Nat.add(U32.to_nat(K.inet_finish(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))))), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))))), d, Nat.add(U32.to_nat(c), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))))), os.finish_value(d, hD, K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))), f0), Equal.trans(Nat, d, Nat.add(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c)), Nat.add(U32.to_nat(c), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))))), Equal.sym(Nat, Nat.add(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c)), d, e1), os.add_comm(U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), U32.to_nat(c))))
+  +e5 = UL.u32_value_eq(K.inet_finish(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), c, os.add_cancel_r(U32.to_nat(K.inet_finish(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0))))), U32.to_nat(c), U32.to_nat(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), e3))
+  %Equal.sym(U32, K.inet_finish(K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))), c, e5) : {K.inet_put16(o, off, _) == o : B.Octets}
+  es
+
 def os.g_add_assoc(+d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, +hE: {U32.to_nat(65535) == d : Nat}, +a: U32, +b: U32, +c: U32, +ha: {U32.is_le(a, 65535) == True{} : Bool}, +hb: {U32.is_le(b, 65535) == True{} : Bool}, +hc: {U32.is_le(c, 65535) == True{} : Bool}) -> {K.inet_add(K.inet_add(a, b), c) == K.inet_add(a, K.inet_add(b, c)) : U32}:
   UL.u32_value_eq(K.inet_add(K.inet_add(a, b), c), K.inet_add(a, K.inet_add(b, c)), os.g_add_assoc.v(d, hd, hD, hE, a, b, c, os.fit_of(d, hE, a, ha), os.fit_of(d, hE, b, hb), os.fit_of(d, hE, c, hc)))
 

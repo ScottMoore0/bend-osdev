@@ -34,7 +34,9 @@ compute and verify the Internet checksum, on `Octets` (bend-osdev-bytes).
 | `LAWS.bend`, `PROOF.bend` | the round trips, truncation, the checksum in pieces, and the vectors |
 | `LAWS_sum.bend`, `PROOF_sum.bend` | the checksum's one's complement arithmetic, and that ICMP, ICMPv6, UDP and TCP built with their checksums verify |
 | `LAWS_ipv4.bend`, `PROOF_ipv4.bend` | that an IPv4 header built with its checksum verifies |
-| `proof_ones.bend` | the lemmas `PROOF_sum.bend` and `PROOF_ipv4.bend` rest on (no laws) |
+| `LAWS_rev.bend`, `PROOF_rev.bend` | the reverse round trips: building a parsed header gives back its bytes |
+| `LAWS_revsum.bend`, `PROOF_revsum.bend` | the same through the builders that recompute the checksum |
+| `proof_ones.bend` | the one's complement and checksum-field lemmas the proof files rest on (no laws) |
 
 Bend imports do not re-export: import `netheaders.bend` (for `NetError`)
 and the files of the protocols you use.
@@ -110,7 +112,7 @@ The pseudo-header's length is the number of bytes checksummed.
 
 ## Laws
 
-Three pairs of law and proof files, each checked on its own, all on the
+Five pairs of law and proof files, each checked on its own, all on the
 public interface. `LAWS.bend`:
 
 * **for every input** (16 properties):
@@ -200,8 +202,38 @@ the bytes `build_checksum` writes are those of the header with its checksum
 field set to the checksum (by computation on the bits of the fields that
 share the checksum's word), so the round trip parses them back.
 
-Not proved for every input: the reverse round trip (building a parsed
-header gives back its bytes), covered by vectors and the differential test.
+`LAWS_rev.bend`, the reverse round trips (7 laws, for every input): for
+bytes o that parse to `Done{h}`, `X.build(h)` is the first `X.length(h)`
+bytes of o (`UdpHeader.header_length` for UDP), for Ethernet (tagged and
+untagged: a tagged frame's TPID is the one the test found), ARP, IPv4 and
+TCP (every header length, the options being the bytes after the fixed
+part), IPv6, ICMP and UDP (`eth_reverse`, `arp_reverse`, `ipv4_reverse`,
+`tcp_reverse`, `ipv6_reverse`, `icmp_reverse`, `udp_reverse`). Every field
+the parser reads is written back bit for bit; the checksum field is
+written as parsed. The proofs (`PROOF_rev.bend`, written by
+`ref/gen_rev.py`: run `python3 ref/gen_rev.py` in this directory) take the
+bytes apart down to the header's length (shorter bytes contradict the
+parse), split the length field's bits where it has one, and compute on the
+bytes' bits.
+
+`LAWS_revsum.bend`, the reverse round trips through the builders that
+recompute the checksum (6 laws, for every input), with the condition on the
+input's checksum field c that makes them hold:
+* `ipv4_reverse_checksum`: bytes that `parse_verified` accepts, with c not
+  0xffff, are given back by `build_checksum`;
+* `icmp_reverse_checksum`: an ICMP message that verifies, c not 0xffff, is
+  given back by `build_checksum(h, data)` with its data;
+* `udp_ipv4_reverse_checksum`, `udp_ipv6_reverse_checksum`: a datagram that
+  verifies with c not 0 (over IPv6 a zero c never verifies) is given back by
+  `build_ipv4` / `build_ipv6` with its payload;
+* `tcp_ipv4_reverse_checksum`, `tcp_ipv6_reverse_checksum`: a segment that
+  verifies, c not 0xffff, is given back by `build_ipv4` / `build_ipv6`.
+The conditions are needed: a field verifies exactly when it is the one's
+complement of the sum of the rest, except that when the rest sums to 0xffff
+both 0x0000 and 0xffff verify and `inet_fill` writes 0x0000; UDP sends a
+computed 0 as 0xffff (RFC 768), so for UDP every verified nonzero field is
+the one it writes, and a zero field is "no checksum", accepted by
+`verify_ipv4` unchecked.
 
 ## Tests
 
@@ -237,8 +269,9 @@ natively; 0.7 s and 280 MB on the JavaScript lane).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (26 laws) and
-`PROOF_ipv4.bend` (2 laws) ALL PROOFS CHECK, and `--verdict` ALL PROOFS
-CHECK for each (peaks 0.62 GB, 0.30 GB and 0.58 GB);
-`ref/gen_sum.py --check` up to date; `check.bend` passes, `ref/run.sh` 696
+Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (26),
+`PROOF_ipv4.bend` (2), `PROOF_rev.bend` (7) and `PROOF_revsum.bend` (6) ALL
+PROOFS CHECK, and `--verdict` ALL PROOFS CHECK for each (peaks 0.62 GB,
+0.30 GB, 0.58 GB, 1.55 GB and 1.69 GB); `ref/gen_sum.py --check` and
+`ref/gen_rev.py --check` up to date; `check.bend` passes, `ref/run.sh` 696
 cases match, `scripts/deps.sh` ok.

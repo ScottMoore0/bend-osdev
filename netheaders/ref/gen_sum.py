@@ -1285,6 +1285,192 @@ def os.ge_zero(x: Nat) -> {{Cmp.is_ge(Nat.cmp(x, 0n)) == True{{}} : Bool}}:
       {{==}}
 """)
 
+# ---- a field written with its own value; a verified checksum is the computed one
+LL = "List<&2, U32>"
+w(f"""
+# Writing a field's own value back changes nothing
+
+def os.of_mask(+a: {LL}, +b: {LL}, +e: {{B.mask(a) == B.mask(b) : {LL}}}) -> {{B.Octets.of_list(a) == B.Octets.of_list(b) : B.Octets}}:
+  %BL.octets_of_list_idempotent(a) : {{_ == B.Octets.of_list(b) : B.Octets}}
+  %Equal.sym({LL}, B.Octets.to_list(B.Octets.of_list(a)), B.mask(a), BL.octets_to_of(a)) : {{B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}}
+  %Equal.sym({LL}, B.mask(a), B.mask(b), e) : {{B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}}
+  %BL.octets_to_of(b) : {{B.Octets.of_list(_) == B.Octets.of_list(b) : B.Octets}}
+  BL.octets_of_list_idempotent(b)
+
+def os.some_get(m: Maybe<&2, U32>, +d: U32) -> U32:
+  match m:
+    case Some{{x}}:
+      x
+    case None{{}}:
+      d
+
+def os.be16_word(a: U32, b: U32) -> U32:
+  U32{{W.W64.bits.cat(16n, 16n, W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)), Word.zero(16n))}}
+
+def os.be16_ab(a: U32, b: U32) -> {{B.mask(B.be16(os.be16_word(a, b))) == B.mask([a, b]) : {LL}}}:
+  match a b:
+    case {pat("a", 8)} {pat("b", 8)}:
+      {{==}}
+
+# a two-byte list read as a 16-bit field c: its bytes are c's
+def os.be16_self.l(ys: {LL}, +c: U32, +eY: {{B.be16.head(ys) == Some{{c}} : Maybe<&2, U32>}}, +eL: {{B.len(ys) == 2n : Nat}}) -> {{B.Octets.of_list(B.be16(c)) == B.Octets.of_list(ys) : B.Octets}}:
+  match ys:
+    case Nil{{}}:
+      Empty.absurd({{B.Octets.of_list(B.be16(c)) == B.Octets.of_list(Nil{{}}) : B.Octets}}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 0n), 2n, 0n, Equal.sym(Nat, 0n, 2n, eL))))
+    case Con{{+a, t}}:
+      match t:
+        case Nil{{}}:
+          Empty.absurd({{B.Octets.of_list(B.be16(c)) == B.Octets.of_list([a]) : B.Octets}}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 1n), 2n, 1n, Equal.sym(Nat, 1n, 2n, eL))))
+        case Con{{+b, t2}}:
+          match t2:
+            case Nil{{}}:
+              %Equal.cong(Maybe<&2, U32>, U32, z => os.some_get(z, c), Some{{os.be16_word(a, b)}}, Some{{c}}, eY) : {{B.Octets.of_list(B.be16(_)) == B.Octets.of_list([a, b]) : B.Octets}}
+              os.of_mask(B.be16(os.be16_word(a, b)), [a, b], os.be16_ab(a, b))
+            case Con{{+d, +t3}}:
+              Empty.absurd({{B.Octets.of_list(B.be16(c)) == B.Octets.of_list(Con{{a, Con{{b, Con{{d, t3}}}}}}) : B.Octets}}, os.ft(Equal.cong(Nat, Bool, z => Nat.is_eq(z, 2n), 3n+B.len(t3), 2n, eL)))
+
+def os.le_sub(off: Nat, +k: Nat, +n: Nat, +h: {{Nat.is_le(Nat.add(off, k), n) == True{{}} : Bool}}) -> {{Nat.is_le(k, Nat.sub(n, off)) == True{{}} : Bool}}:
+  match off:
+    case 0n:
+      Equal.trans(Bool, Nat.is_le(k, Nat.sub(n, 0n)), Nat.is_le(k, n), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.sub(n, 0n), n, os.sub_zero(n)), h)
+    case 1n+ +p:
+      match n:
+        case 0n:
+          Empty.absurd({{Nat.is_le(k, Nat.sub(0n, 1n+p)) == True{{}} : Bool}}, os.ft(h))
+        case 1n+ +q:
+          os.le_sub(p, k, q, h)
+
+# the 2 bytes at the start of D read as c are c's bytes
+def os.be16_self(+D: B.Octets, +c: U32, +hc: {{B.Octets.be16_at(D, 0n) == Some{{c}} : Maybe<&2, U32>}}, +hl: {{Nat.is_le(2n, B.Octets.len(D)) == True{{}} : Bool}}) -> {{B.Octets.be16(c) == B.Octets.take(2n, D) : B.Octets}}:
+  %BL.octets_of_to(B.Octets.take(2n, D)) : {{B.Octets.be16(c) == _ : B.Octets}}
+  os.be16_self.l(B.Octets.to_list(B.Octets.take(2n, D)), c, Equal.trans(Maybe<&2, U32>, B.be16.head(B.Octets.to_list(B.Octets.take(2n, D))), B.Octets.be16_at(D, 0n), Some{{c}}, Equal.cong(B.Octets, Maybe<&2, U32>, z => B.be16.head(B.Octets.to_list(B.Octets.take(2n, z))), D, B.Octets.drop(0n, D), Equal.sym(B.Octets, B.Octets.drop(0n, D), D, BL.octets_drop_zero(D))), hc), Equal.trans(Nat, B.len(B.Octets.to_list(B.Octets.take(2n, D))), B.Octets.len(B.Octets.take(2n, D)), 2n, Equal.sym(Nat, B.Octets.len(B.Octets.take(2n, D)), B.len(B.Octets.to_list(B.Octets.take(2n, D))), BL.octets_len_list(B.Octets.take(2n, D))), BL.octets_len_take_le(2n, D, hl)))
+
+# writing a field's own value back gives the bytes back
+def os.put16_self(+o: B.Octets, +off: Nat, +c: U32, +hc: {{B.Octets.be16_at(o, off) == Some{{c}} : Maybe<&2, U32>}}, +hl: {{Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{{}} : Bool}}) -> {{K.inet_put16(o, off, c) == o : B.Octets}}:
+  %BL.octets_take_drop(off, o) : {{K.inet_put16(o, off, c) == _ : B.Octets}}
+  %BL.octets_take_drop(2n, B.Octets.drop(off, o)) : {{K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), _) : B.Octets}}
+  %Equal.sym(B.Octets, B.Octets.drop(2n, B.Octets.drop(off, o)), B.Octets.drop(Nat.add(off, 2n), o), BL.octets_drop_drop(off, 2n, o)) : {{K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), B.Octets.append(B.Octets.take(2n, B.Octets.drop(off, o)), _)) : B.Octets}}
+  %os.be16_self(B.Octets.drop(off, o), c, Equal.trans(Maybe<&2, U32>, B.Octets.be16_at(B.Octets.drop(off, o), 0n), B.Octets.be16_at(o, off), Some{{c}}, Equal.trans(Maybe<&2, U32>, B.Octets.be16_at(B.Octets.drop(off, o), 0n), B.Octets.be16_at(o, Nat.add(off, 0n)), B.Octets.be16_at(o, off), BL.octets_be16_at_drop(off, o, 0n), Equal.cong(Nat, Maybe<&2, U32>, z => B.Octets.be16_at(o, z), Nat.add(off, 0n), off, os.add_zero(off))), hc), Equal.trans(Bool, Nat.is_le(2n, B.Octets.len(B.Octets.drop(off, o))), Nat.is_le(2n, Nat.sub(B.Octets.len(o), off)), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(2n, z), B.Octets.len(B.Octets.drop(off, o)), Nat.sub(B.Octets.len(o), off), BL.octets_len_drop(off, o)), os.le_sub(off, 2n, B.Octets.len(o), hl))) : {{K.inet_put16(o, off, c) == B.Octets.append(B.Octets.take(off, o), B.Octets.append(_, B.Octets.drop(Nat.add(off, 2n), o))) : B.Octets}}
+  {{==}}
+""")
+
+# ---- a verified checksum field is the checksum the builder computes
+w(f"""
+# More Nat facts
+
+def os.nat_eq(x: Nat, y: Nat, +h: {{Nat.is_eq(x, y) == True{{}} : Bool}}) -> {{x == y : Nat}}:
+  match x y:
+    case 0n 0n:
+      {{==}}
+    case 0n 1n+q:
+      Empty.absurd({{0n == 1n+q : Nat}}, os.ft(h))
+    case 1n+p 0n:
+      Empty.absurd({{1n+p == 0n : Nat}}, os.ft(h))
+    case 1n+ +p 1n+ +q:
+      os.succ_cong(p, q, os.nat_eq(p, q, h))
+
+# x <= y and y <= x: x is y
+def os.le_antisym(x: Nat, y: Nat, +h1: {{Nat.is_le(x, y) == True{{}} : Bool}}, +h2: {{Nat.is_le(y, x) == True{{}} : Bool}}) -> {{Nat.is_eq(x, y) == True{{}} : Bool}}:
+  match x y:
+    case 0n 0n:
+      {{==}}
+    case 0n 1n+q:
+      Empty.absurd({{Nat.is_eq(0n, 1n+q) == True{{}} : Bool}}, os.ft(h2))
+    case 1n+p 0n:
+      Empty.absurd({{Nat.is_eq(1n+p, 0n) == True{{}} : Bool}}, os.ft(h1))
+    case 1n+ +p 1n+ +q:
+      os.le_antisym(p, q, h1, h2)
+
+def os.add_cancel_r(+x: Nat, +y: Nat, k: Nat, +e: {{Nat.add(x, k) == Nat.add(y, k) : Nat}}) -> {{x == y : Nat}}:
+  match k:
+    case 0n:
+      Equal.trans(Nat, x, Nat.add(x, 0n), y, Equal.sym(Nat, Nat.add(x, 0n), x, os.add_zero(x)), Equal.trans(Nat, Nat.add(x, 0n), Nat.add(y, 0n), y, e, os.add_zero(y)))
+    case 1n+ +q:
+      os.add_cancel_r(x, y, q, os.succ_inj(Nat.add(x, q), Nat.add(y, q), Equal.trans(Nat, 1n+Nat.add(x, q), Nat.add(x, 1n+q), 1n+Nat.add(y, q), Equal.sym(Nat, Nat.add(x, 1n+q), 1n+Nat.add(x, q), os.add_succ(x, q)), Equal.trans(Nat, Nat.add(x, 1n+q), Nat.add(y, 1n+q), 1n+Nat.add(y, q), e, os.add_succ(y, q)))))
+
+# s + x = 2d with s <= d: d <= x
+def os.big_x(+d: Nat, +s: Nat, +x: Nat, +hs: {{Nat.is_le(s, d) == True{{}} : Bool}}, +e: {{Nat.add(s, x) == Nat.add(d, d) : Nat}}) -> {{Nat.is_le(d, x) == True{{}} : Bool}}:
+  Equal.trans(Bool, Nat.is_le(d, x), Nat.is_le(Nat.add(d, d), Nat.add(d, x)), True{{}}, Equal.sym(Bool, Nat.is_le(Nat.add(d, d), Nat.add(d, x)), Nat.is_le(d, x), os.le_cancel_l(d, d, x)), Equal.trans(Bool, Nat.is_le(Nat.add(d, d), Nat.add(d, x)), Nat.is_le(Nat.add(s, x), Nat.add(d, x)), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(z, Nat.add(d, x)), Nat.add(d, d), Nat.add(s, x), Equal.sym(Nat, Nat.add(s, x), Nat.add(d, d), e)), os.le_add_mono(s, x, d, x, hs, os.le_refl(x))))
+
+# rep(s + x) = d with s, x <= d and x not d: s + x = d
+def os.rep_eq_d.go(b: Bool, +d: Nat, +hd: {{Nat.is_le(1n, d) == True{{}} : Bool}}, +s: Nat, +x: Nat, +eb: {{Nat.is_le(Nat.add(s, x), d) == b : Bool}}, +hs: {{Nat.is_le(s, d) == True{{}} : Bool}}, +hx: {{Nat.is_le(x, d) == True{{}} : Bool}}, +hne: {{Nat.is_eq(x, d) == False{{}} : Bool}}, +h: {{os.rep(d, Nat.add(s, x)) == d : Nat}}) -> {{Nat.add(s, x) == d : Nat}}:
+  match b:
+    case True{{}}:
+      Equal.trans(Nat, Nat.add(s, x), os.rep(d, Nat.add(s, x)), d, Equal.sym(Nat, os.rep(d, Nat.add(s, x)), Nat.add(s, x), os.rep_small(d, Nat.add(s, x), eb)), h)
+    case False{{}}:
+      +j = Nat.sub(Nat.add(s, x), 1n+d)
+      +eX = os.sub_split(Nat.add(s, x), d, eb)
+      +hab = os.le_add_mono(s, x, d, d, hs, hx)
+      +h1 = os.end_le(d, j, Nat.add(s, x), eX, hab)
+      +r1 = Equal.trans(Nat, os.rep(d, Nat.add(s, x)), os.rep(d, Nat.add(1n+j, d)), 1n+j, Equal.cong(Nat, Nat, z => os.rep(d, z), Nat.add(s, x), Nat.add(1n+j, d), eX), Equal.trans(Nat, os.rep(d, Nat.add(1n+j, d)), os.rep(d, 1n+j), 1n+j, os.rep_period1(d, j, hd), os.rep_small(d, 1n+j, h1)))
+      +ejd = Equal.trans(Nat, 1n+j, os.rep(d, Nat.add(s, x)), d, Equal.sym(Nat, os.rep(d, Nat.add(s, x)), 1n+j, r1), h)
+      +e2 = Equal.trans(Nat, Nat.add(s, x), Nat.add(1n+j, d), Nat.add(d, d), eX, Equal.cong(Nat, Nat, z => Nat.add(z, d), 1n+j, d, ejd))
+      Empty.absurd({{Nat.add(s, x) == d : Nat}}, os.tf(Equal.trans(Bool, True{{}}, Nat.is_eq(x, d), False{{}}, Equal.sym(Bool, Nat.is_eq(x, d), True{{}}, os.le_antisym(x, d, hx, os.big_x(d, s, x, hs, e2))), hne)))
+
+def os.rep_eq_d(+d: Nat, +hd: {{Nat.is_le(1n, d) == True{{}} : Bool}}, +s: Nat, +x: Nat, +hs: {{Nat.is_le(s, d) == True{{}} : Bool}}, +hx: {{Nat.is_le(x, d) == True{{}} : Bool}}, +hne: {{Nat.is_eq(x, d) == False{{}} : Bool}}, +h: {{os.rep(d, Nat.add(s, x)) == d : Nat}}) -> {{Nat.add(s, x) == d : Nat}}:
+  os.rep_eq_d.go(Nat.is_le(Nat.add(s, x), d), d, hd, s, x, {{==}}, hs, hx, hne, h)
+
+# A field read by be16_at is a 16-bit value
+
+def os.mpick(m: Maybe<&2, U32>, t: Type, f: Type) -> Type:
+  match m:
+    case Some{{x}}:
+      t
+    case None{{}}:
+      f
+
+def os.be16_fits.l(+d: Nat, {HD}, ys: List<&2, U32>, +c: U32, +eY: {{B.be16.head(ys) == Some{{c}} : Maybe<&2, U32>}}) -> {fits("c")}:
+  match ys:
+    case Nil{{}}:
+      %eY : os.mpick(_, {fits("c")}, Unit)
+      Unit{{}}
+    case Con{{+a, t}}:
+      match t:
+        case Nil{{}}:
+          %eY : os.mpick(_, {fits("c")}, Unit)
+          Unit{{}}
+        case Con{{+b, +t2}}:
+          %Equal.cong(Maybe<&2, U32>, U32, z => os.some_get(z, c), Some{{os.be16_word(a, b)}}, Some{{c}}, eY) : {{Nat.is_le(U32.to_nat(_), d) == True{{}} : Bool}}
+          %Equal.sym(Nat, {v("os.mk(W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)), Word.zero(16n))")}, {w16("W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a))")}, os.mk_zero_value(W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)))) : {{Nat.is_le(_, d) == True{{}} : Bool}}
+          os.w16_le(d, hD, W.W64.bits.cat(8n, 8n, B.bits8(b), B.bits8(a)))
+
+def os.be16_fits(+d: Nat, {HD}, +o: B.Octets, +off: Nat, +c: U32, +hc: {{B.Octets.be16_at(o, off) == Some{{c}} : Maybe<&2, U32>}}) -> {fits("c")}:
+  os.be16_fits.l(d, hD, B.Octets.to_list(B.Octets.slice(off, 2n, o)), c, hc)
+""")
+PUTc = "K.inet_put16(o, off, c)"
+Sc = "K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, c)))"
+S0_ = "K.inet_sum(B.Octets.append(pseudo, K.inet_put16(o, off, 0)))"
+CC_ = f"K.inet_finish({S0_})"
+K3_ = "os.K3(pseudo, o, off)"
+BEc = "B.Octets.to_list(B.Octets.be16(c))"
+VS0 = v(S0_)
+w(f"""
+# o's field at off verified (pseudo ++ o sums to d): the sum with the field
+# 0, plus the field, goes round to d
+def os.verified_sum({DPAR}, +pseudo: B.Octets, +o: B.Octets, +off: Nat, +c: U32, +eP: {{K.inet_even(pseudo) == True{{}} : Bool}}, +eT: {{K.inet_even(B.Octets.take(off, o)) == True{{}} : Bool}}, +hc: {{B.Octets.be16_at(o, off) == Some{{c}} : Maybe<&2, U32>}}, +hl: {{Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{{}} : Bool}}, +hv: {{K.inet_verify(B.Octets.append(pseudo, o)) == True{{}} : Bool}}) -> {{os.rep(d, Nat.add({VS0}, {v("c")})) == d : Nat}}:
+  +es = os.put16_self(o, off, c, hc, hl)
+  +fc = os.be16_fits(d, hD, o, off, c, hc)
+  +f0 = os.sum0_fits(d, hd, hD, hE, pseudo, o, off, eP, eT)
+  +hv1 = Equal.trans(Bool, K.inet_verify(B.Octets.append(pseudo, {PUTc})), K.inet_verify(B.Octets.append(pseudo, o)), True{{}}, Equal.cong(B.Octets, Bool, z => K.inet_verify(B.Octets.append(pseudo, z)), {PUTc}, o, es), hv)
+  +vS1 = Equal.trans(Nat, {v(Sc)}, {v("65535")}, d, os.nat_eq({v(Sc)}, {v("65535")}, Equal.trans(Bool, Nat.is_eq({v(Sc)}, {v("65535")}), U32.is_eq({Sc}, 65535), True{{}}, Equal.sym(Bool, U32.is_eq({Sc}, 65535), Nat.is_eq({v(Sc)}, {v("65535")}), UL.u32_eq_value({Sc}, 65535)), hv1)), hE)
+  +r1 = Equal.trans(Nat, os.rep(d, Nat.add({K3_}, {v("c")})), {v(Sc)}, d, Equal.sym(Nat, {v(Sc)}, os.rep(d, Nat.add({K3_}, {v("c")})), Equal.trans(Nat, {v(Sc)}, os.rep(d, Nat.add({K3_}, os.ws({BEc}))), os.rep(d, Nat.add({K3_}, {v("c")})), os.sum_put(d, hd, hD, hE, pseudo, o, off, c, eP, eT), Equal.cong(Nat, Nat, z => os.rep(d, Nat.add({K3_}, z)), os.ws({BEc}), {v("c")}, os.be16_ws(d, hD, c, fc)))), vS1)
+  Equal.trans(Nat, os.rep(d, Nat.add({VS0}, {v("c")})), os.rep(d, Nat.add(os.rep(d, {K3_}), {v("c")})), d, Equal.cong(Nat, Nat, z => os.rep(d, Nat.add(z, {v("c")})), {VS0}, os.rep(d, {K3_}), os.sum0(d, hd, hD, hE, pseudo, o, off, eP, eT)), Equal.trans(Nat, os.rep(d, Nat.add(os.rep(d, {K3_}), {v("c")})), os.rep(d, Nat.add({K3_}, {v("c")})), d, os.rep_fold(d, {K3_}, {v("c")}, hd), r1))
+
+# and the field is not 0xffff: the checksum inet_fill computes is that
+# field, so inet_fill gives o back
+def os.fill_self({DPAR}, +pseudo: B.Octets, +o: B.Octets, +off: Nat, +c: U32, +eP: {{K.inet_even(pseudo) == True{{}} : Bool}}, +eT: {{K.inet_even(B.Octets.take(off, o)) == True{{}} : Bool}}, +hc: {{B.Octets.be16_at(o, off) == Some{{c}} : Maybe<&2, U32>}}, +hl: {{Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{{}} : Bool}}, +hv: {{K.inet_verify(B.Octets.append(pseudo, o)) == True{{}} : Bool}}, +hk: {{U32.is_eq(c, 65535) == False{{}} : Bool}}) -> {{K.inet_fill(pseudo, o, off) == o : B.Octets}}:
+  +es = os.put16_self(o, off, c, hc, hl)
+  +fc = os.be16_fits(d, hD, o, off, c, hc)
+  +f0 = os.sum0_fits(d, hd, hD, hE, pseudo, o, off, eP, eT)
+  +r2 = os.verified_sum(d, hd, hD, hE, pseudo, o, off, c, eP, eT, hc, hl, hv)
+  +hne = Equal.trans(Bool, Nat.is_eq({v("c")}, d), Nat.is_eq({v("c")}, {v("65535")}), False{{}}, Equal.cong(Nat, Bool, z => Nat.is_eq({v("c")}, z), d, {v("65535")}, Equal.sym(Nat, {v("65535")}, d, hE)), Equal.trans(Bool, Nat.is_eq({v("c")}, {v("65535")}), U32.is_eq(c, 65535), False{{}}, Equal.sym(Bool, U32.is_eq(c, 65535), Nat.is_eq({v("c")}, {v("65535")}), UL.u32_eq_value(c, 65535)), hk))
+  +e1 = os.rep_eq_d(d, hd, {VS0}, {v("c")}, f0, fc, hne, r2)
+  +e3 = Equal.trans(Nat, Nat.add({v(CC_)}, {VS0}), d, Nat.add({v("c")}, {VS0}), os.finish_value(d, hD, {S0_}, f0), Equal.trans(Nat, d, Nat.add({VS0}, {v("c")}), Nat.add({v("c")}, {VS0}), Equal.sym(Nat, Nat.add({VS0}, {v("c")}), d, e1), os.add_comm({VS0}, {v("c")})))
+  +e5 = UL.u32_value_eq({CC_}, c, os.add_cancel_r({v(CC_)}, {v("c")}, {VS0}, e3))
+  %Equal.sym(U32, {CC_}, c, e5) : {{K.inet_put16(o, off, _) == o : B.Octets}}
+  es
+""")
+
 # define each lemma before its first use
 out = "".join(P)
 def cut(s, name):
