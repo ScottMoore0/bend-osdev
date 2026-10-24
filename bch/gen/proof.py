@@ -12,9 +12,16 @@ are rewritten by this script:
 Each tried case is computed in a def of its own (the proof kernel has a
 step budget per def); the law's def only takes the message apart.
 
-Usage: python3 gen/proof.py   (from bch/)
+It also writes the whole of proof_pat15.bend, the lemma file of
+PROOF_errors.bend: the 121 patterns of at most two flipped bits in a word
+of the (15,7) code, each corrected alone in a def of its own, and the
+facts about GF(16) that the syndromes' linearity needs (see gen_pat15).
+
+Usage: python3 gen/proof.py           (from bch/) rewrites the files
+       python3 gen/proof.py --check   fails if a generated part differs
+                                      from what this script writes
 """
-import itertools, os
+import itertools, os, sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 R = "Result<&2, &2, E.BchError, List<&2, Bool>>"
@@ -107,10 +114,198 @@ def gen_small15():
     return "\n".join(out)
 
 
+# The (15,7) code's patterns of at most two flipped bits (proof_pat15.bend)
+
+def word(bits):
+    inner = "WNil{}"
+    for b in reversed(bits):
+        inner = "WCon{%s, %s}" % (b, inner)
+    return "U32{%s}" % inner
+
+
+def sym(prefix):
+    return ["%s%d" % (prefix, i) for i in range(32)]
+
+
+ROOTS = (2, 4, 8, 3)
+
+
+def pattern15(i, j):
+    e = [0] * 15
+    if i < 15:
+        e[i] ^= 1
+    if j < 15:
+        e[j] ^= 1
+    return e
+
+
+def patterns15():
+    seen, out = set(), []
+    for i in range(16):
+        for j in range(16):
+            e = tuple(pattern15(i, j))
+            if e not in seen:
+                seen.add(e)
+                out.append(list(e))
+    return sorted(out, key=lambda e: (sum(e), [-b for b in e]))
+
+
+def nm15(e):
+    """the indexes of the flipped bits"""
+    ix = [i for i, b in enumerate(e) if b]
+    return "_".join(map(str, ix)) if ix else "none"
+
+
+C15 = "C.Bch.bch15_7()"
+F16 = "M.Gfm.gf16()"
+BL = "List<&2, Bool>"
+RP = "Result<&2, &2, E.BchError, List<&2, U32>>"
+Z15 = lit([0] * 15)
+
+PAT15_HEADER = """# The (15,7) code's patterns of at most two flipped bits, each corrected
+# alone, and the facts about GF(16) that the syndromes' linearity needs
+# (this whole file is written by gen/proof.py: do not edit it).
+#
+#   * For a word x of 15 bits, chk15(x) flips the bits of x at the
+#     decoder's error positions for x's syndromes (Bch.locate), and ok15(x)
+#     says that this is the zero word. For each pattern e with at most two
+#     bits set (121 of them) ok15(e) holds: the decoder finds exactly e's
+#     errors. Each is computed in a def of its own (p15_<indexes>), on
+#     literals (the proof kernel has a step budget per def). q15 takes a
+#     pattern given as two flips (pat15: two indexes) apart: each index is
+#     tried (0 to 14, or past the end, which flips nothing), the pattern
+#     rewritten into its list of bits (t15_<i>_<j>, computed), and each
+#     case is one of the patterns.
+#   * GF(16), whose functions read their arguments modulo 2^4: e1, e2, eid
+#     and a0 split the words into their 32 bits; dist<k> is
+#     (x + y) k = x k + y k for each of the syndromes' points k = 2, 4, 8
+#     and 3, from the elements' low four bits (nib), each value of x's
+#     tried in a def of its own (dk<k>_<x>) and each of y's in a case.
+import Base
+import ../gf/gfm.bend as M
+import ../rs/poly.bend as P
+import ./code.bend as C
+import ./encode.bend as E
+import ./syndrome.bend as S
+import ./bch.bend as D
+"""
+
+
+def gen_pat15():
+    out = [PAT15_HEADER]
+    out.append("# a list of bits plus another, bit by bit (the shorter as padded with zeros)")
+    out.append("def xl(a: %s, b: %s) -> %s:" % (BL, BL, BL))
+    out.append("  match a b:\n    case Nil{} _:\n      b\n    case Con{x, s} Nil{}:\n      Con{x, s}\n    case Con{x, s} Con{y, t}:\n      Con{Bool.xor(x, y), xl(s, t)}\n")
+    out.append("# the word of 15 bits with the bits at indexes i and j flipped")
+    out.append("def pat15(i: Nat, j: Nat) -> %s:" % BL)
+    out.append("  xl(D.bch.flip.one(E.bch.falses(15n), i), D.bch.flip.one(E.bch.falses(15n), j))\n")
+    out.append("# the flips for x's syndromes applied to x")
+    out.append("def chk15r(r: %s, +x: %s) -> %s:" % (RP, BL, R))
+    out.append("  match r:\n    case Fail{e}:\n      Fail{e}\n    case Done{ps}:\n      Done{D.Bch.flip(ps, x)}\n")
+    out.append("def chk15(+x: %s) -> %s:" % (BL, R))
+    out.append("  chk15r(D.Bch.locate(%s, S.Bch.syndromes(%s, x), 15), x)\n" % (C15, C15))
+    out.append("def ok15(+x: %s) -> Type:" % BL)
+    out.append("  {chk15(x) == Done{%s} : %s}\n" % (Z15, R))
+    # GF(16) bits
+    a, b = word(sym("a")), word(sym("b"))
+    f = F16
+    out.append("# GF(16): elt (elt u + v) = elt (u + v)")
+    out.append("def e1(u: U32, v: U32) -> {M.Gfm.elt(%s, U32.xor(M.Gfm.elt(%s, u), v)) == M.Gfm.elt(%s, U32.xor(u, v)) : U32}:" % (f, f, f))
+    out.append("  match u v:\n    case %s %s:\n      {==}\n" % (a, b))
+    out.append("# elt (u + elt v) = elt (u + v)")
+    out.append("def e2(u: U32, v: U32) -> {M.Gfm.elt(%s, U32.xor(u, M.Gfm.elt(%s, v))) == M.Gfm.elt(%s, U32.xor(u, v)) : U32}:" % (f, f, f))
+    out.append("  match u v:\n    case %s %s:\n      {==}\n" % (a, b))
+    out.append("def eid(u: U32) -> {M.Gfm.elt(%s, M.Gfm.elt(%s, u)) == M.Gfm.elt(%s, u) : U32}:" % (f, f, f))
+    out.append("  match u:\n    case %s:\n      {==}\n" % a)
+    out.append("# 0 + y = elt y")
+    out.append("def a0(y: U32) -> {M.Gfm.add(%s, 0, y) == M.Gfm.elt(%s, y) : U32}:" % (f, f))
+    out.append("  match y:\n    case %s:\n      {==}\n" % b)
+    # distributivity, on the low four bits (nib)
+    out.append("# an element from its four bits")
+    out.append("def nib(+a0: Bool, +a1: Bool, +a2: Bool, +a3: Bool) -> U32:")
+    out.append("  U32{WCon{a0, WCon{a1, WCon{a2, WCon{a3, Word.zero(28n)}}}}}\n")
+    out.append("# the product reads x modulo 2^4")
+    out.append("def mm(x: U32, +k: U32) -> {M.Gfm.mul(%s, M.Gfm.elt(%s, x), k) == M.Gfm.mul(%s, x, k) : U32}:" % (f, f, f))
+    out.append("  match x:\n    case %s:\n      {==}\n" % a)
+    out.append("# the sum reads x and y modulo 2^4")
+    out.append("def gm(+x: U32, +y: U32) -> {M.Gfm.add(%s, M.Gfm.elt(%s, x), M.Gfm.elt(%s, y)) == M.Gfm.add(%s, x, y) : U32}:" % (f, f, f, f))
+    out.append("  Equal.trans(U32, M.Gfm.elt(%s, U32.xor(M.Gfm.elt(%s, x), M.Gfm.elt(%s, y))), M.Gfm.elt(%s, U32.xor(x, M.Gfm.elt(%s, y))), M.Gfm.elt(%s, U32.xor(x, y)), e1(x, M.Gfm.elt(%s, y)), e2(x, y))\n" % (f, f, f, f, f, f, f))
+    def nibl(v):
+        return "nib(%s)" % ", ".join("True{}" if (v >> i) & 1 else "False{}" for i in range(4))
+    na = "nib(a0, a1, a2, a3)"
+    nb = "nib(b0, b1, b2, b3)"
+    hb = "+b0: Bool, +b1: Bool, +b2: Bool, +b3: Bool"
+    for k in ROOTS:
+        def dst(x, y):
+            return "{M.Gfm.mul(%s, M.Gfm.add(%s, %s, %s), %d) == M.Gfm.add(%s, M.Gfm.mul(%s, %s, %d), M.Gfm.mul(%s, %s, %d)) : U32}" % (f, f, x, y, k, f, f, x, k, f, y, k)
+        out.append("# (x + y) %d = x %d + y %d: each value of x's four bits, then of y's" % (k, k, k))
+        for x in range(16):
+            out.append("def dk%d_%d(%s) -> %s:" % (k, x, hb, dst(nibl(x), nb)))
+            out.append("  match b0 b1 b2 b3:")
+            for y in range(16):
+                out.append("    case %s:\n      {==}" % " ".join("True{}" if (y >> i) & 1 else "False{}" for i in range(4)))
+            out.append("")
+        out.append("def dk%d(+a0: Bool, +a1: Bool, +a2: Bool, +a3: Bool, %s) -> %s:" % (k, hb, dst(na, nb)))
+        out.append("  match a0 a1 a2 a3:")
+        for x in range(16):
+            out.append("    case %s:\n      dk%d_%d(b0, b1, b2, b3)" % (" ".join("True{}" if (x >> i) & 1 else "False{}" for i in range(4)), k, x))
+        out.append("")
+        ex, ey = "M.Gfm.elt(%s, x)" % f, "M.Gfm.elt(%s, y)" % f
+        out.append("def dn%d(x: U32, y: U32) -> %s:" % (k, dst(ex, ey)))
+        out.append("  match x y:\n    case %s %s:\n      dk%d(a0, a1, a2, a3, b0, b1, b2, b3)\n" % (word(sym("a")), word(sym("b")), k))
+        out.append("def dist%d(+x: U32, +y: U32) -> %s:" % (k, dst("x", "y")))
+        out.append("  %%gm(x, y) : {M.Gfm.mul(%s, _, %d) == M.Gfm.add(%s, M.Gfm.mul(%s, x, %d), M.Gfm.mul(%s, y, %d)) : U32}" % (f, k, f, f, k, f, k))
+        out.append("  %%mm(x, %d) : {M.Gfm.mul(%s, M.Gfm.add(%s, %s, %s), %d) == M.Gfm.add(%s, _, M.Gfm.mul(%s, y, %d)) : U32}" % (k, f, f, ex, ey, k, f, f, k))
+        out.append("  %%mm(y, %d) : {M.Gfm.mul(%s, M.Gfm.add(%s, %s, %s), %d) == M.Gfm.add(%s, M.Gfm.mul(%s, %s, %d), _) : U32}" % (k, f, f, ex, ey, k, f, f, ex, k))
+        out.append("  dn%d(x, y)\n" % k)
+    # patterns
+    out.append("# The patterns")
+    out.append("")
+    for e in patterns15():
+        out.append("def p15_%s() -> {chk15(%s) == Done{%s} : %s}:\n  {==}\n" % (nm15(e), lit(e), Z15, R))
+
+    def nat(i, v):
+        return "%dn" % i if i < 15 else "15n+%s" % v
+    out.append("# A pattern's list of bits, for each pair of indexes")
+    out.append("")
+    for i in range(16):
+        for j in range(16):
+            name = "t15_%s_%s" % (i if i < 15 else "far", j if j < 15 else "far")
+            params = (["k: Nat"] if i == 15 else []) + (["l: Nat"] if j == 15 else [])
+            out.append("def %s(%s) -> {%s == pat15(%s, %s) : %s}:\n  {==}\n" % (name, ", ".join(params), lit(pattern15(i, j)), nat(i, "k"), nat(j, "l"), BL))
+    out.append("# The indexes")
+    out.append("")
+    for i in range(16):
+        if i < 15:
+            out.append("def q15_%d(j: Nat) -> ok15(pat15(%dn, j)):" % (i, i))
+        else:
+            out.append("def q15_far(k: Nat, j: Nat) -> ok15(pat15(15n+k, j)):")
+        out.append("  match j:")
+        for j in range(16):
+            out.append("    case %s:" % nat(j, "l"))
+            args = (["k"] if i == 15 else []) + (["l"] if j == 15 else [])
+            out.append("      %%t15_%s_%s(%s) : ok15(_)" % (i if i < 15 else "far", j if j < 15 else "far", ", ".join(args)))
+            out.append("      p15_%s()" % nm15(pattern15(i, j)))
+        out.append("")
+    out.append("# Every pattern of at most two flipped bits, given as two flips")
+    out.append("def q15(i: Nat, +j: Nat) -> ok15(pat15(i, j)):")
+    out.append("  match i:")
+    for i in range(16):
+        if i < 15:
+            out.append("    case %dn:\n      q15_%d(j)" % (i, i))
+        else:
+            out.append("    case 15n+k:\n      q15_far(k, j)")
+    return "\n".join(out) + "\n"
+
+
 SECTIONS = {"small7": gen_small7, "small15": gen_small15}
 
 
 def main():
+    check = sys.argv[1:] == ["--check"]
+    if sys.argv[1:] not in ([], ["--check"]):
+        raise SystemExit("usage: python3 gen/proof.py [--check]")
+    files = {}
     path = os.path.join(HERE, "PROOF.bend")
     text = open(path).read()
     for nm, fn in SECTIONS.items():
@@ -120,8 +315,20 @@ def main():
         if i < 0 or j < 0:
             raise SystemExit("PROOF.bend has no section " + nm)
         text = text[:i + len(begin)] + fn().rstrip("\n") + "\n" + text[j:]
-    with open(path, "w", newline="\n") as f:
-        f.write(text)
+    files[path] = text
+    files[os.path.join(HERE, "proof_pat15.bend")] = gen_pat15()
+    stale = []
+    for path, text in files.items():
+        old = open(path).read() if os.path.exists(path) else None
+        if old == text:
+            continue
+        if check:
+            stale.append(os.path.relpath(path, HERE))
+        else:
+            with open(path, "w", newline="\n") as f:
+                f.write(text)
+    if stale:
+        raise SystemExit("not what gen/proof.py writes: " + ", ".join(stale))
 
 
 main()

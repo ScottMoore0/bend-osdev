@@ -91,6 +91,7 @@ Recommendations; no kernel source was read.
 | `gname.bend` | GeneralName |
 | `verify.bend` | the signature check and name links (extension points) |
 | `LAWS.bend`, `PROOF.bend`, `proof_x509.bend`, `proof_octets.bend` | the laws, their proofs, lemmas (`proof_octets.bend`: the octets a parse keeps) |
+| `LAWS_ext.bend`, `PROOF_ext.bend` | the laws of the extension readers, and their proofs |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh`, `ref/show.bend.in` | the differential test (`ref/.gitignore` lists what it generates) |
 
@@ -186,17 +187,37 @@ asn1's laws `match_split`, `match_whole`, `match_within` and `match_input`
 then make them slices, one inside another as the certificate's ASN.1
 nests them.
 
-**Not stated as laws** (tested only): that the values read from the fields
-are the certificate's (the version, serial number, validity times, unique
-identifiers, the names' attribute values, the key and signature BIT
-STRINGs, and the extension decoders): these go through bend-osdev-asn1's
-typed readers (INTEGER, BIT STRING, OCTET STRING, BOOLEAN, times,
-strings), which have no laws yet (asn1's typed-reader round trips), so
-only the octets the parse keeps are proved here, not the values decoded
-from them. `ref/run.sh` compares every field with Python cryptography's
-and OpenSSL's reading. That the tbsCertificate's octets are its DER
-encoding (beyond being a slice of the input that a DER certificate holds)
-is not stated: asn1's `read_der` covers the element read, not the
+`LAWS_ext.bend` (with `PROOF_ext.bend`, checked in a process of its own),
+proved for **every** input: an extension whose value octets are the DER
+that bend-osdev-asn1's encoder writes for a value reads back as that value,
+under any rules:
+
+* `key_usage_round_trip`: keyUsage, for every well-formed BIT STRING
+  whose unused bits are zero (asn1's `asn1law.bits_clear`, the form DER
+  gives a named bit list);
+* `subject_key_id_round_trip`: subjectKeyIdentifier, for every OCTET
+  STRING.
+
+Each follows from asn1's `decode_encode` (a primitive BIT STRING or OCTET
+STRING conforms to every rules) and its typed-reader round trips
+(`bits_round_trip`, `octets_round_trip`, in asn1's `LAWS_typed.bend`).
+
+**Not stated as laws** (tested only): the other extension decoders.
+basicConstraints and authorityKeyIdentifier are read through the schema
+matcher (`Asn1.match`), whose answers asn1 states laws for only as to the
+octets and elements they keep, not the fields they find (asn1's
+README, Laws); subjectAltName reads GeneralNames, which have no writer
+here to state a round trip against; extKeyUsage reads each purpose with
+bend-osdev-oid's `Oid.of_node`, which oid states no law for at the element
+level (its laws are for DER octets and text). Nor are the values read from
+the certificate's other fields (the version, serial number, validity times,
+unique identifiers, the names' attribute values, the key and signature BIT
+STRINGs) stated: asn1's typed-reader laws now cover each reader, but a law
+for a field would also need the matcher's laws for the field's place in the
+certificate's schema. `ref/run.sh` compares every field with Python
+cryptography's and OpenSSL's reading. That the tbsCertificate's octets are
+its DER encoding (beyond being a slice of the input that a DER certificate
+holds) is not stated: asn1's `read_der` covers the element read, not the
 elements inside it.
 
 ## Tests
@@ -261,6 +282,7 @@ elements inside it.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 323 cases match, `scripts/deps.sh x509`
-ok.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (16 laws), `--verdict` ALL
+PROOFS CHECK (0.82 GB peak); `PROOF_ext.bend` ALL PROOFS CHECK (2 laws),
+`--verdict` ALL PROOFS CHECK (0.85 GB peak, a minute); `check.bend`
+passes, `ref/run.sh` 323 cases match, `scripts/deps.sh x509` ok.
