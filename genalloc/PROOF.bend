@@ -6,6 +6,10 @@ import ./proof_nat.bend as N
 import ./proof_bits.bend as PB
 import ./proof_pool.bend as PP
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Sizes: each granule is free or allocated
 
@@ -14,7 +18,7 @@ def gl.count_bits(+u: List<&2, Bool>) -> {Nat.add(Bits.genpool.bits.count_free(u
     case Nil{}:
       {==}
     case Con{True{}, t}:
-      %Equal.sym(Nat, Nat.add(Bits.genpool.bits.count_free(t), 1n+Bits.genpool.bits.count_used(t)), 1n+Nat.add(Bits.genpool.bits.count_free(t), Bits.genpool.bits.count_used(t)), N.nl.add_succ(Bits.genpool.bits.count_free(t), Bits.genpool.bits.count_used(t))) : {_ == 1n+List.length(&2, Bool, t) : Nat}
+      %Equal.sym(Nat, Nat.add(Bits.genpool.bits.count_free(t), 1n+Bits.genpool.bits.count_used(t)), 1n+Nat.add(Bits.genpool.bits.count_free(t), Bits.genpool.bits.count_used(t)), UL.nat_add_succ(Bits.genpool.bits.count_free(t), Bits.genpool.bits.count_used(t))) : {_ == 1n+List.length(&2, Bool, t) : Nat}
       %gl.count_bits(t) : {1n+Nat.add(Bits.genpool.bits.count_free(t), Bits.genpool.bits.count_used(t)) == 1n+_ : Nat}
       {==}
     case Con{False{}, t}:
@@ -36,7 +40,7 @@ def gl.count_go(+cs: List<&2, G.GpChunk>) -> {Nat.add(G.genpool.count_free.go(cs
 def Laws.avail_size(p):
   match p:
     case G.GpPool{o, +g, +cs}:
-      %N.nl.mul_add(G.genpool.count_free.go(cs), G.genpool.count_used.go(cs), g) : {_ == Nat.mul(G.genpool.count.go(cs), g) : Nat}
+      %UL.nat_add_mul(G.genpool.count_free.go(cs), G.genpool.count_used.go(cs), g) : {_ == Nat.mul(G.genpool.count.go(cs), g) : Nat}
       %gl.count_go(cs) : {Nat.mul(Nat.add(G.genpool.count_free.go(cs), G.genpool.count_used.go(cs)), g) == Nat.mul(_, g) : Nat}
       {==}
 
@@ -234,7 +238,7 @@ def gl.h_avail(r: Result<&2, &2, G.GpError, G.GpPlan>, +o: Nat, +g: Nat, +cs: Li
       +hv = PP.pp.va_of(cs, c1, s1, b1, n0, hr)
       %Equal.cong(Result<&2, &2, G.GpError, G.GpAlloc>, G.GpPool, z => gl.fq(z), Done{G.GpAlloc{G.GpPool{o, g, G.genpool.mark(cs, c1, s1, n0, True{})}, Nat.add(b1, Nat.mul(s1, g)), c1, s1, n0}}, Done{G.GpAlloc{q, a, c, s, n}}, e) : {Nat.add(G.genpool.avail(_), Nat.mul(n, g)) == Nat.mul(G.genpool.count_free.go(cs), g) : Nat}
       %Equal.cong(Result<&2, &2, G.GpError, G.GpAlloc>, Nat, z => gl.fn(z), Done{G.GpAlloc{G.GpPool{o, g, G.genpool.mark(cs, c1, s1, n0, True{})}, Nat.add(b1, Nat.mul(s1, g)), c1, s1, n0}}, Done{G.GpAlloc{q, a, c, s, n}}, e) : {Nat.add(Nat.mul(G.genpool.count_free.go(G.genpool.mark(cs, c1, s1, n0, True{})), g), Nat.mul(_, g)) == Nat.mul(G.genpool.count_free.go(cs), g) : Nat}
-      %N.nl.mul_add(G.genpool.count_free.go(G.genpool.mark(cs, c1, s1, n0, True{})), n0, g) : {_ == Nat.mul(G.genpool.count_free.go(cs), g) : Nat}
+      %UL.nat_add_mul(G.genpool.count_free.go(G.genpool.mark(cs, c1, s1, n0, True{})), n0, g) : {_ == Nat.mul(G.genpool.count_free.go(cs), g) : Nat}
       %PP.pp.cf_mark(cs, c1, s1, b1, n0, hv) : {Nat.mul(Nat.add(G.genpool.count_free.go(G.genpool.mark(cs, c1, s1, n0, True{})), n0), g) == Nat.mul(_, g) : Nat}
       {==}
 
@@ -280,7 +284,7 @@ def gl.h_free(r: Result<&2, &2, G.GpError, G.GpPlan>, +o: Nat, +g: Nat, +cs: Lis
       +hv = PP.pp.va_of(cs, c1, s1, b1, n0, hr)
       %Equal.cong(Result<&2, &2, G.GpError, G.GpAlloc>, G.GpPool, z => gl.fq(z), Done{G.GpAlloc{G.GpPool{o, g, G.genpool.mark(cs, c1, s1, n0, True{})}, Nat.add(b1, Nat.mul(s1, g)), c1, s1, n0}}, Done{G.GpAlloc{q, a, c, s, n}}, e) : {G.genpool.free(_, a, 1n+k) == Done{G.GpPool{o, g, cs}} : Result<&2, &2, G.GpError, G.GpPool>}
       %Equal.cong(Result<&2, &2, G.GpError, G.GpAlloc>, Nat, z => gl.fa(z), Done{G.GpAlloc{G.GpPool{o, g, G.genpool.mark(cs, c1, s1, n0, True{})}, Nat.add(b1, Nat.mul(s1, g)), c1, s1, n0}}, Done{G.GpAlloc{q, a, c, s, n}}, e) : {G.genpool.free(G.GpPool{o, g, G.genpool.mark(cs, c1, s1, n0, True{})}, _, 1n+k) == Done{G.GpPool{o, g, cs}} : Result<&2, &2, G.GpError, G.GpPool>}
-      %Equal.sym(Maybe<&2, Nat>, G.genpool.locate(G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{c1}, Equal.trans(Maybe<&2, Nat>, G.genpool.locate(G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), g, 0n), G.genpool.locate(cs, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{c1}, PP.pp.locate_mark(cs, c1, s1, n0, True{}, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Equal.trans(Maybe<&2, Nat>, G.genpool.locate(cs, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{Nat.add(c1, 0n)}, Some{c1}, PP.pp.locate_hit(cs, c1, Nat.add(b1, Nat.mul(s1, g)), g, 0n, hd, PP.pp.va_inside(cs, c1, s1, b1, n0, g, hg, hn0, hv)), Equal.cong(Nat, Maybe<&2, Nat>, z => Some{z}, Nat.add(c1, 0n), c1, N.nl.add_zero(c1))))) : {G.genpool.free.found(_, G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), n0, o, g) == Done{G.GpPool{o, g, cs}} : Result<&2, &2, G.GpError, G.GpPool>}
+      %Equal.sym(Maybe<&2, Nat>, G.genpool.locate(G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{c1}, Equal.trans(Maybe<&2, Nat>, G.genpool.locate(G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), g, 0n), G.genpool.locate(cs, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{c1}, PP.pp.locate_mark(cs, c1, s1, n0, True{}, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Equal.trans(Maybe<&2, Nat>, G.genpool.locate(cs, Nat.add(b1, Nat.mul(s1, g)), g, 0n), Some{Nat.add(c1, 0n)}, Some{c1}, PP.pp.locate_hit(cs, c1, Nat.add(b1, Nat.mul(s1, g)), g, 0n, hd, PP.pp.va_inside(cs, c1, s1, b1, n0, g, hg, hn0, hv)), Equal.cong(Nat, Maybe<&2, Nat>, z => Some{z}, Nat.add(c1, 0n), c1, UL.nat_add_zero(c1))))) : {G.genpool.free.found(_, G.genpool.mark(cs, c1, s1, n0, True{}), Nat.add(b1, Nat.mul(s1, g)), n0, o, g) == Done{G.GpPool{o, g, cs}} : Result<&2, &2, G.GpError, G.GpPool>}
       %Equal.sym(Result<&2, &2, G.GpError, List<&2, G.GpChunk>>, G.genpool.free.at(G.genpool.mark(cs, c1, s1, n0, True{}), c1, Nat.add(b1, Nat.mul(s1, g)), n0, g), Done{cs}, PP.pp.free_mark(cs, c1, s1, b1, n0, g, hg, hn0, hv)) : {G.genpool.free.pool(_, o, g) == Done{G.GpPool{o, g, cs}} : Result<&2, &2, G.GpError, G.GpPool>}
       {==}
 
@@ -318,7 +322,7 @@ def gl.pow_pos(+k: Nat) -> {Nat.is_lt(0n, Nat.pow(2n, k)) == True{} : Bool}:
     case 0n:
       {==}
     case 1n+j:
-      N.nl.lt_le_trans(0n, Nat.pow(2n, j), Nat.add(Nat.pow(2n, j), Nat.mul(1n, Nat.pow(2n, j))), gl.pow_pos(j), N.nl.le_add(Nat.pow(2n, j), Nat.mul(1n, Nat.pow(2n, j))))
+      UO.nat_lt_le_trans(0n, Nat.pow(2n, j), Nat.add(Nat.pow(2n, j), Nat.mul(1n, Nat.pow(2n, j))), gl.pow_pos(j), UO.nat_le_add_r(Nat.pow(2n, j), Nat.mul(1n, Nat.pow(2n, j))))
 
 def Laws.new_valid(order):
   N.nl.and_i(Nat.is_lt(0n, Nat.pow(2n, order)), True{}, gl.pow_pos(order), {==})

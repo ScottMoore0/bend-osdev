@@ -571,6 +571,11 @@ several thousand blocks at once could overflow it. `check.bend` builds in
 `ref/wmain.bend` builds in 58 s (1.7 GB) and runs the 27 writing cases in
 46 s (52 MB).
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and `Nat` division (`LAWS_div.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

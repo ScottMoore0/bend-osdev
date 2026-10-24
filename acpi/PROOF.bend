@@ -20,6 +20,8 @@ import ./aml_device.bend as Dv
 import ./mcfg.bend as Mc
 import ./example.bend as X
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # The proofs reach Octets only through bytes' interface laws (octets_to_of,
 # octets_of_to, octets_append_list, octets_len_list, octets_split_at_append,
@@ -2500,13 +2502,6 @@ def Laws.rsdp_ext_checksum(o, r, e):
 # The step bound: AmlM.run.go counts each step it takes, and stops when its
 # fuel runs out
 
-def le_refl(+u: Nat) -> {Nat.is_le(u, u) == True{} : Bool}:
-  match u:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_refl(p)
-
 def le_step(+a: Nat, +b: Nat, +e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a b:
     case 0n _:
@@ -2516,13 +2511,6 @@ def le_step(+a: Nat, +b: Nat, +e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is
     case 1n+ap 1n+bp:
       le_step(ap, bp, e)
 
-def le_add(+p: Nat, +u: Nat) -> {Nat.is_le(u, Nat.add(p, u)) == True{} : Bool}:
-  match p:
-    case 0n:
-      le_refl(u)
-    case 1n+q:
-      le_step(u, Nat.add(q, u), le_add(q, u))
-
 def add_succ(+a: Nat, +b: Nat) -> {1n+Nat.add(a, b) == Nat.add(a, 1n+b) : Nat}:
   match a:
     case 0n:
@@ -2531,28 +2519,20 @@ def add_succ(+a: Nat, +b: Nat) -> {1n+Nat.add(a, b) == Nat.add(a, 1n+b) : Nat}:
       %add_succ(p, b) : {1n+1n+Nat.add(p, b) == 1n+_ : Nat}
       {==}
 
-def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
 def run_go_le(+n: Nat, +h: Bool, +m: I.AmlMachine<Hs.AmlMemHost>, +u: Nat) -> {Nat.is_le(I.AmlRun.steps(Hs.AmlMemHost, I.AmlM.run.go(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, n, h, m, u)), Nat.add(n, u)) == True{} : Bool}:
   match n:
     case 0n:
-      le_refl(u)
+      UL.nat_le_refl(u)
     case 1n+p:
       match h:
         case True{}:
-          le_step(u, Nat.add(p, u), le_add(p, u))
+          le_step(u, Nat.add(p, u), UL.nat_le_add(u, p))
         case False{}:
           %Equal.sym(Nat, 1n+Nat.add(p, u), Nat.add(p, 1n+u), add_succ(p, u)) : {Nat.is_le(I.AmlRun.steps(Hs.AmlMemHost, I.AmlM.run.go(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, p, I.AmlMachine.halted(Hs.AmlMemHost, I.AmlM.step(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, m)), I.AmlM.step(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, m), 1n+u)), _) == True{} : Bool}
           run_go_le(p, I.AmlMachine.halted(Hs.AmlMemHost, I.AmlM.step(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, m)), I.AmlM.step(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, m), 1n+u)
 
 def Laws.run_steps_bound(n, m):
-  %add_zero(n) : {Nat.is_le(I.AmlRun.steps(Hs.AmlMemHost, I.AmlM.run.go(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, n, I.AmlMachine.halted(Hs.AmlMemHost, m), m, 0n)), _) == True{} : Bool}
+  %UL.nat_add_zero(n) : {Nat.is_le(I.AmlRun.steps(Hs.AmlMemHost, I.AmlM.run.go(~Hs.AmlMemHost, ~Hs.AmlMemHost.io, n, I.AmlMachine.halted(Hs.AmlMemHost, m), m, 0n)), _) == True{} : Bool}
   run_go_le(n, I.AmlMachine.halted(Hs.AmlMemHost, m), m, 0n)
 
 # an outcome counts the steps of its run

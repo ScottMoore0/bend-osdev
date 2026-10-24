@@ -10,6 +10,8 @@ import ./dir.bend as DR
 import ./file.bend as FL
 import ./fence.bend as FN
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # The proofs use bytes' interface laws (octets_to_of, octets_of_to,
 # octets_append_list, octets_of_list_idempotent) where a byte string's
@@ -26,22 +28,6 @@ def bool_disc(b: Bool) -> Type:
 def bool_absurd(e: {False{} == True{} : Bool}) -> Empty:
   %e : bool_disc(_)
   Unit{}
-
-def add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
 
 def dlen(ds: List<&2, F.IsoDigit>) -> Nat:
   List.length(&2, F.IsoDigit, ds)
@@ -79,7 +65,7 @@ def read_bytes(ds: List<&2, F.IsoDigit>, +rest: List<&2, U32>, +j: Nat, +acc: Li
     case Nil{}:
       {==}
     case Con{+d, +t}:
-      %add_succ(dlen(t), j) : {F.iso.digits.read(_, B.mask(F.iso.digits.bytes(t, Con{F.IsoDigit.byte(d), rest})), Some{acc}) == F.iso.digits.read(j, B.mask(rest), Some{Con{d, List.append(&2, F.IsoDigit, t, acc)}}) : Maybe<&2, F.IsoDigitsRest>}
+      %UL.nat_add_succ(dlen(t), j) : {F.iso.digits.read(_, B.mask(F.iso.digits.bytes(t, Con{F.IsoDigit.byte(d), rest})), Some{acc}) == F.iso.digits.read(j, B.mask(rest), Some{Con{d, List.append(&2, F.IsoDigit, t, acc)}}) : Maybe<&2, F.IsoDigitsRest>}
       Equal.trans(Maybe<&2, F.IsoDigitsRest>, F.iso.digits.read(Nat.add(dlen(t), 1n+j), B.mask(F.iso.digits.bytes(t, Con{F.IsoDigit.byte(d), rest})), Some{acc}), F.iso.digits.read(1n+j, B.mask(Con{F.IsoDigit.byte(d), rest}), Some{List.append(&2, F.IsoDigit, t, acc)}), F.iso.digits.read(j, B.mask(rest), Some{Con{d, List.append(&2, F.IsoDigit, t, acc)}}), read_bytes(t, Con{F.IsoDigit.byte(d), rest}, 1n+j, acc), read_step(d, rest, j, List.append(&2, F.IsoDigit, t, acc)))
 
 def and_l(a: Bool, b: Bool, h: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
@@ -358,7 +344,7 @@ def append_nil(+ds: List<&2, F.IsoDigit>) -> {ds == List.append(&2, F.IsoDigit, 
 
 # one field: the k digits of n, then the rest
 def field_lemma(+k: Nat, +n: Nat, +rest: List<&2, U32>) -> {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.field(k, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest))) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}:
-  %Equal.trans(Nat, Nat.add(dlen(F.iso.digits.of(k, n)), 0n), dlen(F.iso.digits.of(k, n)), k, add_zero(dlen(F.iso.digits.of(k, n))), Equal.sym(Nat, k, dlen(F.iso.digits.of(k, n)), len_of(k, n))) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.got(F.iso.digits.read(_, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest)), Some{Nil{}})) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
+  %Equal.trans(Nat, Nat.add(dlen(F.iso.digits.of(k, n)), 0n), dlen(F.iso.digits.of(k, n)), k, UL.nat_add_zero(dlen(F.iso.digits.of(k, n))), Equal.sym(Nat, k, dlen(F.iso.digits.of(k, n)), len_of(k, n))) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.got(F.iso.digits.read(_, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest)), Some{Nil{}})) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
   %Equal.sym(Maybe<&2, F.IsoDigitsRest>, F.iso.digits.read(Nat.add(dlen(F.iso.digits.of(k, n)), 0n), B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest)), Some{Nil{}}), F.iso.digits.read(0n, B.mask(rest), Some{List.append(&2, F.IsoDigit, F.iso.digits.of(k, n), Nil{})}), read_bytes(F.iso.digits.of(k, n), rest, 0n, Nil{})) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.got(_) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
   %append_nil(F.iso.digits.of(k, n)) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == Done{F.IsoDigitsRest{_, B.mask(rest)}} : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
   {==}
@@ -494,13 +480,6 @@ def le_zero(+b: Nat) -> {True{} == Nat.is_le(0n, b) : Bool}:
     case 1n+p:
       {==}
 
-def le_refl(+a: Nat) -> {Nat.is_le(a, a) == True{} : Bool}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_refl(p)
-
 def lt_succ_self(+a: Nat) -> {True{} == Nat.is_lt(a, Nat.add(a, 1n)) : Bool}:
   match a:
     case 0n:
@@ -535,7 +514,7 @@ def le_lt(+i: Nat, +p: Nat, +c: Nat, h: {Nat.is_le(Nat.add(i, 1n+p), c) == True{
       le_lt(j, p, q, h)
 
 def le_next(+i: Nat, +p: Nat, +c: Nat, h: {Nat.is_le(Nat.add(i, 1n+p), c) == True{} : Bool}) -> {Nat.is_le(Nat.add(1n+i, p), c) == True{} : Bool}:
-  %add_succ(i, p) : {Nat.is_le(_, c) == True{} : Bool}
+  %UL.nat_add_succ(i, p) : {Nat.is_le(_, c) == True{} : Bool}
   h
 
 # a block inside the fence reads as on the device
@@ -633,10 +612,10 @@ def dw_eq(~D: Data, ~read_block: D -> Nat -> Result<&2, &2, BD.DevError, B.Octet
 def Laws.dir_records_fenced(d, mode, ext, size):
   %dw_eq(~BD.MemDev, ~BD.MemDev.read_block, R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n) : {_ == DR.iso.dir.walk(~FN.IsoFence, ~FN.IsoFence.read_block, R.Iso.blocks(size), FN.IsoFence{d, U32.to_nat(ext), R.Iso.blocks(size)}, mode, U32.to_nat(ext), U32.to_nat(size), 0n, Done{Nil{}}) : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
   %dw_eq(~FN.IsoFence, ~FN.IsoFence.read_block, R.Iso.blocks(size), FN.IsoFence{d, U32.to_nat(ext), R.Iso.blocks(size)}, mode, U32.to_nat(ext), U32.to_nat(size), 0n) : {DR.iso.dir.walk.ref(~BD.MemDev, ~BD.MemDev.read_block, R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n) == _ : Result<&2, &2, F.IsoError, List<&2, R.IsoDirRec>>}
-  walk_fenced(R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n, R.Iso.blocks(size), le_refl(R.Iso.blocks(size)))
+  walk_fenced(R.Iso.blocks(size), d, mode, U32.to_nat(ext), U32.to_nat(size), 0n, R.Iso.blocks(size), UL.nat_le_refl(R.Iso.blocks(size)))
 
 def Laws.stream_step_fenced(d, b, s, t, i, left):
-  %Equal.sym(Bool, Nat.is_le(Nat.add(U32.to_nat(b), i), Nat.add(U32.to_nat(b), i)), True{}, le_refl(Nat.add(U32.to_nat(b), i))) : {FL.Iso.file_next(~BD.MemDev, ~BD.MemDev.block_size, ~BD.MemDev.read_block, d, FL.IsoCursor{Con{DR.IsoExtent{b, s}, t}, i, left}) == FL.iso.file.piece.r(Con{DR.IsoExtent{b, s}, t}, i, left, F.iso.dev(FN.iso.fence.pick(Bool.and(_, Nat.is_lt(Nat.add(U32.to_nat(b), i), Nat.add(Nat.add(U32.to_nat(b), i), 1n))), d, Nat.add(U32.to_nat(b), i)))) : Result<&2, &2, F.IsoError, FL.IsoChunk>}
+  %Equal.sym(Bool, Nat.is_le(Nat.add(U32.to_nat(b), i), Nat.add(U32.to_nat(b), i)), True{}, UL.nat_le_refl(Nat.add(U32.to_nat(b), i))) : {FL.Iso.file_next(~BD.MemDev, ~BD.MemDev.block_size, ~BD.MemDev.read_block, d, FL.IsoCursor{Con{DR.IsoExtent{b, s}, t}, i, left}) == FL.iso.file.piece.r(Con{DR.IsoExtent{b, s}, t}, i, left, F.iso.dev(FN.iso.fence.pick(Bool.and(_, Nat.is_lt(Nat.add(U32.to_nat(b), i), Nat.add(Nat.add(U32.to_nat(b), i), 1n))), d, Nat.add(U32.to_nat(b), i)))) : Result<&2, &2, F.IsoError, FL.IsoChunk>}
   %lt_succ_self(Nat.add(U32.to_nat(b), i)) : {FL.Iso.file_next(~BD.MemDev, ~BD.MemDev.block_size, ~BD.MemDev.read_block, d, FL.IsoCursor{Con{DR.IsoExtent{b, s}, t}, i, left}) == FL.iso.file.piece.r(Con{DR.IsoExtent{b, s}, t}, i, left, F.iso.dev(FN.iso.fence.pick(Bool.and(True{}, _), d, Nat.add(U32.to_nat(b), i)))) : Result<&2, &2, F.IsoError, FL.IsoChunk>}
   {==}
 
@@ -682,12 +661,12 @@ def below(+k: Nat, +n: Nat, +i: Nat, hk: {allb(k, i) == True{} : Bool}, hn: {Nat
     case 1n+p 0n:
       and_l(bn(i), allb(p, 1n+i), hk)
     case 1n+p 1n+m:
-      %add_succ(m, i) : {bn(_) == True{} : Bool}
+      %UL.nat_add_succ(m, i) : {bn(_) == True{} : Bool}
       below(p, m, 1n+i, and_r(bn(i), allb(p, 1n+i), hk), hn)
 
 def byte_nat(+n: Nat, h: {Nat.is_lt(n, 256n) == True{} : Bool}) -> {n == U32.to_nat(B.byte(U32.from_nat(n))) : Nat}:
   +h2 = below(256n, n, 0n, all256(), h)
-  %add_zero(n) : {_ == U32.to_nat(B.byte(U32.from_nat(_))) : Nat}
+  %UL.nat_add_zero(n) : {_ == U32.to_nat(B.byte(U32.from_nat(_))) : Nat}
   Equal.sym(Nat, U32.to_nat(B.byte(U32.from_nat(Nat.add(n, 0n)))), Nat.add(n, 0n), nat_eq(U32.to_nat(B.byte(U32.from_nat(Nat.add(n, 0n)))), Nat.add(n, 0n), h2))
 
 def nat_eq_refl(+a: Nat) -> {True{} == Nat.is_eq(a, a) : Bool}:

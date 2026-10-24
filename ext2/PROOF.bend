@@ -24,43 +24,13 @@ import ./run.bend as RN
 import ./mkfs.bend as MK
 import ./ext2.bend as EX
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Natural numbers: the arithmetic the laws about inode numbers need, proved
 # from Base's definitions of Nat.add, Nat.mul and Nat.divmod
-
-def Ext2Proof.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Ext2Proof.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def Ext2Proof.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Ext2Proof.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def Ext2Proof.add_comm(+a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      %Ext2Proof.add_zero(b) : {_ == Nat.add(b, 0n) : Nat}
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), Ext2Proof.add_succ(b, p)) : {1n+Nat.add(p, b) == _ : Nat}
-      %Ext2Proof.add_comm(p, b) : {1n+Nat.add(p, b) == 1n+_ : Nat}
-      {==}
-
-def Ext2Proof.add_assoc(a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Ext2Proof.add_assoc(p, b, c) : {1n+Nat.add(Nat.add(p, b), c) == 1n+_ : Nat}
-      {==}
 
 def Ext2Proof.lt_irrefl(n: Nat) -> {Nat.is_lt(n, n) == False{} : Bool}:
   match n:
@@ -79,35 +49,8 @@ def Ext2Proof.lt_succ(n: Nat) -> {Nat.is_lt(n, 1n+n) == True{} : Bool}:
 # Base's division: Nat.divmod(a, 1 + bp) runs go(a, bp, 0, 0), which counts
 # m down and r up (m + r == bp throughout) and d once per full round.
 
-def Ext2Proof.dm_lhs(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> Nat:
-  Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r)))
-
-# quotient times divisor plus remainder: what went in
-def Ext2Proof.dm_sum(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m, r) == bp : Nat} -> {Ext2Proof.dm_lhs(n, m, d, r, bp) == Nat.add(n, Nat.add(Nat.mul(d, 1n+bp), r)) : Nat}:
-  match n m:
-    case 0n _:
-      h => {==}
-    case 1n+np 0n:
-      +h =>
-        +dd = Nat.mul(d, 1n+bp)
-        +x = Nat.add(Nat.add(bp, dd), 0n)
-        %Equal.sym(Nat, r, bp, h) : {Ext2Proof.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, Nat.add(dd, _)) : Nat}
-        %Ext2Proof.add_comm(bp, dd) : {Ext2Proof.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, _) : Nat}
-        %Ext2Proof.add_zero(Nat.add(bp, dd)) : {Ext2Proof.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, _) : Nat}
-        %Ext2Proof.add_succ(np, x) : {Ext2Proof.dm_lhs(1n+np, 0n, d, r, bp) == _ : Nat}
-        Ext2Proof.dm_sum(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, Ext2Proof.add_zero(r), h))
-    case 1n+np 1n+mp:
-      h =>
-        +dd = Nat.mul(d, 1n+bp)
-        %Ext2Proof.add_succ(np, Nat.add(dd, r)) : {Ext2Proof.dm_lhs(1n+np, 1n+mp, d, r, bp) == _ : Nat}
-        %Ext2Proof.add_succ(dd, r) : {Ext2Proof.dm_lhs(1n+np, 1n+mp, d, r, bp) == Nat.add(np, _) : Nat}
-        Ext2Proof.dm_sum(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, Ext2Proof.add_succ(mp, r), h))
-
-def Ext2Proof.div_mod(+k: Nat, +bp: Nat) -> {Nat.add(Nat.mul(Nat.div(k, 1n+bp), 1n+bp), Nat.mod(k, 1n+bp)) == k : Nat}:
-  Equal.trans(Nat, Ext2Proof.dm_lhs(k, bp, 0n, 0n, bp), Nat.add(k, 0n), k, Ext2Proof.dm_sum(k, bp, 0n, 0n, bp, Ext2Proof.add_zero(bp)), Ext2Proof.add_zero(k))
-
 def Laws.inode_locate_number(p, k):
-  %Equal.sym(Nat, Nat.add(Nat.mul(Nat.div(k, 1n+p), 1n+p), Nat.mod(k, 1n+p)), k, Ext2Proof.div_mod(k, p)) : {1n+_ == 1n+k : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.mul(Nat.div(k, 1n+p), 1n+p), Nat.mod(k, 1n+p)), k, UD.nat_div_mod(k, p)) : {1n+_ == 1n+k : Nat}
   {==}
 
 # the remainder is below the divisor
@@ -116,7 +59,7 @@ def Ext2Proof.lt_add(+m: Nat, +r: Nat) -> {Nat.is_lt(r, 1n+Nat.add(m, r)) == Tru
     case 0n:
       {==}
     case 1n+p:
-      %Equal.sym(Nat, Nat.add(m, 1n+p), 1n+Nat.add(m, p), Ext2Proof.add_succ(m, p)) : {Nat.is_lt(1n+p, 1n+_) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(m, 1n+p), 1n+Nat.add(m, p), UL.nat_add_succ(m, p)) : {Nat.is_lt(1n+p, 1n+_) == True{} : Bool}
       Ext2Proof.lt_add(m, p)
 
 def Ext2Proof.dm_lt(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m, r) == bp : Nat} -> {Nat.is_lt(Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+bp) == True{} : Bool}:
@@ -126,12 +69,12 @@ def Ext2Proof.dm_lt(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m,
         %h : {Nat.is_lt(r, 1n+_) == True{} : Bool}
         Ext2Proof.lt_add(m, r)
     case 1n+np 0n:
-      h => Ext2Proof.dm_lt(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, Ext2Proof.add_zero(r), h))
+      h => Ext2Proof.dm_lt(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, UL.nat_add_zero(r), h))
     case 1n+np 1n+mp:
-      h => Ext2Proof.dm_lt(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, Ext2Proof.add_succ(mp, r), h))
+      h => Ext2Proof.dm_lt(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, UL.nat_add_succ(mp, r), h))
 
 def Laws.inode_locate_index(p, k):
-  Ext2Proof.dm_lt(k, p, 0n, 0n, p, Ext2Proof.add_zero(p))
+  Ext2Proof.dm_lt(k, p, 0n, 0n, p, UL.nat_add_zero(p))
 
 # The quotient and remainder of g * (1 + bp) + i, for i <= bp, are g and i
 
@@ -149,54 +92,8 @@ def Ext2Proof.bool_clash(h: {False{} == True{} : Bool}) -> Empty:
 def Ext2Proof.ex_falso(-A: Type, e: Empty) -> A:
   match e:
 
-def Ext2Proof.no_lt_one(+np: Nat) -> {Nat.is_lt(1n+np, 1n) == True{} : Bool} -> Empty:
-  match np:
-    case 0n:
-      h => Ext2Proof.bool_clash(h)
-    case 1n+q:
-      h => Ext2Proof.bool_clash(h)
-
-# fewer steps than m left in the round: the remainder grows by n
-def Ext2Proof.dm_small(+n: Nat, +m: Nat, +d: Nat, +r: Nat) -> {Nat.is_lt(n, 1n+m) == True{} : Bool} -> {Nat.divmod.go(n, m, d, r) == (d, Nat.add(n, r)) : Nat & Nat}:
-  match n m:
-    case 0n _:
-      h => {==}
-    case 1n+np 0n:
-      h => Ext2Proof.ex_falso({Nat.divmod.go(1n+np, 0n, d, r) == (d, Nat.add(1n+np, r)) : Nat & Nat}, Ext2Proof.no_lt_one(np, h))
-    case 1n+np 1n+mp:
-      h =>
-        %Ext2Proof.add_succ(np, r) : {Nat.divmod.go(1n+np, 1n+mp, d, r) == (d, _) : Nat & Nat}
-        Ext2Proof.dm_small(np, mp, d, 1n+r, h)
-
-# finishing a round: m steps, then one more starts the next
-def Ext2Proof.dm_round(+m: Nat, +n: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(Nat.add(m, 1n+n), m, d, r) == Nat.divmod.go(n, Nat.add(m, r), 1n+d, 0n) : Nat & Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+mp:
-      %Ext2Proof.add_succ(mp, r) : {Nat.divmod.go(Nat.add(1n+mp, 1n+n), 1n+mp, d, r) == Nat.divmod.go(n, _, 1n+d, 0n) : Nat & Nat}
-      Ext2Proof.dm_round(mp, n, d, 1n+r)
-
-def Ext2Proof.dm_rounds(+g: Nat, +i: Nat, +d: Nat, +bp: Nat) -> {Nat.is_lt(i, 1n+bp) == True{} : Bool} -> {Nat.divmod.go(Nat.add(Nat.mul(g, 1n+bp), i), bp, d, 0n) == (Nat.add(g, d), i) : Nat & Nat}:
-  match g:
-    case 0n:
-      h =>
-        %Ext2Proof.add_zero(i) : {Nat.divmod.go(i, bp, d, 0n) == (d, _) : Nat & Nat}
-        Ext2Proof.dm_small(i, bp, d, 0n, h)
-    case 1n+gp:
-      h =>
-        +gg = Nat.mul(gp, 1n+bp)
-        +y = Nat.add(gg, i)
-        %Equal.sym(Nat, Nat.add(Nat.add(bp, gg), i), Nat.add(bp, y), Ext2Proof.add_assoc(bp, gg, i)) : {Nat.divmod.go(1n+_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Ext2Proof.add_succ(bp, y) : {Nat.divmod.go(_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(bp, 1n+y), bp, d, 0n), Nat.divmod.go(y, Nat.add(bp, 0n), 1n+d, 0n), Ext2Proof.dm_round(bp, y, d, 0n)) : {_ == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Equal.sym(Nat, Nat.add(bp, 0n), bp, Ext2Proof.add_zero(bp)) : {Nat.divmod.go(y, _, 1n+d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Ext2Proof.add_succ(gp, d) : {Nat.divmod.go(y, bp, 1n+d, 0n) == (_, i) : Nat & Nat}
-        Ext2Proof.dm_rounds(gp, i, 1n+d, bp, h)
-
 def Laws.inode_number_locate(p, g, i, h):
-  %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(Nat.mul(g, 1n+p), i), p, 0n, 0n), (Nat.add(g, 0n), i), Ext2Proof.dm_rounds(g, i, 0n, p, h)) : {N.Ext2InodeLoc{Pair.fst(Nat, Nat, _), Pair.snd(Nat, Nat, _)} == N.Ext2InodeLoc{g, i} : N.Ext2InodeLoc}
-  %Equal.sym(Nat, Nat.add(g, 0n), g, Ext2Proof.add_zero(g)) : {N.Ext2InodeLoc{_, i} == N.Ext2InodeLoc{g, i} : N.Ext2InodeLoc}
+  %Equal.sym(Nat & Nat, Nat.divmod(Nat.add(Nat.mul(g, 1n+p), i), 1n+p), (g, i), UD.nat_divmod_exact(g, i, p, h)) : {N.Ext2InodeLoc{Pair.fst(Nat, Nat, _), Pair.snd(Nat, Nat, _)} == N.Ext2InodeLoc{g, i} : N.Ext2InodeLoc}
   {==}
 
 # Every block the map answers is inside the filesystem: its last step,
@@ -460,7 +357,7 @@ def Ext2Proof.total_append(xs: List<&2, DW.Ext2Slot>, +ys: List<&2, DW.Ext2Slot>
       +r = DW.Ext2Slot.rec_len(x)
       +tt = DW.Ext2Slots.total(t)
       +ty = DW.Ext2Slots.total(ys)
-      %Equal.sym(Nat, Nat.add(Nat.add(r, tt), ty), Nat.add(r, Nat.add(tt, ty)), Ext2Proof.add_assoc(r, tt, ty)) : {Nat.add(r, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, t, ys))) == _ : Nat}
+      %Equal.sym(Nat, Nat.add(Nat.add(r, tt), ty), Nat.add(r, Nat.add(tt, ty)), UL.nat_add_assoc(r, tt, ty)) : {Nat.add(r, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, t, ys))) == _ : Nat}
       %Ext2Proof.total_append(t, ys) : {Nat.add(r, DW.Ext2Slots.total(List.append(&2, DW.Ext2Slot, t, ys))) == Nat.add(r, _) : Nat}
       {==}
 
@@ -470,10 +367,10 @@ def Ext2Proof.split_total(u: Bool, s: DW.Ext2Slot, n: DW.Ext2Slot) -> {DW.Ext2Sl
     case True{} DW.Ext2Slot{i, +r, f, +nm} DW.Ext2Slot{ni, nr, nf, +nnm}:
       h =>
         +a = DR.Ext2Dirent.min_rec_len(B.Octets.len(nm))
-        %Equal.sym(Nat, Nat.add(Nat.sub(r, a), 0n), Nat.sub(r, a), Ext2Proof.add_zero(Nat.sub(r, a))) : {Nat.add(a, _) == r : Nat}
+        %Equal.sym(Nat, Nat.add(Nat.sub(r, a), 0n), Nat.sub(r, a), UL.nat_add_zero(Nat.sub(r, a))) : {Nat.add(a, _) == r : Nat}
         Ext2Proof.add_sub(a, DR.Ext2Dirent.min_rec_len(B.Octets.len(nnm)), r, h)
     case False{} DW.Ext2Slot{i, +r, f, nm} DW.Ext2Slot{ni, nr, nf, nnm}:
-      h => Ext2Proof.add_zero(r)
+      h => UL.nat_add_zero(r)
 
 def Ext2Proof.cons_total(s: DW.Ext2Slot, r: Maybe<&2, List<&2, DW.Ext2Slot>>, +d: Nat) -> {Laws.Ext2Laws.total_or(DW.Ext2Slots.cons_some(s, r), Nat.add(DW.Ext2Slot.rec_len(s), d)) == Nat.add(DW.Ext2Slot.rec_len(s), Laws.Ext2Laws.total_or(r, d)) : Nat}:
   match r:
@@ -522,7 +419,7 @@ def Ext2Proof.rm_pick(b: Bool, +prev: DW.Ext2Slot, +s: DW.Ext2Slot, +t: List<&2,
         +rs = DW.Ext2Slot.rec_len(s)
         +tt = DW.Ext2Slots.total(t)
         %Equal.sym(Nat, DW.Ext2Slot.rec_len(DW.Ext2Slot.absorb(prev, s)), Nat.add(rp, rs), Ext2Proof.absorb_rec(prev, s)) : {Nat.add(_, tt) == Nat.add(rp, Nat.add(rs, tt)) : Nat}
-        Ext2Proof.add_assoc(rp, rs, tt)
+        UL.nat_add_assoc(rp, rs, tt)
     case False{}:
       ih =>
         +rp = DW.Ext2Slot.rec_len(prev)

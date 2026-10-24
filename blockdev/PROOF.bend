@@ -9,6 +9,10 @@ import ../array/PROOF.bend as APF
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BPF
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def BP.bool_t(b: Bool) -> Type:
   match b:
@@ -382,26 +386,12 @@ def IP.unword_word(b0: U32, b1: U32, b2: U32, b3: U32, -acc: List<&2, U32>) -> {
 
 # Nat facts
 
-def IP.add_zero(x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, IP.add_zero(p))
-
-def IP.add_succ(x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+y), 1n+Nat.add(p, y), IP.add_succ(p, y))
-
 def IP.add_one(+s: Nat) -> {Nat.add(s, 1n) == 1n+s : Nat}:
-  Equal.trans(Nat, Nat.add(s, 1n), 1n+Nat.add(s, 0n), 1n+s, IP.add_succ(s, 0n), Equal.cong(Nat, Nat, k => 1n+k, Nat.add(s, 0n), s, IP.add_zero(s)))
+  Equal.trans(Nat, Nat.add(s, 1n), 1n+Nat.add(s, 0n), 1n+s, UL.nat_add_succ(s, 0n), Equal.cong(Nat, Nat, k => 1n+k, Nat.add(s, 0n), s, UL.nat_add_zero(s)))
 
 def IP.add_one_r(+p: Nat, +s: Nat) -> {Nat.add(p, Nat.add(s, 1n)) == 1n+Nat.add(p, s) : Nat}:
   %Equal.sym(Nat, Nat.add(s, 1n), 1n+s, IP.add_one(s)) : {Nat.add(p, _) == 1n+Nat.add(p, s) : Nat}
-  IP.add_succ(p, s)
+  UL.nat_add_succ(p, s)
 
 def IP.le_succ(a: Nat, b: Nat) -> {Nat.is_le(1n+a, b) == Nat.is_lt(a, b) : Bool}:
   match a b:
@@ -424,13 +414,6 @@ def IP.le_lt(+a: Nat, +b: Nat, h: {Nat.is_le(1n+a, b) == True{} : Bool}) -> {Nat
 def IP.lt_le(+a: Nat, +b: Nat, h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(1n+a, b) == True{} : Bool}:
   Equal.trans(Bool, Nat.is_le(1n+a, b), Nat.is_lt(a, b), True{}, IP.le_succ(a, b), h)
 
-def IP.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      IP.le_refl(p)
-
 def IP.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
   match x:
     case 0n:
@@ -446,24 +429,6 @@ def IP.le_succ_r(x: Nat, y: Nat, h: {Nat.is_le(x, y) == True{} : Bool}) -> {Nat.
       Empty.absurd({Nat.is_le(1n+p, 1n) == True{} : Bool}, BP.ft(h))
     case 1n+p 1n+q:
       IP.le_succ_r(p, q, h)
-
-def IP.le_trans(a: Nat, b: Nat, c: Nat, h1: {Nat.is_le(a, b) == True{} : Bool}, h2: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      IP.le_zero(c)
-    case 1n+p 0n _:
-      Empty.absurd({Nat.is_le(1n+p, c) == True{} : Bool}, BP.ft(h1))
-    case 1n+p 1n+q 0n:
-      Empty.absurd({Nat.is_le(1n+p, 0n) == True{} : Bool}, BP.ft(h2))
-    case 1n+p 1n+q 1n+r:
-      IP.le_trans(p, q, r, h1, h2)
-
-def IP.le_add(+p: Nat, +s: Nat) -> {Nat.is_le(s, Nat.add(p, s)) == True{} : Bool}:
-  match p:
-    case 0n:
-      IP.le_refl(s)
-    case 1n+q:
-      IP.le_succ_r(s, Nat.add(q, s), IP.le_add(q, s))
 
 def IP.le_cancel(w: Nat, -x: Nat, -y: Nat) -> {Nat.is_le(Nat.add(w, x), Nat.add(w, y)) == Nat.is_le(x, y) : Bool}:
   match w:
@@ -553,7 +518,7 @@ def IP.pred_cong(-a: Nat, -b: Nat, e: {1n+a == 1n+b : Nat}) -> {a == b : Nat}:
 # a block of `w` slots from slot n * w ends inside 2^d when n < c and
 # c * w <= 2^d
 def IP.block_in(+n: Nat, +c: Nat, +w: Nat, +s: Nat, hn: {Nat.is_lt(n, c) == True{} : Bool}, hs: {Nat.is_le(Nat.mul(c, w), s) == True{} : Bool}) -> {Nat.is_le(Nat.add(w, Nat.mul(n, w)), s) == True{} : Bool}:
-  IP.le_trans(Nat.mul(1n+n, w), Nat.mul(c, w), s, IP.mul_mono(1n+n, c, w, IP.lt_le(n, c, hn)), hs)
+  UO.nat_le_trans(Nat.mul(1n+n, w), Nat.mul(c, w), s, IP.mul_mono(1n+n, c, w, IP.lt_le(n, c, hn)), hs)
 
 # The model: words, bytes, a block's words, writing words
 
@@ -619,11 +584,11 @@ def IP.lt_s_s1(+s: Nat) -> {Nat.is_lt(s, Nat.add(s, 1n)) == True{} : Bool}:
 
 def IP.le_s1(+x: Nat) -> {Nat.is_le(x, Nat.add(x, 1n)) == True{} : Bool}:
   %Equal.sym(Nat, Nat.add(x, 1n), 1n+x, IP.add_one(x)) : {Nat.is_le(x, _) == True{} : Bool}
-  IP.le_succ_r(x, x, IP.le_refl(x))
+  IP.le_succ_r(x, x, UL.nat_le_refl(x))
 
 # s is inside a range that starts at s and has 1 + n more slots before m
 def IP.lt_of_range(+n: Nat, +s: Nat, +m: Nat, h: {Nat.is_le(1n+Nat.add(n, s), m) == True{} : Bool}) -> {Nat.is_lt(s, m) == True{} : Bool}:
-  IP.le_lt(s, m, IP.le_trans(1n+s, 1n+Nat.add(n, s), m, IP.le_add(n, s), h))
+  IP.le_lt(s, m, UO.nat_le_trans(1n+s, 1n+Nat.add(n, s), m, UL.nat_le_add(s, n), h))
 
 def IP.cong_succ(-a: Nat, -b: Nat, e: {a == b : Nat}) -> {1n+a == 1n+b : Nat}:
   %e : {1n+a == 1n+_ : Nat}
@@ -799,7 +764,7 @@ def IP.wd_after(k: Nat, +ws: List<&2, U32>, +l: List<&2, U32>, +s: Nat, +s2: Nat
       +wl = IP.writes(ws, l, s)
       +t1 = Nat.add(s2, 1n)
       %Equal.sym(U32, A.Arrays.nth(U32, wl, s2, 0), A.Arrays.nth(U32, l, s2, 0), IP.wo_ge(ws, l, s, s2, h)) : {Con{_, IP.blk(p, wl, t1)} == Con{A.Arrays.nth(U32, l, s2, 0), IP.blk(p, l, t1)} : List<&2, U32>}
-      %Equal.sym(List<&2, U32>, IP.blk(p, wl, t1), IP.blk(p, l, t1), IP.wd_after(p, ws, l, s, t1, IP.le_trans(Nat.add(List.length(&2, U32, ws), s), s2, t1, h, IP.le_s1(s2)))) : {Con{A.Arrays.nth(U32, l, s2, 0), _} == Con{A.Arrays.nth(U32, l, s2, 0), IP.blk(p, l, t1)} : List<&2, U32>}
+      %Equal.sym(List<&2, U32>, IP.blk(p, wl, t1), IP.blk(p, l, t1), IP.wd_after(p, ws, l, s, t1, UO.nat_le_trans(Nat.add(List.length(&2, U32, ws), s), s2, t1, h, IP.le_s1(s2)))) : {Con{A.Arrays.nth(U32, l, s2, 0), _} == Con{A.Arrays.nth(U32, l, s2, 0), IP.blk(p, l, t1)} : List<&2, U32>}
       {==}
 
 # Images over a model list: reads, writes, validity
@@ -898,12 +863,12 @@ def IP.ob(bs: List<&2, B.Octets>, +k: Nat, +w: Nat, +c: Nat, +d: Nat, +l: List<&
       +ht = BP.and_r(Nat.is_eq(B.Octets.len(b), Nat.mul(w, 4n)), I.ImgDev.all_len(t, Nat.mul(w, 4n)), hal)
       +l1 = IP.writes(IP.words(B.Octets.to_list(b)), l, Nat.mul(k, w))
       +hl1 = Equal.trans(Nat, List.length(&2, U32, l1), List.length(&2, U32, l), A.Arrays.slots(d), IP.wlen(IP.words(B.Octets.to_list(b)), l, Nat.mul(k, w)), hl)
-      +hk1 = IP.le_rw_l(Nat.add(n0, 1n+k), 1n+Nat.add(n0, k), c, IP.add_succ(n0, k), hk)
+      +hk1 = IP.le_rw_l(Nat.add(n0, 1n+k), 1n+Nat.add(n0, k), c, UL.nat_add_succ(n0, k), hk)
       %Equal.sym(I.ImgDev & Result<&2, &2, D.DevError, Unit>, I.ImgDev.write_block(I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, l, 0)}, k, b), (I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, l1, 0)}, Done{Unit{}}), IP.write_model(w, c, d, l, hl, hd, hs, k, hn, b, hb)) : {I.ImgDev.of_blocks.go(t, 1n+k, I.ImgDev.of_blocks.step(_)) == I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, IP.build(t, l1, 1n+k, w), 0)} : I.ImgDev}
       IP.ob(t, 1n+k, w, c, d, l1, hl1, hd, hs, hk1, ht)
 
 def IP.le_succ_self(+k: Nat) -> {Nat.is_le(k, 1n+k) == True{} : Bool}:
-  IP.le_succ_r(k, k, IP.le_refl(k))
+  IP.le_succ_r(k, k, UL.nat_le_refl(k))
 
 # later blocks leave an earlier block's words
 def IP.bu(bs: List<&2, B.Octets>, +l: List<&2, U32>, +k: Nat, +w: Nat, +s2: Nat, +h: {Nat.is_le(Nat.add(w, s2), Nat.mul(k, w)) == True{} : Bool}) -> {IP.blk(w, IP.build(bs, l, k, w), s2) == IP.blk(w, l, s2) : List<&2, U32>}:
@@ -913,7 +878,7 @@ def IP.bu(bs: List<&2, B.Octets>, +l: List<&2, U32>, +k: Nat, +w: Nat, +s2: Nat,
     case Con{+b, t}:
       +ws = IP.words(B.Octets.to_list(b))
       +l1 = IP.writes(ws, l, Nat.mul(k, w))
-      Equal.trans(List<&2, U32>, IP.blk(w, IP.build(t, l1, 1n+k, w), s2), IP.blk(w, l1, s2), IP.blk(w, l, s2), IP.bu(t, l1, 1n+k, w, s2, IP.le_trans(Nat.add(w, s2), Nat.mul(k, w), Nat.mul(1n+k, w), h, IP.mul_mono(k, 1n+k, w, IP.le_succ_self(k)))), IP.wd_before(w, ws, l, Nat.mul(k, w), s2, h))
+      Equal.trans(List<&2, U32>, IP.blk(w, IP.build(t, l1, 1n+k, w), s2), IP.blk(w, l1, s2), IP.blk(w, l, s2), IP.bu(t, l1, 1n+k, w, s2, UO.nat_le_trans(Nat.add(w, s2), Nat.mul(k, w), Nat.mul(1n+k, w), h, IP.mul_mono(k, 1n+k, w, IP.le_succ_self(k)))), IP.wd_before(w, ws, l, Nat.mul(k, w), s2, h))
 
 # block i of a build from block k holds the words of the i-th block
 def IP.bb(bs: List<&2, B.Octets>, +l: List<&2, U32>, +k: Nat, +w: Nat, i: Nat, +hi: {Nat.is_lt(i, List.length(&2, B.Octets, bs)) == True{} : Bool}, +hal: {I.ImgDev.all_len(bs, Nat.mul(w, 4n)) == True{} : Bool}, +hlb: {Nat.is_le(Nat.mul(Nat.add(List.length(&2, B.Octets, bs), k), w), List.length(&2, U32, l)) == True{} : Bool}) -> {IP.blk(w, IP.build(bs, l, k, w), Nat.mul(Nat.add(i, k), w)) == IP.words(B.Octets.to_list(A.Arrays.nth(B.Octets, bs, i, B.Octets.empty()))) : List<&2, U32>}:
@@ -929,9 +894,9 @@ def IP.bb(bs: List<&2, B.Octets>, +l: List<&2, U32>, +k: Nat, +w: Nat, i: Nat, +
       +l1 = IP.writes(ws, l, s)
       +hw = IP.words_len(w, B.Octets.to_list(b), IP.list_len(b, w, hb))
       +hl1 = IP.wlen(ws, l, s)
-      +hle = IP.le_rw_l(Nat.add(List.length(&2, U32, ws), s), Nat.mul(1n+k, w), List.length(&2, U32, l), Equal.cong(Nat, Nat, x => Nat.add(x, s), List.length(&2, U32, ws), w, hw), IP.le_trans(Nat.mul(1n+k, w), Nat.mul(Nat.add(1n+n0, k), w), List.length(&2, U32, l), IP.mul_mono(1n+k, Nat.add(1n+n0, k), w, IP.le_add(n0, k)), hlb))
+      +hle = IP.le_rw_l(Nat.add(List.length(&2, U32, ws), s), Nat.mul(1n+k, w), List.length(&2, U32, l), Equal.cong(Nat, Nat, x => Nat.add(x, s), List.length(&2, U32, ws), w, hw), UO.nat_le_trans(Nat.mul(1n+k, w), Nat.mul(Nat.add(1n+n0, k), w), List.length(&2, U32, l), IP.mul_mono(1n+k, Nat.add(1n+n0, k), w, UL.nat_le_add(k, n0)), hlb))
       +e2 = Equal.trans(List<&2, U32>, IP.blk(w, l1, s), IP.blk(List.length(&2, U32, ws), l1, s), ws, Equal.cong(Nat, List<&2, U32>, x => IP.blk(x, l1, s), w, List.length(&2, U32, ws), Equal.sym(Nat, List.length(&2, U32, ws), w, hw)), IP.wr(ws, l, s, hle))
-      Equal.trans(List<&2, U32>, IP.blk(w, IP.build(t, l1, 1n+k, w), s), IP.blk(w, l1, s), ws, IP.bu(t, l1, 1n+k, w, s, IP.le_refl(Nat.mul(1n+k, w))), e2)
+      Equal.trans(List<&2, U32>, IP.blk(w, IP.build(t, l1, 1n+k, w), s), IP.blk(w, l1, s), ws, IP.bu(t, l1, 1n+k, w, s, UL.nat_le_refl(Nat.mul(1n+k, w))), e2)
     case Con{+b, +t} 1n+ +j:
       +n0 = List.length(&2, B.Octets, t)
       +hb = BP.and_l(Nat.is_eq(B.Octets.len(b), Nat.mul(w, 4n)), I.ImgDev.all_len(t, Nat.mul(w, 4n)), hal)
@@ -941,8 +906,8 @@ def IP.bb(bs: List<&2, B.Octets>, +l: List<&2, U32>, +k: Nat, +w: Nat, i: Nat, +
       +l1 = IP.writes(ws, l, s)
       +hw = IP.words_len(w, B.Octets.to_list(b), IP.list_len(b, w, hb))
       +hl1 = IP.wlen(ws, l, s)
-      +hlb1 = IP.le_rw_r(Nat.mul(Nat.add(n0, 1n+k), w), List.length(&2, U32, l1), List.length(&2, U32, l), hl1, IP.le_rw_l(Nat.mul(Nat.add(n0, 1n+k), w), Nat.mul(1n+Nat.add(n0, k), w), List.length(&2, U32, l), Equal.cong(Nat, Nat, x => Nat.mul(x, w), Nat.add(n0, 1n+k), 1n+Nat.add(n0, k), IP.add_succ(n0, k)), hlb))
-      %IP.add_succ(j, k) : {IP.blk(w, IP.build(t, l1, 1n+k, w), Nat.mul(_, w)) == IP.words(B.Octets.to_list(A.Arrays.nth(B.Octets, t, j, B.Octets.empty()))) : List<&2, U32>}
+      +hlb1 = IP.le_rw_r(Nat.mul(Nat.add(n0, 1n+k), w), List.length(&2, U32, l1), List.length(&2, U32, l), hl1, IP.le_rw_l(Nat.mul(Nat.add(n0, 1n+k), w), Nat.mul(1n+Nat.add(n0, k), w), List.length(&2, U32, l), Equal.cong(Nat, Nat, x => Nat.mul(x, w), Nat.add(n0, 1n+k), 1n+Nat.add(n0, k), UL.nat_add_succ(n0, k)), hlb))
+      %UL.nat_add_succ(j, k) : {IP.blk(w, IP.build(t, l1, 1n+k, w), Nat.mul(_, w)) == IP.words(B.Octets.to_list(A.Arrays.nth(B.Octets, t, j, B.Octets.empty()))) : List<&2, U32>}
       IP.bb(t, l1, 1n+k, w, j, hi, ht, hlb1)
 
 def IP.all_len_nth(bs: List<&2, B.Octets>, n: Nat, +m: Nat, hn: {Nat.is_lt(n, List.length(&2, B.Octets, bs)) == True{} : Bool}, +hal: {I.ImgDev.all_len(bs, m) == True{} : Bool}) -> {Nat.is_eq(B.Octets.len(A.Arrays.nth(B.Octets, bs, n, B.Octets.empty())), m) == True{} : Bool}:
@@ -962,9 +927,9 @@ def IP.of_blocks(+d: Nat, +w: Nat, +bs: List<&2, B.Octets>, +hd: {Nat.is_lt(d, 3
   +lf = IP.build(bs, l0, 0n, w)
   +hlf = Equal.trans(Nat, List.length(&2, U32, lf), List.length(&2, U32, l0), sd, IP.blen(bs, l0, 0n, w), hl0)
   +nb = A.Arrays.nth(B.Octets, bs, n, B.Octets.empty())
-  +hk0 = IP.le_rw_l(Nat.add(c, 0n), c, c, IP.add_zero(c), IP.le_refl(c))
-  +hlb = IP.le_rw_r(Nat.mul(Nat.add(c, 0n), w), List.length(&2, U32, l0), sd, hl0, IP.le_rw_l(Nat.mul(Nat.add(c, 0n), w), Nat.mul(c, w), sd, Equal.cong(Nat, Nat, x => Nat.mul(x, w), Nat.add(c, 0n), c, IP.add_zero(c)), hs))
-  +ebb = Equal.trans(List<&2, U32>, IP.blk(w, lf, Nat.mul(n, w)), IP.blk(w, lf, Nat.mul(Nat.add(n, 0n), w)), IP.words(B.Octets.to_list(nb)), Equal.cong(Nat, List<&2, U32>, x => IP.blk(w, lf, Nat.mul(x, w)), n, Nat.add(n, 0n), Equal.sym(Nat, Nat.add(n, 0n), n, IP.add_zero(n))), IP.bb(bs, l0, 0n, w, n, hn, hal, hlb))
+  +hk0 = IP.le_rw_l(Nat.add(c, 0n), c, c, UL.nat_add_zero(c), UL.nat_le_refl(c))
+  +hlb = IP.le_rw_r(Nat.mul(Nat.add(c, 0n), w), List.length(&2, U32, l0), sd, hl0, IP.le_rw_l(Nat.mul(Nat.add(c, 0n), w), Nat.mul(c, w), sd, Equal.cong(Nat, Nat, x => Nat.mul(x, w), Nat.add(c, 0n), c, UL.nat_add_zero(c)), hs))
+  +ebb = Equal.trans(List<&2, U32>, IP.blk(w, lf, Nat.mul(n, w)), IP.blk(w, lf, Nat.mul(Nat.add(n, 0n), w)), IP.words(B.Octets.to_list(nb)), Equal.cong(Nat, List<&2, U32>, x => IP.blk(w, lf, Nat.mul(x, w)), n, Nat.add(n, 0n), Equal.sym(Nat, Nat.add(n, 0n), n, UL.nat_add_zero(n))), IP.bb(bs, l0, 0n, w, n, hn, hal, hlb))
   %Equal.sym(Array<U32>, Array.new(U32, d, 0), A.Arrays.of_list(U32, d, l0, 0), AL.of_list_new(U32, d, 0)) : {Pair.snd(I.ImgDev, Result<&2, &2, D.DevError, B.Octets>, I.ImgDev.read_block(I.ImgDev.of_blocks.go(bs, 0n, I.ImgDev{w, c, d, _}), n)) == Done{nb} : Result<&2, &2, D.DevError, B.Octets>}
   %Equal.sym(I.ImgDev, I.ImgDev.of_blocks.go(bs, 0n, I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, l0, 0)}), I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, lf, 0)}, IP.ob(bs, 0n, w, c, d, l0, hl0, hd, hs, hk0, hal)) : {Pair.snd(I.ImgDev, Result<&2, &2, D.DevError, B.Octets>, I.ImgDev.read_block(_, n)) == Done{nb} : Result<&2, &2, D.DevError, B.Octets>}
   %Equal.sym(I.ImgDev & Result<&2, &2, D.DevError, B.Octets>, I.ImgDev.read_block(I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, lf, 0)}, n), (I.ImgDev{w, c, d, A.Arrays.of_list(U32, d, lf, 0)}, Done{B.Octets.of_list(IP.bytes(IP.blk(w, lf, Nat.mul(n, w))))}), IP.read_model(w, c, d, lf, hlf, hd, hs, n, hn)) : {Pair.snd(I.ImgDev, Result<&2, &2, D.DevError, B.Octets>, _) == Done{nb} : Result<&2, &2, D.DevError, B.Octets>}

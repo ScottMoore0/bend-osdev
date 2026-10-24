@@ -188,8 +188,7 @@ then bytes' laws (`octets_to_of`, `octets_of_list_idempotent`,
 blank `MemDev`, and an owned read across blocks.
 
 `LAWS_range.bend` (proved in `PROOF_range.bend`, its own check process; the
-division lemmas are iodev's, which has them from ext2's, as blockdev can
-import neither):
+division facts are bend-osdev-u32's laws, `LAWS_div.bend`):
 
 **What the pure helpers read, on every pure device** (any `Data` type, any
 `block_size` and `read_block`):
@@ -272,6 +271,10 @@ bytes per byte, bytes' compact storage), so large images belong in an
 `bytes` (byte strings); `array` (bend-osdev-array: `Arrays.slots` and the
 specification of a perfect array in `ImgDev.valid`, and its laws in the
 proofs). No other.
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
+`Nat` and words (`LAWS_order.bend`).
 
 ## Status
 

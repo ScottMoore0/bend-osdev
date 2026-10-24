@@ -16,6 +16,10 @@ import ./mem.bend as M
 import ./LAWS.bend as L
 import ./PROOF.bend as P
 import ./LAWS_write.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Nat
 
@@ -53,19 +57,19 @@ def IWP.eq_nat(+a: Nat, +b: Nat, +h: {Nat.is_eq(a, b) == True{} : Bool}) -> {a =
       Equal.cong(Nat, Nat, x => 1n+x, p, q, IWP.eq_nat(p, q, h))
 
 def IWP.add_one(+j: Nat) -> {Nat.add(j, 1n) == 1n+j : Nat}:
-  Equal.trans(Nat, Nat.add(j, 1n), 1n+Nat.add(j, 0n), 1n+j, P.IOP.add_succ(j, 0n), Equal.cong(Nat, Nat, x => 1n+x, Nat.add(j, 0n), j, P.IOP.add_zero(j)))
+  Equal.trans(Nat, Nat.add(j, 1n), 1n+Nat.add(j, 0n), 1n+j, UL.nat_add_succ(j, 0n), Equal.cong(Nat, Nat, x => 1n+x, Nat.add(j, 0n), j, UL.nat_add_zero(j)))
 
 # p + (j + 1) == 1 + (p + j)
 def IWP.add_one_r(+p: Nat, +j: Nat) -> {Nat.add(p, Nat.add(j, 1n)) == 1n+Nat.add(p, j) : Nat}:
   %Equal.sym(Nat, Nat.add(j, 1n), 1n+j, IWP.add_one(j)) : {Nat.add(p, _) == 1n+Nat.add(p, j) : Nat}
-  P.IOP.add_succ(p, j)
+  UL.nat_add_succ(p, j)
 
 # s is inside a range that starts at s and has 1 + n more before m
 def IWP.lt_of_range(+n: Nat, +s: Nat, +m: Nat, +h: {Nat.is_le(1n+Nat.add(n, s), m) == True{} : Bool}) -> {Nat.is_lt(s, m) == True{} : Bool}:
-  P.IOP.le_lt(s, m, P.IOP.le_trans(1n+s, 1n+Nat.add(n, s), m, P.IOP.le_rw_r(s, Nat.add(n, s), Nat.add(s, n), P.IOP.add_comm(n, s), P.IOP.le_add_r(s, n)), h))
+  P.IOP.le_lt(s, m, UO.nat_le_trans(1n+s, 1n+Nat.add(n, s), m, P.IOP.le_rw_r(s, Nat.add(n, s), Nat.add(s, n), UL.nat_add_comm(n, s), UO.nat_le_add_r(s, n)), h))
 
 def IWP.lt_to_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(a, b) == True{} : Bool}:
-  P.IOP.le_trans(a, 1n+a, b, P.IOP.le_rw_r(a, 1n+a, Nat.add(a, 1n), Equal.sym(Nat, Nat.add(a, 1n), 1n+a, IWP.add_one(a)), P.IOP.le_add_r(a, 1n)), P.IOP.lt_le(a, b, h))
+  UO.nat_le_trans(a, 1n+a, b, P.IOP.le_rw_r(a, 1n+a, Nat.add(a, 1n), Equal.sym(Nat, Nat.add(a, 1n), 1n+a, IWP.add_one(a)), UO.nat_le_add_r(a, 1n)), P.IOP.lt_le(a, b, h))
 
 # c <= x gives x < c false
 def IWP.le_not_lt(+c: Nat, +x: Nat, +h: {Nat.is_le(c, x) == True{} : Bool}) -> {Nat.is_lt(x, c) == False{} : Bool}:
@@ -103,20 +107,13 @@ def IWP.min_l(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.
     case 1n+ +p 1n+ +q:
       Equal.cong(Nat, Nat, x => 1n+x, Nat.min(p, q), p, IWP.min_l(p, q, h))
 
-def IWP.mul_zero(+a: Nat) -> {Nat.mul(a, 0n) == 0n : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      IWP.mul_zero(p)
-
 # (a + m) - m == a, and (a + b) - a == b
 def IWP.add_sub_r(+a: Nat, +m: Nat) -> {Nat.sub(Nat.add(a, m), m) == a : Nat}:
   match m:
     case 0n:
-      Equal.trans(Nat, Nat.sub(Nat.add(a, 0n), 0n), Nat.add(a, 0n), a, P.IOP.sub_zero(Nat.add(a, 0n)), P.IOP.add_zero(a))
+      Equal.trans(Nat, Nat.sub(Nat.add(a, 0n), 0n), Nat.add(a, 0n), a, P.IOP.sub_zero(Nat.add(a, 0n)), UL.nat_add_zero(a))
     case 1n+ +q:
-      %Equal.sym(Nat, Nat.add(a, 1n+q), 1n+Nat.add(a, q), P.IOP.add_succ(a, q)) : {Nat.sub(_, 1n+q) == a : Nat}
+      %Equal.sym(Nat, Nat.add(a, 1n+q), 1n+Nat.add(a, q), UL.nat_add_succ(a, q)) : {Nat.sub(_, 1n+q) == a : Nat}
       IWP.add_sub_r(a, q)
 
 def IWP.add_sub_l(+a: Nat, +b: Nat) -> {Nat.sub(Nat.add(a, b), a) == b : Nat}:
@@ -154,7 +151,7 @@ def IWP.len0(+o: B.Octets, +h: {B.Octets.len(o) == 0n : Nat}) -> {o == B.Octets.
 
 def IWP.patch_nil(+x: Nat, +o: B.Octets) -> {D.Dev.patch(x, B.Octets.empty(), o) == o : B.Octets}:
   %Equal.sym(B.Octets, B.Octets.append(B.Octets.empty(), B.Octets.drop(Nat.add(x, 0n), o)), B.Octets.drop(Nat.add(x, 0n), o), BL.octets_append_empty_l(B.Octets.drop(Nat.add(x, 0n), o))) : {B.Octets.append(B.Octets.take(x, o), _) == o : B.Octets}
-  %Equal.sym(Nat, Nat.add(x, 0n), x, P.IOP.add_zero(x)) : {B.Octets.append(B.Octets.take(x, o), B.Octets.drop(_, o)) == o : B.Octets}
+  %Equal.sym(Nat, Nat.add(x, 0n), x, UL.nat_add_zero(x)) : {B.Octets.append(B.Octets.take(x, o), B.Octets.drop(_, o)) == o : B.Octets}
   BL.octets_take_drop(x, o)
 
 # IOMem's reads are blockdev's (IOP.read_blocks and IOP.read_bytes, for
@@ -239,7 +236,7 @@ def IWP.wtail(-R: Type, k: (D.MemDev & Result<&2, &2, D.DevError, Unit>) -> IO.O
   V.IODev.unit_then(~D.MemDev, r, d2 => R2 => k2 => V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, p, d2, bs, Nat.add(j, 1n), rest)(R2, x => k2(x)))(R, k)
 
 def IWP.take_len(+bs: Nat, +p: Nat, +data: B.Octets, +hl: {B.Octets.len(data) == Nat.mul(1n+p, bs) : Nat}) -> {B.Octets.len(B.Octets.take(bs, data)) == bs : Nat}:
-  BL.octets_len_take_le(bs, data, P.IOP.le_rw_r(bs, B.Octets.len(data), Nat.add(bs, Nat.mul(p, bs)), hl, P.IOP.le_add_r(bs, Nat.mul(p, bs))))
+  BL.octets_len_take_le(bs, data, P.IOP.le_rw_r(bs, B.Octets.len(data), Nat.add(bs, Nat.mul(p, bs)), hl, UO.nat_le_add_r(bs, Nat.mul(p, bs))))
 
 def IWP.drop_len(+bs: Nat, +p: Nat, +data: B.Octets, +hl: {B.Octets.len(data) == Nat.mul(1n+p, bs) : Nat}) -> {B.Octets.len(B.Octets.drop(bs, data)) == Nat.mul(p, bs) : Nat}:
   Equal.trans(Nat, B.Octets.len(B.Octets.drop(bs, data)), Nat.sub(B.Octets.len(data), bs), Nat.mul(p, bs), BL.octets_len_drop(bs, data), Equal.trans(Nat, Nat.sub(B.Octets.len(data), bs), Nat.sub(Nat.add(bs, Nat.mul(p, bs)), bs), Nat.mul(p, bs), Equal.cong(Nat, Nat, x => Nat.sub(x, bs), B.Octets.len(data), Nat.add(bs, Nat.mul(p, bs)), hl), IWP.add_sub_l(bs, Nat.mul(p, bs))))
@@ -310,7 +307,7 @@ def IWP.wb_img(+count: Nat, +d: D.MemDev, +bs: Nat, +j: Nat, +data: B.Octets, +c
       +in_range = P.IOP.lt_rw_r(j, D.MemDev.block_count(d), c, hc, hjc)
       +ih = IWP.wb_img(p, u, bs, Nat.add(j, 1n), dr, c, BRL.valid_update(d, j, tk, hv), Equal.trans(Nat, D.MemDev.block_size(u), D.MemDev.block_size(d), bs, BDL.update_keeps_size(d, j, tk), hbs), Equal.trans(Nat, D.MemDev.block_count(u), D.MemDev.block_count(d), c, BDL.update_keeps_count(d, j, tk), hc), P.IOP.le_rw_l(Nat.add(p, Nat.add(j, 1n)), 1n+Nat.add(p, j), c, IWP.add_one_r(p, j), hr), IWP.drop_len(bs, p, data, hl))
       +eu = BRL.to_octets_update(d, j, tk, hv, len_ok, in_range)
-      +e1 = Equal.trans(Nat, Nat.mul(Nat.add(j, 1n), bs), Nat.add(Nat.mul(j, bs), Nat.mul(1n, bs)), Nat.add(Nat.mul(j, bs), B.Octets.len(tk)), P.IOP.mul_add(j, 1n, bs), Equal.cong(Nat, Nat, x => Nat.add(Nat.mul(j, bs), x), Nat.mul(1n, bs), B.Octets.len(tk), Equal.trans(Nat, Nat.mul(1n, bs), bs, B.Octets.len(tk), P.IOP.add_zero(bs), Equal.sym(Nat, B.Octets.len(tk), bs, ltk))))
+      +e1 = Equal.trans(Nat, Nat.mul(Nat.add(j, 1n), bs), Nat.add(Nat.mul(j, bs), Nat.mul(1n, bs)), Nat.add(Nat.mul(j, bs), B.Octets.len(tk)), UL.nat_add_mul(j, 1n, bs), Equal.cong(Nat, Nat, x => Nat.add(Nat.mul(j, bs), x), Nat.mul(1n, bs), B.Octets.len(tk), Equal.trans(Nat, Nat.mul(1n, bs), bs, B.Octets.len(tk), UL.nat_add_zero(bs), Equal.sym(Nat, B.Octets.len(tk), bs, ltk))))
       +hj = P.IOP.le_rw_r(Nat.mul(j, bs), B.Octets.len(img), Nat.mul(c, bs), IWP.img_len(d, bs, c, hv, hbs, hc), IWP.mul_mono(j, c, bs, IWP.lt_to_le(j, c, hjc)))
       %Equal.sym(B.Octets, D.MemDev.to_octets(IWP.wb(p, u, bs, Nat.add(j, 1n), dr)), D.Dev.patch(Nat.mul(Nat.add(j, 1n), bs), dr, D.MemDev.to_octets(u)), ih) : {_ == D.Dev.patch(Nat.mul(j, bs), data, img) : B.Octets}
       %Equal.sym(B.Octets, D.MemDev.to_octets(u), D.Dev.patch(Nat.mul(j, D.MemDev.block_size(d)), tk, img), eu) : {D.Dev.patch(Nat.mul(Nat.add(j, 1n), bs), dr, _) == D.Dev.patch(Nat.mul(j, bs), data, img) : B.Octets}
@@ -324,7 +321,7 @@ def IWP.wb_img(+count: Nat, +d: D.MemDev, +bs: Nat, +j: Nat, +data: B.Octets, +c
 def IWP.wbl(-R: Type, -k: (Result<&2, &2, D.DevError, Unit> & B.Octets) -> IO.OP<R>, +d: D.MemDev, +count: Nat, +first: Nat, +data: B.Octets, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(first, count), D.MemDev.block_count(d)) == True{} : Bool}, +hl: {B.Octets.len(data) == Nat.mul(count, D.MemDev.block_size(d)) : Nat}) -> {V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, D.MemDev.block_size(d), first, data)(R, x => k(Laws.outcome(x))) == k((Done{Unit{}}, D.Dev.patch(Nat.mul(first, D.MemDev.block_size(d)), data, D.MemDev.to_octets(d)))) : IO.OP<R>}:
   +bs = D.MemDev.block_size(d)
   +c = D.MemDev.block_count(d)
-  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, P.IOP.add_comm(count, first), hr)
+  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, UL.nat_add_comm(count, first), hr)
   +w = IWP.wb(count, d, bs, first, data)
   Equal.trans(IO.OP<R>, V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, bs, first, data)(R, x => k(Laws.outcome(x))), k(Laws.outcome((w, Done{Unit{}}))), k((Done{Unit{}}, D.Dev.patch(Nat.mul(first, bs), data, D.MemDev.to_octets(d)))), IWP.wrun(R, x => k(Laws.outcome(x)), count, d, bs, first, data, c, {==}, {==}, hr2, hl), Equal.cong(B.Octets, IO.OP<R>, z => k((Done{Unit{}}, z)), D.MemDev.to_octets(w), D.Dev.patch(Nat.mul(first, bs), data, D.MemDev.to_octets(d)), IWP.wb_img(count, d, bs, first, data, c, hv, {==}, {==}, hr2, hl)))
 
@@ -334,7 +331,7 @@ def Laws.io_mem_write_blocks(R, k, d, count, first, data, hv, hr, hl):
 def IWP.wbs(-R: Type, -k: (Bool & (Nat & Nat)) -> IO.OP<R>, +d: D.MemDev, +count: Nat, +first: Nat, +data: B.Octets, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(first, count), D.MemDev.block_count(d)) == True{} : Bool}, +hl: {B.Octets.len(data) == Nat.mul(count, D.MemDev.block_size(d)) : Nat}) -> {V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, D.MemDev.block_size(d), first, data)(R, x => k(Laws.shape(Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x)))) == k(Laws.shape(d)) : IO.OP<R>}:
   +bs = D.MemDev.block_size(d)
   +c = D.MemDev.block_count(d)
-  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, P.IOP.add_comm(count, first), hr)
+  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, UL.nat_add_comm(count, first), hr)
   +w = IWP.wb(count, d, bs, first, data)
   Equal.trans(IO.OP<R>, V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, bs, first, data)(R, x => k(Laws.shape(Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x)))), k(Laws.shape(w)), k(Laws.shape(d)), IWP.wrun(R, x => k(Laws.shape(Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x))), count, d, bs, first, data, c, {==}, {==}, hr2, hl), Equal.cong(Bool & (Nat & Nat), IO.OP<R>, z => k(z), Laws.shape(w), Laws.shape(d), IWP.wb_shape(count, d, bs, first, data, hv)))
 
@@ -345,11 +342,11 @@ def IWP.wb_read(+d: D.MemDev, +count: Nat, +first: Nat, +data: B.Octets, +hv: {D
   +bs = D.MemDev.block_size(d)
   +c = D.MemDev.block_count(d)
   +img = D.MemDev.to_octets(d)
-  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, P.IOP.add_comm(count, first), hr)
+  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, UL.nat_add_comm(count, first), hr)
   +w = IWP.wb(count, d, bs, first, data)
   +hvw = IWP.wb_valid(count, d, bs, first, data, hv)
   +hrw = P.IOP.le_rw_r(Nat.add(first, count), D.MemDev.block_count(w), c, IWP.wb_count(count, d, bs, first, data), hr)
-  +hj = P.IOP.le_rw_r(Nat.mul(first, bs), B.Octets.len(img), Nat.mul(c, bs), IWP.img_len(d, bs, c, hv, {==}, {==}), IWP.mul_mono(first, c, bs, P.IOP.le_trans(first, Nat.add(first, count), c, P.IOP.le_add_r(first, count), hr)))
+  +hj = P.IOP.le_rw_r(Nat.mul(first, bs), B.Octets.len(img), Nat.mul(c, bs), IWP.img_len(d, bs, c, hv, {==}, {==}), IWP.mul_mono(first, c, bs, UO.nat_le_trans(first, Nat.add(first, count), c, UO.nat_le_add_r(first, count), hr)))
   %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, w, count, first), Done{B.Octets.slice(Nat.mul(first, D.MemDev.block_size(w)), Nat.mul(count, D.MemDev.block_size(w)), D.MemDev.to_octets(w))}, BRL.read_blocks_mem(w, count, first, hvw, hrw)) : {_ == Done{data} : Result<&2, &2, D.DevError, B.Octets>}
   %Equal.sym(Nat, D.MemDev.block_size(w), bs, IWP.wb_size(count, d, bs, first, data)) : {Done{B.Octets.slice(Nat.mul(first, _), Nat.mul(count, _), D.MemDev.to_octets(w))} == Done{data} : Result<&2, &2, D.DevError, B.Octets>}
   %Equal.sym(B.Octets, D.MemDev.to_octets(w), D.Dev.patch(Nat.mul(first, bs), data, img), IWP.wb_img(count, d, bs, first, data, c, hv, {==}, {==}, hr2, hl)) : {Done{B.Octets.slice(Nat.mul(first, bs), Nat.mul(count, bs), _)} == Done{data} : Result<&2, &2, D.DevError, B.Octets>}
@@ -359,7 +356,7 @@ def IWP.wb_read(+d: D.MemDev, +count: Nat, +first: Nat, +data: B.Octets, +hv: {D
 def IWP.wbr(-R: Type, -k: Result<&2, &2, D.DevError, B.Octets> -> IO.OP<R>, +d: D.MemDev, +count: Nat, +first: Nat, +data: B.Octets, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(first, count), D.MemDev.block_count(d)) == True{} : Bool}, +hl: {B.Octets.len(data) == Nat.mul(count, D.MemDev.block_size(d)) : Nat}) -> {V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, D.MemDev.block_size(d), first, data)(R, x => V.IODev.read_blocks(~D.MemDev, ~M.IOMem.read_block, count, Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x), first)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y)))) == k(Done{data}) : IO.OP<R>}:
   +bs = D.MemDev.block_size(d)
   +c = D.MemDev.block_count(d)
-  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, P.IOP.add_comm(count, first), hr)
+  +hr2 = P.IOP.le_rw_l(Nat.add(count, first), Nat.add(first, count), c, UL.nat_add_comm(count, first), hr)
   +w = IWP.wb(count, d, bs, first, data)
   Equal.trans(IO.OP<R>, V.IODev.write_blocks(~D.MemDev, ~M.IOMem.write_block, count, d, bs, first, data)(R, x => V.IODev.read_blocks(~D.MemDev, ~M.IOMem.read_block, count, Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x), first)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y)))), V.IODev.read_blocks(~D.MemDev, ~M.IOMem.read_block, count, w, first)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y))), k(Done{data}), IWP.wrun(R, x => V.IODev.read_blocks(~D.MemDev, ~M.IOMem.read_block, count, Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x), first)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y))), count, d, bs, first, data, c, {==}, {==}, hr2, hl), Equal.trans(IO.OP<R>, V.IODev.read_blocks(~D.MemDev, ~M.IOMem.read_block, count, w, first)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y))), k(D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, w, count, first)), k(Done{data}), IWP.read_blocks(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y)), count, w, first), Equal.cong(Result<&2, &2, D.DevError, B.Octets>, IO.OP<R>, z => k(z), D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, w, count, first), Done{data}, IWP.wb_read(d, count, first, data, hv, hr, hl))))
 
@@ -381,7 +378,7 @@ def IWP.concat3(+a: B.Octets, +b: B.Octets, +c: B.Octets) -> {B.Octets.concat([a
 
 # a block n < c of a c-block image lies inside it
 def IWP.blk_in(+n: Nat, +bs: Nat, +c: Nat, +img: B.Octets, +hlen: {B.Octets.len(img) == Nat.mul(c, bs) : Nat}, +h: {Nat.is_lt(n, c) == True{} : Bool}) -> {Nat.is_le(Nat.add(Nat.mul(n, bs), bs), B.Octets.len(img)) == True{} : Bool}:
-  P.IOP.le_rw_l(Nat.add(Nat.mul(n, bs), bs), Nat.add(bs, Nat.mul(n, bs)), B.Octets.len(img), P.IOP.add_comm(Nat.mul(n, bs), bs), P.IOP.le_rw_r(Nat.add(bs, Nat.mul(n, bs)), B.Octets.len(img), Nat.mul(c, bs), hlen, IWP.mul_mono(1n+n, c, bs, P.IOP.lt_le(n, c, h))))
+  P.IOP.le_rw_l(Nat.add(Nat.mul(n, bs), bs), Nat.add(bs, Nat.mul(n, bs)), B.Octets.len(img), UL.nat_add_comm(Nat.mul(n, bs), bs), P.IOP.le_rw_r(Nat.add(bs, Nat.mul(n, bs)), B.Octets.len(img), Nat.mul(c, bs), hlen, IWP.mul_mono(1n+n, c, bs, P.IOP.lt_le(n, c, h))))
 
 # the bytes kept from the first block, and from the last
 def IWP.head_eq(+x: Nat, +bs: Nat, +ks: Nat, +img: B.Octets, +hks: {Nat.is_lt(ks, bs) == True{} : Bool}) -> {B.Octets.take(ks, B.Octets.slice(x, bs, img)) == B.Octets.slice(x, ks, img) : B.Octets}:
@@ -408,7 +405,7 @@ def IWP.buf_len(+bs: Nat, +ks: Nat, +ls: Nat, +cs: Nat, +h: B.Octets, +t: B.Octe
   %Equal.sym(Nat, B.Octets.len(a), ks, la) : {Nat.add(_, Nat.add(B.Octets.len(data), B.Octets.len(z))) == Nat.mul(cs, bs) : Nat}
   %Equal.sym(Nat, B.Octets.len(z), ls, lz) : {Nat.add(ks, Nat.add(B.Octets.len(data), _)) == Nat.mul(cs, bs) : Nat}
   %Equal.sym(Nat, Nat.mul(cs, bs), Nat.add(Nat.add(ks, B.Octets.len(data)), ls), hcov) : {Nat.add(ks, Nat.add(B.Octets.len(data), ls)) == _ : Nat}
-  Equal.sym(Nat, Nat.add(Nat.add(ks, B.Octets.len(data)), ls), Nat.add(ks, Nat.add(B.Octets.len(data), ls)), P.IOP.add_assoc(ks, B.Octets.len(data), ls))
+  Equal.sym(Nat, Nat.add(Nat.add(ks, B.Octets.len(data)), ls), Nat.add(ks, Nat.add(B.Octets.len(data), ls)), UL.nat_add_assoc(ks, B.Octets.len(data), ls))
 
 # the last block's kept bytes start where the data ends:
 # (fb + cp * bs) + (bs - ls) == (fb + ks) + L, when (1 + cp) * bs == (ks + L) + ls
@@ -416,14 +413,14 @@ def IWP.tail_off(+fb: Nat, +cp: Nat, +bs: Nat, +ks: Nat, +l: Nat, +ls: Nat, +hco
   +x = Nat.mul(cp, bs)
   +m = Nat.sub(bs, ls)
   +ebs = P.IOP.sub_add(bs, ls, P.IOP.lt_up(ls, bs, hls))
-  +e1 = Equal.trans(Nat, Nat.add(Nat.add(x, m), ls), Nat.add(x, Nat.add(m, ls)), Nat.add(Nat.add(ks, l), ls), P.IOP.add_assoc(x, m, ls), Equal.trans(Nat, Nat.add(x, Nat.add(m, ls)), Nat.add(x, bs), Nat.add(Nat.add(ks, l), ls), Equal.cong(Nat, Nat, z => Nat.add(x, z), Nat.add(m, ls), bs, ebs), Equal.trans(Nat, Nat.add(x, bs), Nat.add(bs, x), Nat.add(Nat.add(ks, l), ls), P.IOP.add_comm(x, bs), hcov)))
+  +e1 = Equal.trans(Nat, Nat.add(Nat.add(x, m), ls), Nat.add(x, Nat.add(m, ls)), Nat.add(Nat.add(ks, l), ls), UL.nat_add_assoc(x, m, ls), Equal.trans(Nat, Nat.add(x, Nat.add(m, ls)), Nat.add(x, bs), Nat.add(Nat.add(ks, l), ls), Equal.cong(Nat, Nat, z => Nat.add(x, z), Nat.add(m, ls), bs, ebs), Equal.trans(Nat, Nat.add(x, bs), Nat.add(bs, x), Nat.add(Nat.add(ks, l), ls), UL.nat_add_comm(x, bs), hcov)))
   +e2 = P.IOP.add_cancel(ls, Nat.add(x, m), Nat.add(ks, l), e1)
-  Equal.trans(Nat, Nat.add(Nat.add(fb, x), m), Nat.add(fb, Nat.add(x, m)), Nat.add(Nat.add(fb, ks), l), P.IOP.add_assoc(fb, x, m), Equal.trans(Nat, Nat.add(fb, Nat.add(x, m)), Nat.add(fb, Nat.add(ks, l)), Nat.add(Nat.add(fb, ks), l), Equal.cong(Nat, Nat, z => Nat.add(fb, z), Nat.add(x, m), Nat.add(ks, l), e2), Equal.sym(Nat, Nat.add(Nat.add(fb, ks), l), Nat.add(fb, Nat.add(ks, l)), P.IOP.add_assoc(fb, ks, l))))
+  Equal.trans(Nat, Nat.add(Nat.add(fb, x), m), Nat.add(fb, Nat.add(x, m)), Nat.add(Nat.add(fb, ks), l), UL.nat_add_assoc(fb, x, m), Equal.trans(Nat, Nat.add(fb, Nat.add(x, m)), Nat.add(fb, Nat.add(ks, l)), Nat.add(Nat.add(fb, ks), l), Equal.cong(Nat, Nat, z => Nat.add(fb, z), Nat.add(x, m), Nat.add(ks, l), e2), Equal.sym(Nat, Nat.add(Nat.add(fb, ks), l), Nat.add(fb, Nat.add(ks, l)), UL.nat_add_assoc(fb, ks, l))))
 
 # the patched span lies inside the image
 def IWP.keep_le(+f: Nat, +cs: Nat, +bs: Nat, +ks: Nat, +l: Nat, +ls: Nat, +c: Nat, +img: B.Octets, +hcov: {Nat.mul(cs, bs) == Nat.add(Nat.add(ks, l), ls) : Nat}, +hw: {Nat.is_le(Nat.add(f, cs), c) == True{} : Bool}, +hlen: {B.Octets.len(img) == Nat.mul(c, bs) : Nat}) -> {Nat.is_le(Nat.add(Nat.add(Nat.add(Nat.mul(f, bs), ks), l), ls), B.Octets.len(img)) == True{} : Bool}:
   +fb = Nat.mul(f, bs)
-  +e = Equal.trans(Nat, Nat.add(Nat.add(Nat.add(fb, ks), l), ls), Nat.add(Nat.add(fb, Nat.add(ks, l)), ls), Nat.mul(Nat.add(f, cs), bs), Equal.cong(Nat, Nat, z => Nat.add(z, ls), Nat.add(Nat.add(fb, ks), l), Nat.add(fb, Nat.add(ks, l)), P.IOP.add_assoc(fb, ks, l)), Equal.trans(Nat, Nat.add(Nat.add(fb, Nat.add(ks, l)), ls), Nat.add(fb, Nat.add(Nat.add(ks, l), ls)), Nat.mul(Nat.add(f, cs), bs), P.IOP.add_assoc(fb, Nat.add(ks, l), ls), Equal.trans(Nat, Nat.add(fb, Nat.add(Nat.add(ks, l), ls)), Nat.add(fb, Nat.mul(cs, bs)), Nat.mul(Nat.add(f, cs), bs), Equal.cong(Nat, Nat, z => Nat.add(fb, z), Nat.add(Nat.add(ks, l), ls), Nat.mul(cs, bs), Equal.sym(Nat, Nat.mul(cs, bs), Nat.add(Nat.add(ks, l), ls), hcov)), Equal.sym(Nat, Nat.mul(Nat.add(f, cs), bs), Nat.add(fb, Nat.mul(cs, bs)), P.IOP.mul_add(f, cs, bs)))))
+  +e = Equal.trans(Nat, Nat.add(Nat.add(Nat.add(fb, ks), l), ls), Nat.add(Nat.add(fb, Nat.add(ks, l)), ls), Nat.mul(Nat.add(f, cs), bs), Equal.cong(Nat, Nat, z => Nat.add(z, ls), Nat.add(Nat.add(fb, ks), l), Nat.add(fb, Nat.add(ks, l)), UL.nat_add_assoc(fb, ks, l)), Equal.trans(Nat, Nat.add(Nat.add(fb, Nat.add(ks, l)), ls), Nat.add(fb, Nat.add(Nat.add(ks, l), ls)), Nat.mul(Nat.add(f, cs), bs), UL.nat_add_assoc(fb, Nat.add(ks, l), ls), Equal.trans(Nat, Nat.add(fb, Nat.add(Nat.add(ks, l), ls)), Nat.add(fb, Nat.mul(cs, bs)), Nat.mul(Nat.add(f, cs), bs), Equal.cong(Nat, Nat, z => Nat.add(fb, z), Nat.add(Nat.add(ks, l), ls), Nat.mul(cs, bs), Equal.sym(Nat, Nat.mul(cs, bs), Nat.add(Nat.add(ks, l), ls), hcov)), Equal.sym(Nat, Nat.mul(Nat.add(f, cs), bs), Nat.add(fb, Nat.mul(cs, bs)), UL.nat_add_mul(f, cs, bs)))))
   P.IOP.le_rw_l(Nat.add(Nat.add(Nat.add(fb, ks), l), ls), Nat.mul(Nat.add(f, cs), bs), B.Octets.len(img), e, P.IOP.le_rw_r(Nat.mul(Nat.add(f, cs), bs), B.Octets.len(img), Nat.mul(c, bs), hlen, IWP.mul_mono(Nat.add(f, cs), c, bs, hw)))
 
 # a block of a valid device, with its block size named
@@ -480,7 +477,7 @@ def IWP.f_ecs(+bp: Nat, +off: Nat, +data: B.Octets, +ee: {Nat.is_eq(B.Octets.len
   +ls = S.IOSpan.slack(sp)
   +cs = S.IOSpan.count(sp)
   +lp = P.IOP.pred(l)
-  IWP.succ_of(cs, Nat.add(Nat.add(ks, lp), ls), 1n+bp, Equal.trans(Nat, Nat.mul(cs, 1n+bp), Nat.add(Nat.add(ks, l), ls), 1n+Nat.add(Nat.add(ks, lp), ls), L.span_cover(bp, off, l), Equal.trans(Nat, Nat.add(Nat.add(ks, l), ls), Nat.add(Nat.add(ks, 1n+lp), ls), 1n+Nat.add(Nat.add(ks, lp), ls), Equal.cong(Nat, Nat, x => Nat.add(Nat.add(ks, x), ls), l, 1n+lp, IWP.nz(l, ee)), Equal.cong(Nat, Nat, x => Nat.add(x, ls), Nat.add(ks, 1n+lp), 1n+Nat.add(ks, lp), P.IOP.add_succ(ks, lp)))))
+  IWP.succ_of(cs, Nat.add(Nat.add(ks, lp), ls), 1n+bp, Equal.trans(Nat, Nat.mul(cs, 1n+bp), Nat.add(Nat.add(ks, l), ls), 1n+Nat.add(Nat.add(ks, lp), ls), L.span_cover(bp, off, l), Equal.trans(Nat, Nat.add(Nat.add(ks, l), ls), Nat.add(Nat.add(ks, 1n+lp), ls), 1n+Nat.add(Nat.add(ks, lp), ls), Equal.cong(Nat, Nat, x => Nat.add(Nat.add(ks, x), ls), l, 1n+lp, IWP.nz(l, ee)), Equal.cong(Nat, Nat, x => Nat.add(x, ls), Nat.add(ks, 1n+lp), 1n+Nat.add(ks, lp), UL.nat_add_succ(ks, lp)))))
 
 # the last block of the span is first + pred(count)
 def IWP.f_last(+f: Nat, +cs: Nat, +ecs: {cs == 1n+P.IOP.pred(cs) : Nat}) -> {Nat.add(f, Nat.sub(cs, 1n)) == Nat.add(f, P.IOP.pred(cs)) : Nat}:
@@ -489,10 +486,10 @@ def IWP.f_last(+f: Nat, +cs: Nat, +ecs: {cs == 1n+P.IOP.pred(cs) : Nat}) -> {Nat
 
 # first + count <= c, with count == 1 + cp, is 1 + (first + cp) <= c
 def IWP.f_hfc(+f: Nat, +cs: Nat, +c: Nat, +ecs: {cs == 1n+P.IOP.pred(cs) : Nat}, +hw: {Nat.is_le(Nat.add(f, cs), c) == True{} : Bool}) -> {Nat.is_le(1n+Nat.add(f, P.IOP.pred(cs)), c) == True{} : Bool}:
-  P.IOP.le_rw_l(1n+Nat.add(f, P.IOP.pred(cs)), Nat.add(f, cs), c, Equal.trans(Nat, 1n+Nat.add(f, P.IOP.pred(cs)), Nat.add(f, 1n+P.IOP.pred(cs)), Nat.add(f, cs), Equal.sym(Nat, Nat.add(f, 1n+P.IOP.pred(cs)), 1n+Nat.add(f, P.IOP.pred(cs)), P.IOP.add_succ(f, P.IOP.pred(cs))), Equal.cong(Nat, Nat, x => Nat.add(f, x), 1n+P.IOP.pred(cs), cs, Equal.sym(Nat, cs, 1n+P.IOP.pred(cs), ecs))), hw)
+  P.IOP.le_rw_l(1n+Nat.add(f, P.IOP.pred(cs)), Nat.add(f, cs), c, Equal.trans(Nat, 1n+Nat.add(f, P.IOP.pred(cs)), Nat.add(f, 1n+P.IOP.pred(cs)), Nat.add(f, cs), Equal.sym(Nat, Nat.add(f, 1n+P.IOP.pred(cs)), 1n+Nat.add(f, P.IOP.pred(cs)), UL.nat_add_succ(f, P.IOP.pred(cs))), Equal.cong(Nat, Nat, x => Nat.add(f, x), 1n+P.IOP.pred(cs), cs, Equal.sym(Nat, cs, 1n+P.IOP.pred(cs), ecs))), hw)
 
 def IWP.f_inf(+f: Nat, +cp: Nat, +c: Nat, +h: {Nat.is_le(1n+Nat.add(f, cp), c) == True{} : Bool}) -> {Nat.is_lt(f, c) == True{} : Bool}:
-  P.IOP.le_lt(f, c, P.IOP.le_trans(1n+f, 1n+Nat.add(f, cp), c, P.IOP.le_add_r(f, cp), h))
+  P.IOP.le_lt(f, c, UO.nat_le_trans(1n+f, 1n+Nat.add(f, cp), c, UO.nat_le_add_r(f, cp), h))
 
 # The run of a nonempty write inside a valid device of 1 + bp byte blocks:
 # both edge blocks read whole, then the span written
@@ -519,7 +516,7 @@ def IWP.wreal(-R: Type, -k: (D.MemDev & Result<&2, &2, D.DevError, Unit>) -> IO.
   +hh = BL.octets_len_slice_le(Nat.mul(f, bs), bs, img, IWP.blk_in(f, bs, c, img, hlen, inf))
   +ht = BL.octets_len_slice_le(Nat.mul(last, bs), bs, img, IWP.blk_in(last, bs, c, img, hlen, inl))
   +hlb = IWP.buf_len(bs, ks, ls, cs, hd, tl, data, hh, ht, L.span_skip(bp, off, l), L.span_slack(bp, off, l), L.span_cover(bp, off, l))
-  +hrw = P.IOP.le_rw_l(Nat.add(cs, f), Nat.add(f, cs), c, P.IOP.add_comm(cs, f), hw)
+  +hrw = P.IOP.le_rw_l(Nat.add(cs, f), Nat.add(f, cs), c, UL.nat_add_comm(cs, f), hw)
   %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(d, f), Done{hd}, IWP.rb(d, f, bp, ebs, hv, inf)) : {IWP.r1(R, k, (d, _), bp, off, data) == k((IWP.wdev(False{}, d, bp, off, data), Done{Unit{}})) : IO.OP<R>}
   %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(d, last), Done{tl}, IWP.rb(d, last, bp, ebs, hv, inl)) : {IWP.r2(R, k, (d, _), hd, bp, off, data) == k((IWP.wdev(False{}, d, bp, off, data), Done{Unit{}})) : IO.OP<R>}
   IWP.wrun(R, k, cs, d, bs, f, IWP.buf(d, bp, off, data), c, ebs, {==}, hrw, hlb)
@@ -551,12 +548,12 @@ def IWP.wreal_img(+d: D.MemDev, +bp: Nat, +off: Nat, +data: B.Octets, +ebs: {D.M
   +hh = BL.octets_len_slice_le(fb, bs, img, IWP.blk_in(f, bs, c, img, hlen, inf))
   +ht = BL.octets_len_slice_le(Nat.mul(last, bs), bs, img, IWP.blk_in(last, bs, c, img, hlen, inl))
   +hlb = IWP.buf_len(bs, ks, ls, cs, hd, tl, data, hh, ht, L.span_skip(bp, off, l), L.span_slack(bp, off, l), L.span_cover(bp, off, l))
-  +hrw = P.IOP.le_rw_l(Nat.add(cs, f), Nat.add(f, cs), c, P.IOP.add_comm(cs, f), hw)
+  +hrw = P.IOP.le_rw_l(Nat.add(cs, f), Nat.add(f, cs), c, UL.nat_add_comm(cs, f), hw)
   +buf = IWP.buf(d, bp, off, data)
   +s1 = B.Octets.slice(fb, ks, img)
   +s2 = B.Octets.slice(Nat.add(Nat.add(fb, ks), l), ls, img)
   +hcov1 = Equal.trans(Nat, Nat.mul(1n+cp, bs), Nat.mul(cs, bs), Nat.add(Nat.add(ks, l), ls), Equal.cong(Nat, Nat, x => Nat.mul(x, bs), 1n+cp, cs, Equal.sym(Nat, cs, 1n+cp, ecs)), L.span_cover(bp, off, l))
-  +eoff2 = Equal.trans(Nat, Nat.add(Nat.mul(last, bs), m), Nat.add(Nat.add(fb, Nat.mul(cp, bs)), m), Nat.add(Nat.add(fb, ks), l), Equal.cong(Nat, Nat, x => Nat.add(x, m), Nat.mul(last, bs), Nat.add(fb, Nat.mul(cp, bs)), Equal.trans(Nat, Nat.mul(last, bs), Nat.mul(Nat.add(f, cp), bs), Nat.add(fb, Nat.mul(cp, bs)), Equal.cong(Nat, Nat, x => Nat.mul(x, bs), last, Nat.add(f, cp), IWP.f_last(f, cs, ecs)), P.IOP.mul_add(f, cp, bs))), IWP.tail_off(fb, cp, bs, ks, l, ls, hcov1, L.span_slack(bp, off, l)))
+  +eoff2 = Equal.trans(Nat, Nat.add(Nat.mul(last, bs), m), Nat.add(Nat.add(fb, Nat.mul(cp, bs)), m), Nat.add(Nat.add(fb, ks), l), Equal.cong(Nat, Nat, x => Nat.add(x, m), Nat.mul(last, bs), Nat.add(fb, Nat.mul(cp, bs)), Equal.trans(Nat, Nat.mul(last, bs), Nat.mul(Nat.add(f, cp), bs), Nat.add(fb, Nat.mul(cp, bs)), Equal.cong(Nat, Nat, x => Nat.mul(x, bs), last, Nat.add(f, cp), IWP.f_last(f, cs, ecs)), UL.nat_add_mul(f, cp, bs))), IWP.tail_off(fb, cp, bs, ks, l, ls, hcov1, L.span_slack(bp, off, l)))
   +ebuf = Equal.trans(B.Octets, buf, B.Octets.append(B.Octets.take(ks, hd), B.Octets.append(data, B.Octets.drop(m, tl))), B.Octets.append(s1, B.Octets.append(data, s2)), IWP.concat3(B.Octets.take(ks, hd), data, B.Octets.drop(m, tl)), Equal.trans(B.Octets, B.Octets.append(B.Octets.take(ks, hd), B.Octets.append(data, B.Octets.drop(m, tl))), B.Octets.append(s1, B.Octets.append(data, B.Octets.drop(m, tl))), B.Octets.append(s1, B.Octets.append(data, s2)), Equal.cong(B.Octets, B.Octets, x => B.Octets.append(x, B.Octets.append(data, B.Octets.drop(m, tl))), B.Octets.take(ks, hd), s1, IWP.head_eq(fb, bs, ks, img, L.span_skip(bp, off, l))), Equal.cong(B.Octets, B.Octets, x => B.Octets.append(s1, B.Octets.append(data, x)), B.Octets.drop(m, tl), s2, Equal.trans(B.Octets, B.Octets.drop(m, tl), B.Octets.slice(Nat.add(Nat.mul(last, bs), m), ls, img), s2, IWP.tail_eq(Nat.mul(last, bs), bs, ls, img, L.span_slack(bp, off, l)), Equal.cong(Nat, B.Octets, x => B.Octets.slice(x, ls, img), Nat.add(Nat.mul(last, bs), m), Nat.add(Nat.add(fb, ks), l), eoff2)))))
   +hkeep = IWP.keep_le(f, cs, bs, ks, l, ls, c, img, L.span_cover(bp, off, l), hw, hlen)
   Equal.trans(B.Octets, D.MemDev.to_octets(IWP.wb(cs, d, bs, f, buf)), D.Dev.patch(fb, buf, img), D.Dev.patch(off, data, img), IWP.wb_img(cs, d, bs, f, buf, c, hv, ebs, {==}, hrw, hlb), Equal.trans(B.Octets, D.Dev.patch(fb, buf, img), D.Dev.patch(fb, B.Octets.append(s1, B.Octets.append(data, s2)), img), D.Dev.patch(off, data, img), Equal.cong(B.Octets, B.Octets, x => D.Dev.patch(fb, x, img), buf, B.Octets.append(s1, B.Octets.append(data, s2)), ebuf), Equal.trans(B.Octets, D.Dev.patch(fb, B.Octets.append(s1, B.Octets.append(data, s2)), img), D.Dev.patch(Nat.add(fb, ks), data, img), D.Dev.patch(off, data, img), BRL.patch_keep(fb, ks, data, ls, img, hkeep), Equal.cong(Nat, B.Octets, x => D.Dev.patch(x, data, img), Nat.add(fb, ks), off, L.span_start(bp, off, l)))))
@@ -566,9 +563,9 @@ def IWP.bs0(+d: D.MemDev, +off: Nat, +data: B.Octets, +ebs: {D.MemDev.block_size
   +l = B.Octets.len(data)
   +lp = P.IOP.pred(l)
   +c = D.MemDev.block_count(d)
-  +e0 = Equal.trans(Nat, 0n, Nat.mul(c, 0n), Nat.mul(c, D.MemDev.block_size(d)), Equal.sym(Nat, Nat.mul(c, 0n), 0n, IWP.mul_zero(c)), Equal.cong(Nat, Nat, x => Nat.mul(c, x), 0n, D.MemDev.block_size(d), Equal.sym(Nat, D.MemDev.block_size(d), 0n, ebs)))
+  +e0 = Equal.trans(Nat, 0n, Nat.mul(c, 0n), Nat.mul(c, D.MemDev.block_size(d)), Equal.sym(Nat, Nat.mul(c, 0n), 0n, UL.nat_mul_zero(c)), Equal.cong(Nat, Nat, x => Nat.mul(c, x), 0n, D.MemDev.block_size(d), Equal.sym(Nat, D.MemDev.block_size(d), 0n, ebs)))
   +h1 = P.IOP.le_rw_l(Nat.add(off, 1n+lp), Nat.add(off, l), 0n, Equal.cong(Nat, Nat, x => Nat.add(off, x), 1n+lp, l, Equal.sym(Nat, l, 1n+lp, IWP.nz(l, ee))), P.IOP.le_rw_r(Nat.add(off, l), 0n, Nat.mul(c, D.MemDev.block_size(d)), e0, hr))
-  P.IOP.bool_clash(P.IOP.le_rw_l(1n+Nat.add(off, lp), Nat.add(off, 1n+lp), 0n, Equal.sym(Nat, Nat.add(off, 1n+lp), 1n+Nat.add(off, lp), P.IOP.add_succ(off, lp)), h1))
+  P.IOP.bool_clash(P.IOP.le_rw_l(1n+Nat.add(off, lp), Nat.add(off, 1n+lp), 0n, Equal.sym(Nat, Nat.add(off, 1n+lp), 1n+Nat.add(off, lp), UL.nat_add_succ(off, lp)), h1))
 
 # Every write inside a valid device: the run, and the device it leaves
 
@@ -670,7 +667,7 @@ def IWP.w_read(+d: D.MemDev, +off: Nat, +data: B.Octets, +i: Nat, +n: Nat, +hv: 
 
 # the image's length bounds the write
 def IWP.w_off(+d: D.MemDev, +off: Nat, +data: B.Octets, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(off, B.Octets.len(data)), Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d))) == True{} : Bool}) -> {Nat.is_le(off, B.Octets.len(D.MemDev.to_octets(d))) == True{} : Bool}:
-  P.IOP.le_trans(off, Nat.add(off, B.Octets.len(data)), B.Octets.len(D.MemDev.to_octets(d)), P.IOP.le_add_r(off, B.Octets.len(data)), P.IOP.le_rw_r(Nat.add(off, B.Octets.len(data)), B.Octets.len(D.MemDev.to_octets(d)), Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d)), BRL.to_octets_len(d, hv), hr))
+  UO.nat_le_trans(off, Nat.add(off, B.Octets.len(data)), B.Octets.len(D.MemDev.to_octets(d)), UO.nat_le_add_r(off, B.Octets.len(data)), P.IOP.le_rw_r(Nat.add(off, B.Octets.len(data)), B.Octets.len(D.MemDev.to_octets(d)), Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d)), BRL.to_octets_len(d, hv), hr))
 
 # write_bytes then a read: the read of the device written
 def IWP.w_then(-R: Type, -k: Result<&2, &2, D.DevError, B.Octets> -> IO.OP<R>, +d: D.MemDev, +off: Nat, +data: B.Octets, +i: Nat, +n: Nat, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(off, B.Octets.len(data)), Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d))) == True{} : Bool}) -> {V.IODev.write_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, ~M.IOMem.write_block, d, off, data)(R, x => V.IODev.read_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x), i, n)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y)))) == k(D.Dev.read_bytes(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, IWP.wdev(Nat.is_eq(B.Octets.len(data), 0n), d, P.IOP.pred(D.MemDev.block_size(d)), off, data), i, n)) : IO.OP<R>}:
@@ -697,7 +694,7 @@ def IWP.l_out(-R: Type, -k: Result<&2, &2, D.DevError, B.Octets> -> IO.OP<R>, +d
 
 def IWP.l_before(-R: Type, -k: Result<&2, &2, D.DevError, B.Octets> -> IO.OP<R>, +d: D.MemDev, +off: Nat, +data: B.Octets, +i: Nat, +n: Nat, +hv: {D.MemDev.valid(d) == True{} : Bool}, +hr: {Nat.is_le(Nat.add(off, B.Octets.len(data)), Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d))) == True{} : Bool}, +h: {Nat.is_le(Nat.add(i, n), off) == True{} : Bool}) -> {V.IODev.write_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, ~M.IOMem.write_block, d, off, data)(R, x => V.IODev.read_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, Pair.fst(D.MemDev, Result<&2, &2, D.DevError, Unit>, x), i, n)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y)))) == V.IODev.read_bytes(~D.MemDev, ~M.IOMem.block_size, ~M.IOMem.read_block, d, i, n)(R, y => k(Pair.snd(D.MemDev, Result<&2, &2, D.DevError, B.Octets>, y))) : IO.OP<R>}:
   +mx = Nat.mul(D.MemDev.block_count(d), D.MemDev.block_size(d))
-  +hi = P.IOP.le_trans(Nat.add(i, n), off, mx, h, P.IOP.le_trans(off, Nat.add(off, B.Octets.len(data)), mx, P.IOP.le_add_r(off, B.Octets.len(data)), hr))
+  +hi = UO.nat_le_trans(Nat.add(i, n), off, mx, h, UO.nat_le_trans(off, Nat.add(off, B.Octets.len(data)), mx, UO.nat_le_add_r(off, B.Octets.len(data)), hr))
   IWP.l_out(R, k, d, off, data, i, n, hv, hr, hi, BRL.patch_before(i, n, off, data, D.MemDev.to_octets(d), h, IWP.w_off(d, off, data, hv, hr)))
 
 def Laws.io_mem_write_before(R, k, d, off, data, i, n, hv, hr, h):
@@ -731,7 +728,7 @@ def IWP.past(z: Bool, -R: Type, -k: (D.MemDev & Bool) -> IO.OP<R>, +d: D.MemDev,
       +cp = P.IOP.pred(cs)
       +last = Nat.add(f, Nat.sub(cs, 1n))
       +ecs = IWP.f_ecs(bp, off, data, ee)
-      +h1 = P.IOP.lt_rw_r(c, 1n+Nat.add(f, cp), Nat.add(f, cs), Equal.trans(Nat, 1n+Nat.add(f, cp), Nat.add(f, 1n+cp), Nat.add(f, cs), Equal.sym(Nat, Nat.add(f, 1n+cp), 1n+Nat.add(f, cp), P.IOP.add_succ(f, cp)), Equal.cong(Nat, Nat, x => Nat.add(f, x), 1n+cp, cs, Equal.sym(Nat, cs, 1n+cp, ecs))), L.span_past(bp, off, l, c, past))
+      +h1 = P.IOP.lt_rw_r(c, 1n+Nat.add(f, cp), Nat.add(f, cs), Equal.trans(Nat, 1n+Nat.add(f, cp), Nat.add(f, 1n+cp), Nat.add(f, cs), Equal.sym(Nat, Nat.add(f, 1n+cp), 1n+Nat.add(f, cp), UL.nat_add_succ(f, cp)), Equal.cong(Nat, Nat, x => Nat.add(f, x), 1n+cp, cs, Equal.sym(Nat, cs, 1n+cp, ecs))), L.span_past(bp, off, l, c, past))
       +hle = P.IOP.le_rw_r(c, last, Nat.add(f, cp), IWP.f_last(f, cs, ecs), P.IOP.lt_succ_le(c, Nat.add(f, cp), h1))
       +hd = B.Octets.slice(Nat.mul(f, bs), bs, D.MemDev.to_octets(d))
       %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(d, f), Done{hd}, IWP.rb(d, f, bp, ebs, hv, ez)) : {IWP.r1(R, x => k(Laws.failed(x)), (d, _), bp, off, data) == k((d, True{})) : IO.OP<R>}

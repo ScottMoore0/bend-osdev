@@ -173,6 +173,11 @@ and 250 small ones) as a regression test.
 * `Cpio.build` does not refuse an entry whose data is 2^32 bytes or longer, or
   whose name is `TRAILER!!!`; such an archive does not parse back.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

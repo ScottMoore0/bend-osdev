@@ -9,43 +9,15 @@ import ./blockdev.bend as D
 import ./LAWS.bend as DL
 import ./PROOF.bend as P
 import ./LAWS_range.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Natural numbers, from Base's definitions of Nat.add, Nat.sub, Nat.mul and
 # Nat.divmod
-
-def BR.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %BR.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def BR.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %BR.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def BR.add_comm(+a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      %BR.add_zero(b) : {_ == Nat.add(b, 0n) : Nat}
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), BR.add_succ(b, p)) : {1n+Nat.add(p, b) == _ : Nat}
-      %BR.add_comm(p, b) : {1n+Nat.add(p, b) == 1n+_ : Nat}
-      {==}
-
-def BR.add_assoc(a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %BR.add_assoc(p, b, c) : {1n+Nat.add(Nat.add(p, b), c) == 1n+_ : Nat}
-      {==}
 
 def BR.sub_zero(a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
   match a:
@@ -53,24 +25,6 @@ def BR.sub_zero(a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
       {==}
     case 1n+p:
       {==}
-
-def BR.pred(n: Nat) -> Nat:
-  match n:
-    case 0n:
-      0n
-    case 1n+p:
-      p
-
-def BR.succ_inj(+x: Nat, +y: Nat, e: {1n+x == 1n+y : Nat}) -> {x == y : Nat}:
-  Equal.cong(Nat, Nat, BR.pred, 1n+x, 1n+y, e)
-
-# a + r == b + r gives a == b
-def BR.add_cancel(+r: Nat, +a: Nat, +b: Nat, e: {Nat.add(a, r) == Nat.add(b, r) : Nat}) -> {a == b : Nat}:
-  match r:
-    case 0n:
-      Equal.trans(Nat, a, Nat.add(b, 0n), b, Equal.trans(Nat, a, Nat.add(a, 0n), Nat.add(b, 0n), Equal.sym(Nat, Nat.add(a, 0n), a, BR.add_zero(a)), e), BR.add_zero(b))
-    case 1n+q:
-      BR.add_cancel(q, a, b, BR.succ_inj(Nat.add(a, q), Nat.add(b, q), Equal.trans(Nat, 1n+Nat.add(a, q), Nat.add(a, 1n+q), 1n+Nat.add(b, q), Equal.sym(Nat, Nat.add(a, 1n+q), 1n+Nat.add(a, q), BR.add_succ(a, q)), Equal.trans(Nat, Nat.add(a, 1n+q), Nat.add(b, 1n+q), 1n+Nat.add(b, q), e, BR.add_succ(b, q)))))
 
 def BR.lt_succ(n: Nat) -> {Nat.is_lt(n, 1n+n) == True{} : Bool}:
   match n:
@@ -93,13 +47,6 @@ def BR.bool_clash(h: {False{} == True{} : Bool}) -> Empty:
 def BR.ex_falso(-A: Type, e: Empty) -> A:
   match e:
 
-def BR.no_lt_one(+np: Nat) -> {Nat.is_lt(1n+np, 1n) == True{} : Bool} -> Empty:
-  match np:
-    case 0n:
-      h => BR.bool_clash(h)
-    case 1n+q:
-      h => BR.bool_clash(h)
-
 # x < y gives x < y + 1
 def BR.lt_up(+x: Nat, +y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_lt(x, 1n+y) == True{} : Bool}:
   match x y:
@@ -120,106 +67,8 @@ def BR.sub_lt(+bp: Nat, +r: Nat) -> {Nat.is_lt(Nat.sub(bp, r), 1n+bp) == True{} 
     case 1n+b 1n+q:
       BR.lt_up(Nat.sub(b, q), 1n+b, BR.sub_lt(b, q))
 
-# r < bp + 1 gives (bp - r) + r == bp
-def BR.sub_add(+bp: Nat, +r: Nat, h: {Nat.is_lt(r, 1n+bp) == True{} : Bool}) -> {Nat.add(Nat.sub(bp, r), r) == bp : Nat}:
-  match bp r:
-    case 0n 0n:
-      {==}
-    case 0n 1n+q:
-      BR.ex_falso({Nat.add(Nat.sub(0n, 1n+q), 1n+q) == 0n : Nat}, BR.no_lt_one(q, h))
-    case 1n+b 0n:
-      BR.add_zero(1n+b)
-    case 1n+b 1n+q:
-      Equal.trans(Nat, Nat.add(Nat.sub(b, q), 1n+q), 1n+Nat.add(Nat.sub(b, q), q), 1n+b, BR.add_succ(Nat.sub(b, q), q), Equal.cong(Nat, Nat, z => 1n+z, Nat.add(Nat.sub(b, q), q), b, BR.sub_add(b, q, h)))
-
 # Base's division: Nat.divmod(a, 1 + bp) runs go(a, bp, 0, 0), which counts
 # m down and r up (m + r == bp throughout) and d once per full round.
-
-def BR.dm_lhs(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> Nat:
-  Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r)))
-
-def BR.dm_sum(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m, r) == bp : Nat} -> {BR.dm_lhs(n, m, d, r, bp) == Nat.add(n, Nat.add(Nat.mul(d, 1n+bp), r)) : Nat}:
-  match n m:
-    case 0n _:
-      h => {==}
-    case 1n+np 0n:
-      +h =>
-        +dd = Nat.mul(d, 1n+bp)
-        +x = Nat.add(Nat.add(bp, dd), 0n)
-        %Equal.sym(Nat, r, bp, h) : {BR.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, Nat.add(dd, _)) : Nat}
-        %BR.add_comm(bp, dd) : {BR.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, _) : Nat}
-        %BR.add_zero(Nat.add(bp, dd)) : {BR.dm_lhs(1n+np, 0n, d, r, bp) == 1n+Nat.add(np, _) : Nat}
-        %BR.add_succ(np, x) : {BR.dm_lhs(1n+np, 0n, d, r, bp) == _ : Nat}
-        BR.dm_sum(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, BR.add_zero(r), h))
-    case 1n+np 1n+mp:
-      h =>
-        +dd = Nat.mul(d, 1n+bp)
-        %BR.add_succ(np, Nat.add(dd, r)) : {BR.dm_lhs(1n+np, 1n+mp, d, r, bp) == _ : Nat}
-        %BR.add_succ(dd, r) : {BR.dm_lhs(1n+np, 1n+mp, d, r, bp) == Nat.add(np, _) : Nat}
-        BR.dm_sum(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, BR.add_succ(mp, r), h))
-
-def BR.div_mod(+k: Nat, +bp: Nat) -> {Nat.add(Nat.mul(Nat.div(k, 1n+bp), 1n+bp), Nat.mod(k, 1n+bp)) == k : Nat}:
-  Equal.trans(Nat, BR.dm_lhs(k, bp, 0n, 0n, bp), Nat.add(k, 0n), k, BR.dm_sum(k, bp, 0n, 0n, bp, BR.add_zero(bp)), BR.add_zero(k))
-
-def BR.lt_add(+m: Nat, +r: Nat) -> {Nat.is_lt(r, 1n+Nat.add(m, r)) == True{} : Bool}:
-  match r:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(m, 1n+p), 1n+Nat.add(m, p), BR.add_succ(m, p)) : {Nat.is_lt(1n+p, 1n+_) == True{} : Bool}
-      BR.lt_add(m, p)
-
-def BR.dm_lt(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m, r) == bp : Nat} -> {Nat.is_lt(Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+bp) == True{} : Bool}:
-  match n m:
-    case 0n _:
-      h =>
-        %h : {Nat.is_lt(r, 1n+_) == True{} : Bool}
-        BR.lt_add(m, r)
-    case 1n+np 0n:
-      h => BR.dm_lt(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, BR.add_zero(r), h))
-    case 1n+np 1n+mp:
-      h => BR.dm_lt(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, BR.add_succ(mp, r), h))
-
-def BR.mod_lt(+k: Nat, +bp: Nat) -> {Nat.is_lt(Nat.mod(k, 1n+bp), 1n+bp) == True{} : Bool}:
-  BR.dm_lt(k, bp, 0n, 0n, bp, BR.add_zero(bp))
-
-# fewer steps than m left in the round: the remainder grows by n
-def BR.dm_small(+n: Nat, +m: Nat, +d: Nat, +r: Nat) -> {Nat.is_lt(n, 1n+m) == True{} : Bool} -> {Nat.divmod.go(n, m, d, r) == (d, Nat.add(n, r)) : Nat & Nat}:
-  match n m:
-    case 0n _:
-      h => {==}
-    case 1n+np 0n:
-      h => BR.ex_falso({Nat.divmod.go(1n+np, 0n, d, r) == (d, Nat.add(1n+np, r)) : Nat & Nat}, BR.no_lt_one(np, h))
-    case 1n+np 1n+mp:
-      h =>
-        %BR.add_succ(np, r) : {Nat.divmod.go(1n+np, 1n+mp, d, r) == (d, _) : Nat & Nat}
-        BR.dm_small(np, mp, d, 1n+r, h)
-
-# finishing a round: m steps, then one more starts the next
-def BR.dm_round(+m: Nat, +n: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(Nat.add(m, 1n+n), m, d, r) == Nat.divmod.go(n, Nat.add(m, r), 1n+d, 0n) : Nat & Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+mp:
-      %BR.add_succ(mp, r) : {Nat.divmod.go(Nat.add(1n+mp, 1n+n), 1n+mp, d, r) == Nat.divmod.go(n, _, 1n+d, 0n) : Nat & Nat}
-      BR.dm_round(mp, n, d, 1n+r)
-
-def BR.dm_rounds(+g: Nat, +i: Nat, +d: Nat, +bp: Nat) -> {Nat.is_lt(i, 1n+bp) == True{} : Bool} -> {Nat.divmod.go(Nat.add(Nat.mul(g, 1n+bp), i), bp, d, 0n) == (Nat.add(g, d), i) : Nat & Nat}:
-  match g:
-    case 0n:
-      h =>
-        %BR.add_zero(i) : {Nat.divmod.go(i, bp, d, 0n) == (d, _) : Nat & Nat}
-        BR.dm_small(i, bp, d, 0n, h)
-    case 1n+gp:
-      h =>
-        +gg = Nat.mul(gp, 1n+bp)
-        +y = Nat.add(gg, i)
-        %Equal.sym(Nat, Nat.add(Nat.add(bp, gg), i), Nat.add(bp, y), BR.add_assoc(bp, gg, i)) : {Nat.divmod.go(1n+_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %BR.add_succ(bp, y) : {Nat.divmod.go(_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(bp, 1n+y), bp, d, 0n), Nat.divmod.go(y, Nat.add(bp, 0n), 1n+d, 0n), BR.dm_round(bp, y, d, 0n)) : {_ == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %Equal.sym(Nat, Nat.add(bp, 0n), bp, BR.add_zero(bp)) : {Nat.divmod.go(y, _, 1n+d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-        %BR.add_succ(gp, d) : {Nat.divmod.go(y, bp, 1n+d, 0n) == (_, i) : Nat & Nat}
-        BR.dm_rounds(gp, i, 1n+d, bp, h)
 
 # Spans. With a block of 1 + bp bytes, Nat.sub(1 + bp, 1) is Nat.sub(bp, 0),
 # which is bp by BR.sub_zero.
@@ -227,20 +76,6 @@ def BR.dm_rounds(+g: Nat, +i: Nat, +d: Nat, +bp: Nat) -> {Nat.is_lt(i, 1n+bp) ==
 def BR.slack_lt(+bp: Nat, +t: Nat) -> {Nat.is_lt(Nat.sub(Nat.sub(1n+bp, 1n), Nat.mod(t, 1n+bp)), 1n+bp) == True{} : Bool}:
   %Equal.sym(Nat, Nat.sub(bp, 0n), bp, BR.sub_zero(bp)) : {Nat.is_lt(Nat.sub(_, Nat.mod(t, 1n+bp)), 1n+bp) == True{} : Bool}
   BR.sub_lt(bp, Nat.mod(t, 1n+bp))
-
-# a + bp == (a + (bp - r)) + r, for r < 1 + bp
-def BR.cover_sum(+bp: Nat, +a: Nat, +r: Nat, h: {Nat.is_lt(r, 1n+bp) == True{} : Bool}) -> {Nat.add(a, Nat.sub(bp, 0n)) == Nat.add(Nat.add(a, Nat.sub(bp, r)), r) : Nat}:
-  %Equal.sym(Nat, Nat.sub(bp, 0n), bp, BR.sub_zero(bp)) : {Nat.add(a, _) == Nat.add(Nat.add(a, Nat.sub(bp, r)), r) : Nat}
-  %Equal.sym(Nat, Nat.add(Nat.add(a, Nat.sub(bp, r)), r), Nat.add(a, Nat.add(Nat.sub(bp, r), r)), BR.add_assoc(a, Nat.sub(bp, r), r)) : {Nat.add(a, bp) == _ : Nat}
-  %BR.sub_add(bp, r, h) : {Nat.add(a, _) == Nat.add(a, Nat.add(Nat.sub(bp, r), r)) : Nat}
-  {==}
-
-def BR.cover(+bp: Nat, +a: Nat) -> {Nat.mul(Nat.div(Nat.add(a, Nat.sub(1n+bp, 1n)), 1n+bp), 1n+bp) == Nat.add(a, Nat.sub(Nat.sub(1n+bp, 1n), Nat.mod(Nat.add(a, Nat.sub(1n+bp, 1n)), 1n+bp))) : Nat}:
-  +t = Nat.add(a, Nat.sub(bp, 0n))
-  +q = Nat.div(t, 1n+bp)
-  +r = Nat.mod(t, 1n+bp)
-  %Equal.sym(Nat, Nat.sub(bp, 0n), bp, BR.sub_zero(bp)) : {Nat.mul(q, 1n+bp) == Nat.add(a, Nat.sub(_, r)) : Nat}
-  BR.add_cancel(r, Nat.mul(q, 1n+bp), Nat.add(a, Nat.sub(bp, r)), Equal.trans(Nat, Nat.add(Nat.mul(q, 1n+bp), r), t, Nat.add(Nat.add(a, Nat.sub(bp, r)), r), BR.div_mod(t, bp), BR.cover_sum(bp, a, r, BR.mod_lt(t, bp))))
 
 def BR.lt0(+p: Nat, +h: {Nat.is_lt(p, 0n) == True{} : Bool}) -> Empty:
   BR.bool_clash(Equal.trans(Bool, False{}, Nat.is_lt(p, 0n), True{}, Equal.sym(Bool, Nat.is_lt(p, 0n), False{}, P.IP.lt_zero(p)), h))
@@ -266,22 +101,11 @@ def BR.le_wit(a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.a
     case 1n+ +p 1n+ +q:
       Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, Nat.sub(q, p)), q, BR.le_wit(p, q, h))
 
-# x <= x + y
-def BR.le_add_r(x: Nat, +y: Nat) -> {Nat.is_le(x, Nat.add(x, y)) == True{} : Bool}:
-  match x:
-    case 0n:
-      P.IP.le_zero(y)
-    case 1n+ +p:
-      BR.le_add_r(p, y)
-
-def BR.lt_le_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_lt(a, b) == True{} : Bool}, +h2: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  P.IP.le_lt(a, c, P.IP.le_trans(1n+a, b, c, P.IP.lt_le(a, b, h1), h2))
-
 def BR.lt_to_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(a, b) == True{} : Bool}:
-  P.IP.le_trans(a, 1n+a, b, P.IP.le_succ_r(a, a, P.IP.le_refl(a)), P.IP.lt_le(a, b, h))
+  UO.nat_le_trans(a, 1n+a, b, P.IP.le_succ_r(a, a, UL.nat_le_refl(a)), P.IP.lt_le(a, b, h))
 
 def BR.lt_le_no(+a: Nat, +b: Nat, +h1: {Nat.is_lt(a, b) == True{} : Bool}, +h2: {Nat.is_le(b, a) == True{} : Bool}) -> Empty:
-  BR.bool_clash(Equal.trans(Bool, False{}, Nat.is_lt(a, a), True{}, Equal.sym(Bool, Nat.is_lt(a, a), False{}, P.BP.lt_irrefl(a)), BR.lt_le_trans(a, b, a, h1, h2)))
+  BR.bool_clash(Equal.trans(Bool, False{}, Nat.is_lt(a, a), True{}, Equal.sym(Bool, Nat.is_lt(a, a), False{}, P.BP.lt_irrefl(a)), UO.nat_lt_le_trans(a, b, a, h1, h2)))
 
 def BR.lt_rw_l(-x: Nat, -y: Nat, -m: Nat, +e: {x == y : Nat}, +h: {Nat.is_lt(y, m) == True{} : Bool}) -> {Nat.is_lt(x, m) == True{} : Bool}:
   %Equal.sym(Nat, x, y, e) : {Nat.is_lt(_, m) == True{} : Bool}
@@ -316,22 +140,6 @@ def BR.lt_succ_le(x: Nat, +n: Nat, +h: {Nat.is_lt(x, 1n+n) == True{} : Bool}) ->
       BR.ex_falso({Nat.is_le(1n+p, 0n) == True{} : Bool}, BR.lt0(p, h))
     case 1n+ +p 1n+ +q:
       BR.lt_succ_le(p, q, h)
-
-# (a + b) * c == a * c + b * c
-def BR.mul_add(a: Nat, +b: Nat, +c: Nat) -> {Nat.mul(Nat.add(a, b), c) == Nat.add(Nat.mul(a, c), Nat.mul(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      %Equal.sym(Nat, Nat.mul(Nat.add(p, b), c), Nat.add(Nat.mul(p, c), Nat.mul(b, c)), BR.mul_add(p, b, c)) : {Nat.add(c, _) == Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)) : Nat}
-      Equal.sym(Nat, Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)), Nat.add(c, Nat.add(Nat.mul(p, c), Nat.mul(b, c))), BR.add_assoc(c, Nat.mul(p, c), Nat.mul(b, c)))
-
-def BR.mul_zero(a: Nat) -> {Nat.mul(a, 0n) == 0n : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      BR.mul_zero(p)
 
 def BR.min_le(a: Nat, +b: Nat) -> {Nat.is_le(Nat.min(a, b), a) == True{} : Bool}:
   match a b:
@@ -375,11 +183,11 @@ def BR.max_l(a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == False{} : Bool}) -> {Nat.m
 def BR.lt_add_both(a: Nat, +b: Nat, +l: Nat, +bs: Nat, +h1: {Nat.is_le(a, b) == True{} : Bool}, +h2: {Nat.is_lt(l, bs) == True{} : Bool}) -> {Nat.is_lt(Nat.add(a, l), Nat.add(bs, b)) == True{} : Bool}:
   match a b:
     case 0n _:
-      BR.lt_le_trans(l, bs, Nat.add(bs, b), h2, BR.le_add_r(bs, b))
+      UO.nat_lt_le_trans(l, bs, Nat.add(bs, b), h2, UO.nat_le_add_r(bs, b))
     case 1n+ +p 0n:
       BR.ex_falso({Nat.is_lt(Nat.add(1n+p, l), Nat.add(bs, 0n)) == True{} : Bool}, BR.bool_clash(h1))
     case 1n+ +p 1n+ +q:
-      %Equal.sym(Nat, Nat.add(bs, 1n+q), 1n+Nat.add(bs, q), BR.add_succ(bs, q)) : {Nat.is_lt(1n+Nat.add(p, l), _) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(bs, 1n+q), 1n+Nat.add(bs, q), UL.nat_add_succ(bs, q)) : {Nat.is_lt(1n+Nat.add(p, l), _) == True{} : Bool}
       BR.lt_add_both(p, q, l, bs, h1, h2)
 
 # The span of a range: with a block of bs = 1 + bp bytes, the range (off,
@@ -393,11 +201,11 @@ def BR.span_eq(+bp: Nat, +off: Nat, +len: Nat) -> {Nat.mul(Nat.add(Nat.div(off, 
   +t = Nat.add(Nat.add(s, len), Nat.sub(bs, 1n))
   +c = Nat.div(t, bs)
   +l = Nat.sub(Nat.sub(bs, 1n), Nat.mod(t, bs))
-  %Equal.sym(Nat, Nat.mul(Nat.add(f, c), bs), Nat.add(Nat.mul(f, bs), Nat.mul(c, bs)), BR.mul_add(f, c, bs)) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
-  %Equal.sym(Nat, Nat.mul(c, bs), Nat.add(Nat.add(s, len), l), BR.cover(bp, Nat.add(s, len))) : {Nat.add(Nat.mul(f, bs), _) == Nat.add(Nat.add(off, len), l) : Nat}
-  %BR.add_assoc(Nat.mul(f, bs), Nat.add(s, len), l) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
-  %BR.add_assoc(Nat.mul(f, bs), s, len) : {Nat.add(_, l) == Nat.add(Nat.add(off, len), l) : Nat}
-  %BR.div_mod(off, bp) : {Nat.add(Nat.add(Nat.add(Nat.mul(f, bs), s), len), l) == Nat.add(Nat.add(_, len), l) : Nat}
+  %Equal.sym(Nat, Nat.mul(Nat.add(f, c), bs), Nat.add(Nat.mul(f, bs), Nat.mul(c, bs)), UL.nat_add_mul(f, c, bs)) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
+  %Equal.sym(Nat, Nat.mul(c, bs), Nat.add(Nat.add(s, len), l), UD.nat_round_up(bp, Nat.add(s, len))) : {Nat.add(Nat.mul(f, bs), _) == Nat.add(Nat.add(off, len), l) : Nat}
+  %UL.nat_add_assoc(Nat.mul(f, bs), Nat.add(s, len), l) : {_ == Nat.add(Nat.add(off, len), l) : Nat}
+  %UL.nat_add_assoc(Nat.mul(f, bs), s, len) : {Nat.add(_, l) == Nat.add(Nat.add(off, len), l) : Nat}
+  %UD.nat_div_mod(off, bp) : {Nat.add(Nat.add(Nat.add(Nat.mul(f, bs), s), len), l) == Nat.add(Nat.add(_, len), l) : Nat}
   {==}
 
 # a range inside n blocks has its span inside them
@@ -428,13 +236,13 @@ def BR.take0(+o: B.Octets) -> {B.Octets.take(0n, o) == B.Octets.empty() : B.Octe
 
 # the first len(x) bytes of x ++ r are x
 def BR.slice_head(+x: B.Octets, +r: B.Octets) -> {B.Octets.slice(0n, B.Octets.len(x), B.Octets.append(x, r)) == x : B.Octets}:
-  %Equal.sym(B.Octets, B.Octets.slice(0n, B.Octets.len(x), B.Octets.append(x, r)), B.Octets.slice(0n, B.Octets.len(x), x), BL.octets_slice_append_le(0n, B.Octets.len(x), x, r, P.IP.le_refl(B.Octets.len(x)))) : {_ == x : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.slice(0n, B.Octets.len(x), B.Octets.append(x, r)), B.Octets.slice(0n, B.Octets.len(x), x), BL.octets_slice_append_le(0n, B.Octets.len(x), x, r, UL.nat_le_refl(B.Octets.len(x)))) : {_ == x : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(0n, x), x, BL.octets_drop_zero(x)) : {B.Octets.take(B.Octets.len(x), _) == x : B.Octets}
   BL.octets_take_len(x)
 
 # the middle of a ++ (m ++ z)
 def BR.slice_mid(+a: B.Octets, +m: B.Octets, +z: B.Octets) -> {B.Octets.slice(B.Octets.len(a), B.Octets.len(m), B.Octets.append(a, B.Octets.append(m, z))) == m : B.Octets}:
-  %BR.add_zero(B.Octets.len(a)) : {B.Octets.slice(_, B.Octets.len(m), B.Octets.append(a, B.Octets.append(m, z))) == m : B.Octets}
+  %UL.nat_add_zero(B.Octets.len(a)) : {B.Octets.slice(_, B.Octets.len(m), B.Octets.append(a, B.Octets.append(m, z))) == m : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(Nat.add(B.Octets.len(a), 0n), B.Octets.len(m), B.Octets.append(a, B.Octets.append(m, z))), B.Octets.slice(0n, B.Octets.len(m), B.Octets.append(m, z)), BL.octets_slice_append_add(a, 0n, B.Octets.len(m), B.Octets.append(m, z))) : {_ == m : B.Octets}
   BR.slice_head(m, z)
 
@@ -509,14 +317,14 @@ def BR.u2(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.Octets
 def BR.u3(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +a: Nat, +b: Nat, +d: T, +j: Nat) -> {BR.img(~T, ~read_block, Nat.add(a, b), d, j) == B.Octets.append(BR.img(~T, ~read_block, a, d, j), BR.img(~T, ~read_block, b, d, Nat.add(j, a))) : B.Octets}:
   match a:
     case 0n:
-      %Equal.sym(Nat, Nat.add(j, 0n), j, BR.add_zero(j)) : {BR.img(~T, ~read_block, b, d, j) == B.Octets.append(B.Octets.empty(), BR.img(~T, ~read_block, b, d, _)) : B.Octets}
+      %Equal.sym(Nat, Nat.add(j, 0n), j, UL.nat_add_zero(j)) : {BR.img(~T, ~read_block, b, d, j) == B.Octets.append(B.Octets.empty(), BR.img(~T, ~read_block, b, d, _)) : B.Octets}
       Equal.sym(B.Octets, B.Octets.append(B.Octets.empty(), BR.img(~T, ~read_block, b, d, j)), BR.img(~T, ~read_block, b, d, j), BL.octets_append_empty_l(BR.img(~T, ~read_block, b, d, j)))
     case 1n+ +p:
       +g = BR.got(read_block(d, j))
       +x = BR.img(~T, ~read_block, p, d, Nat.add(j, 1n))
       +y = BR.img(~T, ~read_block, b, d, Nat.add(Nat.add(j, 1n), p))
       %Equal.sym(B.Octets, BR.img(~T, ~read_block, Nat.add(p, b), d, Nat.add(j, 1n)), B.Octets.append(x, y), BR.u3(~T, ~read_block, p, b, d, Nat.add(j, 1n))) : {B.Octets.append(g, _) == B.Octets.append(B.Octets.append(g, x), BR.img(~T, ~read_block, b, d, Nat.add(j, 1n+p))) : B.Octets}
-      %BR.add_assoc(j, 1n, p) : {B.Octets.append(g, B.Octets.append(x, y)) == B.Octets.append(B.Octets.append(g, x), BR.img(~T, ~read_block, b, d, _)) : B.Octets}
+      %UL.nat_add_assoc(j, 1n, p) : {B.Octets.append(g, B.Octets.append(x, y)) == B.Octets.append(B.Octets.append(g, x), BR.img(~T, ~read_block, b, d, _)) : B.Octets}
       Equal.sym(B.Octets, B.Octets.append(B.Octets.append(g, x), y), B.Octets.append(g, B.Octets.append(x, y)), BL.octets_append_assoc(g, x, y))
 
 # uniform over a + b blocks is uniform over each part
@@ -534,12 +342,12 @@ def BR.u4a(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.Octet
 def BR.u4b(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.Octets>, +a: Nat, +b: Nat, +d: T, +bs: Nat, +j: Nat, +h: {D.Dev.uniform.go(~T, ~read_block, Nat.add(a, b), d, bs, j) == True{} : Bool}) -> {D.Dev.uniform.go(~T, ~read_block, b, d, bs, Nat.add(j, a)) == True{} : Bool}:
   match a:
     case 0n:
-      %Equal.sym(Nat, Nat.add(j, 0n), j, BR.add_zero(j)) : {D.Dev.uniform.go(~T, ~read_block, b, d, bs, _) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(j, 0n), j, UL.nat_add_zero(j)) : {D.Dev.uniform.go(~T, ~read_block, b, d, bs, _) == True{} : Bool}
       h
     case 1n+ +p:
       +ok = D.Dev.uniform.ok(read_block(d, j), bs)
       +h2 = P.BP.and_r(ok, D.Dev.uniform.go(~T, ~read_block, Nat.add(p, b), d, bs, Nat.add(j, 1n)), h)
-      %BR.add_assoc(j, 1n, p) : {D.Dev.uniform.go(~T, ~read_block, b, d, bs, _) == True{} : Bool}
+      %UL.nat_add_assoc(j, 1n, p) : {D.Dev.uniform.go(~T, ~read_block, b, d, bs, _) == True{} : Bool}
       BR.u4b(~T, ~read_block, p, b, d, bs, Nat.add(j, 1n), h2)
 
 # The bytes of the blocks a range spans, against the whole image: the
@@ -553,7 +361,7 @@ def BR.core_eq(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.O
   +c = Nat.div(t, bs)
   +l = Nat.sub(Nat.sub(bs, 1n), Nat.mod(t, bs))
   +r = Nat.sub(n, Nat.add(f, c))
-  +en = Equal.trans(Nat, Nat.add(f, Nat.add(c, r)), Nat.add(Nat.add(f, c), r), n, Equal.sym(Nat, Nat.add(Nat.add(f, c), r), Nat.add(f, Nat.add(c, r)), BR.add_assoc(f, c, r)), BR.le_wit(Nat.add(f, c), n, BR.span_le(bp, off, len, n, hr)))
+  +en = Equal.trans(Nat, Nat.add(f, Nat.add(c, r)), Nat.add(Nat.add(f, c), r), n, Equal.sym(Nat, Nat.add(Nat.add(f, c), r), Nat.add(f, Nat.add(c, r)), UL.nat_add_assoc(f, c, r)), BR.le_wit(Nat.add(f, c), n, BR.span_le(bp, off, len, n, hr)))
   +hn = BR.u_rw(~T, ~read_block, n, Nat.add(f, Nat.add(c, r)), d, bs, 0n, Equal.sym(Nat, Nat.add(f, Nat.add(c, r)), n, en), hu)
   +hf = BR.u4a(~T, ~read_block, f, Nat.add(c, r), d, bs, 0n, hn)
   +hcr = BR.u4b(~T, ~read_block, f, Nat.add(c, r), d, bs, 0n, hn)
@@ -561,8 +369,8 @@ def BR.core_eq(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.O
   +a = BR.img(~T, ~read_block, f, d, 0n)
   +m = BR.img(~T, ~read_block, c, d, f)
   +z = BR.img(~T, ~read_block, r, d, Nat.add(f, c))
-  +eoff = Equal.trans(Nat, Nat.add(B.Octets.len(a), s), Nat.add(Nat.mul(f, bs), s), off, Equal.cong(Nat, Nat, x => Nat.add(x, s), B.Octets.len(a), Nat.mul(f, bs), BR.u2(~T, ~read_block, f, d, bs, 0n, hf)), BR.div_mod(off, bp))
-  +hle = P.IP.le_rw_r(Nat.add(s, len), B.Octets.len(m), Nat.mul(c, bs), BR.u2(~T, ~read_block, c, d, bs, f, hc), P.IP.le_rw_r(Nat.add(s, len), Nat.mul(c, bs), Nat.add(Nat.add(s, len), l), BR.cover(bp, Nat.add(s, len)), BR.le_add_r(Nat.add(s, len), l)))
+  +eoff = Equal.trans(Nat, Nat.add(B.Octets.len(a), s), Nat.add(Nat.mul(f, bs), s), off, Equal.cong(Nat, Nat, x => Nat.add(x, s), B.Octets.len(a), Nat.mul(f, bs), BR.u2(~T, ~read_block, f, d, bs, 0n, hf)), UD.nat_div_mod(off, bp))
+  +hle = P.IP.le_rw_r(Nat.add(s, len), B.Octets.len(m), Nat.mul(c, bs), BR.u2(~T, ~read_block, c, d, bs, f, hc), P.IP.le_rw_r(Nat.add(s, len), Nat.mul(c, bs), Nat.add(Nat.add(s, len), l), UD.nat_round_up(bp, Nat.add(s, len)), UO.nat_le_add_r(Nat.add(s, len), l)))
   %Equal.cong(Nat, B.Octets, k => BR.img(~T, ~read_block, k, d, 0n), Nat.add(f, Nat.add(c, r)), n, en) : {B.Octets.slice(off, len, _) == B.Octets.slice(s, len, m) : B.Octets}
   %Equal.sym(B.Octets, BR.img(~T, ~read_block, Nat.add(f, Nat.add(c, r)), d, 0n), B.Octets.append(a, BR.img(~T, ~read_block, Nat.add(c, r), d, f)), BR.u3(~T, ~read_block, f, Nat.add(c, r), d, 0n)) : {B.Octets.slice(off, len, _) == B.Octets.slice(s, len, m) : B.Octets}
   %Equal.sym(B.Octets, BR.img(~T, ~read_block, Nat.add(c, r), d, f), B.Octets.append(m, z), BR.u3(~T, ~read_block, c, r, d, f)) : {B.Octets.slice(off, len, B.Octets.append(a, _)) == B.Octets.slice(s, len, m) : B.Octets}
@@ -577,7 +385,7 @@ def BR.core(~T: Data, ~read_block: T -> Nat -> Result<&2, &2, D.DevError, B.Octe
   +t = Nat.add(Nat.add(s, len), Nat.sub(bs, 1n))
   +c = Nat.div(t, bs)
   +r = Nat.sub(n, Nat.add(f, c))
-  +en = Equal.trans(Nat, Nat.add(f, Nat.add(c, r)), Nat.add(Nat.add(f, c), r), n, Equal.sym(Nat, Nat.add(Nat.add(f, c), r), Nat.add(f, Nat.add(c, r)), BR.add_assoc(f, c, r)), BR.le_wit(Nat.add(f, c), n, BR.span_le(bp, off, len, n, hr)))
+  +en = Equal.trans(Nat, Nat.add(f, Nat.add(c, r)), Nat.add(Nat.add(f, c), r), n, Equal.sym(Nat, Nat.add(Nat.add(f, c), r), Nat.add(f, Nat.add(c, r)), UL.nat_add_assoc(f, c, r)), BR.le_wit(Nat.add(f, c), n, BR.span_le(bp, off, len, n, hr)))
   +hn = BR.u_rw(~T, ~read_block, n, Nat.add(f, Nat.add(c, r)), d, bs, 0n, Equal.sym(Nat, Nat.add(f, Nat.add(c, r)), n, en), hu)
   +hcr = BR.u4b(~T, ~read_block, f, Nat.add(c, r), d, bs, 0n, hn)
   +hc = BR.u4a(~T, ~read_block, c, r, d, bs, f, hcr)
@@ -635,12 +443,12 @@ def BR.patch_len(+off: Nat, +data: B.Octets, +o: B.Octets, +h: {Nat.is_le(Nat.ad
   +l = B.Octets.len(data)
   +tk = B.Octets.take(off, o)
   +dr = B.Octets.drop(Nat.add(off, l), o)
-  +hoff = P.IP.le_trans(off, Nat.add(off, l), B.Octets.len(o), BR.le_add_r(off, l), h)
+  +hoff = UO.nat_le_trans(off, Nat.add(off, l), B.Octets.len(o), UO.nat_le_add_r(off, l), h)
   %Equal.sym(Nat, B.Octets.len(B.Octets.append(tk, B.Octets.append(data, dr))), Nat.add(B.Octets.len(tk), B.Octets.len(B.Octets.append(data, dr))), BL.octets_len_append(tk, B.Octets.append(data, dr))) : {_ == B.Octets.len(o) : Nat}
   %Equal.sym(Nat, B.Octets.len(B.Octets.append(data, dr)), Nat.add(l, B.Octets.len(dr)), BL.octets_len_append(data, dr)) : {Nat.add(B.Octets.len(tk), _) == B.Octets.len(o) : Nat}
   %Equal.sym(Nat, B.Octets.len(tk), off, BL.octets_len_take_le(off, o, hoff)) : {Nat.add(_, Nat.add(l, B.Octets.len(dr))) == B.Octets.len(o) : Nat}
   %Equal.sym(Nat, B.Octets.len(dr), Nat.sub(B.Octets.len(o), Nat.add(off, l)), BL.octets_len_drop(Nat.add(off, l), o)) : {Nat.add(off, Nat.add(l, _)) == B.Octets.len(o) : Nat}
-  %BR.add_assoc(off, l, Nat.sub(B.Octets.len(o), Nat.add(off, l))) : {_ == B.Octets.len(o) : Nat}
+  %UL.nat_add_assoc(off, l, Nat.sub(B.Octets.len(o), Nat.add(off, l))) : {_ == B.Octets.len(o) : Nat}
   BR.le_wit(Nat.add(off, l), B.Octets.len(o), h)
 
 def Laws.patch_len(off, data, o, h):
@@ -650,7 +458,7 @@ def BR.patch_slice(+off: Nat, +data: B.Octets, +o: B.Octets, +h: {Nat.is_le(off,
   +l = B.Octets.len(data)
   +tk = B.Octets.take(off, o)
   +dr = B.Octets.drop(Nat.add(off, l), o)
-  +et = Equal.trans(Nat, Nat.add(B.Octets.len(tk), 0n), B.Octets.len(tk), off, BR.add_zero(B.Octets.len(tk)), BL.octets_len_take_le(off, o, h))
+  +et = Equal.trans(Nat, Nat.add(B.Octets.len(tk), 0n), B.Octets.len(tk), off, UL.nat_add_zero(B.Octets.len(tk)), BL.octets_len_take_le(off, o, h))
   %et : {B.Octets.slice(_, l, B.Octets.append(tk, B.Octets.append(data, dr))) == data : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(Nat.add(B.Octets.len(tk), 0n), l, B.Octets.append(tk, B.Octets.append(data, dr))), B.Octets.slice(0n, l, B.Octets.append(data, dr)), BL.octets_slice_append_add(tk, 0n, l, B.Octets.append(data, dr))) : {_ == data : B.Octets}
   BR.slice_head(data, dr)
@@ -674,7 +482,7 @@ def BR.patch_after(+i: Nat, +n: Nat, +off: Nat, +data: B.Octets, +o: B.Octets, +
   +dr = B.Octets.drop(Nat.add(off, l), o)
   +j = Nat.sub(i, Nat.add(off, l))
   +ei = BR.le_wit(Nat.add(off, l), i, h)
-  +e1 = Equal.trans(Nat, Nat.add(B.Octets.len(tk), Nat.add(l, j)), Nat.add(off, Nat.add(l, j)), i, Equal.cong(Nat, Nat, x => Nat.add(x, Nat.add(l, j)), B.Octets.len(tk), off, BL.octets_len_take_le(off, o, ho)), Equal.trans(Nat, Nat.add(off, Nat.add(l, j)), Nat.add(Nat.add(off, l), j), i, Equal.sym(Nat, Nat.add(Nat.add(off, l), j), Nat.add(off, Nat.add(l, j)), BR.add_assoc(off, l, j)), ei))
+  +e1 = Equal.trans(Nat, Nat.add(B.Octets.len(tk), Nat.add(l, j)), Nat.add(off, Nat.add(l, j)), i, Equal.cong(Nat, Nat, x => Nat.add(x, Nat.add(l, j)), B.Octets.len(tk), off, BL.octets_len_take_le(off, o, ho)), Equal.trans(Nat, Nat.add(off, Nat.add(l, j)), Nat.add(Nat.add(off, l), j), i, Equal.sym(Nat, Nat.add(Nat.add(off, l), j), Nat.add(off, Nat.add(l, j)), UL.nat_add_assoc(off, l, j)), ei))
   %e1 : {B.Octets.slice(_, n, B.Octets.append(tk, B.Octets.append(data, dr))) == B.Octets.slice(i, n, o) : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(Nat.add(B.Octets.len(tk), Nat.add(l, j)), n, B.Octets.append(tk, B.Octets.append(data, dr))), B.Octets.slice(Nat.add(l, j), n, B.Octets.append(data, dr)), BL.octets_slice_append_add(tk, Nat.add(l, j), n, B.Octets.append(data, dr))) : {_ == B.Octets.slice(i, n, o) : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(Nat.add(l, j), n, B.Octets.append(data, dr)), B.Octets.slice(j, n, dr), BL.octets_slice_append_add(data, j, n, dr)) : {_ == B.Octets.slice(i, n, o) : B.Octets}
@@ -696,14 +504,14 @@ def BR.patch_patch(+off: Nat, +a: B.Octets, +b: B.Octets, +o: B.Octets, +h: {Nat
   %et : {B.Octets.append(B.Octets.take(Nat.add(_, la), p1), B.Octets.append(b, B.Octets.drop(Nat.add(Nat.add(off, la), lb), p1))) == rhs : B.Octets}
   %Equal.sym(B.Octets, B.Octets.take(Nat.add(B.Octets.len(tk), la), p1), B.Octets.append(tk, B.Octets.take(la, B.Octets.append(a, r1))), BL.octets_take_append_add(tk, la, B.Octets.append(a, r1))) : {B.Octets.append(_, B.Octets.append(b, B.Octets.drop(Nat.add(Nat.add(off, la), lb), p1))) == rhs : B.Octets}
   %Equal.sym(B.Octets, B.Octets.take(la, B.Octets.append(a, r1)), a, BL.octets_take_append(a, r1)) : {B.Octets.append(B.Octets.append(tk, _), B.Octets.append(b, B.Octets.drop(Nat.add(Nat.add(off, la), lb), p1))) == rhs : B.Octets}
-  +e1 = Equal.trans(Nat, Nat.add(B.Octets.len(tk), Nat.add(la, lb)), Nat.add(off, Nat.add(la, lb)), Nat.add(Nat.add(off, la), lb), Equal.cong(Nat, Nat, x => Nat.add(x, Nat.add(la, lb)), B.Octets.len(tk), off, et), Equal.sym(Nat, Nat.add(Nat.add(off, la), lb), Nat.add(off, Nat.add(la, lb)), BR.add_assoc(off, la, lb)))
+  +e1 = Equal.trans(Nat, Nat.add(B.Octets.len(tk), Nat.add(la, lb)), Nat.add(off, Nat.add(la, lb)), Nat.add(Nat.add(off, la), lb), Equal.cong(Nat, Nat, x => Nat.add(x, Nat.add(la, lb)), B.Octets.len(tk), off, et), Equal.sym(Nat, Nat.add(Nat.add(off, la), lb), Nat.add(off, Nat.add(la, lb)), UL.nat_add_assoc(off, la, lb)))
   %e1 : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, B.Octets.drop(_, p1))) == rhs : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(tk), Nat.add(la, lb)), p1), B.Octets.drop(Nat.add(la, lb), B.Octets.append(a, r1)), BL.octets_drop_append_add(tk, Nat.add(la, lb), B.Octets.append(a, r1))) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, _)) == rhs : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(Nat.add(la, lb), B.Octets.append(a, r1)), B.Octets.drop(lb, r1), BL.octets_drop_append_add(a, lb, r1)) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, _)) == rhs : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(lb, r1), B.Octets.drop(Nat.add(Nat.add(off, la), lb), o), BL.octets_drop_drop(Nat.add(off, la), lb, o)) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, _)) == rhs : B.Octets}
   +dr = B.Octets.drop(Nat.add(Nat.add(off, la), lb), o)
   %Equal.sym(Nat, B.Octets.len(B.Octets.append(a, b)), Nat.add(la, lb), BL.octets_len_append(a, b)) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, dr)) == B.Octets.append(tk, B.Octets.append(B.Octets.append(a, b), B.Octets.drop(Nat.add(off, _), o))) : B.Octets}
-  %BR.add_assoc(off, la, lb) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, dr)) == B.Octets.append(tk, B.Octets.append(B.Octets.append(a, b), B.Octets.drop(_, o))) : B.Octets}
+  %UL.nat_add_assoc(off, la, lb) : {B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, dr)) == B.Octets.append(tk, B.Octets.append(B.Octets.append(a, b), B.Octets.drop(_, o))) : B.Octets}
   %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(tk, a), B.Octets.append(b, dr)), B.Octets.append(tk, B.Octets.append(a, B.Octets.append(b, dr))), BL.octets_append_assoc(tk, a, B.Octets.append(b, dr))) : {_ == B.Octets.append(tk, B.Octets.append(B.Octets.append(a, b), dr)) : B.Octets}
   %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(a, b), dr), B.Octets.append(a, B.Octets.append(b, dr)), BL.octets_append_assoc(a, b, dr)) : {B.Octets.append(tk, B.Octets.append(a, B.Octets.append(b, dr))) == B.Octets.append(tk, _) : B.Octets}
   {==}
@@ -733,13 +541,13 @@ def BR.patch_keep(+a: Nat, +i: Nat, +data: B.Octets, +j: Nat, +o: B.Octets, +h: 
   +buf = B.Octets.append(s1, B.Octets.append(data, s2))
   +tk = B.Octets.take(a, o)
   +rest = B.Octets.drop(Nat.add(m, j), o)
-  +hm = P.IP.le_trans(m, Nat.add(m, j), B.Octets.len(o), BR.le_add_r(m, j), h)
-  +hai = P.IP.le_trans(ai, m, B.Octets.len(o), BR.le_add_r(ai, l), hm)
-  +ha = P.IP.le_trans(a, ai, B.Octets.len(o), BR.le_add_r(a, i), hai)
+  +hm = UO.nat_le_trans(m, Nat.add(m, j), B.Octets.len(o), UO.nat_le_add_r(m, j), h)
+  +hai = UO.nat_le_trans(ai, m, B.Octets.len(o), UO.nat_le_add_r(ai, l), hm)
+  +ha = UO.nat_le_trans(a, ai, B.Octets.len(o), UO.nat_le_add_r(a, i), hai)
   +l1 = BL.octets_len_slice_le(a, i, o, hai)
   +l2 = BL.octets_len_slice_le(m, j, o, h)
   +lb = Equal.trans(Nat, B.Octets.len(buf), Nat.add(B.Octets.len(s1), B.Octets.len(B.Octets.append(data, s2))), Nat.add(i, Nat.add(l, j)), BL.octets_len_append(s1, B.Octets.append(data, s2)), Equal.trans(Nat, Nat.add(B.Octets.len(s1), B.Octets.len(B.Octets.append(data, s2))), Nat.add(i, Nat.add(l, B.Octets.len(s2))), Nat.add(i, Nat.add(l, j)), Equal.trans(Nat, Nat.add(B.Octets.len(s1), B.Octets.len(B.Octets.append(data, s2))), Nat.add(i, B.Octets.len(B.Octets.append(data, s2))), Nat.add(i, Nat.add(l, B.Octets.len(s2))), Equal.cong(Nat, Nat, x => Nat.add(x, B.Octets.len(B.Octets.append(data, s2))), B.Octets.len(s1), i, l1), Equal.cong(Nat, Nat, x => Nat.add(i, x), B.Octets.len(B.Octets.append(data, s2)), Nat.add(l, B.Octets.len(s2)), BL.octets_len_append(data, s2))), Equal.cong(Nat, Nat, x => Nat.add(i, Nat.add(l, x)), B.Octets.len(s2), j, l2)))
-  +ek = Equal.trans(Nat, Nat.add(a, B.Octets.len(buf)), Nat.add(a, Nat.add(i, Nat.add(l, j))), Nat.add(m, j), Equal.cong(Nat, Nat, x => Nat.add(a, x), B.Octets.len(buf), Nat.add(i, Nat.add(l, j)), lb), Equal.trans(Nat, Nat.add(a, Nat.add(i, Nat.add(l, j))), Nat.add(ai, Nat.add(l, j)), Nat.add(m, j), Equal.sym(Nat, Nat.add(ai, Nat.add(l, j)), Nat.add(a, Nat.add(i, Nat.add(l, j))), BR.add_assoc(a, i, Nat.add(l, j))), Equal.sym(Nat, Nat.add(m, j), Nat.add(ai, Nat.add(l, j)), BR.add_assoc(ai, l, j))))
+  +ek = Equal.trans(Nat, Nat.add(a, B.Octets.len(buf)), Nat.add(a, Nat.add(i, Nat.add(l, j))), Nat.add(m, j), Equal.cong(Nat, Nat, x => Nat.add(a, x), B.Octets.len(buf), Nat.add(i, Nat.add(l, j)), lb), Equal.trans(Nat, Nat.add(a, Nat.add(i, Nat.add(l, j))), Nat.add(ai, Nat.add(l, j)), Nat.add(m, j), Equal.sym(Nat, Nat.add(ai, Nat.add(l, j)), Nat.add(a, Nat.add(i, Nat.add(l, j))), UL.nat_add_assoc(a, i, Nat.add(l, j))), Equal.sym(Nat, Nat.add(m, j), Nat.add(ai, Nat.add(l, j)), UL.nat_add_assoc(ai, l, j))))
   +rhs0 = B.Octets.append(B.Octets.take(ai, o), B.Octets.append(data, B.Octets.drop(m, o)))
   %Equal.sym(Nat, Nat.add(a, B.Octets.len(buf)), Nat.add(m, j), ek) : {B.Octets.append(tk, B.Octets.append(buf, B.Octets.drop(_, o))) == rhs0 : B.Octets}
   %Equal.sym(B.Octets, B.Octets.take(ai, o), B.Octets.append(tk, s1), BR.take_split(a, i, o, ha)) : {B.Octets.append(tk, B.Octets.append(buf, rest)) == B.Octets.append(_, B.Octets.append(data, B.Octets.drop(m, o))) : B.Octets}
@@ -766,7 +574,7 @@ def BR.and_tt(+a: Bool, +b: Bool, +ea: {a == True{} : Bool}, +eb: {b == True{} :
 # j + (k + (c - (j + k))) == c when j + k <= c
 def BR.split3(+j: Nat, +k: Nat, +c: Nat, +h: {Nat.is_le(Nat.add(j, k), c) == True{} : Bool}) -> {Nat.add(j, Nat.add(k, Nat.sub(c, Nat.add(j, k)))) == c : Nat}:
   +r = Nat.sub(c, Nat.add(j, k))
-  Equal.trans(Nat, Nat.add(j, Nat.add(k, r)), Nat.add(Nat.add(j, k), r), c, Equal.sym(Nat, Nat.add(Nat.add(j, k), r), Nat.add(j, Nat.add(k, r)), BR.add_assoc(j, k, r)), BR.le_wit(Nat.add(j, k), c, h))
+  Equal.trans(Nat, Nat.add(j, Nat.add(k, r)), Nat.add(Nat.add(j, k), r), c, Equal.sym(Nat, Nat.add(Nat.add(j, k), r), Nat.add(j, Nat.add(k, r)), UL.nat_add_assoc(j, k, r)), BR.le_wit(Nat.add(j, k), c, h))
 
 # uniform over n blocks: uniform over blocks j to j + k - 1, and they read as
 # the slice of the image they name
@@ -842,7 +650,7 @@ def BR.mem_img(+k: Nat, +bs: Nat, +c: Nat, +t: D.MemTree, +h: {Nat.is_le(k, c) =
 def BR.to_img(+d: D.MemDev) -> {D.MemDev.to_octets(d) == BR.img(~D.MemDev, ~D.MemDev.read_block, D.MemDev.block_count(d), d, 0n) : B.Octets}:
   match d:
     case D.MemDev{+bs, +c, +t}:
-      Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, c, D.MemDev{bs, c, t}, 0n), B.Octets.concat(D.MemDev.blocks.go(c, bs, t, Nil{})), BR.mem_img(c, bs, c, t, P.IP.le_refl(c)))
+      Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, c, D.MemDev{bs, c, t}, 0n), B.Octets.concat(D.MemDev.blocks.go(c, bs, t, Nil{})), BR.mem_img(c, bs, c, t, UL.nat_le_refl(c)))
 
 # Validity: a tree whose leaves are whole blocks gives a valid device
 
@@ -888,7 +696,7 @@ def BR.mem_uniform(+k: Nat, +bs: Nat, +c: Nat, +t: D.MemTree, +j: Nat, +ht: {BR.
       BR.mem_uniform(p, bs, c, t, Nat.add(j, 1n), ht, P.IP.le_rw_l(Nat.add(p, Nat.add(j, 1n)), 1n+Nat.add(p, j), c, P.IP.add_one_r(p, j), hr))
 
 def Laws.valid_blank(bs, count):
-  BR.mem_uniform(count, bs, count, D.MemTEmpty{}, 0n, {==}, P.IP.le_rw_l(Nat.add(count, 0n), count, count, BR.add_zero(count), P.IP.le_refl(count)))
+  BR.mem_uniform(count, bs, count, D.MemTEmpty{}, 0n, {==}, P.IP.le_rw_l(Nat.add(count, 0n), count, count, UL.nat_add_zero(count), UL.nat_le_refl(count)))
 
 # of_octets: every block it cuts is a whole block, and the tree it builds
 # holds only those
@@ -973,7 +781,7 @@ def BR.valid_of_octets(+bs: Nat, +o: B.Octets) -> {D.MemDev.valid(D.MemDev.of_oc
   +ys = D.MemDev.split.go(n, bs, o, Nil{})
   +xs = D.MemDev.blocks.rev_onto(ys, Nil{})
   +ht = BR.fin_tree(D.MemTree.build(n, n, xs), bs, BR.build_ok(n, n, xs, bs, BR.rev_ok(ys, Nil{}, bs, BR.split_ok(n, bs, o, Nil{}, {==}), {==})))
-  BR.mem_uniform(n, bs, n, D.MemTree.of_list(n, xs), 0n, ht, P.IP.le_rw_l(Nat.add(n, 0n), n, n, BR.add_zero(n), P.IP.le_refl(n)))
+  BR.mem_uniform(n, bs, n, D.MemTree.of_list(n, xs), 0n, ht, P.IP.le_rw_l(Nat.add(n, 0n), n, n, UL.nat_add_zero(n), UL.nat_le_refl(n)))
 
 def Laws.valid_of_octets(bs, o):
   BR.valid_of_octets(bs, o)
@@ -1053,7 +861,7 @@ def BR.block_mem(+d: D.MemDev, +n: Nat, +hv: {D.MemDev.valid(d) == True{} : Bool
       +hok = P.BP.and_l(D.Dev.uniform.ok(D.MemDev.read_block(dd, n), bs), True{}, hk)
       +g = BR.got(D.MemDev.read_block(dd, n))
       %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(dd, n), Done{g}, BR.u_done(D.MemDev.read_block(dd, n), bs, hok)) : {_ == Done{B.Octets.slice(Nat.mul(n, bs), bs, D.MemDev.to_octets(dd))} : Result<&2, &2, D.DevError, B.Octets>}
-      %BR.add_zero(bs) : {Done{g} == Done{B.Octets.slice(Nat.mul(n, bs), _, D.MemDev.to_octets(dd))} : Result<&2, &2, D.DevError, B.Octets>}
+      %UL.nat_add_zero(bs) : {Done{g} == Done{B.Octets.slice(Nat.mul(n, bs), _, D.MemDev.to_octets(dd))} : Result<&2, &2, D.DevError, B.Octets>}
       %Equal.sym(B.Octets, D.MemDev.to_octets(dd), BR.img(~D.MemDev, ~D.MemDev.read_block, c, dd, 0n), BR.to_img(dd)) : {Done{g} == Done{B.Octets.slice(Nat.mul(n, bs), Nat.add(bs, 0n), _)} : Result<&2, &2, D.DevError, B.Octets>}
       %Equal.sym(B.Octets, B.Octets.slice(Nat.mul(n, bs), Nat.mul(1n, bs), BR.img(~D.MemDev, ~D.MemDev.read_block, c, dd, 0n)), BR.img(~D.MemDev, ~D.MemDev.read_block, 1n, dd, n), BR.img_slice(~D.MemDev, ~D.MemDev.read_block, dd, bs, c, n, 1n, hv, h1)) : {Done{g} == Done{_} : Result<&2, &2, D.DevError, B.Octets>}
       %Equal.sym(B.Octets, B.Octets.append(g, B.Octets.empty()), g, BL.octets_append_empty_r(g)) : {Done{g} == Done{_} : Result<&2, &2, D.DevError, B.Octets>}
@@ -1069,8 +877,8 @@ def BR.map_mem(+bp: Nat, +c: Nat, +t: D.MemTree, +off: Nat, +len: Nat, +hv: {D.M
   {==}
 
 def BR.le_zero_f(+off: Nat, +lp: Nat, +c: Nat) -> {Nat.is_le(Nat.add(off, 1n+lp), Nat.mul(c, 0n)) == False{} : Bool}:
-  %Equal.sym(Nat, Nat.mul(c, 0n), 0n, BR.mul_zero(c)) : {Nat.is_le(Nat.add(off, 1n+lp), _) == False{} : Bool}
-  %Equal.sym(Nat, Nat.add(off, 1n+lp), 1n+Nat.add(off, lp), BR.add_succ(off, lp)) : {Nat.is_le(_, 0n) == False{} : Bool}
+  %Equal.sym(Nat, Nat.mul(c, 0n), 0n, UL.nat_mul_zero(c)) : {Nat.is_le(Nat.add(off, 1n+lp), _) == False{} : Bool}
+  %Equal.sym(Nat, Nat.add(off, 1n+lp), 1n+Nat.add(off, lp), UL.nat_add_succ(off, lp)) : {Nat.is_le(_, 0n) == False{} : Bool}
   {==}
 
 def BR.bytes_mem0(+c: Nat, +t: D.MemTree, +off: Nat, len: Nat, +h: {Nat.is_le(Nat.add(off, len), Nat.mul(c, 0n)) == True{} : Bool}) -> {D.Dev.read_bytes(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, D.MemDev{0n, c, t}, off, len) == Done{B.Octets.slice(off, len, D.MemDev.to_octets(D.MemDev{0n, c, t}))} : Result<&2, &2, D.DevError, B.Octets>}:
@@ -1111,7 +919,7 @@ def BR.fb_last(z: Bool, +bs: Nat, +c: Nat, +t: D.MemTree, +j: Nat, +ez: {Nat.is_
     case False{}:
       Equal.trans(Result<&2, &2, D.DevError, B.Octets>, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n, j), Fail{D.DevOutOfRange{j}}, Fail{D.DevOutOfRange{Nat.max(j, c)}}, BR.rb_fail(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 0n, j, D.DevOutOfRange{j}, BR.read_out(bs, c, t, j, ez)), Equal.cong(Nat, Result<&2, &2, D.DevError, B.Octets>, x => Fail{D.DevOutOfRange{x}}, j, Nat.max(j, c), Equal.sym(Nat, Nat.max(j, c), j, BR.max_l(j, c, ez))))
     case True{}:
-      Empty.absurd({D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n, j) == Fail{D.DevOutOfRange{Nat.max(j, c)}} : Result<&2, &2, D.DevError, B.Octets>}, BR.lt_le_no(j, c, ez, P.IP.le_rw_r(c, j, Nat.add(j, 0n), Equal.sym(Nat, Nat.add(j, 0n), j, BR.add_zero(j)), h)))
+      Empty.absurd({D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n, j) == Fail{D.DevOutOfRange{Nat.max(j, c)}} : Result<&2, &2, D.DevError, B.Octets>}, BR.lt_le_no(j, c, ez, P.IP.le_rw_r(c, j, Nat.add(j, 0n), Equal.sym(Nat, Nat.add(j, 0n), j, UL.nat_add_zero(j)), h)))
 
 def BR.fb_step(z: Bool, +bs: Nat, +c: Nat, +t: D.MemTree, +j: Nat, +q: Nat, +ez: {Nat.is_lt(j, c) == z : Bool}, +ih: {D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n+q, Nat.add(j, 1n)) == Fail{D.DevOutOfRange{Nat.max(Nat.add(j, 1n), c)}} : Result<&2, &2, D.DevError, B.Octets>}) -> {D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n+1n+q, j) == Fail{D.DevOutOfRange{Nat.max(j, c)}} : Result<&2, &2, D.DevError, B.Octets>}:
   match z:
@@ -1127,16 +935,16 @@ def BR.fail_blocks(+p: Nat, +bs: Nat, +c: Nat, +t: D.MemTree, +j: Nat, +h: {Nat.
     case 0n:
       BR.fb_last(Nat.is_lt(j, c), bs, c, t, j, {==}, h)
     case 1n+ +q:
-      BR.fb_step(Nat.is_lt(j, c), bs, c, t, j, q, {==}, BR.fail_blocks(q, bs, c, t, Nat.add(j, 1n), P.IP.le_rw_r(c, Nat.add(Nat.add(j, 1n), q), Nat.add(j, 1n+q), BR.add_assoc(j, 1n, q), h)))
+      BR.fb_step(Nat.is_lt(j, c), bs, c, t, j, q, {==}, BR.fail_blocks(q, bs, c, t, Nat.add(j, 1n), P.IP.le_rw_r(c, Nat.add(Nat.add(j, 1n), q), Nat.add(j, 1n+q), UL.nat_add_assoc(j, 1n, q), h)))
 
 def BR.past_go(cc: Nat, +cx: Nat, +f: Nat, +s: Nat, +l: Nat, +bs: Nat, +c: Nat, +t: D.MemTree, +bp: Nat, +lp: Nat, +ec: {cx == cc : Nat}, +hgt: {Nat.is_lt(c, Nat.add(f, cx)) == True{} : Bool}, +hcov: {Nat.mul(cx, 1n+bp) == Nat.add(Nat.add(s, 1n+lp), l) : Nat}) -> {Result.bind(&2, &2, D.DevError, B.Octets, B.Octets, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, cx, f), blocks => Result.pure(&2, &2, D.DevError, B.Octets, B.Octets.slice(s, 1n+lp, blocks))) == Fail{D.DevOutOfRange{Nat.max(f, c)}} : Result<&2, &2, D.DevError, B.Octets>}:
   match cc:
     case 0n:
-      +e0 = Equal.trans(Nat, 0n, Nat.add(Nat.add(s, 1n+lp), l), 1n+Nat.add(Nat.add(s, lp), l), Equal.trans(Nat, 0n, Nat.mul(cx, 1n+bp), Nat.add(Nat.add(s, 1n+lp), l), Equal.cong(Nat, Nat, x => Nat.mul(x, 1n+bp), 0n, cx, Equal.sym(Nat, cx, 0n, ec)), hcov), Equal.cong(Nat, Nat, x => Nat.add(x, l), Nat.add(s, 1n+lp), 1n+Nat.add(s, lp), BR.add_succ(s, lp)))
+      +e0 = Equal.trans(Nat, 0n, Nat.add(Nat.add(s, 1n+lp), l), 1n+Nat.add(Nat.add(s, lp), l), Equal.trans(Nat, 0n, Nat.mul(cx, 1n+bp), Nat.add(Nat.add(s, 1n+lp), l), Equal.cong(Nat, Nat, x => Nat.mul(x, 1n+bp), 0n, cx, Equal.sym(Nat, cx, 0n, ec)), hcov), Equal.cong(Nat, Nat, x => Nat.add(x, l), Nat.add(s, 1n+lp), 1n+Nat.add(s, lp), UL.nat_add_succ(s, lp)))
       Empty.absurd({Result.bind(&2, &2, D.DevError, B.Octets, B.Octets, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, cx, f), blocks => Result.pure(&2, &2, D.DevError, B.Octets, B.Octets.slice(s, 1n+lp, blocks))) == Fail{D.DevOutOfRange{Nat.max(f, c)}} : Result<&2, &2, D.DevError, B.Octets>}, P.IP.sz(Nat.add(Nat.add(s, lp), l), Equal.sym(Nat, 0n, 1n+Nat.add(Nat.add(s, lp), l), e0)))
     case 1n+ +cp:
       +h1 = BR.lt_rw_r(c, Nat.add(f, 1n+cp), Nat.add(f, cx), Equal.cong(Nat, Nat, x => Nat.add(f, x), 1n+cp, cx, Equal.sym(Nat, cx, 1n+cp, ec)), hgt)
-      +h2 = BR.lt_rw_r(c, 1n+Nat.add(f, cp), Nat.add(f, 1n+cp), Equal.sym(Nat, Nat.add(f, 1n+cp), 1n+Nat.add(f, cp), BR.add_succ(f, cp)), h1)
+      +h2 = BR.lt_rw_r(c, 1n+Nat.add(f, cp), Nat.add(f, 1n+cp), Equal.sym(Nat, Nat.add(f, 1n+cp), 1n+Nat.add(f, cp), UL.nat_add_succ(f, cp)), h1)
       %Equal.sym(Nat, cx, 1n+cp, ec) : {Result.bind(&2, &2, D.DevError, B.Octets, B.Octets, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, _, f), blocks => Result.pure(&2, &2, D.DevError, B.Octets, B.Octets.slice(s, 1n+lp, blocks))) == Fail{D.DevOutOfRange{Nat.max(f, c)}} : Result<&2, &2, D.DevError, B.Octets>}
       %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.Dev.read_blocks(~D.MemDev, ~D.MemDev.read_block, D.MemDev{bs, c, t}, 1n+cp, f), Fail{D.DevOutOfRange{Nat.max(f, c)}}, BR.fail_blocks(cp, bs, c, t, f, BR.lt_succ_le(c, Nat.add(f, cp), h2))) : {Result.bind(&2, &2, D.DevError, B.Octets, B.Octets, _, blocks => Result.pure(&2, &2, D.DevError, B.Octets, B.Octets.slice(s, 1n+lp, blocks))) == Fail{D.DevOutOfRange{Nat.max(f, c)}} : Result<&2, &2, D.DevError, B.Octets>}
       {==}
@@ -1149,8 +957,8 @@ def BR.past(+bs: Nat, +c: Nat, +t: D.MemTree, +bp: Nat, +off: Nat, +lp: Nat, +h:
   +tt = Nat.add(Nat.add(s, len), Nat.sub(bsz, 1n))
   +cx = Nat.div(tt, bsz)
   +l = Nat.sub(Nat.sub(bsz, 1n), Nat.mod(tt, bsz))
-  +hgt = BR.mul_lt_cancel(c, Nat.add(f, cx), bp, BR.lt_rw_r(Nat.mul(c, bsz), Nat.mul(Nat.add(f, cx), bsz), Nat.add(Nat.add(off, len), l), BR.span_eq(bp, off, len), BR.lt_le_trans(Nat.mul(c, bsz), Nat.add(off, len), Nat.add(Nat.add(off, len), l), h, BR.le_add_r(Nat.add(off, len), l))))
-  BR.past_go(cx, cx, f, s, l, bs, c, t, bp, lp, {==}, hgt, BR.cover(bp, Nat.add(s, len)))
+  +hgt = BR.mul_lt_cancel(c, Nat.add(f, cx), bp, BR.lt_rw_r(Nat.mul(c, bsz), Nat.mul(Nat.add(f, cx), bsz), Nat.add(Nat.add(off, len), l), BR.span_eq(bp, off, len), UO.nat_lt_le_trans(Nat.mul(c, bsz), Nat.add(off, len), Nat.add(Nat.add(off, len), l), h, UO.nat_le_add_r(Nat.add(off, len), l))))
+  BR.past_go(cx, cx, f, s, l, bs, c, t, bp, lp, {==}, hgt, UD.nat_round_up(bp, Nat.add(s, len)))
 
 def BR.past_end(+d: D.MemDev, +bp: Nat, +off: Nat, +lp: Nat, +hbs: {D.MemDev.block_size(d) == 1n+bp : Nat}, +h: {Nat.is_lt(Nat.mul(D.MemDev.block_count(d), 1n+bp), Nat.add(off, 1n+lp)) == True{} : Bool}) -> {D.Dev.read_bytes(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, off, 1n+lp) == Fail{D.DevOutOfRange{Nat.max(Nat.div(off, 1n+bp), D.MemDev.block_count(d))}} : Result<&2, &2, D.DevError, B.Octets>}:
   match d:
@@ -1200,7 +1008,7 @@ def BR.upd_img_u(+bs: Nat, +c: Nat, +t: D.MemTree, +n: Nat, +data: B.Octets, +r:
   %Equal.sym(Nat, D.MemDev.block_count(u), D.MemDev.block_count(dd), DL.update_keeps_count(dd, n, data)) : {BR.img(~D.MemDev, ~D.MemDev.read_block, _, u, 0n) == rhs : B.Octets}
   %Equal.cong(Nat, B.Octets, k => BR.img(~D.MemDev, ~D.MemDev.read_block, k, u, 0n), Nat.add(n, 1n+r), c, ec) : {_ == rhs : B.Octets}
   %Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, Nat.add(n, 1n+r), u, 0n), B.Octets.append(BR.img(~D.MemDev, ~D.MemDev.read_block, n, u, 0n), BR.img(~D.MemDev, ~D.MemDev.read_block, 1n+r, u, n)), BR.u3(~D.MemDev, ~D.MemDev.read_block, n, 1n+r, u, 0n)) : {_ == rhs : B.Octets}
-  %Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, n, u, 0n), BR.img(~D.MemDev, ~D.MemDev.read_block, n, dd, 0n), BR.agree_lo(n, dd, n, data, 0n, P.IP.le_rw_l(Nat.add(n, 0n), n, n, BR.add_zero(n), P.IP.le_refl(n)))) : {B.Octets.append(_, BR.img(~D.MemDev, ~D.MemDev.read_block, 1n+r, u, n)) == rhs : B.Octets}
+  %Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, n, u, 0n), BR.img(~D.MemDev, ~D.MemDev.read_block, n, dd, 0n), BR.agree_lo(n, dd, n, data, 0n, P.IP.le_rw_l(Nat.add(n, 0n), n, n, UL.nat_add_zero(n), UL.nat_le_refl(n)))) : {B.Octets.append(_, BR.img(~D.MemDev, ~D.MemDev.read_block, 1n+r, u, n)) == rhs : B.Octets}
   %Equal.sym(Result<&2, &2, D.DevError, B.Octets>, D.MemDev.read_block(u, n), Done{data}, DL.read_after_update(dd, n, data, len_ok, in_range)) : {B.Octets.append(BR.img(~D.MemDev, ~D.MemDev.read_block, n, dd, 0n), B.Octets.append(BR.got(_), BR.img(~D.MemDev, ~D.MemDev.read_block, r, u, Nat.add(n, 1n)))) == rhs : B.Octets}
   %Equal.sym(B.Octets, BR.img(~D.MemDev, ~D.MemDev.read_block, r, u, Nat.add(n, 1n)), BR.img(~D.MemDev, ~D.MemDev.read_block, r, dd, Nat.add(n, 1n)), BR.agree_hi(r, dd, n, data, Nat.add(n, 1n), P.IP.lt_s_s1(n))) : {B.Octets.append(BR.img(~D.MemDev, ~D.MemDev.read_block, n, dd, 0n), B.Octets.append(data, _)) == rhs : B.Octets}
   {==}
@@ -1209,7 +1017,7 @@ def BR.upd_img(+bs: Nat, +c: Nat, +t: D.MemTree, +n: Nat, +data: B.Octets, +hv: 
   +dd : D.MemDev = D.MemDev{bs, c, t}
   +u = D.MemDev.update(dd, n, data)
   +r = Nat.sub(c, 1n+n)
-  +ec = Equal.trans(Nat, Nat.add(n, 1n+r), 1n+Nat.add(n, r), c, BR.add_succ(n, r), BR.le_wit(1n+n, c, P.IP.lt_le(n, c, in_range)))
+  +ec = Equal.trans(Nat, Nat.add(n, 1n+r), 1n+Nat.add(n, r), c, UL.nat_add_succ(n, r), BR.le_wit(1n+n, c, P.IP.lt_le(n, c, in_range)))
   +hn = BR.u_rw(~D.MemDev, ~D.MemDev.read_block, c, Nat.add(n, 1n+r), dd, bs, 0n, Equal.sym(Nat, Nat.add(n, 1n+r), c, ec), hv)
   +hlo = BR.u4a(~D.MemDev, ~D.MemDev.read_block, n, 1n+r, dd, bs, 0n, hn)
   +hmid = BR.u4b(~D.MemDev, ~D.MemDev.read_block, n, 1n+r, dd, bs, 0n, hn)

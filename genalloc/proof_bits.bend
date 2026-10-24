@@ -4,6 +4,10 @@ import Base
 import ./bits.bend as Bits
 import ./genalloc.bend as G
 import ./proof_nat.bend as N
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def pb.not_t(b: Bool, e: {Bool.not(b) == True{} : Bool}) -> {b == False{} : Bool}:
   match b:
@@ -196,12 +200,12 @@ def pb.take_drop(u: List<&2, Bool>, s: Nat) -> {List.append(&2, Bool, List.take(
 def pb.walk(bits: List<&2, Bool>, s: Nat, +x: Nat, +g: Nat, +n: Nat, +hg: {Nat.is_lt(0n, g) == True{} : Bool}, +hn: {Nat.is_lt(0n, n) == True{} : Bool}, hu: {Bits.genpool.bits.used_prefix(List.drop(&2, Bool, bits, s), n) == True{} : Bool}) -> {G.genpool.free.walk(bits, Nat.is_eq(x, Nat.add(x, Nat.mul(s, g))), Nat.is_lt(Nat.add(x, Nat.mul(s, g)), x), x, Nat.add(x, Nat.mul(s, g)), g, n) == Done{List.append(&2, Bool, List.take(&2, Bool, bits, s), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, bits, s), n, False{}))} : Result<&2, &2, G.GpError, List<&2, Bool>>}:
   match bits s:
     case Nil{} 0n:
-      %Equal.sym(Nat, Nat.add(x, 0n), x, N.nl.add_zero(x)) : {G.genpool.free.walk(Nil{}, Nat.is_eq(x, _), Nat.is_lt(_, x), x, _, g, n) == Done{Bits.genpool.bits.fill_prefix(Nil{}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
+      %Equal.sym(Nat, Nat.add(x, 0n), x, UL.nat_add_zero(x)) : {G.genpool.free.walk(Nil{}, Nat.is_eq(x, _), Nat.is_lt(_, x), x, _, g, n) == Done{Bits.genpool.bits.fill_prefix(Nil{}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       %Equal.sym(Bool, Nat.is_eq(x, x), True{}, N.nl.eq_refl(x)) : {G.genpool.free.walk(Nil{}, _, Nat.is_lt(x, x), x, x, g, n) == Done{Bits.genpool.bits.fill_prefix(Nil{}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       %Equal.sym(Bool, Bits.genpool.bits.used_prefix(Nil{}, n), True{}, hu) : {G.genpool.free.clear(_, Nil{}, n) == Done{Bits.genpool.bits.fill_prefix(Nil{}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       {==}
     case Con{+b, +t} 0n:
-      %Equal.sym(Nat, Nat.add(x, 0n), x, N.nl.add_zero(x)) : {G.genpool.free.walk(Con{b, t}, Nat.is_eq(x, _), Nat.is_lt(_, x), x, _, g, n) == Done{Bits.genpool.bits.fill_prefix(Con{b, t}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
+      %Equal.sym(Nat, Nat.add(x, 0n), x, UL.nat_add_zero(x)) : {G.genpool.free.walk(Con{b, t}, Nat.is_eq(x, _), Nat.is_lt(_, x), x, _, g, n) == Done{Bits.genpool.bits.fill_prefix(Con{b, t}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       %Equal.sym(Bool, Nat.is_eq(x, x), True{}, N.nl.eq_refl(x)) : {G.genpool.free.walk(Con{b, t}, _, Nat.is_lt(x, x), x, x, g, n) == Done{Bits.genpool.bits.fill_prefix(Con{b, t}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       %Equal.sym(Bool, Bits.genpool.bits.used_prefix(Con{b, t}, n), True{}, hu) : {G.genpool.free.clear(_, Con{b, t}, n) == Done{Bits.genpool.bits.fill_prefix(Con{b, t}, n, False{})} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       {==}
@@ -211,10 +215,10 @@ def pb.walk(bits: List<&2, Bool>, s: Nat, +x: Nat, +g: Nat, +n: Nat, +hg: {Nat.i
       +m = Nat.mul(i, g)
       +a = Nat.add(x, Nat.add(g, m))
       +y = Nat.add(x, g)
-      +pos = N.nl.lt_le_trans(0n, g, Nat.add(g, m), hg, N.nl.le_add(g, m))
+      +pos = UO.nat_lt_le_trans(0n, g, Nat.add(g, m), hg, UO.nat_le_add_r(g, m))
       %Equal.sym(Bool, Nat.is_eq(x, a), False{}, N.nl.lt_ne(x, a, N.nl.lt_add(x, Nat.add(g, m), pos))) : {G.genpool.free.walk(Con{b, t}, _, Nat.is_lt(a, x), x, a, g, n) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
-      %Equal.sym(Bool, Nat.is_lt(a, x), False{}, N.nl.le_nlt(x, a, N.nl.le_add(x, Nat.add(g, m)))) : {G.genpool.free.walk(Con{b, t}, False{}, _, x, a, g, n) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
-      %N.nl.add_assoc(x, g, m) : {G.genpool.free.cons(b, G.genpool.free.walk(t, Nat.is_eq(y, _), Nat.is_lt(_, y), y, _, g, n)) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
+      %Equal.sym(Bool, Nat.is_lt(a, x), False{}, N.nl.le_nlt(x, a, UO.nat_le_add_r(x, Nat.add(g, m)))) : {G.genpool.free.walk(Con{b, t}, False{}, _, x, a, g, n) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
+      %UL.nat_add_assoc(x, g, m) : {G.genpool.free.cons(b, G.genpool.free.walk(t, Nat.is_eq(y, _), Nat.is_lt(_, y), y, _, g, n)) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       %Equal.sym(Result<&2, &2, G.GpError, List<&2, Bool>>, G.genpool.free.walk(t, Nat.is_eq(y, Nat.add(y, m)), Nat.is_lt(Nat.add(y, m), y), y, Nat.add(y, m), g, n), Done{List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}, pb.walk(t, i, y, g, n, hg, hn, hu)) : {G.genpool.free.cons(b, _) == Done{Con{b, List.append(&2, Bool, List.take(&2, Bool, t, i), Bits.genpool.bits.fill_prefix(List.drop(&2, Bool, t, i), n, False{}))}} : Result<&2, &2, G.GpError, List<&2, Bool>>}
       {==}
 

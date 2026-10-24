@@ -29,6 +29,8 @@ import ./format.bend as K
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Equality of words is reflexive (U32.is_eq(a, a) is True for every a)
 def word_refl(n: Nat, w: Word(n)) -> {EQ{} == Word.cmp(n, w, w) : Cmp}:
@@ -534,22 +536,6 @@ def MQ.eq_true(a: Nat, b: Nat, e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b
       %MQ.eq_true(p, q, e) : {1n+p == 1n+_ : Nat}
       {==}
 
-def MQ.add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      %MQ.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def MQ.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %MQ.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
 def MQ.word_refl(n: Nat, w: Word(n)) -> {EQ{} == Word.cmp(n, w, w) : Cmp}:
   match n:
     case 0n:
@@ -689,7 +675,7 @@ def MR.len_rev(xs: List<&2, Nat>, +ys: List<&2, Nat>) -> {List.length(&2, Nat, A
     case Nil{}:
       {==}
     case Con{+h, +t}:
-      Equal.trans(Nat, List.length(&2, Nat, A.FatMap.rev_nat(t, Con{h, ys})), Nat.add(List.length(&2, Nat, t), 1n+List.length(&2, Nat, ys)), 1n+Nat.add(List.length(&2, Nat, t), List.length(&2, Nat, ys)), MR.len_rev(t, Con{h, ys}), MQ.add_succ(List.length(&2, Nat, t), List.length(&2, Nat, ys)))
+      Equal.trans(Nat, List.length(&2, Nat, A.FatMap.rev_nat(t, Con{h, ys})), Nat.add(List.length(&2, Nat, t), 1n+List.length(&2, Nat, ys)), 1n+Nat.add(List.length(&2, Nat, t), List.length(&2, Nat, ys)), MR.len_rev(t, Con{h, ys}), UL.nat_add_succ(List.length(&2, Nat, t), List.length(&2, Nat, ys)))
 
 # every element of xs is missing from ys
 def MR.disjoint(xs: List<&2, Nat>, +ys: List<&2, Nat>) -> Bool:
@@ -863,13 +849,13 @@ def MT.d2(+acc: List<&2, Nat>, +c: Nat, +eb: {A.FatMap.member(c, acc) == False{}
   hd
 
 def MT.l2(+acc: List<&2, Nat>, +c: Nat, +p: Nat, +k0: Nat, +hl: {Nat.add(List.length(&2, Nat, acc), 1n+p) == k0 : Nat}) -> {Nat.add(List.length(&2, Nat, Con{c, acc}), p) == k0 : Nat}:
-  Equal.trans(Nat, 1n+Nat.add(List.length(&2, Nat, acc), p), Nat.add(List.length(&2, Nat, acc), 1n+p), k0, Equal.sym(Nat, Nat.add(List.length(&2, Nat, acc), 1n+p), 1n+Nat.add(List.length(&2, Nat, acc), p), MQ.add_succ(List.length(&2, Nat, acc), p)), hl)
+  Equal.trans(Nat, 1n+Nat.add(List.length(&2, Nat, acc), p), Nat.add(List.length(&2, Nat, acc), 1n+p), k0, Equal.sym(Nat, Nat.add(List.length(&2, Nat, acc), 1n+p), 1n+Nat.add(List.length(&2, Nat, acc), p), UL.nat_add_succ(List.length(&2, Nat, acc), p)), hl)
 
 # the first phase, from any state its invariants hold in
 def MT.claim(k: Nat, +m0: A.FatMap, +k0: Nat, +m: A.FatMap, found: Maybe<&2, Nat>, +acc: List<&2, Nat>, b: Bool, +eb: {MT.mem_found(found, acc) == b : Bool}, +hf: {MQ.found_free(m, found) == True{} : Bool}, +hm: {m == MS.overlay(m0, acc) : A.FatMap}, +hfr: {A.FatMap.all_free(m0, acc) == True{} : Bool}, +hd: {A.FatMap.distinct(acc) == True{} : Bool}, +hl: {Nat.add(List.length(&2, Nat, acc), k) == k0 : Nat}) -> MT.cspec(m0, k0, A.FatMap.claim(k, m, found, acc)):
   match k found b:
     case 0n _ _:
-      (acc, (hm, ({==}, (hfr, (hd, Equal.trans(Nat, List.length(&2, Nat, acc), Nat.add(List.length(&2, Nat, acc), 0n), k0, Equal.sym(Nat, Nat.add(List.length(&2, Nat, acc), 0n), List.length(&2, Nat, acc), MQ.add_zero(List.length(&2, Nat, acc))), hl))))))
+      (acc, (hm, ({==}, (hfr, (hd, Equal.trans(Nat, List.length(&2, Nat, acc), Nat.add(List.length(&2, Nat, acc), 0n), k0, Equal.sym(Nat, Nat.add(List.length(&2, Nat, acc), 0n), List.length(&2, Nat, acc), UL.nat_add_zero(List.length(&2, Nat, acc))), hl))))))
     case 1n+ +p None{} _:
       Unit{}
     case 1n+ +p Some{+c} True{}:
@@ -1008,7 +994,7 @@ def MV.distinct_c(+cs: List<&2, Nat>, +acc: List<&2, Nat>, +e2: {cs == A.FatMap.
 
 def MV.size_c(+k: Nat, +cs: List<&2, Nat>, +acc: List<&2, Nat>, +e2: {cs == A.FatMap.rev_nat(acc, Nil{}) : List<&2, Nat>}, +e5: {List.length(&2, Nat, acc) == k : Nat}) -> {List.length(&2, Nat, cs) == k : Nat}:
   %Equal.sym(List<&2, Nat>, cs, A.FatMap.rev_nat(acc, Nil{}), e2) : {List.length(&2, Nat, _) == k : Nat}
-  Equal.trans(Nat, List.length(&2, Nat, A.FatMap.rev_nat(acc, Nil{})), Nat.add(List.length(&2, Nat, acc), 0n), k, MR.len_rev(acc, Nil{}), Equal.trans(Nat, Nat.add(List.length(&2, Nat, acc), 0n), List.length(&2, Nat, acc), k, MQ.add_zero(List.length(&2, Nat, acc)), e5))
+  Equal.trans(Nat, List.length(&2, Nat, A.FatMap.rev_nat(acc, Nil{})), Nat.add(List.length(&2, Nat, acc), 0n), k, MR.len_rev(acc, Nil{}), Equal.trans(Nat, Nat.add(List.length(&2, Nat, acc), 0n), List.length(&2, Nat, acc), k, UL.nat_add_zero(List.length(&2, Nat, acc)), e5))
 
 def MV.fresh_d(+m: A.FatMap, +k: Nat, +m2: A.FatMap, +cs: List<&2, Nat>, s: MT.cfacts(m, k, m2, cs)) -> {A.FatMap.all_free(m, cs) == True{} : Bool}:
   (+acc, es) = s

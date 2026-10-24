@@ -6,6 +6,10 @@ import ./bits.bend as Bits
 import ./genalloc.bend as G
 import ./proof_nat.bend as N
 import ./proof_bits.bend as PB
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # A checked plan: chunk k holds address b and a free run of n at s
 
@@ -37,13 +41,13 @@ def pp.shift(+x: G.GpChunk, +l: List<&2, G.GpChunk>, +c: Nat, +n: Nat, r: Result
         case 1n+ +d:
           +hle = N.nl.and_l(Nat.is_le(c, d), pp.valid_at(l, Nat.sub(d, c), s, b, n), h)
           %Equal.sym(Nat, Nat.sub(1n+d, c), 1n+Nat.sub(d, c), N.nl.sub_succ(d, c, hle)) : {Bool.and(Nat.is_le(c, 1n+d), pp.valid_at(Con{x, l}, _, s, b, n)) == True{} : Bool}
-          N.nl.and_i(Nat.is_le(c, 1n+d), pp.valid_at(l, Nat.sub(d, c), s, b, n), N.nl.le_trans(c, d, 1n+d, hle, N.nl.le_succ(d)), N.nl.and_r(Nat.is_le(c, d), pp.valid_at(l, Nat.sub(d, c), s, b, n), h))
+          N.nl.and_i(Nat.is_le(c, 1n+d), pp.valid_at(l, Nat.sub(d, c), s, b, n), UO.nat_le_trans(c, d, 1n+d, hle, N.nl.le_succ(d)), N.nl.and_r(Nat.is_le(c, d), pp.valid_at(l, Nat.sub(d, c), s, b, n), h))
 
 def pp.pc(ok: Bool, +ch: G.GpChunk, +r: List<&2, G.GpChunk>, +c: Nat, +s: Nat, +n: Nat, +eok: {Bits.genpool.bits.run_free(G.genpool.chunk.used(ch), s, n) == ok : Bool}) -> {pp.okp(Con{ch, r}, c, n, G.genpool.plan.check(ok, c, s, G.genpool.chunk.addr(ch))) == True{} : Bool}:
   match ok:
     case True{}:
       %Equal.sym(Nat, Nat.sub(c, c), 0n, N.nl.sub_self(c)) : {Bool.and(Nat.is_le(c, c), pp.valid_at(Con{ch, r}, _, s, G.genpool.chunk.addr(ch), n)) == True{} : Bool}
-      N.nl.and_i(Nat.is_le(c, c), pp.valid_at(Con{ch, r}, 0n, s, G.genpool.chunk.addr(ch), n), N.nl.le_refl(c), N.nl.and_i(Nat.is_eq(G.genpool.chunk.addr(ch), G.genpool.chunk.addr(ch)), Bits.genpool.bits.run_free(G.genpool.chunk.used(ch), s, n), N.nl.eq_refl(G.genpool.chunk.addr(ch)), eok))
+      N.nl.and_i(Nat.is_le(c, c), pp.valid_at(Con{ch, r}, 0n, s, G.genpool.chunk.addr(ch), n), UL.nat_le_refl(c), N.nl.and_i(Nat.is_eq(G.genpool.chunk.addr(ch), G.genpool.chunk.addr(ch)), Bits.genpool.bits.run_free(G.genpool.chunk.used(ch), s, n), N.nl.eq_refl(G.genpool.chunk.addr(ch)), eok))
     case False{}:
       {==}
 
@@ -104,7 +108,7 @@ def pp.mark_in(cs: List<&2, G.GpChunk>, k: Nat, +s: Nat, +b: Nat, +n: Nat, +j: N
       Empty.absurd({False{} == True{} : Bool}, N.nl.ft(hv))
     case Con{G.GpChunk{+a, +u}, t} 0n:
       +hr = N.nl.and_r(Nat.is_eq(a, b), Bits.genpool.bits.run_free(u, s, n), hv)
-      PB.pb.fill_get_in(u, s, n, j, True{}, l, m, N.nl.lt_le_trans(j, Nat.add(s, n), List.length(&2, Bool, u), m, PB.pb.rf_len(u, s, n, hn, hr)))
+      PB.pb.fill_get_in(u, s, n, j, True{}, l, m, UO.nat_lt_le_trans(j, Nat.add(s, n), List.length(&2, Bool, u), m, PB.pb.rf_len(u, s, n, hn, hr)))
     case Con{h, t} 1n+i:
       pp.mark_in(t, i, s, b, n, j, hn, hv, l, m)
 
@@ -140,10 +144,10 @@ def pp.cf_fp(v: List<&2, Bool>, n: Nat, +h: {Bits.genpool.bits.free_prefix(v, n)
     case Nil{} 1n+m:
       Empty.absurd({Nat.add(0n, 1n+m) == 0n : Nat}, N.nl.ft(h))
     case Con{+b, +t} 0n:
-      N.nl.add_zero(Bits.genpool.bits.count_free(Con{b, t}))
+      UL.nat_add_zero(Bits.genpool.bits.count_free(Con{b, t}))
     case Con{+b, +t} 1n+ +m:
       %Equal.sym(Bool, b, False{}, PB.pb.not_t(b, N.nl.and_l(Bool.not(b), Bits.genpool.bits.free_prefix(t, m), h))) : {Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), 1n+m) == Bits.genpool.bits.count_free(Con{_, t}) : Nat}
-      %Equal.sym(Nat, Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), 1n+m), 1n+Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), m), N.nl.add_succ(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), m)) : {_ == 1n+Bits.genpool.bits.count_free(t) : Nat}
+      %Equal.sym(Nat, Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), 1n+m), 1n+Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), m), UL.nat_add_succ(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), m)) : {_ == 1n+Bits.genpool.bits.count_free(t) : Nat}
       %pp.cf_fp(t, m, N.nl.and_r(Bool.not(b), Bits.genpool.bits.free_prefix(t, m), h)) : {1n+Nat.add(Bits.genpool.bits.count_free(Bits.genpool.bits.fill_prefix(t, m, True{})), m) == 1n+_ : Nat}
       {==}
 
@@ -161,9 +165,9 @@ def pp.cf_fill(u: List<&2, Bool>, s: Nat, +n: Nat, +h: {Bits.genpool.bits.run_fr
 
 # (x + y) + n = (x + n) + y
 def pp.add_rc(+x: Nat, +y: Nat, +n: Nat) -> {Nat.add(Nat.add(x, y), n) == Nat.add(Nat.add(x, n), y) : Nat}:
-  %Equal.sym(Nat, Nat.add(Nat.add(x, y), n), Nat.add(x, Nat.add(y, n)), N.nl.add_assoc(x, y, n)) : {_ == Nat.add(Nat.add(x, n), y) : Nat}
-  %Equal.sym(Nat, Nat.add(Nat.add(x, n), y), Nat.add(x, Nat.add(n, y)), N.nl.add_assoc(x, n, y)) : {Nat.add(x, Nat.add(y, n)) == _ : Nat}
-  %N.nl.add_comm(y, n) : {Nat.add(x, Nat.add(y, n)) == Nat.add(x, _) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(x, y), n), Nat.add(x, Nat.add(y, n)), UL.nat_add_assoc(x, y, n)) : {_ == Nat.add(Nat.add(x, n), y) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(x, n), y), Nat.add(x, Nat.add(n, y)), UL.nat_add_assoc(x, n, y)) : {Nat.add(x, Nat.add(y, n)) == _ : Nat}
+  %UL.nat_add_comm(y, n) : {Nat.add(x, Nat.add(y, n)) == Nat.add(x, _) : Nat}
   {==}
 
 def pp.cf_mark(cs: List<&2, G.GpChunk>, k: Nat, +s: Nat, +b: Nat, +n: Nat, +hv: {pp.valid_at(cs, k, s, b, n) == True{} : Bool}) -> {Nat.add(G.genpool.count_free.go(G.genpool.mark(cs, k, s, n, True{})), n) == G.genpool.count_free.go(cs) : Nat}:
@@ -177,7 +181,7 @@ def pp.cf_mark(cs: List<&2, G.GpChunk>, k: Nat, +s: Nat, +b: Nat, +n: Nat, +hv: 
       {==}
     case Con{+h, +t} 1n+ +i:
       +f = Bits.genpool.bits.count_free(G.genpool.chunk.used(h))
-      %Equal.sym(Nat, Nat.add(Nat.add(f, G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{}))), n), Nat.add(f, Nat.add(G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{})), n)), N.nl.add_assoc(f, G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{})), n)) : {_ == Nat.add(f, G.genpool.count_free.go(t)) : Nat}
+      %Equal.sym(Nat, Nat.add(Nat.add(f, G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{}))), n), Nat.add(f, Nat.add(G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{})), n)), UL.nat_add_assoc(f, G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{})), n)) : {_ == Nat.add(f, G.genpool.count_free.go(t)) : Nat}
       %pp.cf_mark(t, i, s, b, n, hv) : {Nat.add(f, Nat.add(G.genpool.count_free.go(G.genpool.mark(t, i, s, n, True{})), n)) == Nat.add(f, _) : Nat}
       {==}
 
@@ -199,9 +203,9 @@ def pp.va_inside(cs: List<&2, G.GpChunk>, k: Nat, +s: Nat, +b: Nat, +n: Nat, +g:
       Empty.absurd({False{} == True{} : Bool}, N.nl.ft(hv))
     case Con{G.GpChunk{+a0, +u}, t} 0n:
       +hr = N.nl.and_r(Nat.is_eq(a0, b), Bits.genpool.bits.run_free(u, s, n), hv)
-      +hs = N.nl.lt_le_trans(s, Nat.add(s, n), List.length(&2, Bool, u), N.nl.lt_add(s, n, hn), PB.pb.rf_len(u, s, n, hn, hr))
+      +hs = UO.nat_lt_le_trans(s, Nat.add(s, n), List.length(&2, Bool, u), N.nl.lt_add(s, n, hn), PB.pb.rf_len(u, s, n, hn, hr))
       %N.nl.eq(a0, b, N.nl.and_l(Nat.is_eq(a0, b), Bits.genpool.bits.run_free(u, s, n), hv)) : {G.genpool.inside(G.GpChunk{a0, u}, Nat.add(_, Nat.mul(s, g)), g) == True{} : Bool}
-      N.nl.and_i(Nat.is_le(a0, Nat.add(a0, Nat.mul(s, g))), Nat.is_lt(Nat.add(a0, Nat.mul(s, g)), Nat.add(a0, Nat.mul(List.length(&2, Bool, u), g))), N.nl.le_add(a0, Nat.mul(s, g)), N.nl.lt_add_l(a0, Nat.mul(s, g), Nat.mul(List.length(&2, Bool, u), g), N.nl.lt_mul(s, List.length(&2, Bool, u), g, hs, hg)))
+      N.nl.and_i(Nat.is_le(a0, Nat.add(a0, Nat.mul(s, g))), Nat.is_lt(Nat.add(a0, Nat.mul(s, g)), Nat.add(a0, Nat.mul(List.length(&2, Bool, u), g))), UO.nat_le_add_r(a0, Nat.mul(s, g)), N.nl.lt_add_l(a0, Nat.mul(s, g), Nat.mul(List.length(&2, Bool, u), g), N.nl.lt_mul(s, List.length(&2, Bool, u), g, hs, hg)))
     case Con{h, t} 1n+i:
       pp.va_inside(t, i, s, b, n, g, hg, hn, hv)
 
@@ -225,10 +229,10 @@ def pp.lt_nle(a: Nat, b: Nat, +e: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is
 def pp.apart1(x: Bool, +b: Nat, +e: Nat, +b2: Nat, +e2: Nat, +a: Nat, +ex: {Nat.is_le(e, b2) == x : Bool}, +ap: {Bool.or(x, Nat.is_le(e2, b)) == True{} : Bool}, +hl: {Nat.is_le(b2, a) == True{} : Bool}, +hr: {Nat.is_lt(a, e2) == True{} : Bool}) -> {Bool.and(Nat.is_le(b, a), Nat.is_lt(a, e)) == False{} : Bool}:
   match x:
     case True{}:
-      %Equal.sym(Bool, Nat.is_lt(a, e), False{}, N.nl.le_nlt(e, a, N.nl.le_trans(e, b2, a, ex, hl))) : {Bool.and(Nat.is_le(b, a), _) == False{} : Bool}
+      %Equal.sym(Bool, Nat.is_lt(a, e), False{}, N.nl.le_nlt(e, a, UO.nat_le_trans(e, b2, a, ex, hl))) : {Bool.and(Nat.is_le(b, a), _) == False{} : Bool}
       pp.and_ff(Nat.is_le(b, a))
     case False{}:
-      %Equal.sym(Bool, Nat.is_le(b, a), False{}, pp.lt_nle(a, b, N.nl.lt_le_trans(a, e2, b, hr, ap))) : {Bool.and(_, Nat.is_lt(a, e)) == False{} : Bool}
+      %Equal.sym(Bool, Nat.is_le(b, a), False{}, pp.lt_nle(a, b, UO.nat_lt_le_trans(a, e2, b, hr, ap))) : {Bool.and(_, Nat.is_lt(a, e)) == False{} : Bool}
       {==}
 
 def pp.apart_out(+b: Nat, +e: Nat, cs: List<&2, G.GpChunk>, k: Nat, +a: Nat, +g: Nat, +hap: {G.genpool.apart_all(b, e, cs, g) == True{} : Bool}, +hin: {pp.inside_at(cs, k, a, g) == True{} : Bool}) -> {Bool.and(Nat.is_le(b, a), Nat.is_lt(a, e)) == False{} : Bool}:
@@ -254,7 +258,7 @@ def pp.locate_hit(cs: List<&2, G.GpChunk>, k: Nat, +a: Nat, +g: Nat, +i: Nat, +h
     case Con{+h, +t} 1n+ +j:
       +out = pp.apart_out(G.genpool.chunk.addr(h), G.genpool.chunk.end(h, g), t, j, a, g, N.nl.and_l(G.genpool.apart_all(G.genpool.chunk.addr(h), G.genpool.chunk.end(h, g), t, g), G.genpool.disjoint.go(t, g), hd), hin)
       %Equal.sym(Bool, G.genpool.inside(h, a, g), False{}, out) : {G.genpool.locate.pick(_, i, G.genpool.locate(t, a, g, 1n+i)) == Some{1n+Nat.add(j, i)} : Maybe<&2, Nat>}
-      Equal.trans(Maybe<&2, Nat>, G.genpool.locate(t, a, g, 1n+i), Some{Nat.add(j, 1n+i)}, Some{1n+Nat.add(j, i)}, pp.locate_hit(t, j, a, g, 1n+i, N.nl.and_r(G.genpool.apart_all(G.genpool.chunk.addr(h), G.genpool.chunk.end(h, g), t, g), G.genpool.disjoint.go(t, g), hd), hin), Equal.cong(Nat, Maybe<&2, Nat>, z => Some{z}, Nat.add(j, 1n+i), 1n+Nat.add(j, i), N.nl.add_succ(j, i)))
+      Equal.trans(Maybe<&2, Nat>, G.genpool.locate(t, a, g, 1n+i), Some{Nat.add(j, 1n+i)}, Some{1n+Nat.add(j, i)}, pp.locate_hit(t, j, a, g, 1n+i, N.nl.and_r(G.genpool.apart_all(G.genpool.chunk.addr(h), G.genpool.chunk.end(h, g), t, g), G.genpool.disjoint.go(t, g), hd), hin), Equal.cong(Nat, Maybe<&2, Nat>, z => Some{z}, Nat.add(j, 1n+i), 1n+Nat.add(j, i), UL.nat_add_succ(j, i)))
 
 # marking a run changes no chunk's address or length
 def pp.locate_mark(cs: List<&2, G.GpChunk>, k: Nat, +s: Nat, +n: Nat, +v: Bool, +a: Nat, +g: Nat, +i: Nat) -> {G.genpool.locate(G.genpool.mark(cs, k, s, n, v), a, g, i) == G.genpool.locate(cs, a, g, i) : Maybe<&2, Nat>}:

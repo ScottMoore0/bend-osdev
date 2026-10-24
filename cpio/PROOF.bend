@@ -6,6 +6,8 @@ import ./cpio.bend as C
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Lemmas are stated as {value == expression}, the direction a rewrite needs:
 # %e : P replaces the expression by the value.
@@ -154,20 +156,6 @@ def decomp.ref(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half.ref(n)) : Nat}:
 
 # The tail-recursive half is the structural one: halving onto acc adds acc.
 
-def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+n), 1n+Nat.add(p, n), add_succ(p, n))
-
-def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
-
 def half_go(+n: Nat, +acc: Nat) -> {C.nat.half.go(n, acc) == Nat.add(C.nat.half.ref(n), acc) : Nat}:
   match n:
     case 0n:
@@ -177,10 +165,10 @@ def half_go(+n: Nat, +acc: Nat) -> {C.nat.half.go(n, acc) == Nat.add(C.nat.half.
         case 0n:
           {==}
         case 1n+q:
-          Equal.trans(Nat, C.nat.half.go(q, 1n+acc), Nat.add(C.nat.half.ref(q), 1n+acc), 1n+Nat.add(C.nat.half.ref(q), acc), half_go(q, 1n+acc), add_succ(C.nat.half.ref(q), acc))
+          Equal.trans(Nat, C.nat.half.go(q, 1n+acc), Nat.add(C.nat.half.ref(q), 1n+acc), 1n+Nat.add(C.nat.half.ref(q), acc), half_go(q, 1n+acc), UL.nat_add_succ(C.nat.half.ref(q), acc))
 
 def half_eq(+n: Nat) -> {C.nat.half.ref(n) == C.nat.half(n) : Nat}:
-  Equal.sym(Nat, C.nat.half(n), C.nat.half.ref(n), Equal.trans(Nat, C.nat.half.go(n, 0n), Nat.add(C.nat.half.ref(n), 0n), C.nat.half.ref(n), half_go(n, 0n), add_zero(C.nat.half.ref(n))))
+  Equal.sym(Nat, C.nat.half(n), C.nat.half.ref(n), Equal.trans(Nat, C.nat.half.go(n, 0n), Nat.add(C.nat.half.ref(n), 0n), C.nat.half.ref(n), half_go(n, 0n), UL.nat_add_zero(C.nat.half.ref(n))))
 
 def decomp(+n: Nat) -> {n == rec(C.nat.odd(n), C.nat.half(n)) : Nat}:
   %half_eq(n) : {n == rec(C.nat.odd(n), _) : Nat}
