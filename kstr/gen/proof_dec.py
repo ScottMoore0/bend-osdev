@@ -18,6 +18,9 @@ the W64 division laws), and goes on with the quotient q until it is 0. So:
     overflow since v < 2^64 (ks.ml); in 32 bits (kstr.mul.fin) since v <
     2^32 (ks.ml32). The fuel n is enough: v < 2^n and q < 2^(n - 1).
 
+The base (10 here) and the letters' case are CFG's, so gen/proof_fmt.py
+runs the same lemmas in base 8 and base 16.
+
 Every lemma that holds 2^32 or 2^64 states it in the exact form a law
 takes it (u32/README.md, "Stating the bounds"), and no fact whose type
 holds one is ever bound to a name (a binding's type is normalized).
@@ -30,6 +33,25 @@ R32 = "Result<&2, &2, K.KStrError, U32>"
 TL = "List<&2, K.KStrTok>"
 W32 = "U.U32Nat.dbl(32n, 1n)"
 W64 = "U.U32Nat.dbl(64n, 1n)"
+
+# the base the digits are written and read in, and the case of the letters
+CFG = {"base": 10, "up": "False{}"}
+
+
+def BS():
+    return str(CFG["base"])
+
+
+def BN():
+    return f"{CFG['base']}n"
+
+
+def B1N():
+    return f"{CFG['base'] - 1}n"
+
+
+def B2N():
+    return f"{CFG['base'] - 2}n"
 
 
 def v32(x):
@@ -45,7 +67,7 @@ def D(k, x):
 
 
 def DQR(v):
-    return f"F.kfmt.divmod(U32.is_eq(W.W64.hi({v}), 0), {v}, 10)"
+    return f"F.kfmt.divmod(U32.is_eq(W.W64.hi({v}), 0), {v}, {BS()})"
 
 
 def Q(v):
@@ -57,11 +79,11 @@ def R(v):
 
 
 def DIG(r):
-    return f"F.kfmt.digit.pick(U32.is_lt({r}, 10), False{{}}, {r})"
+    return f"F.kfmt.digit.pick(U32.is_lt({r}, 10), {CFG['up']}, {r})"
 
 
 def DS(n, z, v, acc):
-    return f"F.kfmt.digits({n}, {z}, {v}, 10, False{{}}, {acc})"
+    return f"F.kfmt.digits({n}, {z}, {v}, {BS()}, {CFG['up']}, {acc})"
 
 
 def DT(n, z, v, tl):
@@ -142,7 +164,7 @@ def ks.hz(+m: W.W64, +h0: {{{hi} == 0n : Nat}}) -> {{U32.is_eq(W.W64.hi(m), 0) =
 def divmod_facts(put):
     put("# kfmt.divmod(..., v, 10): q 10 + r = v and r < 10, by U32 or by W64 division\n")
     v = "v"
-    DM = "W.W64.divmod(v, W.W64.from_u32(10))"
+    DM = f"W.W64.divmod(v, W.W64.from_u32({BS()}))"
     QR = f"F.kfmt.qr64({DM})"
     put(f"""def ks.oq(p: W.W64 & W.W64) -> {{W.W64.fst(p) == F.kfmt.q(F.kfmt.qr64(p)) : W.W64}}:
   (q, r) = p
@@ -152,60 +174,60 @@ def ks.or(p: W.W64 & W.W64) -> {{W.W64.lo(W.W64.snd(p)) == F.kfmt.r(F.kfmt.qr64(
   (q, r) = p
   {{==}}
 
-def ks.dmv(+v: W.W64) -> {{Nat.add(Nat.mul({v64(f'F.kfmt.q({QR})')}, 10n), {v32(f'F.kfmt.r({QR})')}) == {v64('v')} : Nat}}:
-  %ks.oq({DM}) : {{Nat.add(Nat.mul({v64('_')}, 10n), {v32(f'F.kfmt.r({QR})')}) == {v64('v')} : Nat}}
-  %ks.or({DM}) : {{Nat.add(Nat.mul({v64(f'W.W64.fst({DM})')}, 10n), {v32('_')}) == {v64('v')} : Nat}}
-  %ks.lo_small(W.W64.snd({DM}), 10, WL.mod_lt(v, W.W64.from_u32(10), {{==}})) : {{Nat.add(Nat.mul({v64(f'W.W64.fst({DM})')}, 10n), _) == {v64('v')} : Nat}}
-  WL.divmod_value(v, W.W64.from_u32(10), {{==}})
+def ks.dmv(+v: W.W64) -> {{Nat.add(Nat.mul({v64(f'F.kfmt.q({QR})')}, {BN()}), {v32(f'F.kfmt.r({QR})')}) == {v64('v')} : Nat}}:
+  %ks.oq({DM}) : {{Nat.add(Nat.mul({v64('_')}, {BN()}), {v32(f'F.kfmt.r({QR})')}) == {v64('v')} : Nat}}
+  %ks.or({DM}) : {{Nat.add(Nat.mul({v64(f'W.W64.fst({DM})')}, {BN()}), {v32('_')}) == {v64('v')} : Nat}}
+  %ks.lo_small(W.W64.snd({DM}), {BS()}, WL.mod_lt(v, W.W64.from_u32({BS()}), {{==}})) : {{Nat.add(Nat.mul({v64(f'W.W64.fst({DM})')}, {BN()}), _) == {v64('v')} : Nat}}
+  WL.divmod_value(v, W.W64.from_u32({BS()}), {{==}})
 
-def ks.dml(+v: W.W64) -> {btrue(f'Nat.is_lt({v32(f"F.kfmt.r({QR})")}, 10n)')}:
-  +lt = WL.mod_lt(v, W.W64.from_u32(10), {{==}})
-  %ks.or({DM}) : {btrue(f'Nat.is_lt({v32("_")}, 10n)')}
-  %ks.lo_small(W.W64.snd({DM}), 10, lt) : {btrue('Nat.is_lt(_, 10n)')}
+def ks.dml(+v: W.W64) -> {btrue(f'Nat.is_lt({v32(f"F.kfmt.r({QR})")}, {BN()})')}:
+  +lt = WL.mod_lt(v, W.W64.from_u32({BS()}), {{==}})
+  %ks.or({DM}) : {btrue(f'Nat.is_lt({v32("_")}, {BN()})')}
+  %ks.lo_small(W.W64.snd({DM}), {BS()}, lt) : {btrue(f'Nat.is_lt(_, {BN()})')}
   lt
 """)
     # the 32-bit case: hi v = 0
     L = "W.W64.lo(v)"
-    QS = f"W.W64.from_u32(U32.div({L}, 10))"
-    RS = f"U32.mod({L}, 10)"
+    QS = f"W.W64.from_u32(U32.div({L}, {BS()}))"
+    RS = f"U32.mod({L}, {BS()})"
     hv = v32("W.W64.hi(v)")
     H0 = hyp("h0", hv, "0n")
-    e = calc(f"Nat.add(Nat.mul({v64(QS)}, 10n), {v32(RS)})",
-             (f"Nat.add(Nat.mul({v32(f'U32.div({L}, 10)')}, 10n), {v32(RS)})", hyp(f"ks.fv(U32.div({L}, 10))", v64(QS), v32(f"U32.div({L}, 10)"))),
-             (v32(L), hyp(f"UL.u32_divmod({L}, 10, {{==}})", f"Nat.add(Nat.mul({v32(f'U32.div({L}, 10)')}, 10n), {v32(RS)})", v32(L))),
+    e = calc(f"Nat.add(Nat.mul({v64(QS)}, {BN()}), {v32(RS)})",
+             (f"Nat.add(Nat.mul({v32(f'U32.div({L}, {BS()})')}, {BN()}), {v32(RS)})", hyp(f"ks.fv(U32.div({L}, {BS()}))", v64(QS), v32(f"U32.div({L}, {BS()})"))),
+             (v32(L), hyp(f"UL.u32_divmod({L}, {BS()}, {{==}})", f"Nat.add(Nat.mul({v32(f'U32.div({L}, {BS()})')}, {BN()}), {v32(RS)})", v32(L))),
              (f"Nat.add({v32(L)}, 0n)", sym(hyp(f"UL.nat_add_zero({v32(L)})", f"Nat.add({v32(L)}, 0n)", v32(L)))),
              (f"Nat.add({v32(L)}, {D('32n', '0n')})", "="),
              (f"Nat.add({v32(L)}, {D('32n', hv)})", sym(H0)),
              (v64("v"), hyp("ks.np(v)", f"Nat.add({v32(L)}, {D('32n', hv)})", v64("v"))))
     h0 = (f"ks.z0({hv}, Equal.trans(Bool, Nat.is_eq({hv}, 0n), U32.is_eq(W.W64.hi(v), 0), True{{}}, "
           f"Equal.sym(Bool, U32.is_eq(W.W64.hi(v), 0), Nat.is_eq({hv}, 0n), UL.u32_eq_value(W.W64.hi(v), 0)), es))")
-    pair = (f"{{Nat.add(Nat.mul({v64('F.kfmt.q(F.kfmt.divmod(s, v, 10))')}, 10n), {v32('F.kfmt.r(F.kfmt.divmod(s, v, 10))')}) == {v64('v')} : Nat}} & "
-            + btrue(f"Nat.is_lt({v32('F.kfmt.r(F.kfmt.divmod(s, v, 10))')}, 10n)"))
+    pair = (f"{{Nat.add(Nat.mul({v64(f'F.kfmt.q(F.kfmt.divmod(s, v, {BS()}))')}, {BN()}), {v32(f'F.kfmt.r(F.kfmt.divmod(s, v, {BS()}))')}) == {v64('v')} : Nat}} & "
+            + btrue(f"Nat.is_lt({v32(f'F.kfmt.r(F.kfmt.divmod(s, v, {BS()}))')}, {BN()})"))
     put(f"""def ks.dm1(+v: W.W64, s: Bool, es: {{U32.is_eq(W.W64.hi(v), 0) == s : Bool}}) -> {pair}:
   match s:
     case True{{}}:
       +h0 = {h0}
-      ({e.text}, UL.u32_mod_lt({L}, 10, {{==}}))
+      ({e.text}, UL.u32_mod_lt({L}, {BS()}, {{==}}))
     case False{{}}:
       (ks.dmv(v), ks.dml(v))
 """)
-    args = f"Nat.add(Nat.mul({v64(Q('v'))}, 10n), {v32(R('v'))}), {v64('v')}, {v32(R('v'))}, 10n"
-    put(f"""def ks.dmq(+v: W.W64) -> {{Nat.add(Nat.mul({v64(Q('v'))}, 10n), {v32(R('v'))}) == {v64('v')} : Nat}}:
+    args = f"Nat.add(Nat.mul({v64(Q('v'))}, {BN()}), {v32(R('v'))}), {v64('v')}, {v32(R('v'))}, {BN()}"
+    put(f"""def ks.dmq(+v: W.W64) -> {{Nat.add(Nat.mul({v64(Q('v'))}, {BN()}), {v32(R('v'))}) == {v64('v')} : Nat}}:
   ks.c1({args}, ks.dm1(v, U32.is_eq(W.W64.hi(v), 0), {{==}}))
 
-def ks.dmr(+v: W.W64) -> {btrue(f'Nat.is_lt({v32(R("v"))}, 10n)')}:
+def ks.dmr(+v: W.W64) -> {btrue(f'Nat.is_lt({v32(R("v"))}, {BN()})')}:
   ks.c2({args}, ks.dm1(v, U32.is_eq(W.W64.hi(v), 0), {{==}}))
 
 # q < 2^k when q 10 + r = v < 2^m, m = 1 + k
-def ks.hq(+k: Nat, +m: Nat, +q: Nat, +r: Nat, +v: Nat, em: {{1n+k == m : Nat}}, e: {{Nat.add(Nat.mul(q, 10n), r) == v : Nat}}, h: {btrue(f'Nat.is_lt(v, {D("m", "1n")})')}) -> {btrue(f'Nat.is_lt(q, {D("k", "1n")})')}:
+def ks.hq(+k: Nat, +m: Nat, +q: Nat, +r: Nat, +v: Nat, em: {{1n+k == m : Nat}}, e: {{Nat.add(Nat.mul(q, {BN()}), r) == v : Nat}}, h: {btrue(f'Nat.is_lt(v, {D("m", "1n")})')}) -> {btrue(f'Nat.is_lt(q, {D("k", "1n")})')}:
   {hq_body()}
 """)
 
 
 def hq_body():
-    E = hyp("e", "Nat.add(Nat.mul(q, 10n), r)", "v")
-    w = "Nat.add(Nat.mul(q, 8n), r)"
-    pf = calc(f"Nat.add({w}, Nat.double(q))", ("Nat.add(Nat.mul(q, 10n), r)", "ring"), ("v", E))
+    E = hyp("e", f"Nat.add(Nat.mul(q, {BN()}), r)", "v")
+    w = f"Nat.add(Nat.mul(q, {B2N()}), r)"
+    pf = calc(f"Nat.add({w}, Nat.double(q))", (f"Nat.add(Nat.mul(q, {BN()}), r)", "ring"), ("v", E))
     le = le_from("Nat.double(q)", "v", w, pf)
     hm = (f"Equal.trans(Bool, Nat.is_lt(v, {D('1n+k', '1n')}), Nat.is_lt(v, {D('m', '1n')}), True{{}}, "
           f"Equal.cong(Nat, Bool, zz => Nat.is_lt(v, {D('zz', '1n')}), 1n+k, m, em), h)")
@@ -223,7 +245,7 @@ def tokens(put):
 
     def go(depth, ind, k):
         pad = "  " * ind
-        if k == 10:
+        if k == CFG["base"]:
             out.append(pad + f"match n{depth}:")
             out.append(pad + "  case 0n:")
             out.append(pad + f"    Empty.absurd({goal}, ks.ft(h))")
@@ -237,10 +259,10 @@ def tokens(put):
         out.append(pad + f"  case 1n+n{depth + 1}:")
         go(depth + 1, ind + 2, k + 1)
     go(0, 1, 0)
-    put(f"""def ks.tdn(n0: Nat, +r: U32, e: {{{v32('r')} == n0 : Nat}}, h: {btrue('Nat.is_lt(n0, 10n)')}) -> {goal}:
+    put(f"""def ks.tdn(n0: Nat, +r: U32, e: {{{v32('r')} == n0 : Nat}}, h: {btrue(f'Nat.is_lt(n0, {BN()})')}) -> {goal}:
 """ + "\n".join(out) + f"""
 
-def ks.td(+r: U32, h: {btrue(f'Nat.is_lt({v32("r")}, 10n)')}) -> {goal}:
+def ks.td(+r: U32, h: {btrue(f'Nat.is_lt({v32("r")}, {BN()})')}) -> {goal}:
   ks.tdn({v32('r')}, r, {{==}}, h)
 
 # the tokens of the digits of v (least significant last), onto tl
@@ -289,7 +311,7 @@ def ks.tb(n: Nat, z: Bool, +v: W.W64, +tl: {TL}) -> {{K.kstr.strip_nl({DT('n', '
     case 1n+ +k False{{}}:
       ks.tb(k, {ZQ('v')}, {Q('v')}, Con{{K.KTDigit{{{R('v')}}}, tl}})
 
-def ks.fr(n: Nat, z: Bool, +v: W.W64, +d: U32, +tl: {TL}) -> {{K.kstr.front(10, {DT('n', 'z', 'v', 'Con{K.KTDigit{d}, tl}')}, False{{}}) == Done{{K.KStrDigits{{False{{}}, 10, {DT('n', 'z', 'v', 'Con{K.KTDigit{d}, tl}')}, 0n}}}} : Result<&2, &2, K.KStrError, K.KStrDigits>}}:
+def ks.fr(n: Nat, z: Bool, +v: W.W64, +d: U32, +tl: {TL}) -> {{K.kstr.front({BS()}, {DT('n', 'z', 'v', 'Con{K.KTDigit{d}, tl}')}, False{{}}) == Done{{K.KStrDigits{{False{{}}, {BS()}, {DT('n', 'z', 'v', 'Con{K.KTDigit{d}, tl}')}, 0n}}}} : Result<&2, &2, K.KStrError, K.KStrDigits>}}:
   match n z:
     case 0n True{{}}:
       {{==}}
@@ -306,7 +328,7 @@ def mul64(put):
     """kstr.mul64(q, 10, r) = Done{v} when q 10 + r = v (< 2^64)."""
     put("# One step of the 64-bit parse: acc 10 + d, which does not overflow\n")
     q, r, v = "q", "r", "v"
-    F10 = "W.W64.from_u32(10)"
+    F10 = f"W.W64.from_u32({BS()})"
     ql, qh = "W.W64.lo(q)", "W.W64.hi(q)"
     PLO = f"W.W64.mul(W.W64.from_u32({ql}), {F10})"
     MH = f"W.W64.mul(W.W64.from_u32({qh}), {F10})"
@@ -315,59 +337,59 @@ def mul64(put):
     PROD = f"W.W64.from_parts(W.W64.lo({MID}), W.W64.lo({PLO}))"
     SUM = f"W.W64.add({PROD}, W.W64.from_u32(r))"
     OK = f"K.kstr.ok64(Bool.and(U32.is_eq(W.W64.hi({MID}), 0), W.W64.is_le({PROD}, {SUM})), {SUM})"
-    put(f"""def ks.mu(+q: W.W64, +r: U32) -> {{K.kstr.mul64(q, 10, r) == {OK} : {R64}}}:
+    put(f"""def ks.mu(+q: W.W64, +r: U32) -> {{K.kstr.mul64(q, {BS()}, r) == {OK} : {R64}}}:
   {{==}}
 """)
     Qv, VL, VH, V, Rv = v64(q), v32(ql), v32(qh), v64(v), v32(r)
     LP, HP = v32(f"W.W64.lo({PLO})"), v32(HPw)
-    Mv = f"Nat.add(Nat.mul({VH}, 10n), {HP})"
+    Mv = f"Nat.add(Nat.mul({VH}, {BN()}), {HP})"
     NPq = hyp("ks.np(q)", f"Nat.add({VL}, {D('32n', VH)})", Qv)
-    E = hyp("e", f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", V)
+    E = hyp("e", f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", V)
     FVL = hyp(f"ks.fv({ql})", v64(f"W.W64.from_u32({ql})"), VL)
     FVH = hyp(f"ks.fv({qh})", v64(f"W.W64.from_u32({qh})"), VH)
     FVR = hyp("ks.fv(r)", v64("W.W64.from_u32(r)"), Rv)
     FHP = hyp(f"ks.fv({HPw})", v64(f"W.W64.from_u32({HPw})"), HP)
     # V = (VL 10 + R) + 2^32 (VH 10)
-    keyv = calc(f"Nat.add(Nat.add(Nat.mul({VL}, 10n), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})",
-                (f"Nat.add(Nat.mul(Nat.add({VL}, {D('32n', VH)}), 10n), {Rv})", "ring"),
-                (f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", NPq),
+    keyv = calc(f"Nat.add(Nat.add(Nat.mul({VL}, {BN()}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})",
+                (f"Nat.add(Nat.mul(Nat.add({VL}, {D('32n', VH)}), {BN()}), {Rv})", "ring"),
+                (f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", NPq),
                 (V, E))
-    KEYV = hyp("keyv", f"Nat.add(Nat.add(Nat.mul({VL}, 10n), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", V)
+    KEYV = hyp("keyv", f"Nat.add(Nat.add(Nat.mul({VL}, {BN()}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", V)
     # (1) the low product
-    w1 = f"Nat.add({D('32n', f'Nat.mul({VH}, 10n)')}, {Rv})"
+    w1 = f"Nat.add({D('32n', f'Nat.mul({VH}, {BN()})')}, {Rv})"
     p1 = calc(f"Nat.add({w1}, Nat.mul({v64(f'W.W64.from_u32({ql})')}, {v64(F10)}))",
-              (f"Nat.add({w1}, Nat.mul({v64(f'W.W64.from_u32({ql})')}, 10n))", "="),
-              (f"Nat.add({w1}, Nat.mul({VL}, 10n))", FVL),
-              (f"Nat.add(Nat.add(Nat.mul({VL}, 10n), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", "ring"),
+              (f"Nat.add({w1}, Nat.mul({v64(f'W.W64.from_u32({ql})')}, {BN()}))", "="),
+              (f"Nat.add({w1}, Nat.mul({VL}, {BN()}))", FVL),
+              (f"Nat.add(Nat.add(Nat.mul({VL}, {BN()}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", "ring"),
               (V, KEYV))
     h1 = le_from(f"Nat.mul({v64(f'W.W64.from_u32({ql})')}, {v64(F10)})", V, w1, p1)
     vplo = calc(v64(PLO), (f"Nat.mul({v64(f'W.W64.from_u32({ql})')}, {v64(F10)})", hyp(f"WL.mul_value(W.W64.from_u32({ql}), {F10}, v, {h1})", v64(PLO), f"Nat.mul({v64(f'W.W64.from_u32({ql})')}, {v64(F10)})")),
-                (f"Nat.mul({v64(f'W.W64.from_u32({ql})')}, 10n)", "="),
-                (f"Nat.mul({VL}, 10n)", FVL))
-    VPLO = hyp("vplo", v64(PLO), f"Nat.mul({VL}, 10n)")
+                (f"Nat.mul({v64(f'W.W64.from_u32({ql})')}, {BN()})", "="),
+                (f"Nat.mul({VL}, {BN()})", FVL))
+    VPLO = hyp("vplo", v64(PLO), f"Nat.mul({VL}, {BN()})")
     NPP = hyp(f"ks.np({PLO})", f"Nat.add({LP}, {D('32n', HP)})", v64(PLO))
     # V = (LP + R) + 2^32 M
     key2 = calc(f"Nat.add(Nat.add({LP}, {Rv}), {D('32n', Mv)})",
-                (f"Nat.add(Nat.add(Nat.add({LP}, {D('32n', HP)}), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", "ring"),
-                (f"Nat.add(Nat.add({v64(PLO)}, {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", NPP),
-                (f"Nat.add(Nat.add(Nat.mul({VL}, 10n), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", VPLO),
+                (f"Nat.add(Nat.add(Nat.add({LP}, {D('32n', HP)}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", "ring"),
+                (f"Nat.add(Nat.add({v64(PLO)}, {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", NPP),
+                (f"Nat.add(Nat.add(Nat.mul({VL}, {BN()}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", VPLO),
                 (V, KEYV))
     KEY2 = hyp("key2", f"Nat.add(Nat.add({LP}, {Rv}), {D('32n', Mv)})", V)
     # (3) the high product: VH 10 <= 2^32 (VH 10) <= V
-    dle = le_from(D("32n", f"Nat.mul({VH}, 10n)"), V, f"Nat.add(Nat.mul({VL}, 10n), {Rv})",
-                  calc(f"Nat.add(Nat.add(Nat.mul({VL}, 10n), {Rv}), {D('32n', f'Nat.mul({VH}, 10n)')})", (V, KEYV)))
-    h3x = f"ks.le_trans(Nat.mul({VH}, 10n), {D('32n', f'Nat.mul({VH}, 10n)')}, {V}, UL.nat_le_dbl(32n, Nat.mul({VH}, 10n)), {dle})"
-    h3 = N.btrans(f"Nat.is_le(Nat.mul({v64(f'W.W64.from_u32({qh})')}, {v64(F10)}), {V})", f"Nat.is_le(Nat.mul({VH}, 10n), {V})", "True{}",
-                  N.bcong("zz", f"Nat.is_le(Nat.mul(zz, 10n), {V})", v64(f"W.W64.from_u32({qh})"), VH, "ks.fv(" + qh + ")"), h3x)
+    dle = le_from(D("32n", f"Nat.mul({VH}, {BN()})"), V, f"Nat.add(Nat.mul({VL}, {BN()}), {Rv})",
+                  calc(f"Nat.add(Nat.add(Nat.mul({VL}, {BN()}), {Rv}), {D('32n', f'Nat.mul({VH}, {BN()})')})", (V, KEYV)))
+    h3x = f"ks.le_trans(Nat.mul({VH}, {BN()}), {D('32n', f'Nat.mul({VH}, {BN()})')}, {V}, UL.nat_le_dbl(32n, Nat.mul({VH}, {BN()})), {dle})"
+    h3 = N.btrans(f"Nat.is_le(Nat.mul({v64(f'W.W64.from_u32({qh})')}, {v64(F10)}), {V})", f"Nat.is_le(Nat.mul({VH}, {BN()}), {V})", "True{}",
+                  N.bcong("zz", f"Nat.is_le(Nat.mul(zz, {BN()}), {V})", v64(f"W.W64.from_u32({qh})"), VH, "ks.fv(" + qh + ")"), h3x)
     vmh = calc(v64(MH), (f"Nat.mul({v64(f'W.W64.from_u32({qh})')}, {v64(F10)})", hyp(f"WL.mul_value(W.W64.from_u32({qh}), {F10}, v, {h3})", v64(MH), f"Nat.mul({v64(f'W.W64.from_u32({qh})')}, {v64(F10)})")),
-               (f"Nat.mul({v64(f'W.W64.from_u32({qh})')}, 10n)", "="),
-               (f"Nat.mul({VH}, 10n)", FVH))
-    VMH = hyp("vmh", v64(MH), f"Nat.mul({VH}, 10n)")
+               (f"Nat.mul({v64(f'W.W64.from_u32({qh})')}, {BN()})", "="),
+               (f"Nat.mul({VH}, {BN()})", FVH))
+    VMH = hyp("vmh", v64(MH), f"Nat.mul({VH}, {BN()})")
     # (4) the middle: M <= 2^32 M <= V
     dle2 = le_from(D("32n", Mv), V, f"Nat.add({LP}, {Rv})", calc(f"Nat.add(Nat.add({LP}, {Rv}), {D('32n', Mv)})", (V, KEY2)))
     h4x = f"ks.le_trans({Mv}, {D('32n', Mv)}, {V}, UL.nat_le_dbl(32n, {Mv}), {dle2})"
     X4 = f"Nat.add({v64(MH)}, {v64(f'W.W64.from_u32({HPw})')})"
-    e4 = calc(X4, (f"Nat.add(Nat.mul({VH}, 10n), {v64(f'W.W64.from_u32({HPw})')})", VMH), (Mv, FHP))
+    e4 = calc(X4, (f"Nat.add(Nat.mul({VH}, {BN()}), {v64(f'W.W64.from_u32({HPw})')})", VMH), (Mv, FHP))
     h4 = N.btrans(f"Nat.is_le({X4}, {V})", f"Nat.is_le({Mv}, {V})", "True{}", N.bcong("zz", f"Nat.is_le(zz, {V})", X4, Mv, e4.text), h4x)
     vmid = calc(v64(MID), (X4, hyp(f"WL.add_value({MH}, W.W64.from_u32({HPw}), v, {h4})", v64(MID), X4)), (Mv, e4))
     VMID = hyp("vmid", v64(MID), Mv)
@@ -397,7 +419,7 @@ def mul64(put):
                    f"UL.nat_le_add({v64(PROD)}, {v64('W.W64.from_u32(r)')})")
     LE = f"Equal.trans(Bool, W.W64.is_le({PROD}, {SUM}), Nat.is_le({v64(PROD)}, {v64(SUM)}), True{{}}, WL.le_value({PROD}, {SUM}), {lex})"
     okt = lambda a, b, c: f"K.kstr.ok64(Bool.and({a}, {b}), {c})"  # noqa: E731
-    put(f"""def ks.ml(+q: W.W64, +r: U32, +v: W.W64, +e: {{Nat.add(Nat.mul({Qv}, 10n), {Rv}) == {V} : Nat}}) -> {{K.kstr.mul64(q, 10, r) == Done{{v}} : {R64}}}:
+    put(f"""def ks.ml(+q: W.W64, +r: U32, +v: W.W64, +e: {{Nat.add(Nat.mul({Qv}, {BN()}), {Rv}) == {V} : Nat}}) -> {{K.kstr.mul64(q, {BS()}, r) == Done{{v}} : {R64}}}:
   +keyv = {keyv.text}
   +vplo = {vplo.text}
   +key2 = {key2.text}
@@ -406,7 +428,7 @@ def mul64(put):
   +lom = ks.lo32({MID}, {midlt})
   +vprod = {vprod.text}
   +e8 = {e8.text}
-  %Equal.sym({R64}, K.kstr.mul64(q, 10, r), {OK}, ks.mu(q, r)) : {{_ == Done{{v}} : {R64}}}
+  %Equal.sym({R64}, K.kstr.mul64(q, {BS()}, r), {OK}, ks.mu(q, r)) : {{_ == Done{{v}} : {R64}}}
   %Equal.sym(Bool, U32.is_eq(W.W64.hi({MID}), 0), True{{}}, ks.hz({MID}, ks.hi0({MID}, lom))) : {{{okt('_', f'W.W64.is_le({PROD}, {SUM})', SUM)} == Done{{v}} : {R64}}}
   %Equal.sym(Bool, W.W64.is_le({PROD}, {SUM}), True{{}}, {LE}) : {{{okt('True{}', '_', SUM)} == Done{{v}} : {R64}}}
   Equal.cong(W.W64, {R64}, zz => Done{{zz}}, {SUM}, v, WL.value_eq({SUM}, v, {vsum.text}))
@@ -417,28 +439,28 @@ def mul32(put):
     """kstr.mul.fin(lo q 10 + r) = Done{lo v} when q 10 + r = v < 2^32."""
     put("# One step of the 32-bit parse\n")
     q, r, v = "q", "r", "v"
-    F10 = "W.W64.from_u32(10)"
+    F10 = f"W.W64.from_u32({BS()})"
     LQ = "W.W64.lo(q)"
     MU = f"W.W64.mul(W.W64.from_u32({LQ}), {F10})"
     PP = f"W.W64.add({MU}, W.W64.from_u32(r))"
     Qv, V, Rv = v64(q), v64(v), v32(r)
-    E = hyp("e", f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", V)
-    qle = le_from(Qv, V, f"Nat.add(Nat.mul({Qv}, 9n), {Rv})",
-                  calc(f"Nat.add(Nat.add(Nat.mul({Qv}, 9n), {Rv}), {Qv})", (f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", "ring"), (V, E)))
+    E = hyp("e", f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", V)
+    qle = le_from(Qv, V, f"Nat.add(Nat.mul({Qv}, {B1N()}), {Rv})",
+                  calc(f"Nat.add(Nat.add(Nat.mul({Qv}, {B1N()}), {Rv}), {Qv})", (f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", "ring"), (V, E)))
     qlt = f"ks.lelt({Qv}, {V}, {W32}, {qle}, hv)"
     LQV = hyp("lqv", v32(LQ), Qv)
     FLQ = hyp(f"ks.fv({LQ})", v64(f"W.W64.from_u32({LQ})"), v32(LQ))
     FR = hyp("ks.fv(r)", v64("W.W64.from_u32(r)"), Rv)
     X1 = f"Nat.mul({v64(f'W.W64.from_u32({LQ})')}, {v64(F10)})"
-    e1 = calc(X1, (f"Nat.mul({v64(f'W.W64.from_u32({LQ})')}, 10n)", "="), (f"Nat.mul({v32(LQ)}, 10n)", FLQ), (f"Nat.mul({Qv}, 10n)", LQV))
-    h1 = le_from(X1, V, Rv, calc(f"Nat.add({Rv}, {X1})", (f"Nat.add({Rv}, Nat.mul({Qv}, 10n))", e1), (f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", "ring"), (V, E)))
+    e1 = calc(X1, (f"Nat.mul({v64(f'W.W64.from_u32({LQ})')}, {BN()})", "="), (f"Nat.mul({v32(LQ)}, {BN()})", FLQ), (f"Nat.mul({Qv}, {BN()})", LQV))
+    h1 = le_from(X1, V, Rv, calc(f"Nat.add({Rv}, {X1})", (f"Nat.add({Rv}, Nat.mul({Qv}, {BN()}))", e1), (f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", "ring"), (V, E)))
     X2 = f"Nat.add({v64(MU)}, {v64('W.W64.from_u32(r)')})"
     VMU = hyp(f"WL.mul_value(W.W64.from_u32({LQ}), {F10}, v, {h1})", v64(MU), X1)
-    e2 = calc(X2, (f"Nat.add({X1}, {v64('W.W64.from_u32(r)')})", VMU), (f"Nat.add(Nat.mul({Qv}, 10n), {v64('W.W64.from_u32(r)')})", e1),
-              (f"Nat.add(Nat.mul({Qv}, 10n), {Rv})", FR), (V, E))
+    e2 = calc(X2, (f"Nat.add({X1}, {v64('W.W64.from_u32(r)')})", VMU), (f"Nat.add(Nat.mul({Qv}, {BN()}), {v64('W.W64.from_u32(r)')})", e1),
+              (f"Nat.add(Nat.mul({Qv}, {BN()}), {Rv})", FR), (V, E))
     h2 = le_from(X2, V, "0n", calc(f"Nat.add(0n, {X2})", (X2, "="), (V, hyp("e2", X2, V))))
     vp = calc(v64(PP), (X2, hyp(f"WL.add_value({MU}, W.W64.from_u32(r), v, {h2})", v64(PP), X2)), (V, hyp("e2", X2, V)))
-    put(f"""def ks.ml32(+q: W.W64, +r: U32, +v: W.W64, +e: {{Nat.add(Nat.mul({Qv}, 10n), {Rv}) == {V} : Nat}}, +hv: {btrue(f'Nat.is_lt({V}, {W32})')}) -> {{K.kstr.mul.fin({PP}) == Done{{W.W64.lo(v)}} : {R32}}}:
+    put(f"""def ks.ml32(+q: W.W64, +r: U32, +v: W.W64, +e: {{Nat.add(Nat.mul({Qv}, {BN()}), {Rv}) == {V} : Nat}}, +hv: {btrue(f'Nat.is_lt({V}, {W32})')}) -> {{K.kstr.mul.fin({PP}) == Done{{W.W64.lo(v)}} : {R32}}}:
   +lqv = ks.lo32(q, {qlt})
   +e2 = {e2.text}
   %Equal.sym(W.W64, {PP}, v, WL.value_eq({PP}, v, {vp.text})) : {{K.kstr.mul.fin(_) == Done{{W.W64.lo(v)}} : {R32}}}
@@ -451,13 +473,13 @@ def parse(put):
     put("# The parse of the digit tokens\n")
     v = "v"
     Qv, Rv = Q(v), R(v)
-    ltu = (f"Equal.trans(Bool, U32.is_lt({Rv}, 10), Nat.is_lt({v32(Rv)}, 10n), True{{}}, UL.u32_lt_value({Rv}, 10), ks.dmr(v))")
+    ltu = (f"Equal.trans(Bool, U32.is_lt({Rv}, {BS()}), Nat.is_lt({v32(Rv)}, {BN()}), True{{}}, UL.u32_lt_value({Rv}, {BS()}), ks.dmr(v))")
     # one digit step, 64 and 32 bits
-    put(f"""def ks.sp(+v: W.W64, +tl: {TL}, +p: Nat) -> {{K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, tl}}, 10, Done{{{Qv}}}, p) == K.kstr.digits64(tl, 10, Done{{v}}, 1n+p) : {R64}}}:
-  Equal.cong({R64}, {R64}, zz => K.kstr.digits64(tl, 10, zz, 1n+p), K.kstr.step64.digit(U32.is_lt({Rv}, 10), 10, {Qv}, {Rv}, p), Done{{v}}, Equal.trans({R64}, K.kstr.step64.digit(U32.is_lt({Rv}, 10), 10, {Qv}, {Rv}, p), K.kstr.step64.digit(True{{}}, 10, {Qv}, {Rv}, p), Done{{v}}, Equal.cong(Bool, {R64}, zz => K.kstr.step64.digit(zz, 10, {Qv}, {Rv}, p), U32.is_lt({Rv}, 10), True{{}}, {ltu}), ks.ml({Qv}, {Rv}, v, ks.dmq(v))))
+    put(f"""def ks.sp(+v: W.W64, +tl: {TL}, +p: Nat) -> {{K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, tl}}, {BS()}, Done{{{Qv}}}, p) == K.kstr.digits64(tl, {BS()}, Done{{v}}, 1n+p) : {R64}}}:
+  Equal.cong({R64}, {R64}, zz => K.kstr.digits64(tl, {BS()}, zz, 1n+p), K.kstr.step64.digit(U32.is_lt({Rv}, {BS()}), {BS()}, {Qv}, {Rv}, p), Done{{v}}, Equal.trans({R64}, K.kstr.step64.digit(U32.is_lt({Rv}, {BS()}), {BS()}, {Qv}, {Rv}, p), K.kstr.step64.digit(True{{}}, {BS()}, {Qv}, {Rv}, p), Done{{v}}, Equal.cong(Bool, {R64}, zz => K.kstr.step64.digit(zz, {BS()}, {Qv}, {Rv}, p), U32.is_lt({Rv}, {BS()}), True{{}}, {ltu}), ks.ml({Qv}, {Rv}, v, ks.dmq(v))))
 
-def ks.sq(+v: W.W64, +tl: {TL}, +p: Nat, +hv: {btrue(f'Nat.is_lt({v64("v")}, {W32})')}) -> {{K.kstr.digits(Con{{K.KTDigit{{{Rv}}}, tl}}, 10, Done{{W.W64.lo({Qv})}}, p) == K.kstr.digits(tl, 10, Done{{W.W64.lo(v)}}, 1n+p) : {R32}}}:
-  Equal.cong({R32}, {R32}, zz => K.kstr.digits(tl, 10, zz, 1n+p), K.kstr.step.digit(U32.is_lt({Rv}, 10), 10, W.W64.lo({Qv}), {Rv}, p), Done{{W.W64.lo(v)}}, Equal.trans({R32}, K.kstr.step.digit(U32.is_lt({Rv}, 10), 10, W.W64.lo({Qv}), {Rv}, p), K.kstr.step.digit(True{{}}, 10, W.W64.lo({Qv}), {Rv}, p), Done{{W.W64.lo(v)}}, Equal.cong(Bool, {R32}, zz => K.kstr.step.digit(zz, 10, W.W64.lo({Qv}), {Rv}, p), U32.is_lt({Rv}, 10), True{{}}, {ltu}), ks.ml32({Qv}, {Rv}, v, ks.dmq(v), hv)))
+def ks.sq(+v: W.W64, +tl: {TL}, +p: Nat, +hv: {btrue(f'Nat.is_lt({v64("v")}, {W32})')}) -> {{K.kstr.digits(Con{{K.KTDigit{{{Rv}}}, tl}}, {BS()}, Done{{W.W64.lo({Qv})}}, p) == K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(v)}}, 1n+p) : {R32}}}:
+  Equal.cong({R32}, {R32}, zz => K.kstr.digits(tl, {BS()}, zz, 1n+p), K.kstr.step.digit(U32.is_lt({Rv}, {BS()}), {BS()}, W.W64.lo({Qv}), {Rv}, p), Done{{W.W64.lo(v)}}, Equal.trans({R32}, K.kstr.step.digit(U32.is_lt({Rv}, {BS()}), {BS()}, W.W64.lo({Qv}), {Rv}, p), K.kstr.step.digit(True{{}}, {BS()}, W.W64.lo({Qv}), {Rv}, p), Done{{W.W64.lo(v)}}, Equal.cong(Bool, {R32}, zz => K.kstr.step.digit(zz, {BS()}, W.W64.lo({Qv}), {Rv}, p), U32.is_lt({Rv}, {BS()}), True{{}}, {ltu}), ks.ml32({Qv}, {Rv}, v, ks.dmq(v), hv)))
 """)
     # v = 0 when is_zero(v); and not when fuel is 0 and v < 1
     vz = f"WL.value_eq(v, W.W64.zero(), ks.wz(v, ez))"
@@ -467,35 +489,35 @@ def ks.sq(+v: W.W64, +tl: {TL}, +p: Nat, +hv: {btrue(f'Nat.is_lt({v64("v")}, {W3
                f"Equal.sym(Bool, Nat.is_eq({v64('v')}, 0n), True{{}}, Equal.cong(Nat, Bool, zz => Nat.is_eq(zz, 0n), {v64('v')}, 0n, ks.lt1({v64('v')}, hf))), {nz}))")
     hfq = f"ks.hq(k, 1n+k, {v64(Qv)}, {v32(Rv)}, {v64('v')}, {{==}}, ks.dmq(v), hf)"
     # the quotient is below 2^32 too: q <= v
-    E = hyp("ks.dmq(v)", f"Nat.add(Nat.mul({v64(Qv)}, 10n), {v32(Rv)})", v64("v"))
-    qle = le_from(v64(Qv), v64("v"), f"Nat.add(Nat.mul({v64(Qv)}, 9n), {v32(Rv)})",
-                  calc(f"Nat.add(Nat.add(Nat.mul({v64(Qv)}, 9n), {v32(Rv)}), {v64(Qv)})", (f"Nat.add(Nat.mul({v64(Qv)}, 10n), {v32(Rv)})", "ring"), (v64("v"), E)))
+    E = hyp("ks.dmq(v)", f"Nat.add(Nat.mul({v64(Qv)}, {BN()}), {v32(Rv)})", v64("v"))
+    qle = le_from(v64(Qv), v64("v"), f"Nat.add(Nat.mul({v64(Qv)}, {B1N()}), {v32(Rv)})",
+                  calc(f"Nat.add(Nat.add(Nat.mul({v64(Qv)}, {B1N()}), {v32(Rv)}), {v64(Qv)})", (f"Nat.add(Nat.mul({v64(Qv)}, {BN()}), {v32(Rv)})", "ring"), (v64("v"), E)))
     hvq = f"ks.lelt({v64(Qv)}, {v64('v')}, {W32}, {qle}, hv)"
-    put(f"""def ks.tp(n: Nat, z: Bool, +v: W.W64, ez: {{W.W64.is_zero(v) == z : Bool}}, +tl: {TL}, +pos: Nat, hf: {btrue(f'Nat.is_lt({v64("v")}, {D("n", "1n")})')}) -> {{K.kstr.digits64({DT('n', 'z', 'v', 'tl')}, 10, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, 10, Done{{v}}, ks.pos(n, z, v, pos)) : {R64}}}:
+    put(f"""def ks.tp(n: Nat, z: Bool, +v: W.W64, ez: {{W.W64.is_zero(v) == z : Bool}}, +tl: {TL}, +pos: Nat, hf: {btrue(f'Nat.is_lt({v64("v")}, {D("n", "1n")})')}) -> {{K.kstr.digits64({DT('n', 'z', 'v', 'tl')}, {BS()}, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, {BS()}, Done{{v}}, ks.pos(n, z, v, pos)) : {R64}}}:
   match n z:
     case 0n True{{}}:
-      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits64(tl, 10, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, 10, Done{{_}}, pos) : {R64}}}
+      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits64(tl, {BS()}, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, {BS()}, Done{{_}}, pos) : {R64}}}
       {{==}}
     case 1n+ +k True{{}}:
-      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits64(tl, 10, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, 10, Done{{_}}, pos) : {R64}}}
+      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits64(tl, {BS()}, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, {BS()}, Done{{_}}, pos) : {R64}}}
       {{==}}
     case 0n False{{}}:
-      Empty.absurd({{K.kstr.digits64(tl, 10, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, 10, Done{{v}}, pos) : {R64}}}, {absurd0})
+      Empty.absurd({{K.kstr.digits64(tl, {BS()}, Done{{W.W64.zero()}}, pos) == K.kstr.digits64(tl, {BS()}, Done{{v}}, pos) : {R64}}}, {absurd0})
     case 1n+ +k False{{}}:
-      Equal.trans({R64}, K.kstr.digits64({DT('k', ZQ('v'), Qv, f'Con{{K.KTDigit{{{Rv}}}, tl}}')}, 10, Done{{W.W64.zero()}}, pos), K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, tl}}, 10, Done{{{Qv}}}, ks.pos(k, {ZQ('v')}, {Qv}, pos)), K.kstr.digits64(tl, 10, Done{{v}}, 1n+ks.pos(k, {ZQ('v')}, {Qv}, pos)), ks.tp(k, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, tl}}, pos, {hfq}), ks.sp(v, tl, ks.pos(k, {ZQ('v')}, {Qv}, pos)))
+      Equal.trans({R64}, K.kstr.digits64({DT('k', ZQ('v'), Qv, f'Con{{K.KTDigit{{{Rv}}}, tl}}')}, {BS()}, Done{{W.W64.zero()}}, pos), K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, tl}}, {BS()}, Done{{{Qv}}}, ks.pos(k, {ZQ('v')}, {Qv}, pos)), K.kstr.digits64(tl, {BS()}, Done{{v}}, 1n+ks.pos(k, {ZQ('v')}, {Qv}, pos)), ks.tp(k, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, tl}}, pos, {hfq}), ks.sp(v, tl, ks.pos(k, {ZQ('v')}, {Qv}, pos)))
 
-def ks.tq(n: Nat, z: Bool, +v: W.W64, ez: {{W.W64.is_zero(v) == z : Bool}}, +tl: {TL}, +pos: Nat, hf: {btrue(f'Nat.is_lt({v64("v")}, {D("n", "1n")})')}, +hv: {btrue(f'Nat.is_lt({v64("v")}, {W32})')}) -> {{K.kstr.digits({DT('n', 'z', 'v', 'tl')}, 10, Done{{0}}, pos) == K.kstr.digits(tl, 10, Done{{W.W64.lo(v)}}, ks.pos(n, z, v, pos)) : {R32}}}:
+def ks.tq(n: Nat, z: Bool, +v: W.W64, ez: {{W.W64.is_zero(v) == z : Bool}}, +tl: {TL}, +pos: Nat, hf: {btrue(f'Nat.is_lt({v64("v")}, {D("n", "1n")})')}, +hv: {btrue(f'Nat.is_lt({v64("v")}, {W32})')}) -> {{K.kstr.digits({DT('n', 'z', 'v', 'tl')}, {BS()}, Done{{0}}, pos) == K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(v)}}, ks.pos(n, z, v, pos)) : {R32}}}:
   match n z:
     case 0n True{{}}:
-      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits(tl, 10, Done{{0}}, pos) == K.kstr.digits(tl, 10, Done{{W.W64.lo(_)}}, pos) : {R32}}}
+      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits(tl, {BS()}, Done{{0}}, pos) == K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(_)}}, pos) : {R32}}}
       {{==}}
     case 1n+ +k True{{}}:
-      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits(tl, 10, Done{{0}}, pos) == K.kstr.digits(tl, 10, Done{{W.W64.lo(_)}}, pos) : {R32}}}
+      %Equal.sym(W.W64, v, W.W64.zero(), {vz}) : {{K.kstr.digits(tl, {BS()}, Done{{0}}, pos) == K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(_)}}, pos) : {R32}}}
       {{==}}
     case 0n False{{}}:
-      Empty.absurd({{K.kstr.digits(tl, 10, Done{{0}}, pos) == K.kstr.digits(tl, 10, Done{{W.W64.lo(v)}}, pos) : {R32}}}, {absurd0})
+      Empty.absurd({{K.kstr.digits(tl, {BS()}, Done{{0}}, pos) == K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(v)}}, pos) : {R32}}}, {absurd0})
     case 1n+ +k False{{}}:
-      Equal.trans({R32}, K.kstr.digits({DT('k', ZQ('v'), Qv, f'Con{{K.KTDigit{{{Rv}}}, tl}}')}, 10, Done{{0}}, pos), K.kstr.digits(Con{{K.KTDigit{{{Rv}}}, tl}}, 10, Done{{W.W64.lo({Qv})}}, ks.pos(k, {ZQ('v')}, {Qv}, pos)), K.kstr.digits(tl, 10, Done{{W.W64.lo(v)}}, 1n+ks.pos(k, {ZQ('v')}, {Qv}, pos)), ks.tq(k, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, tl}}, pos, {hfq}, {hvq}), ks.sq(v, tl, ks.pos(k, {ZQ('v')}, {Qv}, pos), hv))
+      Equal.trans({R32}, K.kstr.digits({DT('k', ZQ('v'), Qv, f'Con{{K.KTDigit{{{Rv}}}, tl}}')}, {BS()}, Done{{0}}, pos), K.kstr.digits(Con{{K.KTDigit{{{Rv}}}, tl}}, {BS()}, Done{{W.W64.lo({Qv})}}, ks.pos(k, {ZQ('v')}, {Qv}, pos)), K.kstr.digits(tl, {BS()}, Done{{W.W64.lo(v)}}, 1n+ks.pos(k, {ZQ('v')}, {Qv}, pos)), ks.tq(k, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, tl}}, pos, {hfq}, {hvq}), ks.sq(v, tl, ks.pos(k, {ZQ('v')}, {Qv}, pos), hv))
 """)
 
 
@@ -507,12 +529,12 @@ def laws(put):
     DT63 = DT("63n", ZQ(v), Qv, f"Con{{K.KTDigit{{{Rv}}}, Nil{{}}}}")
     hf63 = f"ks.hq(63n, 64n, {v64(Qv)}, {v32(Rv)}, {v64('v')}, {{==}}, ks.dmq(v), ks.lt64(v))"
     FR = "Result<&2, &2, K.KStrError, K.KStrDigits>"
-    put(f"""def ks.r64(+v: W.W64) -> {{K.kstr.u64.fin(K.kstr.front(10, K.kstr.strip_nl(K.kstr.toks(B.Octets.to_list(B.Octets.of_list({D64})))), False{{}})) == Done{{v}} : {R64}}}:
-  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list({D64})), B.mask({D64}), BL.octets_to_of({D64})) : {{K.kstr.u64.fin(K.kstr.front(10, K.kstr.strip_nl(K.kstr.toks(_)), False{{}})) == Done{{v}} : {R64}}}
-  %Equal.sym({TL}, K.kstr.toks(B.mask({D64})), {DT('64n', 'False{}', 'v', 'Nil{}')}, ks.ta(64n, False{{}}, v, Nil{{}})) : {{K.kstr.u64.fin(K.kstr.front(10, K.kstr.strip_nl(_), False{{}})) == Done{{v}} : {R64}}}
-  %Equal.sym({TL}, K.kstr.strip_nl({DT('64n', 'False{}', 'v', 'Nil{}')}), {DT('64n', 'False{}', 'v', 'Nil{}')}, ks.tb(64n, False{{}}, v, Nil{{}})) : {{K.kstr.u64.fin(K.kstr.front(10, _, False{{}})) == Done{{v}} : {R64}}}
-  %Equal.sym({FR}, K.kstr.front(10, {DT63}, False{{}}), Done{{K.KStrDigits{{False{{}}, 10, {DT63}, 0n}}}}, ks.fr(63n, {ZQ('v')}, {Qv}, {Rv}, Nil{{}})) : {{K.kstr.u64.fin(_) == Done{{v}} : {R64}}}
-  Equal.trans({R64}, K.kstr.digits64({DT63}, 10, Done{{W.W64.zero()}}, 0n), K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, Nil{{}}}}, 10, Done{{{Qv}}}, ks.pos(63n, {ZQ('v')}, {Qv}, 0n)), Done{{v}}, ks.tp(63n, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, Nil{{}}}}, 0n, {hf63}), ks.sp(v, Nil{{}}, ks.pos(63n, {ZQ('v')}, {Qv}, 0n)))
+    put(f"""def ks.r64(+v: W.W64) -> {{K.kstr.u64.fin(K.kstr.front({BS()}, K.kstr.strip_nl(K.kstr.toks(B.Octets.to_list(B.Octets.of_list({D64})))), False{{}})) == Done{{v}} : {R64}}}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list({D64})), B.mask({D64}), BL.octets_to_of({D64})) : {{K.kstr.u64.fin(K.kstr.front({BS()}, K.kstr.strip_nl(K.kstr.toks(_)), False{{}})) == Done{{v}} : {R64}}}
+  %Equal.sym({TL}, K.kstr.toks(B.mask({D64})), {DT('64n', 'False{}', 'v', 'Nil{}')}, ks.ta(64n, False{{}}, v, Nil{{}})) : {{K.kstr.u64.fin(K.kstr.front({BS()}, K.kstr.strip_nl(_), False{{}})) == Done{{v}} : {R64}}}
+  %Equal.sym({TL}, K.kstr.strip_nl({DT('64n', 'False{}', 'v', 'Nil{}')}), {DT('64n', 'False{}', 'v', 'Nil{}')}, ks.tb(64n, False{{}}, v, Nil{{}})) : {{K.kstr.u64.fin(K.kstr.front({BS()}, _, False{{}})) == Done{{v}} : {R64}}}
+  %Equal.sym({FR}, K.kstr.front({BS()}, {DT63}, False{{}}), Done{{K.KStrDigits{{False{{}}, {BS()}, {DT63}, 0n}}}}, ks.fr(63n, {ZQ('v')}, {Qv}, {Rv}, Nil{{}})) : {{K.kstr.u64.fin(_) == Done{{v}} : {R64}}}
+  Equal.trans({R64}, K.kstr.digits64({DT63}, {BS()}, Done{{W.W64.zero()}}, 0n), K.kstr.digits64(Con{{K.KTDigit{{{Rv}}}, Nil{{}}}}, {BS()}, Done{{{Qv}}}, ks.pos(63n, {ZQ('v')}, {Qv}, 0n)), Done{{v}}, ks.tp(63n, {ZQ('v')}, {Qv}, {{==}}, Con{{K.KTDigit{{{Rv}}}, Nil{{}}}}, 0n, {hf63}), ks.sp(v, Nil{{}}, ks.pos(63n, {ZQ('v')}, {Qv}, 0n)))
 
 def Laws.dec64_round_trip(v):
   ks.r64(v)
@@ -524,16 +546,16 @@ def Laws.dec64_round_trip(v):
     DTw = DT("63n", ZQ(w), Qw, f"Con{{K.KTDigit{{{Rw}}}, Nil{{}}}}")
     hvw = lt_rw(v32("v"), W32, v64(w), W32, f"Equal.sym(Nat, {v64(w)}, {v32('v')}, ks.fv(v))", None, "ks.lt32(v)")
     hf63w = f"ks.hq(63n, 64n, {v64(Qw)}, {v32(Rw)}, {v64(w)}, {{==}}, ks.dmq({w}), ks.lt64({w}))"
-    E = hyp(f"ks.dmq({w})", f"Nat.add(Nat.mul({v64(Qw)}, 10n), {v32(Rw)})", v64(w))
-    qle = le_from(v64(Qw), v64(w), f"Nat.add(Nat.mul({v64(Qw)}, 9n), {v32(Rw)})",
-                  calc(f"Nat.add(Nat.add(Nat.mul({v64(Qw)}, 9n), {v32(Rw)}), {v64(Qw)})", (f"Nat.add(Nat.mul({v64(Qw)}, 10n), {v32(Rw)})", "ring"), (v64(w), E)))
+    E = hyp(f"ks.dmq({w})", f"Nat.add(Nat.mul({v64(Qw)}, {BN()}), {v32(Rw)})", v64(w))
+    qle = le_from(v64(Qw), v64(w), f"Nat.add(Nat.mul({v64(Qw)}, {B1N()}), {v32(Rw)})",
+                  calc(f"Nat.add(Nat.add(Nat.mul({v64(Qw)}, {B1N()}), {v32(Rw)}), {v64(Qw)})", (f"Nat.add(Nat.mul({v64(Qw)}, {BN()}), {v32(Rw)})", "ring"), (v64(w), E)))
     hvq = f"ks.lelt({v64(Qw)}, {v64(w)}, {W32}, {qle}, {hvw})"
-    put(f"""def ks.r32(+v: U32) -> {{K.kstr.u32.fin(K.kstr.front(10, K.kstr.strip_nl(K.kstr.toks(B.Octets.to_list(B.Octets.of_list({D32})))), False{{}})) == Done{{v}} : {R32}}}:
-  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list({D32})), B.mask({D32}), BL.octets_to_of({D32})) : {{K.kstr.u32.fin(K.kstr.front(10, K.kstr.strip_nl(K.kstr.toks(_)), False{{}})) == Done{{v}} : {R32}}}
-  %Equal.sym({TL}, K.kstr.toks(B.mask({D32})), {DT('64n', 'False{}', w, 'Nil{}')}, ks.ta(64n, False{{}}, {w}, Nil{{}})) : {{K.kstr.u32.fin(K.kstr.front(10, K.kstr.strip_nl(_), False{{}})) == Done{{v}} : {R32}}}
-  %Equal.sym({TL}, K.kstr.strip_nl({DT('64n', 'False{}', w, 'Nil{}')}), {DT('64n', 'False{}', w, 'Nil{}')}, ks.tb(64n, False{{}}, {w}, Nil{{}})) : {{K.kstr.u32.fin(K.kstr.front(10, _, False{{}})) == Done{{v}} : {R32}}}
-  %Equal.sym({FR}, K.kstr.front(10, {DTw}, False{{}}), Done{{K.KStrDigits{{False{{}}, 10, {DTw}, 0n}}}}, ks.fr(63n, {ZQ(w)}, {Qw}, {Rw}, Nil{{}})) : {{K.kstr.u32.fin(_) == Done{{v}} : {R32}}}
-  Equal.trans({R32}, K.kstr.digits({DTw}, 10, Done{{0}}, 0n), K.kstr.digits(Con{{K.KTDigit{{{Rw}}}, Nil{{}}}}, 10, Done{{W.W64.lo({Qw})}}, ks.pos(63n, {ZQ(w)}, {Qw}, 0n)), Done{{v}}, ks.tq(63n, {ZQ(w)}, {Qw}, {{==}}, Con{{K.KTDigit{{{Rw}}}, Nil{{}}}}, 0n, {hf63w}, {hvq}), ks.sq({w}, Nil{{}}, ks.pos(63n, {ZQ(w)}, {Qw}, 0n), {hvw}))
+    put(f"""def ks.r32(+v: U32) -> {{K.kstr.u32.fin(K.kstr.front({BS()}, K.kstr.strip_nl(K.kstr.toks(B.Octets.to_list(B.Octets.of_list({D32})))), False{{}})) == Done{{v}} : {R32}}}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list({D32})), B.mask({D32}), BL.octets_to_of({D32})) : {{K.kstr.u32.fin(K.kstr.front({BS()}, K.kstr.strip_nl(K.kstr.toks(_)), False{{}})) == Done{{v}} : {R32}}}
+  %Equal.sym({TL}, K.kstr.toks(B.mask({D32})), {DT('64n', 'False{}', w, 'Nil{}')}, ks.ta(64n, False{{}}, {w}, Nil{{}})) : {{K.kstr.u32.fin(K.kstr.front({BS()}, K.kstr.strip_nl(_), False{{}})) == Done{{v}} : {R32}}}
+  %Equal.sym({TL}, K.kstr.strip_nl({DT('64n', 'False{}', w, 'Nil{}')}), {DT('64n', 'False{}', w, 'Nil{}')}, ks.tb(64n, False{{}}, {w}, Nil{{}})) : {{K.kstr.u32.fin(K.kstr.front({BS()}, _, False{{}})) == Done{{v}} : {R32}}}
+  %Equal.sym({FR}, K.kstr.front({BS()}, {DTw}, False{{}}), Done{{K.KStrDigits{{False{{}}, {BS()}, {DTw}, 0n}}}}, ks.fr(63n, {ZQ(w)}, {Qw}, {Rw}, Nil{{}})) : {{K.kstr.u32.fin(_) == Done{{v}} : {R32}}}
+  Equal.trans({R32}, K.kstr.digits({DTw}, {BS()}, Done{{0}}, 0n), K.kstr.digits(Con{{K.KTDigit{{{Rw}}}, Nil{{}}}}, {BS()}, Done{{W.W64.lo({Qw})}}, ks.pos(63n, {ZQ(w)}, {Qw}, 0n)), Done{{v}}, ks.tq(63n, {ZQ(w)}, {Qw}, {{==}}, Con{{K.KTDigit{{{Rw}}}, Nil{{}}}}, 0n, {hf63w}, {hvq}), ks.sq({w}, Nil{{}}, ks.pos(63n, {ZQ(w)}, {Qw}, 0n), {hvw}))
 
 def Laws.dec32_round_trip(v):
   ks.r32(v)
