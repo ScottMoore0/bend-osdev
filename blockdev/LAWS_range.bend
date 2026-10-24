@@ -169,7 +169,8 @@ law read_bytes_past_end:
   for h: {Nat.is_lt(Nat.mul(D.MemDev.block_count(d), 1n+bp), Nat.add(off, 1n+lp)) == True{} : Bool}
   {D.Dev.read_bytes(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, d, off, 1n+lp) == Fail{D.DevOutOfRange{Nat.max(Nat.div(off, 1n+bp), D.MemDev.block_count(d))}} : Result<&2, &2, D.DevError, B.Octets>}
 
-# Vectors: the 3-block device of LAWS.bend is valid; a patch
+# Vectors: the 3-block device of LAWS.bend is valid; a patch; a read past
+# its end fails with the first block it needs past the end
 
 law vector_valid:
   {D.MemDev.valid(D.MemDev.of_octets(4n, B.Octets.of_string("abcdefghij"))) == True{} : Bool}
@@ -177,5 +178,5 @@ law vector_valid:
 law vector_patch:
   {B.Octets.to_string(D.Dev.patch(3n, B.Octets.of_string("XYZ"), B.Octets.of_string("abcdefgh"))) == "abcXYZgh" : String}
 
-law vector_read_bytes_mem:
+law vector_past_end_block:
   {D.Dev.read_bytes(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, D.MemDev.of_octets(4n, B.Octets.of_string("abcdefghij")), 11n, 2n) == Fail{D.DevOutOfRange{3n}} : Result<&2, &2, D.DevError, B.Octets>}

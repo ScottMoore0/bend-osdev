@@ -1238,5 +1238,5 @@ def Laws.vector_valid():
 def Laws.vector_patch():
   {==}
 
-def Laws.vector_read_bytes_mem():
+def Laws.vector_past_end_block():
   {==}
