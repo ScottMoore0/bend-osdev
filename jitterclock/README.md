@@ -35,6 +35,7 @@ import a foreign def.
 | `jitterclock.c`, `jitterclock.js` | the effect's C side and JavaScript side |
 | `time.bend` | `JClock.time.*`: stamps from halves, deltas, the read's budget (pure) |
 | `LAWS.bend`, `PROOF.bend` | the laws about `time.bend` and their proofs |
+| `LAWS_read.bend`, `PROOF_read.bend` | the law about the pure part of a read (a stopped clock), and its proof |
 | `check.bend` | a runnable check of the effect and of reads |
 | `ref/stamps.bend`, `ref/check.py`, `ref/run.sh` | the test against Python's reading of the same clock |
 
@@ -77,6 +78,13 @@ delta than stamps), `deltas_step` (each delta is a stamp minus the one
 before); vectors `deltas_vec`, `budget_default` (3916 deltas for 32 bytes
 under the default parameters). The effects have no laws: they are tested.
 
+`LAWS_read.bend`: `stopped_clock`: a clock that reads the same stamp every
+time gives `JClock.read`'s pure part (the deltas of the budget's stamps,
+given to `JitSha3.generate`) deltas that are all the same, so a read of 32
+bytes under the default parameters fails with `JitRctFailure` rather than
+running out of deltas: the budget (3916) is at least the RCT's cutoff (91),
+and jitter's `constant_fails_default` does the rest.
+
 ## Tests
 
 * `check.bend`, natively and on the JavaScript lane: 1000 stamps never go
@@ -99,7 +107,8 @@ under the default parameters). The effects have no laws: they are tested.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
+Bend 2.0.37: `PROOF.bend` and `PROOF_read.bend` ALL PROOFS CHECK, `--verdict`
+ALL PROOFS CHECK (`PROOF_read.bend`: 0.3 GB peak),
 `check.bend` passes natively and on the JavaScript lane, `ref/run.sh`
 passes on both lanes, `scripts/deps.sh` passes. Linux (WSL2) only so far;
 the C side uses only POSIX calls, but macOS is untested.
