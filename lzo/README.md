@@ -135,6 +135,8 @@ alone) were refused by the tool.
 | `lzop.bend` | the lzop container: reading, writing, streaming writing |
 | `adler32.bend` | Adler-32 (one-shot and streaming) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `proof_distance.bend` | proof helpers: each match's distance, from its bytes, as a Nat (through bend-osdev-u32's value laws) |
+| `gen/proof_lemmas.py`, `gen/proof_distance.py` | generators of the case trees in `PROOF.bend` and `proof_distance.bend` |
 | `check.bend` | examples, with their output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -239,7 +241,7 @@ does not write M1 (which only pays for 2- and 3-byte matches). Matches are
 
 ## Laws
 
-`LAWS.bend` has 65 laws: 8 properties, 3 witnesses and 54 vectors.
+`LAWS.bend` has 75 laws: 15 properties, 6 witnesses and 54 vectors.
 
 **For every input** (properties, proved by induction):
 
@@ -256,6 +258,12 @@ does not write M1 (which only pays for 2- and 3-byte matches). Matches are
 * `first_match_rejected`: a stream that opens with a match (first byte 17)
   whose first distance byte is 4 or more (so that it is not the end marker)
   is `LzoBadDistance`, whatever follows;
+* `m2_beyond_rejected`, `m3_beyond_rejected`, `m4_beyond_rejected`,
+  `m4_far_beyond_rejected` (L > 0) and `m3_ext_beyond_rejected`,
+  `m4_ext_beyond_rejected`, `m4_far_ext_beyond_rejected` (L = 0, then any
+  number of zero length bytes and a byte other than 0): after any output, a
+  match whose distance reaches before the start of the output is
+  `LzoBadDistance`, at every distance, whatever follows (see below);
 * `reader_pieces`: decoding a stream through the reader, in any pieces, is
   exactly the one-shot decoder on the pieces joined (bytes and failures);
 * `adler32_pieces`: Adler-32 updated piece by piece is Adler-32 of the
@@ -263,7 +271,9 @@ does not write M1 (which only pays for 2- and 3-byte matches). Matches are
 
 Laws with a hypothesis each have a witness that it can hold
 (`truncation_rejected_witness`, `trailing_rejected_witness`,
-`first_match_rejected_witness`).
+`first_match_rejected_witness`, and for the matches before the start
+`beyond_rejected_vectors`, `m4_beyond_rejected_witness`,
+`ext_beyond_rejected_vectors`).
 
 The compressor's round trip holds for every input because
 `lzo1x_compress_with` checks its stream by decoding it and comparing, and
@@ -275,11 +285,41 @@ round trip is stated with the maximum equal to the input's length (the
 size the check decodes with); `literals_round_trip` holds for every larger
 maximum too.
 
-A for-all law that every match reaching before the start of the output is
-refused, at every distance, is not stated: it would need the distance
-fields' bit arithmetic followed for unknown bytes. `first_match_rejected`
-covers the case with no output, and vectors and the differential test the
-rest.
+**Matches before the start.** Each `*_beyond_rejected` law takes a prefix
+`a`, not empty, after which an instruction may start: the end marker
+written with a length byte (`end_marker`, `[16, 1, 0, 0]`) ends the stream
+there, `a ++ end_marker` decoding to `o`, the bytes `a` writes. After `a`
+comes a match whose distance, read from its bytes as the kernel document
+gives it, is more than `len(o)`: M2's `8 H + D + 1` (`m2_distance`), M3's
+`D + 1` and M4's `D + 2^14` (H = 0, D > 0) or `D + 2^15` (H = 1), with `D`
+the top 14 bits of the little-endian field `lo, hi` (`d14`). The stream is
+`LzoBadDistance`, whatever follows. So, with `first_match_rejected` for the
+case with no output, every M2, M3 and M4 that reaches before the start is
+refused, at every distance and after any output: the decoder never reads
+its window at an offset it has not written. The proofs follow the decoder's
+U32 shifts, masks and sums for unknown bytes (`proof_distance.bend`, from
+bend-osdev-u32's value laws), find `a`'s state from the end marker,
+backwards (an instruction state, not the first), and use the window's count
+of the bytes written (it equals the output's length).
+
+Not covered by a law:
+
+* **M1** (`0000DDSS` after literals): whether such a byte is M1 at all, and
+  at which distance, depends on the class of the run before it (after a
+  match with S = 0 it starts a literal run; after 1 to 3 literals it is M1
+  at `4 H + D + 1`; after 4 or more, at `2049 + 4 H + D`). The laws describe
+  the prefix only by what it decodes to, which says that an instruction may
+  start, not which class it has: a law for M1 would need a hypothesis on
+  that class, and the package's interface has nothing that states it. The
+  decoder refuses M1 through the same check as the others (`dec.copy.at`,
+  which every copy goes through); the vectors and the differential test
+  cover it.
+* **That the window holds the offset.** A copy reads the window at its
+  offset only when the offset is below the count of bytes written, which is
+  what the laws show. The window keeps the last 64 KiB and no distance the
+  format can encode exceeds 49151 (M4 with H = 1: 32768 + 16383), so the
+  read is within the window; this second step is about the internal window
+  and is not stated as a law.
 
 **Vectors** (proved by computation; 54): a stream for each encoding the
 kernel document describes, built by hand from its description (the
@@ -309,8 +349,14 @@ many literals, and so does the differential test.
 
 The proofs follow the decoder byte by byte. Octets enter them only through
 bytes' interface laws (`octets_append_list`, `octets_to_of`,
-`octets_of_to`, `octets_len_list`, `octets_cons_list`, `rev_rev`), so they
-do not depend on how `Octets` stores its bytes.
+`octets_of_to`, `octets_len_list`, `octets_cons_list`,
+`octets_zeros_list`, `byte_below_256`, `rev_rev`), so they do not depend on
+how `Octets` stores its bytes; U32 arithmetic enters only through
+bend-osdev-u32's laws. The M4 constants (16383, 32767, 2^14, 2^15) are too
+deep for the checker to expand as Nats, so the laws write the powers as
+`U32Nat.dbl(n, 1n)` and the proofs keep them as words of ones, never
+expanded. The case trees over the decoder's states and the 16 bits of `lo`
+and `hi` are printed by `gen/proof_lemmas.py` and `gen/proof_distance.py`.
 
 ## Tests
 
