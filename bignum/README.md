@@ -55,6 +55,9 @@ two limbs plus two more limbs fits in a `U32`.
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
 | `LAWS_limbs.bend`, `PROOF_limbs.bend` | the limb laws (the value of a number, add, sub, cmp), and their proofs |
 | `gen/proof_limbs.py` | writes `PROOF_limbs.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_mul.bend`, `PROOF_mul.bend` | the multiplication laws (`mul` is the product of the values), and their proofs |
+| `LAWS_div.bend`, `PROOF_div.bend` | the division laws (`divmod`, `div` and `mod` are long division of the values), and their proofs |
+| `gen/proof_mul.py`, `gen/proof_div.py` | write `PROOF_mul.bend` and `PROOF_div.bend` (ring identities by `scripts/natproof.py`) |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -126,12 +129,42 @@ x + 2^16 - y - w, borrows 1 - high16(t) (0 or 1), and the borrow is the
 one the rest needs. The `Nat` reasoning about 2^16 is done for a width that
 is a variable and used at 16 (u32's README, "Stating the bounds").
 
-**Not proved, and tested:** that `mul`, `divmod`, the shifts and the rest
-compute the product, quotient and shifts of the numbers their limbs stand
-for, for every input (the next laws on the ones above: schoolbook product,
-long division, Montgomery's REDC). The exhaustive laws cover small values;
-`ref/run.sh` compares every def with Python's integers on numbers of up to
-2048 bits.
+### Multiplication and division
+
+`LAWS_mul.bend`, **for every input**: for valid a and b, the value of
+`BnNat.mul(a, b)` is the product of the values (`mul_value`), and the
+product is valid for every a and b (`mul_valid`). A row of the schoolbook
+product (`bn.mac`) adds x times the number b and a carry to an
+accumulator; one step takes t = z + x y + c, at most (2^16 - 1)^2 +
+2 (2^16 - 1) = 2^32 - 1, so it does not wrap, and puts down low16(t) with
+the carry high16(t). By induction a row is acc + x b + c, and the rows add
+up to a b.
+
+`LAWS_div.bend`, **for every input**: `BnNat.divmod(a, b)` is `None`
+exactly when the value of b is 0 (`divmod_none`), and otherwise its
+quotient and remainder are `BnNat.div(a, b)` and `BnNat.mod(a, b)`
+(`divmod_q`, `divmod_r`, through `BnDivMod.q` and `.r`). For valid a and
+b with b above 0, a = q b + r with r < b (`divmod_value`, `mod_lt`); so,
+for valid a and b, `mod` and `div` are Base's `Nat.mod` and `Nat.div` of
+the values (`mod_value`, `div_value`; by 0 too, where both give a and 0).
+The quotient is valid for every input (`div_valid`), the remainder for a
+valid a (`mod_valid`: a remainder of a smaller a is a itself). The
+division is shift and subtract: with la and lb the bit lengths, la < lb
+gives a < b (2^lb <= 2 b, from `bn.wbits` on the top limb of the
+normalised number), and otherwise the loop runs from d = la - lb down to
+0 with s = b 2^i, keeping q b 2^(i+1) + r = a and r < b 2^(i+1); at the
+start a < 2^la <= b 2^(d+1). On the way the proofs show that `bn.shl(x,
+n)` is x 2^n (n = 16 (n / 16) + n mod 16, by Base's `Nat.divmod`), that
+`bn.shr1` halves and `bn.shl1` doubles and adds a bit, and the bounds of
+the bit length; these are lemmas in `PROOF_div.bend`, not laws.
+
+**Not proved, and tested:** that the public shifts (`shl`, `shr`),
+Montgomery multiplication and its contexts, the modular operations and
+exponentiation, the inverse, gcd and lcm, the Jacobi symbol and
+Miller-Rabin compute what they stand for on the numbers, for every input
+(the next stages, on the laws above). The exhaustive laws cover small
+values; `ref/run.sh` compares every def with Python's integers on numbers
+of up to 2048 bits.
 
 ## Tests
 
@@ -175,7 +208,9 @@ their proofs).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (12 laws) and `PROOF_limbs.bend` (6) ALL PROOFS
-CHECK, `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 48 s, peak
-0.50 GB; `PROOF_limbs.bend` about 7 s, peak 0.34 GB), `check.bend` passes,
-`ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` (12 laws), `PROOF_limbs.bend` (6),
+`PROOF_mul.bend` (2) and `PROOF_div.bend` (9) ALL PROOFS CHECK, `--verdict`
+ALL PROOFS CHECK on all four (`PROOF.bend` about 48 s, peak 0.50 GB;
+`PROOF_limbs.bend` about 7 s, peak 0.34 GB; `PROOF_mul.bend` about 7 s,
+peak 0.36 GB; `PROOF_div.bend` about 8 s, peak 0.45 GB), `check.bend`
+passes, `ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
