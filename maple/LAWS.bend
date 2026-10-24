@@ -30,8 +30,7 @@
 # Vectors: updates and lookups on a small tree, and an instance of each
 # hypothesis the properties carry, so that none is vacuous. That nodes stay
 # between half full and full (balanced, which bounds the height by the
-# logarithm of the size) is tested (ref/, check.bend) and checked on a
-# vector, not proved for every input.
+# logarithm of the size) is proved in LAWS_fill.bend, with PROOF_fill.bend.
 import Base
 import ./model.bend as M
 import ./node.bend as N

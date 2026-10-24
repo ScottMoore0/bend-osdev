@@ -92,8 +92,10 @@ Where the documented interface leaves room, this package chooses:
 | `tree.bend` | joining two trees, and cutting a tree below or above an index (`MapleTree.join`, `lo`, `hi`) |
 | `maple.bend` | the entry file: the public operations, generic (`Maple.*`) and on `U32` (`Maple32.*`) |
 | `gap.bend` | the gap search (`Maple.empty_area`, `Maple32.empty_area`) |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws of contents, lookups, the invariant and the depth of the leaves, and their proofs |
 | `proof_order.bend`, `proof_lists.bend`, `proof_trees.bend`, `proof_level.bend` | the lemmas `PROOF.bend` uses: U32's order and arithmetic; the list model; the tree against the model; every leaf at one depth |
+| `LAWS_fill.bend`, `PROOF_fill.bend` | the laws of the fill bounds (`balanced`), the order and the height bound, and their proofs |
+| `proof_counts.bend` | the lemmas `PROOF_fill.bend` uses: `Nat` arithmetic on counts and halves; the counts that appending, taking, dropping, merging, splitting and joining nodes produce |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -154,11 +156,13 @@ the gap search; `Maple32.x(V, ...)` is the named default on `U32`
   where it does not wrap).
 * **Any value type**: `V` is any `Data`.
 * **The order** is `MapleOptions{order}` (default 16); a tree keeps it.
-* **The node layout is internal.** Every law is stated over the entries and
-  the list model, so the node format can change (different leaf and branch
-  sizes, a split that leaves the left node full for in-order appends, the
-  maple tree's dense and range node types) without changing a law; the
-  proofs about contents never look at counts.
+* **The node layout is internal.** Every law of `LAWS.bend` is stated over
+  the entries and the list model, so the node format can change (different
+  leaf and branch sizes, a split that leaves the left node full for
+  in-order appends, the maple tree's dense and range node types) without
+  changing one of them; the proofs about contents never look at counts.
+  `LAWS_fill.bend` states this layout's fill bounds (`balanced`), so another
+  layout would come with its own fill laws in place of those.
 * **Gap tracking.** The gap search skips any subtree that ends before its
   cursor, and otherwise walks entries in order: it takes O(log n + k) steps
   for k entries between `min` and the answer. The kernel's allocation trees
@@ -223,12 +227,46 @@ entries in order, and every node built keeps right pivots, so cutting and
 every lookup follow the model; `MapleNode.cons` leaves out empty children,
 so every chain holds nodes of one height.
 
-**Fill bounds are tested, not proved.** That every node but the root stays
-between half full and full (`balanced`, which bounds the height by about
-`log` base `order / 2` of the size) is checked by the differential test after
-every sequence and at random points, by `check.bend`, and by the vector
-`example_deep`; a proof would need lemmas about the counts that splitting
-and merging produce, which this package does not have yet.
+**The fill bounds** are proved in `LAWS_fill.bend` (14 laws, with
+`PROOF_fill.bend`, checked in a process of its own): 10 **for every
+input** (every tree, range, index and value type, for the `U32` default),
+and 4 vectors.
+
+* **Balance:** the empty trees are `balanced` (`balanced_empty`,
+  `balanced_empty_with`), and `set_range`, `clear_range` and `erase` keep a
+  tree `balanced` (`balanced_set_range`, `balanced_clear_range`,
+  `balanced_erase`): every leaf at depth `height`, every node but the root
+  holding from half of `order + 1` to `order` items, the root at most
+  `order` (and at least 2 if a branch). These carry the hypothesis that the
+  tree's order (`Maple.order`) is at least 3, which every tree the interface
+  builds has: the empty trees' order is at least 3 (`order_empty_with`; an
+  order below 3 is taken as 3), and `set_range`, `clear_range` and `erase`
+  keep the order of every tree (`order_set_range`, `order_clear_range`,
+  `order_erase`). Below 3 the bounds cannot be kept: a leaf of order 1
+  holding one entry is balanced, and storing a second range splits it into
+  two leaves under a root of two slots, more than its order.
+* **The height bound:** a balanced tree of height `g + 1` holds at least
+  `2 m^(g+1)` entries for every `m` with `2m <= order + 1`
+  (`size_bound`), so, with `m = half(order + 1)`, its height is at most
+  `log` base `half(order + 1)` of half its size.
+* **Vectors:** the order of the empty trees (16, and 3 for an order of 1
+  asked for), the bounds after ten stores at order 3 (leaves split, height
+  2) and a clear across five of them (nodes merge), and the height bound on
+  the result (height 2, 9 entries, `m = 2`).
+
+The proofs (`proof_counts.bend`) follow the counts. A full node (any but the
+root) of height `h` holds `L = half(order + 1)` to `order` items, and its
+children are full nodes of height `h - 1`. `fit` turns a node of `L` to
+`2 order` items into one or two full nodes (two halves, of `half(k)` and
+`half(k + 1)` items, when it holds `k > order`), and a node of at most
+`2 order` items, normalised as a root, into a root. Joining two trees
+merges the shorter's root (at most `order` items) into a full node of the
+taller's edge, so the merged node holds `L` to `2 order` items, and each
+level on the way back up gains at most one slot; the root ends with 2 to
+`order` slots. Cutting below or above an index joins trees made of the
+original tree's nodes: the slots before the path, a chain of at most
+`order` full nodes normalised as a root, and leaves of no more entries
+than before. Storing and erasing are such cuts and joins.
 
 ## Tests
 
@@ -284,4 +322,7 @@ for large trees; `leveled` and `balanced` are linear.
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (native), `ref/run.sh` 2443 cases match,
 `scripts/deps.sh maple` ok. Balance: every leaf at the same depth is proved
-for every operation; the fill bounds are tested, not proved.
+for every operation, and so are the fill bounds and the height bound
+(`PROOF_fill.bend`, 14 laws, ALL PROOFS CHECK, `--verdict` ALL PROOFS
+CHECK). Peaks under `--verdict`: `PROOF.bend` 0.24 GB, `PROOF_fill.bend`
+0.21 GB.
