@@ -140,11 +140,12 @@ cases, and the checker never computes with a concrete curve or group.
   exhaustive cases into this check. `rsa_pk_format_if` (by hand): an RSA
   public key that `Rsa.public_of` accepts (`hk`) is read back from the
   bytes written for it, given rsa's `public_form_round_trip_if` at its
-  integers (`hr`); it is not of the others' shape, because rsa's form reads
-  a key read from any bytes back only up to the representation of its
-  integers (rsa's README, Laws), and rsa's law itself has hypotheses (that
-  each integer reads back from its shortest bytes, and that their byte
-  counts fit 32 bits).
+  integers (`hr`), and rsa's law itself has hypotheses (that each integer
+  reads back from its shortest bytes, and that their byte counts fit 32
+  bits). rsa's reader now takes only the forms its writer writes, and its
+  `public_form_write_read` (a key read from any bytes is read again from
+  the bytes written for it) has the others' shape with no hypotheses; an
+  instance law from it, through `lift_pk_format`, is not stated here yet.
 
 **Not proved, and tested:** the hypotheses `ha` and `h` (that a scheme
 accepts its own signatures, and that both parties' shared secrets agree,
