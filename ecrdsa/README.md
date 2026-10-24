@@ -68,8 +68,17 @@ named `ecrdsa.*` is internal.
 
 ## Laws
 
-`LAWS.bend` has 1 law, proved (`PROOF.bend`) and accepted by `--verdict`.
+`LAWS.bend` has 2 laws, both proved (`PROOF.bend`) and accepted by
+`--verdict`.
 
+* **For every input:** `public_round_trip`: for every curve and bytes, a
+  public key read from RFC 4491's form (`Ecrdsa.public_of`) is read again,
+  the same, from the bytes `Ecrdsa.public_to` writes for it (as ecc's
+  `point_round_trip` for SEC 1's form). The proof shows more: those bytes
+  are the bytes it was read from, since each coordinate's little-endian
+  bytes come back from its number (bignum's `octets_round_trip`, with the
+  bytes reversed twice: bytes' `rev_rev`). pubkey's EC-RDSA instance
+  states its pk_format law from it.
 * **Small-parameter exhaustive** (`gen/exhaustive.py`, each case by
   computation): `toy_sign_verify`: on the curve y^2 = x^3 + 2x + 7 over
   GF(11) with base point (6, 2) of prime order 7, every signature of the
@@ -78,10 +87,7 @@ named `ecrdsa.*` is internal.
   refused).
 
 **Not proved, and tested:** that every signature verifies for every key of
-every curve (the group law: ecc's README); that RFC 4491's public-key form
-round-trips (tested in `ref/run.sh` and `check.bend`; a proof like ecc's
-`point_round_trip` for the little-endian form was not done in this
-version, so pubkey's EC-RDSA instance has no pk_format law).
+every curve (the group law: ecc's README).
 
 ## Tests
 
@@ -114,11 +120,12 @@ random source (this package has none).
 
 ## Dependencies
 
-`DEPS`: `bytes` (`Octets`), `bignum` (the integers), `ecc` (the curves,
+`DEPS`: `bytes` (`Octets`, and its laws in the proofs), `bignum` (the
+integers, and its `octets_round_trip` in the proofs), `ecc` (the curves,
 points, signatures and RFC 6979), `hashes` (Streebog).
 
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
-(about 118 s), `check.bend` passes, `ref/run.sh` 136 cases match,
+(about 165 s, 0.44 GB peak), `check.bend` passes, `ref/run.sh` 136 cases match,
 `scripts/deps.sh` passes.
