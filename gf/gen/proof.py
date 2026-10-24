@@ -949,6 +949,144 @@ def gen_gfm():
         emit()
 
 
+TAB_FIELDS = [("aes", "G.Gf8.aes()"), ("rs", "G.Gf8.rs()")]
+
+
+def gen_tabs():
+    """The tables (tables.bend), for the named fields: their fills are lists
+    (proof_tab.bend, through array's laws), read by array's of_list_get; a
+    product is exp[log a + log b] = gen^(log b + log a) = gen^(log b) *
+    gen^(log a) (pow_add) = b * a (exp_log) = a * b. The table steps are
+    proved for a field f and a log list l given as variables, with the named
+    fields' facts as hypotheses, so that no checker computes in a named field
+    while it compares the tables."""
+    emit("# 7. The tables, for the named fields (proof_tab.bend, proof_tab_cases.bend)")
+    emit()
+    emit("# a product with a factor whose table zero test is true is 0")
+    emit("def tl.zero_l(+f: G.Gf8Field, +a: U32, +b: U32, +h: {U32.is_eq(G.Gf8.elt(a), 0) == True{} : Bool}) -> {G.Gf8.mul(f, a, b) == 0 : U32}:")
+    emit("  %Equal.sym(U32, G.Gf8.mul(f, a, b), G.Gf8.mul(f, G.Gf8.elt(a), b), mul_elt_l(f, a, b)) : {_ == 0 : U32}")
+    emit("  %Equal.sym(U32, G.Gf8.elt(a), 0, GC.gc.elt0(a, h)) : {G.Gf8.mul(f, _, b) == 0 : U32}")
+    emit("  Laws.mul_zero(f, b)")
+    emit()
+    emit("def tl.mul_elt(+f: G.Gf8Field, +a: U32, +b: U32) -> {G.Gf8.mul(f, G.Gf8.elt(a), G.Gf8.elt(b)) == G.Gf8.mul(f, a, b) : U32}:")
+    emit("  Equal.trans(U32, G.Gf8.mul(f, G.Gf8.elt(a), G.Gf8.elt(b)), G.Gf8.mul(f, a, G.Gf8.elt(b)), G.Gf8.mul(f, a, b), Equal.sym(U32, G.Gf8.mul(f, a, G.Gf8.elt(b)), G.Gf8.mul(f, G.Gf8.elt(a), G.Gf8.elt(b)), mul_elt_l(f, a, G.Gf8.elt(b))), Equal.trans(U32, G.Gf8.mul(f, a, G.Gf8.elt(b)), G.Gf8.mul(f, G.Gf8.elt(b), a), G.Gf8.mul(f, a, b), Laws.mul_comm(f, a, G.Gf8.elt(b)), Equal.trans(U32, G.Gf8.mul(f, G.Gf8.elt(b), a), G.Gf8.mul(f, b, a), G.Gf8.mul(f, a, b), Equal.sym(U32, G.Gf8.mul(f, b, a), G.Gf8.mul(f, G.Gf8.elt(b), a), mul_elt_l(f, b, a)), Laws.mul_comm(f, b, a))))")
+    emit()
+    f, l = "f", "l"
+    EL = f"GT.gt.elist(510n, {f}, 0n)"
+    E9 = f"A.Arrays.of_list(U32, 9n, {EL}, 0)"
+    L8 = f"A.Arrays.of_list(U32, 8n, {l}, 0)"
+    TAB = f"GT.gt.tab({f}, {l})"
+    TT = "T.Gf8Tab{" + E9 + ", " + L8 + "}"
+
+    def LX(x):
+        return f"A.Arrays.nth(U32, {l}, A.Arrays.index(8n, G.Gf8.elt({x})), 0)"
+    la, lb = f"G.Gf8.log({f}, a)", f"G.Gf8.log({f}, b)"
+    FA, FB = f"U32.from_nat({la})", f"U32.from_nat({lb})"
+    S = f"Nat.add({lb}, {la})"
+    g = f"G.Gf8.gen({f})"
+    PAIR = "T.Gf8Tab & U32"
+    AP = "Array<U32> & U32"
+    MUL = f"G.Gf8.mul({f}, a, b)"
+    HL = f"+hl: {{List.length(&2, U32, {l}) == A.Arrays.slots(8n) : Nat}}"
+    HXA = f"+hxa: {{{LX('a')} == {FA} : U32}}"
+    HXB = f"+hxb: {{{LX('b')} == {FB} : U32}}"
+    ELA = f"+ela: {{G.Gf8.exp({f}, {la}) == G.Gf8.elt(a) : U32}}"
+    ELB = f"+elb: {{G.Gf8.exp({f}, {lb}) == G.Gf8.elt(b) : U32}}"
+    FL = f"+f: G.Gf8Field, +l: List<&2, U32>"
+
+    def get8(x):
+        return f"AL.of_list_get(U32, 8n, {l}, 0, hl, GT.gt.hd8(), G.Gf8.elt({x}))"
+    V = f"A.Arrays.nth(U32, {EL}, A.Arrays.index(9n, U32.add({LX('a')}, {LX('b')})), 0)"
+    emit("# both factors nonzero: the exp table's entry at log a + log b is the")
+    emit("# product, for a field f whose log list l gives log a and log b")
+    emit(f"def tl.nz({FL}, +a: U32, +b: U32, {HXA}, {HXB}, {ELA}, {ELB}) -> {{{V} == {MUL} : U32}}:")
+    emit(f"  %Equal.sym(U32, {LX('a')}, {FA}, hxa) : {{A.Arrays.nth(U32, {EL}, A.Arrays.index(9n, U32.add(_, {LX('b')})), 0) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, {LX('b')}, {FB}, hxb) : {{A.Arrays.nth(U32, {EL}, A.Arrays.index(9n, U32.add({FA}, _)), 0) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, U32.add({FA}, {FB}), U32.from_nat({S}), GT.gt.add_nat({la}, {lb})) : {{A.Arrays.nth(U32, {EL}, A.Arrays.index(9n, _), 0) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(Nat, A.Arrays.index(9n, U32.from_nat({S})), {S}, AL.index_of_nat(9n, GT.gt.hd9(), {S}, GT.gt.sum_lt({lb}, {la}, GT.gt.log_lt({f}, b), GT.gt.log_lt({f}, a)))) : {{A.Arrays.nth(U32, {EL}, _, 0) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, A.Arrays.nth(U32, {EL}, {S}, 0), G.Gf8.exp({f}, Nat.add({S}, 0n)), GT.gt.elist_nth(510n, {f}, 0n, {S}, GT.gt.lt_sum({lb}, 255n, {la}, 255n, GT.gt.log_lt({f}, b), GT.gt.log_lt({f}, a)))) : {{_ == {MUL} : U32}}")
+    emit(f"  %Equal.sym(Nat, Nat.add({S}, 0n), {S}, GT.gt.add_zero_r({S})) : {{G.Gf8.exp({f}, _) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, G.Gf8.pow({f}, {g}, {S}), G.Gf8.mul({f}, G.Gf8.pow({f}, {g}, {lb}), G.Gf8.pow({f}, {g}, {la})), Laws.pow_add({f}, {g}, {lb}, {la})) : {{_ == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, G.Gf8.exp({f}, {lb}), G.Gf8.elt(b), elb) : {{G.Gf8.mul({f}, _, G.Gf8.pow({f}, {g}, {la})) == {MUL} : U32}}")
+    emit(f"  %Equal.sym(U32, G.Gf8.exp({f}, {la}), G.Gf8.elt(a), ela) : {{G.Gf8.mul({f}, G.Gf8.elt(b), _) == {MUL} : U32}}")
+    emit(f"  Equal.trans(U32, G.Gf8.mul({f}, G.Gf8.elt(b), G.Gf8.elt(a)), G.Gf8.mul({f}, b, a), {MUL}, tl.mul_elt({f}, b, a), Laws.mul_comm({f}, b, a))")
+    emit()
+    emit("# both factors nonzero: the table's product, through its three reads")
+    emit(f"def tl.nzpick({FL}, +a: U32, +b: U32, {HL}, {HXA}, {HXB}, {ELA}, {ELB}) -> {{T.gf8tab.two.pick(Bool.or(False{{}}, False{{}}), {TAB}, G.Gf8.elt(a), G.Gf8.elt(b), False{{}}) == ({TAB}, {MUL}) : {PAIR}}}:")
+    emit(f"  %Equal.sym({AP}, Array.get(U32, {L8}, G.Gf8.elt(a)), ({L8}, {LX('a')}), {get8('a')}) : {{T.gf8tab.two.mid({E9}, _, G.Gf8.elt(b), False{{}}) == ({TAB}, {MUL}) : {PAIR}}}")
+    emit(f"  %Equal.sym({AP}, Array.get(U32, {L8}, G.Gf8.elt(b)), ({L8}, {LX('b')}), {get8('b')}) : {{T.gf8tab.two.fin({E9}, _, {LX('a')}, False{{}}) == ({TAB}, {MUL}) : {PAIR}}}")
+    IDX = f"U32.add({LX('a')}, {LX('b')})"
+    emit(f"  %Equal.sym({AP}, Array.get(U32, {E9}, {IDX}), ({E9}, {V}), AL.of_list_get(U32, 9n, {EL}, 0, GT.gt.hl_elist({f}), GT.gt.hd9(), {IDX})) : {{T.gf8tab.exp.fin(_, {L8}) == ({TAB}, {MUL}) : {PAIR}}}")
+    emit(f"  %Equal.sym(U32, {V}, {MUL}, tl.nz({f}, {l}, a, b, hxa, hxb, ela, elb)) : {{({TT}, _) == ({TAB}, {MUL}) : {PAIR}}}")
+    emit("  {==}")
+    emit()
+    LOG = f"U32.from_nat({la})"
+    emit("# a logarithm through the table")
+    emit(f"def tl.log({FL}, +a: U32, {HL}, {HXA}) -> {{T.Gf8Tab.log({TAB}, a) == ({TAB}, {LOG}) : {PAIR}}}:")
+    emit(f"  %Equal.sym({AP}, Array.get(U32, {L8}, G.Gf8.elt(a)), ({L8}, {LX('a')}), {get8('a')}) : {{T.gf8tab.log.fin({E9}, _) == ({TAB}, {LOG}) : {PAIR}}}")
+    emit(f"  %Equal.sym(U32, {LX('a')}, {LOG}, hxa) : {{({TT}, _) == ({TAB}, {LOG}) : {PAIR}}}")
+    emit("  {==}")
+    emit()
+    EXP = f"G.Gf8.exp({f}, U32.to_nat(i))"
+    NI = f"A.Arrays.nth(U32, {EL}, U32.to_nat(i), 0)"
+    emit("# an exponential through the table")
+    emit(f"def tl.exp({FL}, +i: U32, +hi: {{Nat.is_lt(U32.to_nat(i), 510n) == True{{}} : Bool}}) -> {{T.Gf8Tab.exp({TAB}, i) == ({TAB}, {EXP}) : {PAIR}}}:")
+    emit(f"  %Equal.sym({AP}, Array.get(U32, {E9}, i), ({E9}, A.Arrays.nth(U32, {EL}, A.Arrays.index(9n, i), 0)), AL.of_list_get(U32, 9n, {EL}, 0, GT.gt.hl_elist({f}), GT.gt.hd9(), i)) : {{T.gf8tab.exp.fin(_, {L8}) == ({TAB}, {EXP}) : {PAIR}}}")
+    emit(f"  %Equal.sym(Nat, A.Arrays.index(9n, i), U32.to_nat(i), AL.index_of_u32(9n, i, GT.gt.lt_add_left(2n, U32.to_nat(i), 510n, hi))) : {{({TT}, A.Arrays.nth(U32, {EL}, _, 0)) == ({TAB}, {EXP}) : {PAIR}}}")
+    emit(f"  %Equal.sym(U32, {NI}, G.Gf8.exp({f}, Nat.add(U32.to_nat(i), 0n)), GT.gt.elist_nth(510n, {f}, 0n, U32.to_nat(i), hi)) : {{({TT}, _) == ({TAB}, {EXP}) : {PAIR}}}")
+    emit(f"  %Equal.sym(Nat, Nat.add(U32.to_nat(i), 0n), U32.to_nat(i), GT.gt.add_zero_r(U32.to_nat(i))) : {{({TT}, G.Gf8.exp({f}, _)) == ({TAB}, {EXP}) : {PAIR}}}")
+    emit("  {==}")
+    emit()
+    NZA = f"+ela: {{G.Gf8.is_zero(a) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {la}) == G.Gf8.elt(a) : U32}}"
+    NZB = f"+elb: {{G.Gf8.is_zero(b) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {lb}) == G.Gf8.elt(b) : U32}}"
+    nza = f"Equal.trans(Bool, G.Gf8.is_zero(a), U32.is_eq(G.Gf8.elt(a), 0), False{{}}, Equal.sym(Bool, U32.is_eq(G.Gf8.elt(a), 0), G.Gf8.is_zero(a), GC.gc.isz(a)), ex)"
+    nzb = f"Equal.trans(Bool, G.Gf8.is_zero(b), U32.is_eq(G.Gf8.elt(b), 0), False{{}}, Equal.sym(Bool, U32.is_eq(G.Gf8.elt(b), 0), G.Gf8.is_zero(b), GC.gc.isz(b)), ey)"
+    emit("# the product through the table, by whether each factor is zero")
+    emit(f"def tl.pick({FL}, zx: Bool, zy: Bool, +a: U32, +b: U32, +ex: {{U32.is_eq(G.Gf8.elt(a), 0) == zx : Bool}}, +ey: {{U32.is_eq(G.Gf8.elt(b), 0) == zy : Bool}}, {HL}, {HXA}, {HXB}, ela: {{G.Gf8.is_zero(a) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {la}) == G.Gf8.elt(a) : U32}}, elb: {{G.Gf8.is_zero(b) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {lb}) == G.Gf8.elt(b) : U32}}) -> {{T.gf8tab.two.pick(Bool.or(zx, zy), {TAB}, G.Gf8.elt(a), G.Gf8.elt(b), False{{}}) == ({TAB}, {MUL}) : {PAIR}}}:")
+    emit("  match zx zy:")
+    emit("    case True{} _:")
+    emit(f"      %Equal.sym(U32, {MUL}, 0, tl.zero_l({f}, a, b, ex)) : {{({TAB}, 0) == ({TAB}, _) : {PAIR}}}")
+    emit("      {==}")
+    emit("    case False{} True{}:")
+    emit(f"      %Equal.sym(U32, {MUL}, 0, Equal.trans(U32, {MUL}, G.Gf8.mul({f}, b, a), 0, Laws.mul_comm({f}, a, b), tl.zero_l({f}, b, a, ey))) : {{({TAB}, 0) == ({TAB}, _) : {PAIR}}}")
+    emit("      {==}")
+    emit("    case False{} False{}:")
+    emit(f"      tl.nzpick({f}, {l}, a, b, hl, hxa, hxb, ela({nza}), elb({nzb}))")
+    emit()
+    emit("# a product through the table")
+    emit(f"def tl.mul({FL}, +a: U32, +b: U32, {HL}, {HXA}, {HXB}, ela: {{G.Gf8.is_zero(a) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {la}) == G.Gf8.elt(a) : U32}}, elb: {{G.Gf8.is_zero(b) == False{{}} : Bool}} -> {{G.Gf8.exp({f}, {lb}) == G.Gf8.elt(b) : U32}}) -> {{T.Gf8Tab.mul({TAB}, a, b) == ({TAB}, {MUL}) : {PAIR}}}:")
+    emit(f"  tl.pick({f}, {l}, U32.is_eq(G.Gf8.elt(a), 0), U32.is_eq(G.Gf8.elt(b), 0), a, b, {{==}}, {{==}}, hl, hxa, hxb, ela, elb)")
+    emit()
+    for n, F in TAB_FIELDS:
+        L = f"GC.gc.{n}.llist()"
+        TABF = f"GT.gt.tab({F}, {L})"
+        MULF = f"G.Gf8.mul({F}, a, b)"
+        nza = f"Equal.trans(Bool, G.Gf8.is_zero(a), U32.is_eq(G.Gf8.elt(a), 0), False{{}}, Equal.sym(Bool, U32.is_eq(G.Gf8.elt(a), 0), G.Gf8.is_zero(a), GC.gc.isz(a)), ex)"
+        nzb = f"Equal.trans(Bool, G.Gf8.is_zero(b), U32.is_eq(G.Gf8.elt(b), 0), False{{}}, Equal.sym(Bool, U32.is_eq(G.Gf8.elt(b), 0), G.Gf8.is_zero(b), GC.gc.isz(b)), ey)"
+        emit(f"# The {n} field")
+        emit()
+        emit(f"def tl.hl8_{n}() -> {{List.length(&2, U32, {L}) == A.Arrays.slots(8n) : Nat}}:")
+        emit("  {==}")
+        emit()
+        emit(f"def Laws.tab_mul_{n}(a, b):")
+        emit(f"  %GC.gc.{n}.new() : {{T.Gf8Tab.mul(_, a, b) == (_, {MULF}) : {PAIR}}}")
+        emit(f"  tl.mul({F}, {L}, a, b, tl.hl8_{n}(), GC.gc.{n}.log(a), GC.gc.{n}.log(b), nz => Laws.exp_log_{n}(a, nz), nz => Laws.exp_log_{n}(b, nz))")
+        emit()
+        LOGF = f"U32.from_nat(G.Gf8.log({F}, a))"
+        emit(f"def Laws.tab_log_{n}(a):")
+        emit(f"  %GC.gc.{n}.new() : {{T.Gf8Tab.log(_, a) == (_, {LOGF}) : {PAIR}}}")
+        emit(f"  tl.log({F}, {L}, a, tl.hl8_{n}(), GC.gc.{n}.log(a))")
+        emit()
+        EXPF = f"G.Gf8.exp({F}, U32.to_nat(i))"
+        emit(f"def Laws.tab_exp_{n}(i, hi):")
+        emit(f"  %GC.gc.{n}.new() : {{T.Gf8Tab.exp(_, i) == (_, {EXPF}) : {PAIR}}}")
+        emit(f"  tl.exp({F}, {L}, i, hi)")
+        emit()
+    emit("def Laws.witness_tab_exp():")
+    emit("  {==}")
+    emit()
+
+
 out_text = None
 
 
@@ -960,6 +1098,11 @@ def main():
     emit("import ./tables.bend as T")
     emit("import ./gf128.bend as H")
     emit("import ./gfm.bend as M")
+    emit("import ../array/array.bend as A")
+    emit("import ../array/LAWS.bend as AL")
+    emit("import ../array/PROOF.bend as APF")
+    emit("import ./proof_tab.bend as GT")
+    emit("import ./proof_tab_cases.bend as GC")
     emit("import ./LAWS.bend as Laws")
     emit()
     gen_bool()
@@ -969,6 +1112,7 @@ def main():
     gen_ring()
     gen_laws()
     gen_gfm()
+    gen_tabs()
     with open(OUT, "w", newline="\n") as f:
         f.write("\n".join(out) + "\n")
 

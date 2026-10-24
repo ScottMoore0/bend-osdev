@@ -2,8 +2,11 @@ import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B
 import ./crc.bend as C
+import ./table.bend as T
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
+import ./proof_fast.bend as PF
+import ./proof_fast64.bend as PF6
 import ./LAWS.bend as Laws
 
 # Each engine folds the bytes one at a time, so running it over a ++ b is
@@ -102,6 +105,19 @@ def Laws.empty_crc32c():
 
 def Laws.empty_crc_t10dif():
   {==}
+
+# The fast path, through proof_fast.bend
+def Laws.fast_update32(spec, c, o):
+  PF.cf.update32(spec, c, o)
+
+def Laws.fast_compute32(spec, o):
+  Equal.cong(U32, U32, x => C.Crc32Spec.finish(spec, x), T.Crc32Spec.update_fast(spec, C.Crc32Spec.start(spec), o), C.Crc32Spec.update(spec, C.Crc32Spec.start(spec), o), PF.cf.update32(spec, C.Crc32Spec.start(spec), o))
+
+def Laws.fast_update64(spec, c, o):
+  PF6.cf6.update64(spec, c, o)
+
+def Laws.fast_compute64(spec, o):
+  Equal.cong(W.W64, W.W64, x => C.Crc64Spec.finish(spec, x), T.Crc64Spec.update_fast(spec, C.Crc64Spec.start(spec), o), C.Crc64Spec.update(spec, C.Crc64Spec.start(spec), o), PF6.cf6.update64(spec, C.Crc64Spec.start(spec), o))
 
 def Laws.fast_crc32c():
   {==}

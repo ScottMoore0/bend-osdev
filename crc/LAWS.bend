@@ -54,9 +54,33 @@ law empty_crc32c:
 law empty_crc_t10dif:
   {C.crc_t10dif(B.Octets.empty()) == 0 : U32}
 
-# The table-driven fast path (table.bend) gives the same check values, and
-# agrees with the reference on a longer input. Vectors only: a law for every
-# input would need lemmas about Array's internals.
+# The table-driven fast path (table.bend) is the reference: for every
+# parameter set, register and input, at both word sizes (proved through
+# bend-osdev-array's laws, see proof_fast.bend and proof_fast64.bend), and so
+# for every complete CRC. It also gives the check values, and agrees with
+# the reference on a longer input.
+
+law fast_update32:
+  for spec: C.Crc32Spec
+  for +c: U32
+  for +o: B.Octets
+  {T.Crc32Spec.update_fast(spec, c, o) == C.Crc32Spec.update(spec, c, o) : U32}
+
+law fast_compute32:
+  for +spec: C.Crc32Spec
+  for +o: B.Octets
+  {T.Crc32Spec.compute_fast(spec, o) == C.Crc32Spec.compute(spec, o) : U32}
+
+law fast_update64:
+  for spec: C.Crc64Spec
+  for +c: W.W64
+  for +o: B.Octets
+  {T.Crc64Spec.update_fast(spec, c, o) == C.Crc64Spec.update(spec, c, o) : W.W64}
+
+law fast_compute64:
+  for +spec: C.Crc64Spec
+  for +o: B.Octets
+  {T.Crc64Spec.compute_fast(spec, o) == C.Crc64Spec.compute(spec, o) : W.W64}
 
 law fast_crc32c:
   {T.Crc32Spec.compute_fast(C.crc32c.spec(), B.Octets.of_string("123456789")) == 3808858755 : U32}
