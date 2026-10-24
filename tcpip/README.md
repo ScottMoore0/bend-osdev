@@ -82,6 +82,8 @@ Where the RFC leaves a choice, the package makes one and says so:
 | `udp.bend` | UDP sockets (`Udp.step`) |
 | `sim.bend` | a simulated network of two TCP endpoints, for tests (`TcpSim`) |
 | `show.bend` | text forms of segments, actions and notes (`TcpShow`) |
+| `LAWS.bend`, `PROOF.bend` | the laws below but the packet-level ones, and their proofs |
+| `LAWS_packet.bend`, `PROOF_packet.bend` | the packet-level answers of ICMP and UDP (written by `ref/gen_packet.py`) |
 
 Bend imports do not re-export: import the files whose names you use.
 
@@ -198,8 +200,10 @@ so a host may fire timers late or twice.
 
 ## Laws
 
-`LAWS.bend`; every law is
-proved in `PROOF.bend`.
+Two pairs of law and proof files, each checked on its own: `LAWS.bend`
+with `PROOF.bend`, and `LAWS_packet.bend` with `PROOF_packet.bend` (the
+packet-level answers, whose proofs rest on bend-osdev-netheaders' checksum
+laws). Every law is proved.
 
 **For every input:**
 * sequence numbers: `SeqNum.lt` is irreflexive (`seq_lt_irrefl`),
@@ -247,12 +251,29 @@ a SYN to a listener answered by SYN,ACK, and the resets for a segment to no
 connection. Every law with a hypothesis has a satisfiability law (`*_sat`).
 
 The TCP laws are stated for Reno, since a law cannot quantify over a
-template argument; neither depends on the congestion controller. Not proved
-for every input: that the delivered bytes are the stream's (the receive
-queue law says where they start and how far they reach; the differential
-tests compare the bytes), and the packet-level answers of UDP and ICMP
-(their checksums need one's complement lemmas; vectors and the Linux test
-cover them).
+template argument; neither depends on the congestion controller.
+
+**Packet level** (`LAWS_packet.bend`, 7 laws, for every input): the bytes a
+sender builds, checksum and all, are taken for what was sent.
+`icmp_decode_request`, `icmp_decode_reply`: an echo request's or reply's
+bytes (`Icmp.encode`) decode back to it, identifier and sequence number
+masked to their 16 bits; `icmp_echo_packet_answered`: received, the bytes
+of an echo request are answered (with `answer_echo` on) by the bytes of the
+echo reply with the same identifier, sequence number and data, to the
+sender; `icmp_reply_packet_reported`: the bytes of an echo reply are
+reported to the application, in any state; `udp_packet_received`: a
+datagram built over IPv4 from src to dst (`UdpHeader.build_ipv4`, checksum
+and all), its length field the datagram's length, is passed to
+`Udp.receive` with its 16-bit ports and its data, which with
+`udp_bound_delivers` delivers it to the socket bound to its port; and a
+satisfiability law for the length Udp.send writes. The proofs use
+netheaders' laws that such bytes verify, parse back with the checksum
+field written, and keep the payload; ICMP's packed identifier and
+sequence number are read back by computation on the words' halves.
+
+Not proved for every input: that the delivered bytes are the stream's (the
+receive queue law says where they start and how far they reach; the
+differential tests compare the bytes).
 
 ## Tests
 
@@ -301,6 +322,7 @@ Measured on native builds (Bend 2.0.37, WSL2):
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (47 laws), `--verdict` ALL PROOFS
-CHECK, `check.bend` passes, `ref/run.sh` 100 cases (6671 trace lines) match
+Bend 2.0.37: `PROOF.bend` (47 laws) and `PROOF_packet.bend` (7 laws) ALL
+PROOFS CHECK, `--verdict` ALL PROOFS CHECK for each (`PROOF_packet.bend`
+peaks at 0.31 GB), `ref/gen_packet.py --check` up to date, `check.bend` passes, `ref/run.sh` 100 cases (6671 trace lines) match
 the model and 12 of 12 checks pass against Linux 6.6, `scripts/deps.sh` ok.
