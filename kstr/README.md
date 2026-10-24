@@ -96,9 +96,7 @@ digits are the token list of v's quotient followed by `KTDigit{r}`; each
 masked digit byte reads as its token (the ten cases of r); and the parse
 of the quotient's digits leaves the quotient, one more step, acc 10 + r,
 giving v back without overflow (in 64 bits since v < 2^64, in 32 bits
-since v < 2^32). `PROOF_dec.bend` ALL PROOFS CHECK, and cannot pass
-`--verdict` while it imports bend-osdev-word64's `PROOF_div.bend` (word64's
-README, "`PROOF_div.bend` and the kernel").
+since v < 2^32).
 
 **A bug, found by the proof and fixed:** `KStr.format32` sign-extended
 every value, so `%u`, `%x`, `%X` and `%o` of a `U32` with its top bit set
@@ -123,7 +121,6 @@ sizes and orders against a model of the documented layout.
 ## Status
 
 Bend 2.0.37: `PROOF.bend` (20 laws) and `PROOF_dec.bend` (2) ALL PROOFS
-CHECK; `--verdict` ALL PROOFS CHECK on `PROOF.bend` (about 8 s, peak 0.43
-GB), and does not finish on `PROOF_dec.bend` (word64's division, above);
-`check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh`
+CHECK; `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 8 s, peak
+0.43 GB; `PROOF_dec.bend` about 6 s, 0.54 GB); `check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh`
 passes.
