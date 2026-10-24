@@ -135,6 +135,7 @@ These are stated choices; where the choice is a real one it is an option
 | `eval.bend` | `NftOptions` and its default, a chain's evaluation (`Nft.run_chain`, `NftRun`), a base chain's (`Nft.run_base`), a hook's (`Nft.run_hook`, `NftOut`) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `LAWS_map.bend`, `PROOF_map.bend` | the key order and map lookup: laws and proofs |
+| `LAWS_expr.bend`, `PROOF_expr.bend` | what payload loads, comparisons and limits mean: laws and proofs |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -340,8 +341,57 @@ holds a key of the new one. The list model follows by induction over the
 insertions, with the set's lookup the first answer of the elements inserted
 so far.
 
-Not proved: the expressions' semantics (payload loads, comparisons, limits)
-are covered by the differential test and `check.bend`.
+`LAWS_expr.bend`, on the public interface only: 19 laws for every input, 3
+vectors and 1 witness, on what the expressions mean.
+
+* **payload loads are byte reads at offsets:** `payload_load` (with the
+  base's bytes `o`, as `NftPacket.base` gives them: the headers from that
+  layer on, as netheaders builds them, then the data, a load of `len`
+  bytes at `off` that fits is `slice(off, len, o)`), `payload_at` (and its
+  byte `i`, for `i < len`, is `o`'s byte at `off + i`), `payload_short` (a
+  load that would run past the end gives nothing) and `payload_no_base` (so
+  does one from a layer the packet does not have); a match on nothing
+  fails;
+* **comparisons on Octets:** `cmp_eq_holds` (`==` holds only for the value
+  itself: `v == w`), `cmp_eq_refl`, `cmp_ne` (the negation), `cmp_lt`,
+  `cmp_le`, `cmp_gt`, `cmp_ge` (the key order, one way or the other round:
+  `v > w` is `NftKey.lt(w, v)`), `range_contains` and `not_range_contains`
+  (a range test is an element's interval test), `in_set_mem` and
+  `not_in_set_mem` (set membership), `key_u8_cmp` (one-byte keys compare
+  as their bytes, `U32.cmp`, which bend-osdev-u32's `u32_cmp_value` makes
+  the order of the numbers);
+* **limits:** `limit_fresh` (the first packet through a limit with no
+  bucket yet conforms exactly when its cost, `unit_ms` or `unit_ms` per
+  byte, is at most the bucket's capacity, `burst` tokens, or `rate` when
+  `burst` is 0, of `unit_ms` each; `over` inverts), `limit_over` and
+  `limit_over_env` (`over` only inverts the match: for every state the
+  packet, counters and buckets after it are the same).
+
+Vectors: `th dport` on a UDP datagram reads its destination port, a load
+past the header's end and one from a missing network layer give nothing;
+ports compared, a range and a set; a limit of one packet a second with
+burst 1 passing a packet at 0 ms, refusing the next at 0 ms and passing one
+at 1000 ms. The witness is the transport base of that datagram, with loads
+that fit and do not.
+
+The proofs (`PROOF_expr.bend`): a payload load is a cut of the base's
+bytes, so the laws follow by rewriting with the hypotheses; its byte `i`
+is found by splitting the bytes at the offset and at the end of the load
+(bend-osdev-bytes' `take_drop`, and reads inside the first part of a
+joined string through the list form of Octets). Equal comparisons give
+equal byte lists (each `U32.cmp` equal, so each byte equal, by
+bend-osdev-u32's value laws), so equal Octets; the reversed comparisons
+flip by `PROOF_map.bend`'s lemma. A fresh bucket is full, and a full bucket
+refills to its capacity (`W64.cmp`'s value law, bend-osdev-word64);
+`over` changes only the bit `NftBucket.take` answers, which every later
+step passes on, by induction on the buckets.
+
+Not proved: the refill arithmetic (after `elapsed` ms a bucket holds
+`min(capacity, credit + elapsed * rate)`), so nothing about a limit's
+second and later packets: it rests on 64-bit multiplication and division,
+and bend-osdev-word64 has no value laws for those (nor bend-osdev-u32 for
+its multiplication). The differential test (`ref/gen.py` computes the
+bucket as `min(cap, credit + elapsed * rate)`) and `check.bend` cover it.
 
 ## Tests
 
@@ -414,8 +464,9 @@ and checking and building it takes about 1 GB.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` and `PROOF_map.bend` ALL PROOFS CHECK, `--verdict`
-ALL PROOFS CHECK (`PROOF_map.bend` peaks at 0.22 GB), `check.bend` passes
+Bend 2.0.37: `PROOF.bend`, `PROOF_map.bend` and `PROOF_expr.bend` ALL
+PROOFS CHECK, `--verdict` ALL PROOFS CHECK (`PROOF_map.bend` peaks at
+0.22 GB, `PROOF_expr.bend` at 0.44 GB), `check.bend` passes
 (native), `ref/run.sh` 80 cases (152 packets) match, and where nft was
 installed, `nft --check` accepted all 32 rule sets written in nft syntax;
 `scripts/deps.sh` ok.
