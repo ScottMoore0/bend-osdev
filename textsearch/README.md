@@ -66,6 +66,7 @@ as an NFA simulation. No kernel source was read.
 | `LAWS.bend`, `PROOF.bend` | the laws for every automaton and the bounded ones, and their proofs |
 | `LAWS_kmp.bend`, `PROOF_kmp.bend` | KMP against the reference, and its proof (the theory of borders) |
 | `LAWS_fsm.bend`, `PROOF_fsm.bend` | the token automaton against its backtracking reference, and its proof |
+| `LAWS_bm.bend`, `PROOF_bm.bend` | Boyer-Moore against the reference, and its proof (every shift safe) |
 | `proof_lib.bend` | lemmas the proof files share (no law) |
 | `check.bend` | examples and large exhaustive comparisons, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -101,7 +102,9 @@ the `ts.bm.*` tables and scan, the `ts.fsm.*` steps, `ts.naive.at`/`go`, and
   that reads a byte at a time needs only a step, and `auto.bend` gives it
   the chunking and its laws for free (`auto_split` holds for every step).
 * **Boyer-Moore's shift** is a parameter (`TsBmRule`); a new rule is a case
-  of `ts.bm.shift` (each must be safe: never skip an occurrence).
+  of `ts.bm.shift` (each must be safe: never skip an occurrence; for
+  `bm_ref` to cover it, its safety is a case of `bp.safe_long` in
+  `PROOF_bm.bend`).
 * **Case** is a parameter (`icase`); other byte equivalences would replace
   `ts.fold`.
 * **Classes** in the token automaton are open data; a new class is a
@@ -180,12 +183,42 @@ at each later end whether a match begun before is accepted or some
 non-empty run within the rest matches (`fs.run`); from the start nothing is
 under way, which is the reference.
 
-**Not proved, and why.** That Boyer-Moore finds exactly what the reference
-finds **in general**, and its chunking law in general. Its correctness
-rests on each shift being safe, a substantial development not done here.
-It is held instead by the bounded laws above (proved by computation, kept
-small because the checker bounds the work of one law), by `check.bend`'s
-much larger exhaustive comparisons, and by `ref/`.
+`LAWS_bm.bend`, **for every input**, proved in `PROOF_bm.bend`:
+
+* `bm_ref`: Boyer-Moore finds exactly what the reference finds,
+  `ts.bm.ends(icase, rule, p, xs) == ts.naive.ends(icase, p, xs)`, for
+  both shift rules (`TsHorspool`, and `TsGoodSuffix`, the larger of
+  Horspool's shift and the strong good-suffix shift), every pattern (the
+  empty one included), exactly or ignoring case, and every text.
+
+The proof shows every shift safe. Ignoring case is the exact search of the
+folded pattern in the folded text (`bp.conv`). Each window's report is
+the reference's test at its offset: the code's count of agreeing bytes
+from the window's end is the whole pattern exactly when the pattern is
+there (`bp.hit_ok`). No offset the step skips holds the pattern
+(`bp.safe`):
+
+* Horspool's shift h: Horspool's scan leaves no pattern position from
+  m - h to m - 2 holding the window's last byte b (`bp.hs_go`), and a
+  skipped offset i would put pattern position m - 1 - i under b;
+* the good-suffix shift g after a mismatch at position j: the search for g
+  fails at every s below it (`bp.least_nok`), and an occurrence at offset
+  s would make s hold, since the pattern there agrees with the matched
+  suffix and puts the window's byte j, which is not pattern byte j, under
+  position j (`bp.okw`);
+* after a match, the shift is the least period, every s below it is not a
+  period (`bp.per_nok`), and an occurrence at s would make it one;
+* the default rule's shift is the larger of Horspool's and the
+  good-suffix shift, and an offset below it is below one of them.
+
+So the scan skips only offsets the reference rejects (`bp.main`).
+
+**Not proved, and why.** Boyer-Moore's chunking law in general (that
+feeding the text in chunks, keeping the last m - 1 bytes between them,
+finds what the whole text does). It follows from `bm_ref` once the
+reference's matches over a chunk and the rest are split at the kept
+bytes, which is not done here; it is held by the bounded laws above,
+`check.bend`'s exhaustive chunked comparisons, and `ref/`.
 
 ## Tests
 
@@ -223,7 +256,7 @@ much larger exhaustive comparisons, and by `ref/`.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend`, `PROOF_kmp.bend` and `PROOF_fsm.bend` ALL
-PROOFS CHECK, and under `--verdict` (each in its own process, under 0.3
-GB), `check.bend` passes, `ref/run.sh` 200 cases match, `scripts/deps.sh
-textsearch` ok.
+Bend 2.0.37: `PROOF.bend`, `PROOF_kmp.bend`, `PROOF_fsm.bend` and
+`PROOF_bm.bend` ALL PROOFS CHECK, and under `--verdict` (each in its own
+process, under 0.3 GB), `check.bend` passes, `ref/run.sh` 200 cases
+match, `scripts/deps.sh textsearch` ok.

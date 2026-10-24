@@ -460,3 +460,222 @@ def tsl.split(~S: Data, ~step: S -> U32 -> S & Bool, cs: List<&2, List<&2, U32>>
       %Equal.sym(S & List<&2, Nat>, A.ts.auto.feed(~S, ~step, s, pos, List.append(&2, U32, c, T.ts.concat(t))), A.ts.auto.then(~S, ~step, A.ts.auto.feed(~S, ~step, s, pos, c), p, T.ts.concat(t)), tsl.feed_app(~S, ~step, s, pos, c, T.ts.concat(t))) : {List.append(&2, Nat, m0, T.ts.run.go(~S, ~(s1 => p => xs => A.ts.auto.feed(~S, ~step, s1, p, xs)), t, p, A.ts.auto.feed(~S, ~step, s, pos, c))) == List.append(&2, Nat, m0, A.ts.auto.snd(~S, _)) : List<&2, Nat>}
       tsl.split_k(~S, ~step, A.ts.auto.feed(~S, ~step, s, pos, c), t, p, m0, s1 => m1 => tsl.split(~S, ~step, t, p, s1, m1))
 
+
+# Nat: subtraction and order
+
+def tsl.sub_self(+a: Nat) -> {Nat.sub(a, a) == 0n : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      tsl.sub_self(p)
+
+# b <= a: (a + 1) - b is (a - b) + 1
+def tsl.sub_succ_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(b, 1n+a) == True{} : Bool}) -> {Nat.sub(1n+a, b) == 1n+Nat.sub(a, b) : Nat}:
+  match a:
+    case 0n:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.lt_zero_abs(Nat, Nat.sub(1n, 1n+bp), 1n+Nat.sub(0n, 1n+bp), bp, h)
+    case 1n+ap:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.sub_succ_le(ap, bp, h)
+
+# a <= b: a + (b - a) is b
+def tsl.add_sub(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, 1n+b) == True{} : Bool}) -> {Nat.add(a, Nat.sub(b, a)) == b : Nat}:
+  match a:
+    case 0n:
+      tsl.sub_zero(b)
+    case 1n+ap:
+      match b:
+        case 0n:
+          tsl.lt_zero_abs(Nat, Nat.add(1n+ap, Nat.sub(0n, 1n+ap)), 0n, ap, h)
+        case 1n+bp:
+          %tsl.add_sub(ap, bp, h) : {1n+Nat.add(ap, Nat.sub(bp, ap)) == 1n+_ : Nat}
+          {==}
+
+# a - b <= a
+def tsl.sub_le(+a: Nat, +b: Nat) -> {Nat.is_lt(Nat.sub(a, b), 1n+a) == True{} : Bool}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+ap:
+      match b:
+        case 0n:
+          tsl.lt_succ(ap)
+        case 1n+bp:
+          tsl.lt_weak(Nat.sub(ap, bp), 1n+ap, tsl.sub_le(ap, bp))
+
+def tsl.lt_irrefl(+a: Nat) -> {Nat.is_lt(a, a) == False{} : Bool}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      tsl.lt_irrefl(p)
+
+def tsl.lt_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_lt(a, b) == True{} : Bool}, +h2: {Nat.is_lt(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
+  tsl.lt_le_trans(a, b, c, h1, tsl.lt_weak(b, c, h2))
+
+# a < b: a is not b
+def tsl.lt_ne(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_eq(a, b) == False{} : Bool}:
+  match a:
+    case 0n:
+      match b:
+        case 0n:
+          tsl.absurd(Bool, True{}, False{}, h)
+        case 1n+bp:
+          {==}
+    case 1n+ap:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.lt_ne(ap, bp, h)
+
+# not a < b, and a is not b: b < a
+def tsl.nlt_ne(+a: Nat, +b: Nat, +h1: {Nat.is_lt(a, b) == False{} : Bool}, +h2: {Nat.is_eq(a, b) == False{} : Bool}) -> {Nat.is_lt(b, a) == True{} : Bool}:
+  match a:
+    case 0n:
+      match b:
+        case 0n:
+          tsl.absurd_tf(Bool, Nat.is_lt(0n, 0n), True{}, h2)
+        case 1n+bp:
+          tsl.absurd_tf(Bool, Nat.is_lt(1n+bp, 0n), True{}, h1)
+    case 1n+ap:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.nlt_ne(ap, bp, h1, h2)
+
+# not a < b: b < a + 1
+def tsl.nlt_le(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == False{} : Bool}) -> {Nat.is_lt(b, 1n+a) == True{} : Bool}:
+  match a:
+    case 0n:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.absurd_tf(Bool, Nat.is_lt(1n+bp, 1n), True{}, h)
+    case 1n+ap:
+      match b:
+        case 0n:
+          {==}
+        case 1n+bp:
+          tsl.nlt_le(ap, bp, h)
+
+# a < b + 1: not b < a
+def tsl.le_nlt(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, 1n+b) == True{} : Bool}) -> {Nat.is_lt(b, a) == False{} : Bool}:
+  match a:
+    case 0n:
+      tsl.lt_zero(b)
+    case 1n+ap:
+      match b:
+        case 0n:
+          tsl.lt_zero_abs(Bool, Nat.is_lt(0n, 1n+ap), False{}, ap, h)
+        case 1n+bp:
+          tsl.le_nlt(ap, bp, h)
+
+def tsl.max_zero(+y: Nat) -> {Nat.max(y, 0n) == y : Nat}:
+  match y:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+# m > 0: (m - 1) + 1 is m
+def tsl.succ_pred(+m: Nat, +h: {Nat.is_lt(0n, m) == True{} : Bool}) -> {1n+Nat.sub(m, 1n) == m : Nat}:
+  match m:
+    case 0n:
+      tsl.absurd(Nat, 1n, 0n, h)
+    case 1n+ +k:
+      %Equal.sym(Nat, Nat.sub(k, 0n), k, tsl.sub_zero(k)) : {1n+_ == 1n+k : Nat}
+      {==}
+
+# j <= a: a - (a - j) is j
+def tsl.sub_sub(+a: Nat, +j: Nat, +h: {Nat.is_lt(j, 1n+a) == True{} : Bool}) -> {Nat.sub(a, Nat.sub(a, j)) == j : Nat}:
+  match a:
+    case 0n:
+      match j:
+        case 0n:
+          {==}
+        case 1n+ +i:
+          tsl.lt_zero_abs(Nat, 0n, 1n+i, i, h)
+    case 1n+ +k:
+      match j:
+        case 0n:
+          tsl.sub_self(k)
+        case 1n+ +i:
+          %Equal.sym(Nat, Nat.sub(1n+k, Nat.sub(k, i)), 1n+Nat.sub(k, Nat.sub(k, i)), tsl.sub_succ_le(k, Nat.sub(k, i), tsl.sub_le(k, i))) : {_ == 1n+i : Nat}
+          %Equal.sym(Nat, Nat.sub(k, Nat.sub(k, i)), i, tsl.sub_sub(k, i, h)) : {1n+_ == 1n+i : Nat}
+          {==}
+
+# 0 < i <= a: a - i < a
+def tsl.sub_lt(+a: Nat, +i: Nat, +h1: {Nat.is_lt(0n, i) == True{} : Bool}, +h2: {Nat.is_lt(i, 1n+a) == True{} : Bool}) -> {Nat.is_lt(Nat.sub(a, i), a) == True{} : Bool}:
+  match a:
+    case 0n:
+      match i:
+        case 0n:
+          tsl.absurd(Bool, Nat.is_lt(0n, 0n), True{}, h1)
+        case 1n+ +j:
+          tsl.lt_zero_abs(Bool, Nat.is_lt(0n, 0n), True{}, j, h2)
+    case 1n+ +k:
+      match i:
+        case 0n:
+          tsl.absurd(Bool, Nat.is_lt(1n+k, 1n+k), True{}, h1)
+        case 1n+ +j:
+          tsl.sub_le(k, j)
+
+# b1 <= b2: a - b2 <= a - b1
+def tsl.sub_mono(+b1: Nat, +b2: Nat, +a: Nat, +h: {Nat.is_lt(b1, 1n+b2) == True{} : Bool}) -> {Nat.is_lt(Nat.sub(a, b2), 1n+Nat.sub(a, b1)) == True{} : Bool}:
+  match b1:
+    case 0n:
+      %Equal.sym(Nat, Nat.sub(a, 0n), a, tsl.sub_zero(a)) : {Nat.is_lt(Nat.sub(a, b2), 1n+_) == True{} : Bool}
+      tsl.sub_le(a, b2)
+    case 1n+ +c1:
+      match b2:
+        case 0n:
+          tsl.lt_zero_abs(Bool, Nat.is_lt(Nat.sub(a, 0n), 1n+Nat.sub(a, 1n+c1)), True{}, c1, h)
+        case 1n+ +c2:
+          match a:
+            case 0n:
+              {==}
+            case 1n+ +k:
+              tsl.sub_mono(c1, c2, k, h)
+
+# a < b: not b <= a
+def tsl.lt_nle(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_lt(b, 1n+a) == False{} : Bool}:
+  match a:
+    case 0n:
+      match b:
+        case 0n:
+          tsl.absurd(Bool, True{}, False{}, h)
+        case 1n+ +j:
+          tsl.lt_zero(j)
+    case 1n+ +k:
+      match b:
+        case 0n:
+          tsl.absurd(Bool, True{}, False{}, h)
+        case 1n+ +j:
+          tsl.lt_nle(k, j, h)
+
+# a + b < c: a < c
+def tsl.lt_add_l(+a: Nat, +b: Nat, +c: Nat, +h: {Nat.is_lt(Nat.add(a, b), c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
+  match a:
+    case 0n:
+      match c:
+        case 0n:
+          tsl.lt_zero_abs(Bool, False{}, True{}, b, h)
+        case 1n+ +k:
+          {==}
+    case 1n+ +j:
+      match c:
+        case 0n:
+          tsl.absurd(Bool, False{}, True{}, h)
+        case 1n+ +k:
+          tsl.lt_add_l(j, b, k, h)
