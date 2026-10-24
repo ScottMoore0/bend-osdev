@@ -46,7 +46,7 @@ cryptography stands in (below).
 | `oaep.bend` | EME-OAEP and RSAES-OAEP |
 | `es15.bend` | EME-PKCS1-v1_5 and RSAES-PKCS1-v1_5 |
 | `keygen.bend` | key generation from the caller's random bytes |
-| `keys.bend` | the keys' raw byte form |
+| `keys.bend` | the keys' raw byte form (each integer as a four-byte length and its shortest bytes; the reader refuses any other form of an integer) |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
 | `check.bend` | an RSA-2048 key through every scheme, with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive law and its proof (`--check` checks it) |
@@ -66,7 +66,7 @@ Bend imports do not re-export: import the files you use.
 | `oaep.bend` | `RsaOaep.encode(~digest, ~mgf, label, m, seed, k)`, `RsaOaep.decode`, `RsaOaep.encrypt(~digest, ~mgf, pk, label, m, seed)`, `RsaOaep.decrypt(~digest, ~mgf, sk, label, c)` |
 | `es15.bend` | `RsaEs15.encode(m, ps, k)`, `RsaEs15.decode(em)`, `RsaEs15.encrypt(pk, m, ps)`, `RsaEs15.decrypt(sk, c)` |
 | `keygen.bend` | `RsaKeygen.prime(seed, bits, e, bases, f)`, `RsaKeygen.generate(e, nlen, seed_p, seed_q, bases, f)` |
-| `keys.bend` | `RsaKeys.public_to`, `RsaKeys.private_to`, `RsaKeys.public_of`, `RsaKeys.private_of` (`RsaBadFormat` for a malformed form, `RsaBadKey` for a key that fails the checks); `RsaField{x, rest}`, `RsaField.x`, `RsaField.rest` |
+| `keys.bend` | `RsaKeys.public_to`, `RsaKeys.private_to`, `RsaKeys.public_of`, `RsaKeys.private_of` (`RsaBadFormat` for a malformed form, including an integer not in its shortest form, `RsaBadKey` for a key that fails the checks); `RsaField{x, rest}`, `RsaField.x`, `RsaField.rest` |
 
 The hash is `~digest: B.Octets -> B.Octets` (one-shot, the shape of
 crypto's hash interface's digest); the mask generation function is `~mgf:
@@ -93,7 +93,7 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
 
 ## Laws
 
-`LAWS.bend` has 9 laws, all proved (`PROOF.bend`) and all accepted by
+`LAWS.bend` has 13 laws, all proved (`PROOF.bend`) and all accepted by
 `--verdict`.
 
 * **For every input:**
@@ -111,18 +111,29 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
   * `pkcs1_sign_verify_if`: an RSASSA-PKCS1-v1_5 signature verifies, for
     every hash, prefix, key and message, wherever the encoding succeeds and
     RSAVP1 undoes RSASP1 on the encoded message (hypotheses);
+  * `public_form_read_write`, `private_form_read_write`: every form the
+    reader accepts is the form the writer writes for the key it read
+    (`RsaKeys.public_to(k)` is the bytes read, for every byte string the
+    reader takes as k; where it refuses, both sides refuse alike), with no
+    hypotheses: the reader takes an integer only where the form holds
+    exactly the field the writer writes for it, its four-byte length and
+    then its shortest bytes (`keys.bend`), and the field and the bytes
+    after it are then the form (bytes' `octets_take_drop`);
+  * `public_form_write_read`, `private_form_write_read`: so the form
+    written for a key the reader read is read as the same key;
   * `public_form_round_trip_if`, `private_form_round_trip_if`: the keys'
-    raw forms (`keys.bend`) read back: the form of `RsaPublic{n, e}` is
-    read as `Rsa.public_of(n, e)`, and the form of a private key as
-    `Rsa.private_of(n, e, d, p, q)` (the key checked and its CRT values
-    recomputed, whatever dP, dQ and qInv it held), for every key whose
-    integers each read back from their shortest big-endian bytes
+    raw forms (`keys.bend`) read back from the other side: the form of
+    `RsaPublic{n, e}` is read as `Rsa.public_of(n, e)`, and the form of a
+    private key as `Rsa.private_of(n, e, d, p, q)` (the key checked and its
+    CRT values recomputed, whatever dP, dQ and qInv it held), for every key
+    whose integers each read back from their shortest big-endian bytes
     (hypotheses `hn`, `he`, ...: `BnNat.of_octets(BnNat.to_octets_min(x))`
     is x) and whose byte counts fit the four-byte length field (`ln`,
     `le`, ...: `U32.from_nat` of each count is exact). Each field is read
     back from bytes' laws: the length at offset 0 of the joined bytes,
-    then the integer's bytes and the rest cut at that length. pubkey's RSA
-    instance states its pk_format law from the public one.
+    then the integer's bytes cut at that length, and the field compared
+    with the writer's. pubkey's RSA instance states its pk_format law from
+    the public one.
 * **Small-parameter exhaustive** (`gen/exhaustive.py`): `toy_round_trip`:
   for the key p = 5, q = 11, e = 3, every message below 55 goes through
   RSADP and back through RSAEP and the other way, and the CRT's RSADP equals
@@ -137,27 +148,31 @@ the integers that bignum's limbs stand for, which is not formalised here
 sign-then-verify laws for PSS and PKCS #1 v1.5 follow from it and are
 likewise not stated for every key.
 
-The form laws' hypotheses are not proved here:
+**The key reader is strict.** An integer whose bytes are not its
+shortest form is refused with `RsaBadFormat` (the malformed-form error; no
+new error): a field with a leading zero byte (`00000002 00c5 00000001 03`,
+n = 197 written with a leading zero byte), and zero written as a byte
+(`00000001 00`); zero is no bytes (`00000000`), which is what
+`BnNat.to_octets_min` writes for it. The reader compares each field with
+the field the writer writes for the integer it read, so that is exactly
+what it accepts, and the read-write laws above hold for every byte string.
+
+The conditional form laws' hypotheses are not proved here:
 
 * that an integer reads back from its shortest bytes is a law bignum would
   state, and it needs a number's bit length (`BnNat.byte_len`, from its top
   limb's bits) related to its limbs, which bignum does not reason about for
   every value (its README, Laws). It holds for every `BnNat` without zero
   limbs on top, which is every value bignum's arithmetic, `of_hex` and a
-  shortest form make; but **not** for one read from bytes with leading zero
-  bytes, which `BnNat.of_octets` keeps as zero limbs on top. Such a key is
-  read back equal by value (`BnNat.is_eq`) but in another representation,
-  so a key read from *any* bytes is not read again, the same, from the
-  bytes written for it (as ecc's `point_round_trip` has it for SEC 1's
-  form): `RsaKeys.public_of` accepts `00000002 00c5 00000001 03` (n = 197
-  written with a leading zero byte, e = 3), and `public_to` writes that
-  key as `00000001 c5 00000001 03`. The reader accepts integers that are
-  not in their shortest form, which the form asks for (`keys.bend`: each
-  integer as a four-byte length and then its shortest big-endian bytes);
-  refusing them would change its behaviour, and is left to the maintainer.
+  shortest form make, and for every key the reader returns (the read-write
+  laws). The other half, that every byte string without a leading zero
+  byte is the shortest form of its number (so the reader refuses only the
+  forms above), is the same reasoning; `check.bend` tests it, and the
+  differential test reads back every key cryptography makes.
 * that a byte count fits the length field is a bound of 2^32, which a key
   read from a form always meets but which cannot be stated as a closed
-  number (u32's README, Laws, "Stating the bounds").
+  number (u32's README, Laws, "Stating the bounds"); the read-write laws
+  need no such bound, since their lengths are the form's own.
 
 ## Tests
 
@@ -168,7 +183,11 @@ The form laws' hypotheses are not proved here:
   cryptography's signature (MGF1-SHA-256, 32-byte salt) and refuses
   another message, and verifies its own; RSAES-OAEP and RSAES-PKCS1-v1_5
   round trips; RSADP by the CRT equals the first form (and Python's pow);
-  the raw key forms read back; an out-of-range ciphertext refused.
+  the raw key forms read back; short forms read (n = 197, e = 3, and the
+  key p = 5, q = 11, e = 3), and written back the same; a leading zero byte
+  in n, in e and in a private key's d refused, n = 0 written as no bytes
+  read (and then refused as a key), as a byte refused; an out-of-range
+  ciphertext refused.
 * `ref/run.sh` (195 cases with the default seed, about 120 s and 2.1 GB at
   peak): keys of 512 to 2048 bits from cryptography (e = 3 and 65537);
   RSASSA-PKCS1-v1_5 over SHA-256 and SHA-512 (Bend's signature equals
@@ -202,12 +221,14 @@ about 24 ms; signing by the CRT about 0.30 s.** `check.bend` takes about
 ## Dependencies
 
 `DEPS`: `bytes` (`Octets`, and its laws in the proofs), `bignum` (the
-integers, Montgomery exponentiation, inverses, Miller-Rabin),
+integers, Montgomery exponentiation, inverses, Miller-Rabin), `u32` (its
+value laws, in the proofs: a word comparison is the comparison of values),
 `bend-collections-laws-crypto@1.0.0.0` (SHA-256 and SHA-512 for
 `check.bend` and `ref/`: no hash is part of this package's interface).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 195 cases match, `scripts/deps.sh`
-passes.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (13 laws; about 100 s, peak
+0.48 GB), `--verdict` ALL PROOFS CHECK, `check.bend` passes, `ref/run.sh`
+195 cases match (the whole `VERDICT=1 scripts/check.sh rsa` about 580 s,
+peak 1.15 GB), `scripts/deps.sh` passes.

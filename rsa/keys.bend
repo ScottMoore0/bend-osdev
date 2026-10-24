@@ -1,5 +1,7 @@
 # The keys' byte forms in this package's raw format: each integer as a
-# four-byte big-endian length and then its shortest big-endian bytes,
+# four-byte big-endian length and then its shortest big-endian bytes (no
+# leading zero byte; zero is no bytes, and the reader refuses any other
+# form of an integer),
 #   public:  n, e
 #   private: n, e, d, p, q   (dP, dQ and qInv are recomputed, and the key
 #                             checked, when it is read)
@@ -32,10 +34,42 @@ def RsaKeys.private_to(sk: R.RsaPrivate) -> B.Octets:
 type RsaField is Data:
   RsaField{x: N.BnNat, rest: B.Octets}
 
-def rsa.take.go(fits: Bool, +n: Nat, +body: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
+# whether two lists of words are equal
+def rsa.same(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
+  match xs ys:
+    case Nil{} Nil{}:
+      True{}
+    case Con{x, xt} Con{y, yt}:
+      Bool.and(U32.is_eq(x, y), rsa.same(xt, yt))
+    case Nil{} Con{y, yt}:
+      False{}
+    case Con{x, xt} Nil{}:
+      False{}
+
+def rsa.take.min(ok: Bool, +x: N.BnNat, +k: Nat, +o: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
+  match ok:
+    case True{}:
+      Done{RsaField{x, B.Octets.drop(k, o)}}
+    case False{}:
+      Fail{R.RsaBadFormat{}}
+
+# x and the bytes after its field f, if o starts with exactly f; RsaBadFormat
+# otherwise
+def rsa.take.exact(+f: B.Octets, +x: N.BnNat, +o: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
+  rsa.take.min(rsa.same(B.Octets.to_list(B.Octets.take(B.Octets.len(f), o)), B.Octets.to_list(f)), x, B.Octets.len(f), o)
+
+# the integer x read from the start of o, if o starts with exactly the field
+# the writer writes for x (rsa.field: its length, then its shortest bytes)
+def rsa.take.of(+x: N.BnNat, +o: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
+  rsa.take.exact(rsa.field(x), x, o)
+
+# the integer whose bytes follow o's length field (n bytes, if there are
+# that many), refused unless the field is its integer's shortest form: no
+# leading zero byte, and zero as no bytes
+def rsa.take.go(fits: Bool, +n: Nat, +o: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
   match fits:
     case True{}:
-      Done{RsaField{N.BnNat.of_octets(B.Octets.take(n, body)), B.Octets.drop(n, body)}}
+      rsa.take.of(N.BnNat.of_octets(B.Octets.take(n, B.Octets.drop(4n, o))), o)
     case False{}:
       Fail{R.RsaBadFormat{}}
 
@@ -43,10 +77,8 @@ def rsa.take(len: Maybe<&2, U32>, +o: B.Octets) -> Result<&2, &2, R.RsaError, Rs
   match len:
     case None{}:
       Fail{R.RsaBadFormat{}}
-    case Some{l}:
-      +n = U32.to_nat(l)
-      +body = B.Octets.drop(4n, o)
-      rsa.take.go(Nat.is_le(n, B.Octets.len(body)), n, body)
+    case Some{+l}:
+      rsa.take.go(Nat.is_le(U32.to_nat(l), B.Octets.len(B.Octets.drop(4n, o))), U32.to_nat(l), o)
 
 # the first integer of a form, and the rest
 def rsa.read(+o: B.Octets) -> Result<&2, &2, R.RsaError, RsaField>:
@@ -67,8 +99,10 @@ def rsa.read.pub(a: RsaField) -> Result<&2, &2, R.RsaError, R.RsaPublic>:
     case RsaField{n, r}:
       rsa.read.pub2(n, rsa.read(r))
 
-# A public key from its form: RsaBadFormat for malformed bytes, RsaBadKey
-# for a key Rsa.public_of refuses
+# A public key from its form: RsaBadFormat for malformed bytes (a short or
+# overlong form, or an integer not in its shortest form: a leading zero
+# byte, or zero written as a byte), RsaBadKey for a key Rsa.public_of
+# refuses
 def RsaKeys.public_of(+o: B.Octets) -> Result<&2, &2, R.RsaError, R.RsaPublic>:
   Result.bind(&2, &2, R.RsaError, RsaField, R.RsaPublic, rsa.read(o), a => rsa.read.pub(a))
 
@@ -97,7 +131,7 @@ def rsa.read.priv(xs: List<&2, N.BnNat>) -> Result<&2, &2, R.RsaError, R.RsaPriv
     case _:
       Fail{R.RsaBadFormat{}}
 
-# A private key from its form: RsaBadFormat for malformed bytes, RsaBadKey
-# for a key Rsa.private_of refuses
+# A private key from its form: RsaBadFormat for malformed bytes (as for
+# public keys), RsaBadKey for a key Rsa.private_of refuses
 def RsaKeys.private_of(+o: B.Octets) -> Result<&2, &2, R.RsaError, R.RsaPrivate>:
   Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, rsa.read.n(5n, o), xs => rsa.read.priv(xs))

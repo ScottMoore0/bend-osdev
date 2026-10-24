@@ -3,6 +3,9 @@ import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ../bignum/bignum.bend as N
+import ../bignum/modular.bend as Md
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 import ./rsa.bend as R
 import ./mgf1.bend as G
 import ./pkcs1.bend as P
@@ -1090,11 +1093,116 @@ def Laws.toy_round_trip(m, hm):
                                                                                                                                                                                                                                   Empty.absurd({Laws.rsalaw.round_trip(Laws.rsalaw.nat(56n+mz)) == True{} : Bool}, ex.absurd(hm))
 # END GENERATED: exhaustive
 
-# The keys' raw forms: each field (a four-byte big-endian length, then the
-# integer's shortest bytes) read back from bytes' laws (the length field
-# read at offset 0 of the joined bytes, the bytes after it cut at that
-# length), when the integer reads back from its shortest bytes (hx) and
-# their count fits the length field (hl)
+# The keys' raw forms. The reader takes an integer only where the form holds
+# exactly the field the writer writes for it (rsa.take.exact: its length,
+# then its shortest bytes), so a field written for an integer that reads
+# back from its shortest bytes is read back (kr.field, for the conditional
+# laws), and every form the reader accepts is the form the writer writes for
+# what it read (kr.inv0, for the unconditional ones)
+
+# Nat, words, lists and Octets
+
+def kr.nat_eq_refl(+a: Nat) -> {Nat.is_eq(a, a) == True{} : Bool}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      kr.nat_eq_refl(p)
+
+def kr.nat_eq_true(a: Nat, b: Nat, h: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b : Nat}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+q:
+      Empty.absurd({0n == 1n+q : Nat}, ex.absurd(h))
+    case 1n+p 0n:
+      Empty.absurd({1n+p == 0n : Nat}, ex.absurd(h))
+    case 1n+p 1n+q:
+      %kr.nat_eq_true(p, q, h) : {1n+p == 1n+_ : Nat}
+      {==}
+
+def kr.and_l(a: Bool, b: Bool, h: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
+  match a:
+    case True{}:
+      {==}
+    case False{}:
+      Empty.absurd({False{} == True{} : Bool}, ex.absurd(h))
+
+def kr.and_r(a: Bool, b: Bool, h: {Bool.and(a, b) == True{} : Bool}) -> {b == True{} : Bool}:
+  match a:
+    case True{}:
+      h
+    case False{}:
+      Empty.absurd({b == True{} : Bool}, ex.absurd(h))
+
+def kr.u32_eq_refl(+x: U32) -> {U32.is_eq(x, x) == True{} : Bool}:
+  %Equal.sym(Bool, U32.is_eq(x, x), Nat.is_eq(U32.to_nat(x), U32.to_nat(x)), UL.u32_eq_value(x, x)) : {_ == True{} : Bool}
+  kr.nat_eq_refl(U32.to_nat(x))
+
+def kr.u32_eq_true(+x: U32, +y: U32, h: {U32.is_eq(x, y) == True{} : Bool}) -> {x == y : U32}:
+  UL.u32_value_eq(x, y, kr.nat_eq_true(U32.to_nat(x), U32.to_nat(y), Equal.trans(Bool, Nat.is_eq(U32.to_nat(x), U32.to_nat(y)), U32.is_eq(x, y), True{}, Equal.sym(Bool, U32.is_eq(x, y), Nat.is_eq(U32.to_nat(x), U32.to_nat(y)), UL.u32_eq_value(x, y)), h)))
+
+# rsa.same is equality of word lists
+def kr.same_refl(+xs: List<&2, U32>) -> {K.rsa.same(xs, xs) == True{} : Bool}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
+      %Equal.sym(Bool, U32.is_eq(x, x), True{}, kr.u32_eq_refl(x)) : {Bool.and(_, K.rsa.same(t, t)) == True{} : Bool}
+      kr.same_refl(t)
+
+def kr.same_sound(+xs: List<&2, U32>, +ys: List<&2, U32>, +h: {K.rsa.same(xs, ys) == True{} : Bool}) -> {xs == ys : List<&2, U32>}:
+  match xs ys:
+    case Nil{} Nil{}:
+      {==}
+    case Con{+x, +xt} Con{+y, +yt}:
+      %kr.u32_eq_true(x, y, kr.and_l(U32.is_eq(x, y), K.rsa.same(xt, yt), h)) : {Con{x, xt} == Con{_, yt} : List<&2, U32>}
+      %kr.same_sound(xt, yt, kr.and_r(U32.is_eq(x, y), K.rsa.same(xt, yt), h)) : {Con{x, xt} == Con{x, _} : List<&2, U32>}
+      {==}
+    case Nil{} Con{y, yt}:
+      Empty.absurd({Nil{} == Con{y, yt} : List<&2, U32>}, ex.absurd(h))
+    case Con{x, xt} Nil{}:
+      Empty.absurd({Con{x, xt} == Nil{} : List<&2, U32>}, ex.absurd(h))
+
+# Octets with the same bytes are the same
+def kr.oct_eq(+a: B.Octets, +b: B.Octets, h: {B.Octets.to_list(a) == B.Octets.to_list(b) : List<&2, U32>}) -> {a == b : B.Octets}:
+  %BL.octets_of_to(a) : {_ == b : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(a), B.Octets.to_list(b), h) : {B.Octets.of_list(_) == b : B.Octets}
+  BL.octets_of_to(b)
+
+def kr.len0l(+xs: List<&2, U32>, h: {Nat.is_eq(B.len(xs), 0n) == True{} : Bool}) -> {xs == Nil{} : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{x, t}:
+      Empty.absurd({Con{x, t} == Nil{} : List<&2, U32>}, ex.absurd(h))
+
+def kr.len0h(+o: B.Octets, h: {Nat.is_eq(B.Octets.len(o), 0n) == True{} : Bool}) -> {Nat.is_eq(B.len(B.Octets.to_list(o)), 0n) == True{} : Bool}:
+  %BL.octets_len_list(o) : {Nat.is_eq(_, 0n) == True{} : Bool}
+  h
+
+# a byte string of no bytes is the empty one
+def kr.len0(+o: B.Octets, h: {Nat.is_eq(B.Octets.len(o), 0n) == True{} : Bool}) -> {o == B.Octets.empty() : B.Octets}:
+  %BL.octets_of_to(o) : {_ == B.Octets.empty() : B.Octets}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(o), Nil{}, kr.len0l(B.Octets.to_list(o), kr.len0h(o, h))) : {B.Octets.of_list(_) == B.Octets.empty() : B.Octets}
+  {==}
+
+def kr.tail0(+f: B.Octets, +r: B.Octets, h: {Nat.is_eq(B.Octets.len(r), 0n) == True{} : Bool}) -> {f == B.Octets.append(f, r) : B.Octets}:
+  %Equal.sym(B.Octets, r, B.Octets.empty(), kr.len0(r, h)) : {f == B.Octets.append(f, _) : B.Octets}
+  Equal.sym(B.Octets, B.Octets.append(f, B.Octets.empty()), f, BL.octets_append_empty_r(f))
+
+def kr.val(r: Result<&2, &2, R.RsaError, B.Octets>) -> B.Octets:
+  match r:
+    case Done{v}:
+      v
+    case Fail{er}:
+      B.Octets.empty()
+
+def kr.done_inj(+a: B.Octets, +b: B.Octets, h: {Done{a} == Done{b} : Result<&2, &2, R.RsaError, B.Octets>}) -> {a == b : B.Octets}:
+  Equal.cong(Result<&2, &2, R.RsaError, B.Octets>, B.Octets, r => kr.val(r), Done{a}, Done{b}, h)
+
+# The writer's fields read back: the length at offset 0 (bytes' laws), the
+# integer's bytes after it, and the field compared with the writer's
 
 def kr.le4(+v: U32) -> {Nat.is_le(Nat.add(0n, 4n), B.Octets.len(B.Octets.be32(v))) == True{} : Bool}:
   %Equal.sym(Nat, B.Octets.len(B.Octets.be32(v)), 4n, BL.octets_len_be32(v)) : {Nat.is_le(4n, _) == True{} : Bool}
@@ -1103,30 +1211,39 @@ def kr.le4(+v: U32) -> {Nat.is_le(Nat.add(0n, 4n), B.Octets.len(B.Octets.be32(v)
 def kr.drop4(+v: U32, +y: B.Octets) -> {B.Octets.drop(4n, B.Octets.append(B.Octets.be32(v), y)) == y : B.Octets}:
   %BL.octets_len_be32(v) : {B.Octets.drop(_, B.Octets.append(B.Octets.be32(v), y)) == y : B.Octets}
   BL.octets_drop_append(B.Octets.be32(v), y)
-
-def kr.read(+v: U32, +y: B.Octets) -> {K.rsa.read(B.Octets.append(B.Octets.be32(v), y)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(y)), U32.to_nat(v), y) : Result<&2, &2, R.RsaError, K.RsaField>}:
-  %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.append(B.Octets.be32(v), y), 0n), B.Octets.be32_at(B.Octets.be32(v), 0n), BL.octets_be32_at_append_le(B.Octets.be32(v), y, 0n, kr.le4(v))) : {K.rsa.take(_, B.Octets.append(B.Octets.be32(v), y)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(y)), U32.to_nat(v), y) : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.be32(v), 0n), Some{v}, BL.octets_be32_round_trip(v)) : {K.rsa.take(_, B.Octets.append(B.Octets.be32(v), y)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(y)), U32.to_nat(v), y) : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(B.Octets, B.Octets.drop(4n, B.Octets.append(B.Octets.be32(v), y)), y, kr.drop4(v, y)) : {K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(_)), U32.to_nat(v), _) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(y)), U32.to_nat(v), y) : Result<&2, &2, R.RsaError, K.RsaField>}
+# the length field read at the start of a field and what follows it
+def kr.read2(+v: U32, +m: B.Octets, +rest: B.Octets) -> {K.rsa.read(B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}:
+  %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest), B.Octets.append(B.Octets.be32(v), B.Octets.append(m, rest)), BL.octets_append_assoc(B.Octets.be32(v), m, rest)) : {K.rsa.take(B.Octets.be32_at(_, 0n), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.append(B.Octets.be32(v), B.Octets.append(m, rest)), 0n), B.Octets.be32_at(B.Octets.be32(v), 0n), BL.octets_be32_at_append_le(B.Octets.be32(v), B.Octets.append(m, rest), 0n, kr.le4(v))) : {K.rsa.take(_, B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.be32(v), 0n), Some{v}, BL.octets_be32_round_trip(v)) : {K.rsa.take(_, B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest), B.Octets.append(B.Octets.be32(v), B.Octets.append(m, rest)), BL.octets_append_assoc(B.Octets.be32(v), m, rest)) : {K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.drop(4n, _))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.drop(4n, B.Octets.append(B.Octets.be32(v), B.Octets.append(m, rest))), B.Octets.append(m, rest), kr.drop4(v, B.Octets.append(m, rest))) : {K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(_)), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) == K.rsa.take.go(Nat.is_le(U32.to_nat(v), B.Octets.len(B.Octets.append(m, rest))), U32.to_nat(v), B.Octets.append(B.Octets.append(B.Octets.be32(v), m), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
   {==}
-
-def kr.take_go(+n: Nat, +m: B.Octets, +rest: B.Octets, +hn: {B.Octets.len(m) == n : Nat}) -> {K.rsa.take.go(Nat.is_le(n, B.Octets.len(B.Octets.append(m, rest))), n, B.Octets.append(m, rest)) == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}:
-  %hn : {K.rsa.take.go(Nat.is_le(_, B.Octets.len(B.Octets.append(m, rest))), _, B.Octets.append(m, rest)) == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(Nat, B.Octets.len(B.Octets.append(m, rest)), Nat.add(B.Octets.len(m), B.Octets.len(rest)), BL.octets_len_append(m, rest)) : {K.rsa.take.go(Nat.is_le(B.Octets.len(m), _), B.Octets.len(m), B.Octets.append(m, rest)) == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(Bool, Nat.is_le(B.Octets.len(m), Nat.add(B.Octets.len(m), B.Octets.len(rest))), True{}, BP.nat_le_add(B.Octets.len(m), B.Octets.len(rest))) : {K.rsa.take.go(_, B.Octets.len(m), B.Octets.append(m, rest)) == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(B.Octets, B.Octets.take(B.Octets.len(m), B.Octets.append(m, rest)), m, BL.octets_take_append(m, rest)) : {Done{K.RsaField{N.BnNat.of_octets(_), B.Octets.drop(B.Octets.len(m), B.Octets.append(m, rest))}} == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(B.Octets, B.Octets.drop(B.Octets.len(m), B.Octets.append(m, rest)), rest, BL.octets_drop_append(m, rest)) : {Done{K.RsaField{N.BnNat.of_octets(m), _}} == Done{K.RsaField{N.BnNat.of_octets(m), rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
+# the integer's bytes after the length, when the length is their count (hl)
+# and they read back as the integer (hx)
+def kr.go_true(+x: N.BnNat, +rest: B.Octets, +hx: {N.BnNat.of_octets(N.BnNat.to_octets_min(x)) == x : N.BnNat}, +hl: {U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))) == B.Octets.len(N.BnNat.to_octets_min(x)) : Nat}) -> {K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}:
+  %Equal.sym(Nat, U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(N.BnNat.to_octets_min(x)), hl) : {K.rsa.take.go(Nat.is_le(_, B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), _, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Nat, B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest)), Nat.add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest)), BL.octets_len_append(N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.go(Nat.is_le(B.Octets.len(N.BnNat.to_octets_min(x)), _), B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Bool, Nat.is_le(B.Octets.len(N.BnNat.to_octets_min(x)), Nat.add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))), True{}, BP.nat_le_add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))) : {K.rsa.take.go(_, B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest), B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest)), BL.octets_append_assoc(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.of(N.BnNat.of_octets(B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.drop(4n, _))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.drop(4n, B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest))), B.Octets.append(N.BnNat.to_octets_min(x), rest), kr.drop4(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x))), B.Octets.append(N.BnNat.to_octets_min(x), rest))) : {K.rsa.take.of(N.BnNat.of_octets(B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), _)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(N.BnNat.to_octets_min(x), rest)), N.BnNat.to_octets_min(x), BL.octets_take_append(N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.of(N.BnNat.of_octets(_), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(N.BnNat, N.BnNat.of_octets(N.BnNat.to_octets_min(x)), x, hx) : {K.rsa.take.of(_, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  {==}
+# the writer's field for x, at the start of a form, is taken
+def kr.of_field(+x: N.BnNat, +rest: B.Octets) -> {K.rsa.take.of(x, B.Octets.append(K.rsa.field(x), rest)) == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}:
+  %Equal.sym(B.Octets, B.Octets.take(B.Octets.len(K.rsa.field(x)), B.Octets.append(K.rsa.field(x), rest)), K.rsa.field(x), BL.octets_take_append(K.rsa.field(x), rest)) : {K.rsa.take.min(K.rsa.same(B.Octets.to_list(_), B.Octets.to_list(K.rsa.field(x))), x, B.Octets.len(K.rsa.field(x)), B.Octets.append(K.rsa.field(x), rest)) == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Bool, K.rsa.same(B.Octets.to_list(K.rsa.field(x)), B.Octets.to_list(K.rsa.field(x))), True{}, kr.same_refl(B.Octets.to_list(K.rsa.field(x)))) : {K.rsa.take.min(_, x, B.Octets.len(K.rsa.field(x)), B.Octets.append(K.rsa.field(x), rest)) == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(B.Octets, B.Octets.drop(B.Octets.len(K.rsa.field(x)), B.Octets.append(K.rsa.field(x), rest)), rest, BL.octets_drop_append(K.rsa.field(x), rest)) : {Done{K.RsaField{x, _}} == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
   {==}
 
 # a field, and the bytes after it, read back
 def kr.field(+x: N.BnNat, +rest: B.Octets, +hx: {N.BnNat.of_octets(N.BnNat.to_octets_min(x)) == x : N.BnNat}, +hl: {U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))) == B.Octets.len(N.BnNat.to_octets_min(x)) : Nat}) -> {K.rsa.read(B.Octets.append(K.rsa.field(x), rest)) == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}:
-  %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest), B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest)), BL.octets_append_assoc(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x), rest)) : {K.rsa.read(_) == Done{K.RsaField{x, rest}} : Result<&2, &2, R.RsaError, K.RsaField>}
-  Equal.trans(Result<&2, &2, R.RsaError, K.RsaField>, K.rsa.read(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest))), K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest)), Done{K.RsaField{x, rest}},
-    kr.read(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x))), B.Octets.append(N.BnNat.to_octets_min(x), rest)),
-    Equal.trans(Result<&2, &2, R.RsaError, K.RsaField>, K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest)), Done{K.RsaField{N.BnNat.of_octets(N.BnNat.to_octets_min(x)), rest}}, Done{K.RsaField{x, rest}},
-      kr.take_go(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x), rest, Equal.sym(Nat, U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(N.BnNat.to_octets_min(x)), hl)),
-      Equal.cong(N.BnNat, Result<&2, &2, R.RsaError, K.RsaField>, z => Done{K.RsaField{z, rest}}, N.BnNat.of_octets(N.BnNat.to_octets_min(x)), x, hx)))
-
+  Equal.trans(Result<&2, &2, R.RsaError, K.RsaField>, K.rsa.read(B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)), K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)), Done{K.RsaField{x, rest}},
+    kr.read2(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x))), N.BnNat.to_octets_min(x), rest),
+    Equal.trans(Result<&2, &2, R.RsaError, K.RsaField>, K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)), K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)), Done{K.RsaField{x, rest}},
+      kr.go_true(x, rest, hx, hl),
+      kr.of_field(x, rest)))
 def Laws.public_form_round_trip_if(n, e, hn, he, ln, le):
   %Equal.sym(Result<&2, &2, R.RsaError, K.RsaField>, K.rsa.read(B.Octets.append(K.rsa.field(n), K.rsa.field(e))), Done{K.RsaField{n, K.rsa.field(e)}}, kr.field(n, K.rsa.field(e), hn, ln)) : {Result.bind(&2, &2, R.RsaError, K.RsaField, R.RsaPublic, _, a => K.rsa.read.pub(a)) == R.Rsa.public_of(n, e) : Result<&2, &2, R.RsaError, R.RsaPublic>}
   %BL.octets_append_empty_r(K.rsa.field(e)) : {K.rsa.read.pub2(n, K.rsa.read(_)) == R.Rsa.public_of(n, e) : Result<&2, &2, R.RsaError, R.RsaPublic>}
@@ -1155,3 +1272,176 @@ def Laws.private_form_round_trip_if(n, e, d, p, q, dp, dq, qinv, hn, he, hd, hp,
   %Equal.sym(Result<&2, &2, R.RsaError, List<&2, N.BnNat>>, K.rsa.read.n(2n, B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty()))), Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{p, t}, K.rsa.read.n(1n, B.Octets.append(K.rsa.field(q), B.Octets.empty()))), kr.readn(p, B.Octets.append(K.rsa.field(q), B.Octets.empty()), 1n, hp, lp)) : {Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{n, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{e, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{d, t}, _))), xs => K.rsa.read.priv(xs)) == R.Rsa.private_of(n, e, d, p, q) : Result<&2, &2, R.RsaError, R.RsaPrivate>}
   %Equal.sym(Result<&2, &2, R.RsaError, List<&2, N.BnNat>>, K.rsa.read.n(1n, B.Octets.append(K.rsa.field(q), B.Octets.empty())), Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{q, t}, K.rsa.read.n(0n, B.Octets.empty())), kr.readn(q, B.Octets.empty(), 0n, hq, lq)) : {Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{n, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{e, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{d, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{p, t}, _)))), xs => K.rsa.read.priv(xs)) == R.Rsa.private_of(n, e, d, p, q) : Result<&2, &2, R.RsaError, R.RsaPrivate>}
   {==}
+
+# Every form the reader accepts is the writer's: the reader takes a field
+# only where the form starts with exactly the writer's field for what it
+# read (kr.inv4), so the field and what follows are the form
+
+def kr.inv4(+o: B.Octets, +x: N.BnNat, ok: Bool, +hok: {K.rsa.same(B.Octets.to_list(B.Octets.take(B.Octets.len(K.rsa.field(x)), o)), B.Octets.to_list(K.rsa.field(x))) == ok : Bool}) -> {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), K.rsa.take.min(ok, x, B.Octets.len(K.rsa.field(x)), o)) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, K.rsa.take.min(ok, x, B.Octets.len(K.rsa.field(x)), o)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match ok:
+    case True{}:
+      %kr.oct_eq(B.Octets.take(B.Octets.len(K.rsa.field(x)), o), K.rsa.field(x), kr.same_sound(B.Octets.to_list(B.Octets.take(B.Octets.len(K.rsa.field(x)), o)), B.Octets.to_list(K.rsa.field(x)), hok)) : {Done{B.Octets.append(_, B.Octets.drop(B.Octets.len(K.rsa.field(x)), o))} == Done{o} : Result<&2, &2, R.RsaError, B.Octets>}
+      %Equal.sym(B.Octets, B.Octets.append(B.Octets.take(B.Octets.len(K.rsa.field(x)), o), B.Octets.drop(B.Octets.len(K.rsa.field(x)), o)), o, BL.octets_take_drop(B.Octets.len(K.rsa.field(x)), o)) : {Done{_} == Done{o} : Result<&2, &2, R.RsaError, B.Octets>}
+      {==}
+    case False{}:
+      {==}
+
+def kr.inv3(+o: B.Octets, +x: N.BnNat) -> {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), K.rsa.take.of(x, o)) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, K.rsa.take.of(x, o)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  kr.inv4(o, x, K.rsa.same(B.Octets.to_list(B.Octets.take(B.Octets.len(K.rsa.field(x)), o)), B.Octets.to_list(K.rsa.field(x))), {==})
+
+def kr.inv2(+o: B.Octets, +n: Nat, fits: Bool) -> {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), K.rsa.take.go(fits, n, o)) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, K.rsa.take.go(fits, n, o)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match fits:
+    case True{}:
+      kr.inv3(o, N.BnNat.of_octets(B.Octets.take(n, B.Octets.drop(4n, o))))
+    case False{}:
+      {==}
+
+def kr.inv1(+o: B.Octets, ml: Maybe<&2, U32>) -> {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), K.rsa.take(ml, o)) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, K.rsa.take(ml, o)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match ml:
+    case Some{+l}:
+      kr.inv2(o, U32.to_nat(l), Nat.is_le(U32.to_nat(l), B.Octets.len(B.Octets.drop(4n, o))))
+    case None{}:
+      {==}
+
+def kr.inv0(+o: B.Octets) -> {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), K.rsa.read(o)) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, K.rsa.read(o)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  kr.inv1(o, B.Octets.be32_at(o, 0n))
+# A public form read and written back
+
+def kr.pw4(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, e: {B.Octets.append(K.rsa.field(x1), K.rsa.field(x2)) == o : B.Octets}, c: Result<&2, &2, R.RsaError, Unit>) -> {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), Result.map(&2, &2, R.RsaError, Unit, R.RsaPublic, u => R.RsaPublic{x1, x2}, c)) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, Result.map(&2, &2, R.RsaError, Unit, R.RsaPublic, u => R.RsaPublic{x1, x2}, c)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match c:
+    case Done{u}:
+      %e : {Done{B.Octets.append(K.rsa.field(x1), K.rsa.field(x2))} == Done{_} : Result<&2, &2, R.RsaError, B.Octets>}
+      {==}
+    case Fail{er}:
+      {==}
+
+def kr.pw3(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, +rest2: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)) == o : B.Octets}, b: Bool, +hb: {Nat.is_eq(B.Octets.len(rest2), 0n) == b : Bool}) -> {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), Result.bind(&2, &2, R.RsaError, Unit, R.RsaPublic, R.RsaError.check(b, R.RsaBadFormat{}), u => R.Rsa.public_of(x1, x2))) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, Result.bind(&2, &2, R.RsaError, Unit, R.RsaPublic, R.RsaError.check(b, R.RsaBadFormat{}), u => R.Rsa.public_of(x1, x2))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match b:
+    case True{}:
+      kr.pw4(o, x1, x2, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), K.rsa.field(x2)), B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), z), K.rsa.field(x2), B.Octets.append(K.rsa.field(x2), rest2), kr.tail0(K.rsa.field(x2), rest2, hb)), e), R.RsaError.check(Bool.and(Bool.and(N.BnNat.is_odd(x1), N.BnNat.is_lt(R.rsa.three(), x1)), Bool.and(N.BnNat.is_odd(x2), Bool.and(N.BnNat.is_le(R.rsa.three(), x2), N.BnNat.is_lt(x2, x1)))), R.RsaBadKey{}))
+    case False{}:
+      {==}
+
+def kr.pw2(+o: B.Octets, +x1: N.BnNat, +rest1: B.Octets, +e1: {B.Octets.append(K.rsa.field(x1), rest1) == o : B.Octets}, r2: Result<&2, &2, R.RsaError, K.RsaField>, h2: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r2) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => rest1, r2) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), K.rsa.read.pub2(x1, r2)) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, K.rsa.read.pub2(x1, r2)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r2:
+    case Done{a2}:
+      match a2:
+        case K.RsaField{+x2, +rest2}:
+          kr.pw3(o, x1, x2, rest2, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)), B.Octets.append(K.rsa.field(x1), rest1), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), z), B.Octets.append(K.rsa.field(x2), rest2), rest1, kr.done_inj(B.Octets.append(K.rsa.field(x2), rest2), rest1, h2)), e1), Nat.is_eq(B.Octets.len(rest2), 0n), {==})
+    case Fail{er}:
+      {==}
+
+def kr.pw1(+o: B.Octets, r1: Result<&2, &2, R.RsaError, K.RsaField>, h1: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r1) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, r1) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), Result.bind(&2, &2, R.RsaError, K.RsaField, R.RsaPublic, r1, a => K.rsa.read.pub(a))) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, Result.bind(&2, &2, R.RsaError, K.RsaField, R.RsaPublic, r1, a => K.rsa.read.pub(a))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r1:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x1, +rest1}:
+          kr.pw2(o, x1, rest1, kr.done_inj(B.Octets.append(K.rsa.field(x1), rest1), o, h1), K.rsa.read(rest1), kr.inv0(rest1))
+    case Fail{er}:
+      {==}
+
+def Laws.public_form_read_write(o):
+  kr.pw1(o, K.rsa.read(o), kr.inv0(o))
+# A private form read and written back: its five fields, one at a time
+
+def kv.key3(+o: B.Octets, +n: N.BnNat, +e: N.BnNat, +d: N.BnNat, +p: N.BnNat, +q: N.BnNat, h: {B.Octets.append(K.rsa.field(n), B.Octets.append(K.rsa.field(e), B.Octets.append(K.rsa.field(d), B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty()))))) == o : B.Octets}, qi: Maybe<&2, N.BnNat>) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), R.rsa.crt(n, e, d, p, q, qi)) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, R.rsa.crt(n, e, d, p, q, qi)) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match qi:
+    case Some{qinv}:
+      %Equal.sym(B.Octets, B.Octets.concat(Con{K.rsa.field(n), Con{K.rsa.field(e), Con{K.rsa.field(d), Con{K.rsa.field(p), Con{K.rsa.field(q), Nil{}}}}}}), B.Octets.append(K.rsa.field(n), B.Octets.append(K.rsa.field(e), B.Octets.append(K.rsa.field(d), B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty()))))), kr.concat5(K.rsa.field(n), K.rsa.field(e), K.rsa.field(d), K.rsa.field(p), K.rsa.field(q))) : {Done{_} == Done{o} : Result<&2, &2, R.RsaError, B.Octets>}
+      %h : {Done{B.Octets.append(K.rsa.field(n), B.Octets.append(K.rsa.field(e), B.Octets.append(K.rsa.field(d), B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty())))))} == Done{_} : Result<&2, &2, R.RsaError, B.Octets>}
+      {==}
+    case None{}:
+      {==}
+
+def kv.key2(+o: B.Octets, +n: N.BnNat, +e: N.BnNat, +d: N.BnNat, +p: N.BnNat, +q: N.BnNat, h: {B.Octets.append(K.rsa.field(n), B.Octets.append(K.rsa.field(e), B.Octets.append(K.rsa.field(d), B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty()))))) == o : B.Octets}, c2: Result<&2, &2, R.RsaError, Unit>) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, Unit, R.RsaPrivate, c2, u => R.rsa.crt(n, e, d, p, q, Md.BnMod.inv(q, p)))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, Unit, R.RsaPrivate, c2, u => R.rsa.crt(n, e, d, p, q, Md.BnMod.inv(q, p)))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match c2:
+    case Done{u}:
+      kv.key3(o, n, e, d, p, q, h, Md.BnMod.inv(q, p))
+    case Fail{er}:
+      {==}
+
+def kv.key1(+o: B.Octets, +n: N.BnNat, +e: N.BnNat, +d: N.BnNat, +p: N.BnNat, +q: N.BnNat, h: {B.Octets.append(K.rsa.field(n), B.Octets.append(K.rsa.field(e), B.Octets.append(K.rsa.field(d), B.Octets.append(K.rsa.field(p), B.Octets.append(K.rsa.field(q), B.Octets.empty()))))) == o : B.Octets}, c1: Result<&2, &2, R.RsaError, R.RsaPublic>) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, R.RsaPublic, R.RsaPrivate, c1, pk => Result.bind(&2, &2, R.RsaError, Unit, R.RsaPrivate, R.RsaError.check(Bool.and(Bool.and(N.BnNat.is_eq(N.BnNat.mul(p, q), n), Bool.and(N.BnNat.is_lt(N.BnNat.one(), p), N.BnNat.is_lt(N.BnNat.one(), q))), Bool.and(N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(p)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(p))), N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(q)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(q))))), R.RsaBadKey{}), u => R.rsa.crt(n, e, d, p, q, Md.BnMod.inv(q, p))))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, R.RsaPublic, R.RsaPrivate, c1, pk => Result.bind(&2, &2, R.RsaError, Unit, R.RsaPrivate, R.RsaError.check(Bool.and(Bool.and(N.BnNat.is_eq(N.BnNat.mul(p, q), n), Bool.and(N.BnNat.is_lt(N.BnNat.one(), p), N.BnNat.is_lt(N.BnNat.one(), q))), Bool.and(N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(p)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(p))), N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(q)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(q))))), R.RsaBadKey{}), u => R.rsa.crt(n, e, d, p, q, Md.BnMod.inv(q, p))))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match c1:
+    case Done{pk}:
+      kv.key2(o, n, e, d, p, q, h, R.RsaError.check(Bool.and(Bool.and(N.BnNat.is_eq(N.BnNat.mul(p, q), n), Bool.and(N.BnNat.is_lt(N.BnNat.one(), p), N.BnNat.is_lt(N.BnNat.one(), q))), Bool.and(N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(p)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(p))), N.BnNat.is_eq(Md.BnMod.mul(d, e, R.rsa.minus1(q)), N.BnNat.mod(N.BnNat.one(), R.rsa.minus1(q))))), R.RsaBadKey{}))
+    case Fail{er}:
+      {==}
+
+def kv.end(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, +x3: N.BnNat, +x4: N.BnNat, +x5: N.BnNat, +rest5: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), B.Octets.append(K.rsa.field(x5), rest5))))) == o : B.Octets}, b: Bool, +hb: {Nat.is_eq(B.Octets.len(rest5), 0n) == b : Bool}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x4, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x5, t}, Result.map(&2, &2, R.RsaError, Unit, List<&2, N.BnNat>, u => Nil{}, R.RsaError.check(b, R.RsaBadFormat{}))))))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x4, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x5, t}, Result.map(&2, &2, R.RsaError, Unit, List<&2, N.BnNat>, u => Nil{}, R.RsaError.check(b, R.RsaBadFormat{}))))))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match b:
+    case True{}:
+      kv.key1(o, x1, x2, x3, x4, x5, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), B.Octets.append(K.rsa.field(x5), B.Octets.empty()))))), B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), B.Octets.append(K.rsa.field(x5), rest5))))), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), B.Octets.append(K.rsa.field(x5), z))))), B.Octets.empty(), rest5, Equal.sym(B.Octets, rest5, B.Octets.empty(), kr.len0(rest5, hb))), e), R.Rsa.public_of(x1, x2))
+    case False{}:
+      {==}
+
+def kv.l5(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, +x3: N.BnNat, +x4: N.BnNat, +rest4: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), rest4)))) == o : B.Octets}, r: Result<&2, &2, R.RsaError, K.RsaField>, h: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => rest4, r) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x4, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(0n, K.RsaField.rest(a)))))))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x4, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(0n, K.RsaField.rest(a)))))))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x5, +rest5}:
+          kv.end(o, x1, x2, x3, x4, x5, rest5, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), B.Octets.append(K.rsa.field(x5), rest5))))), B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), rest4)))), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), z)))), B.Octets.append(K.rsa.field(x5), rest5), rest4, kr.done_inj(B.Octets.append(K.rsa.field(x5), rest5), rest4, h)), e), Nat.is_eq(B.Octets.len(rest5), 0n), {==})
+    case Fail{er}:
+      {==}
+
+def kv.l4(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, +x3: N.BnNat, +rest3: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), rest3))) == o : B.Octets}, r: Result<&2, &2, R.RsaError, K.RsaField>, h: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => rest3, r) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(1n, K.RsaField.rest(a))))))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x3, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(1n, K.RsaField.rest(a))))))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x4, +rest4}:
+          kv.l5(o, x1, x2, x3, x4, rest4, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), B.Octets.append(K.rsa.field(x4), rest4)))), B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), rest3))), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), z))), B.Octets.append(K.rsa.field(x4), rest4), rest3, kr.done_inj(B.Octets.append(K.rsa.field(x4), rest4), rest3, h)), e), K.rsa.read(rest4), kr.inv0(rest4))
+    case Fail{er}:
+      {==}
+
+def kv.l3(+o: B.Octets, +x1: N.BnNat, +x2: N.BnNat, +rest2: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)) == o : B.Octets}, r: Result<&2, &2, R.RsaError, K.RsaField>, h: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => rest2, r) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(2n, K.RsaField.rest(a)))))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x2, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(2n, K.RsaField.rest(a)))))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x3, +rest3}:
+          kv.l4(o, x1, x2, x3, rest3, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), B.Octets.append(K.rsa.field(x3), rest3))), B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), z)), B.Octets.append(K.rsa.field(x3), rest3), rest2, kr.done_inj(B.Octets.append(K.rsa.field(x3), rest3), rest2, h)), e), K.rsa.read(rest3), kr.inv0(rest3))
+    case Fail{er}:
+      {==}
+
+def kv.l2(+o: B.Octets, +x1: N.BnNat, +rest1: B.Octets, +e: {B.Octets.append(K.rsa.field(x1), rest1) == o : B.Octets}, r: Result<&2, &2, R.RsaError, K.RsaField>, h: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => rest1, r) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(3n, K.RsaField.rest(a))))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{x1, t}, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(3n, K.RsaField.rest(a))))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x2, +rest2}:
+          kv.l3(o, x1, x2, rest2, Equal.trans(B.Octets, B.Octets.append(K.rsa.field(x1), B.Octets.append(K.rsa.field(x2), rest2)), B.Octets.append(K.rsa.field(x1), rest1), o, Equal.cong(B.Octets, B.Octets, z => B.Octets.append(K.rsa.field(x1), z), B.Octets.append(K.rsa.field(x2), rest2), rest1, kr.done_inj(B.Octets.append(K.rsa.field(x2), rest2), rest1, h)), e), K.rsa.read(rest2), kr.inv0(rest2))
+    case Fail{er}:
+      {==}
+
+def kv.l1(+o: B.Octets, r: Result<&2, &2, R.RsaError, K.RsaField>, h: {Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => B.Octets.append(K.rsa.field(K.RsaField.x(a)), K.RsaField.rest(a)), r) == Result.map(&2, &2, R.RsaError, K.RsaField, B.Octets, a => o, r) : Result<&2, &2, R.RsaError, B.Octets>}) -> {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(4n, K.RsaField.rest(a)))), xs => K.rsa.read.priv(xs))) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, Result.bind(&2, &2, R.RsaError, List<&2, N.BnNat>, R.RsaPrivate, Result.bind(&2, &2, R.RsaError, K.RsaField, List<&2, N.BnNat>, r, +a => Result.map(&2, &2, R.RsaError, List<&2, N.BnNat>, List<&2, N.BnNat>, t => Con{K.RsaField.x(a), t}, K.rsa.read.n(4n, K.RsaField.rest(a)))), xs => K.rsa.read.priv(xs))) : Result<&2, &2, R.RsaError, B.Octets>}:
+  match r:
+    case Done{a}:
+      match a:
+        case K.RsaField{+x1, +rest1}:
+          kv.l2(o, x1, rest1, kr.done_inj(B.Octets.append(K.rsa.field(x1), rest1), o, h), K.rsa.read(rest1), kr.inv0(rest1))
+    case Fail{er}:
+      {==}
+
+def Laws.private_form_read_write(o):
+  kv.l1(o, K.rsa.read(o), kr.inv0(o))
+
+# The form written for a key read is read as the same key
+
+def kr.wr_pub(r: Result<&2, &2, R.RsaError, R.RsaPublic>, +o: B.Octets, h: {Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => K.RsaKeys.public_to(pk), r) == Result.map(&2, &2, R.RsaError, R.RsaPublic, B.Octets, pk => o, r) : Result<&2, &2, R.RsaError, B.Octets>}, hr: {K.RsaKeys.public_of(o) == r : Result<&2, &2, R.RsaError, R.RsaPublic>}) -> {Result.bind(&2, &2, R.RsaError, R.RsaPublic, R.RsaPublic, r, pk => K.RsaKeys.public_of(K.RsaKeys.public_to(pk))) == r : Result<&2, &2, R.RsaError, R.RsaPublic>}:
+  match r:
+    case Done{+pk}:
+      %Equal.sym(B.Octets, K.RsaKeys.public_to(pk), o, kr.done_inj(K.RsaKeys.public_to(pk), o, h)) : {K.RsaKeys.public_of(_) == Done{pk} : Result<&2, &2, R.RsaError, R.RsaPublic>}
+      hr
+    case Fail{er}:
+      {==}
+
+def Laws.public_form_write_read(o):
+  kr.wr_pub(K.RsaKeys.public_of(o), o, Laws.public_form_read_write(o), {==})
+
+def kr.wr_priv(r: Result<&2, &2, R.RsaError, R.RsaPrivate>, +o: B.Octets, h: {Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => K.RsaKeys.private_to(sk), r) == Result.map(&2, &2, R.RsaError, R.RsaPrivate, B.Octets, sk => o, r) : Result<&2, &2, R.RsaError, B.Octets>}, hr: {K.RsaKeys.private_of(o) == r : Result<&2, &2, R.RsaError, R.RsaPrivate>}) -> {Result.bind(&2, &2, R.RsaError, R.RsaPrivate, R.RsaPrivate, r, sk => K.RsaKeys.private_of(K.RsaKeys.private_to(sk))) == r : Result<&2, &2, R.RsaError, R.RsaPrivate>}:
+  match r:
+    case Done{+sk}:
+      %Equal.sym(B.Octets, K.RsaKeys.private_to(sk), o, kr.done_inj(K.RsaKeys.private_to(sk), o, h)) : {K.RsaKeys.private_of(_) == Done{sk} : Result<&2, &2, R.RsaError, R.RsaPrivate>}
+      hr
+    case Fail{er}:
+      {==}
+
+def Laws.private_form_write_read(o):
+  kr.wr_priv(K.RsaKeys.private_of(o), o, Laws.private_form_read_write(o), {==})
