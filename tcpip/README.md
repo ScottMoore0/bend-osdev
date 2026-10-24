@@ -84,6 +84,7 @@ Where the RFC leaves a choice, the package makes one and says so:
 | `show.bend` | text forms of segments, actions and notes (`TcpShow`) |
 | `LAWS.bend`, `PROOF.bend` | the laws below but the packet-level ones, and their proofs |
 | `LAWS_packet.bend`, `PROOF_packet.bend` | the packet-level answers of ICMP and UDP (written by `ref/gen_packet.py`) |
+| `LAWS_stream.bend`, `PROOF_stream.bend` | the receive queue delivers the stream's bytes |
 
 Bend imports do not re-export: import the files whose names you use.
 
@@ -200,10 +201,11 @@ so a host may fire timers late or twice.
 
 ## Laws
 
-Two pairs of law and proof files, each checked on its own: `LAWS.bend`
-with `PROOF.bend`, and `LAWS_packet.bend` with `PROOF_packet.bend` (the
+Three pairs of law and proof files, each checked on its own: `LAWS.bend`
+with `PROOF.bend`, `LAWS_packet.bend` with `PROOF_packet.bend` (the
 packet-level answers, whose proofs rest on bend-osdev-netheaders' checksum
-laws). Every law is proved.
+laws), and `LAWS_stream.bend` with `PROOF_stream.bend` (the bytes the
+receive queue delivers). Every law is proved.
 
 **For every input:**
 * sequence numbers: `SeqNum.lt` is irreflexive (`seq_lt_irrefl`),
@@ -271,9 +273,23 @@ netheaders' laws that such bytes verify, parse back with the checksum
 field written, and keep the payload; ICMP's packed identifier and
 sequence number are read back by computation on the words' halves.
 
-Not proved for every input: that the delivered bytes are the stream's (the
-receive queue law says where they start and how far they reach; the
-differential tests compare the bytes).
+**The stream** (`LAWS_stream.bend`, 2 laws for every input, a vector and
+a satisfiability law): a piece `RcvSeg{at, d}` is the stream `str`'s when
+`d` is `str`'s `len(d)` bytes at offset `at` (`stream_seg` leaves it
+unchanged; `stream_segs` does that to every piece). `rcvq_stream`: if the
+pieces a queue at next offset `n` holds are the stream's, and so is the
+piece `d` arriving at `n + rel`, then the bytes the insert delivers are
+the stream's from `n` on (`slice(n, len(data), str) == data`), whatever
+the limit; `rcvq_stream_held`: and the pieces the queue then holds are the
+stream's. With `rcvq_contiguous`, by induction over the inserts from
+`RcvQ.new()` (which holds nothing), the bytes the application reads are
+the stream's from its start, in order and without gaps, whatever order the
+pieces came in, overlapping or resent. The vector holds "world" at offset
+6, then "hello " at 0 delivers "hello world". The proofs rest on a
+reassembly lemma about prefixes (`t == take(len(t), z)`): a prefix of `z`
+followed by a prefix of what follows it is a prefix of `z`, and dropping
+from a prefix gives a prefix of the dropped string; they use
+bend-osdev-bytes' laws of take, drop and append on Octets.
 
 ## Tests
 
@@ -322,7 +338,8 @@ Measured on native builds (Bend 2.0.37, WSL2):
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (47 laws) and `PROOF_packet.bend` (7 laws) ALL
-PROOFS CHECK, `--verdict` ALL PROOFS CHECK for each (`PROOF_packet.bend`
-peaks at 0.31 GB), `ref/gen_packet.py --check` up to date, `check.bend` passes, `ref/run.sh` 100 cases (6671 trace lines) match
+Bend 2.0.37: `PROOF.bend` (47 laws), `PROOF_packet.bend` (7 laws) and
+`PROOF_stream.bend` (4 laws) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
+for each (`PROOF_packet.bend` peaks at 0.31 GB, `PROOF_stream.bend` at
+0.30 GB), `ref/gen_packet.py --check` up to date, `check.bend` passes, `ref/run.sh` 100 cases (6671 trace lines) match
 the model and 12 of 12 checks pass against Linux 6.6, `scripts/deps.sh` ok.
