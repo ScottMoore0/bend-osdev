@@ -16,7 +16,12 @@ Base's when that arrives.
 | File | Holds |
 |---|---|
 | `word64.bend` | `W64` and its operations |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws of the halves, the value, comparison, addition, subtraction and the shifts, and their proofs |
+| `LAWS_mul.bend`, `PROOF_mul.bend` | multiplication (`mulhi_value`, `mul_wrap`, `mul_low`, `mul_value`) |
+| `LAWS_div.bend`, `PROOF_div.bend` | division (`divmod_value`, `mod_lt`, `div_zero`, `mod_zero`) |
+| `LAWS_bits.bend`, `PROOF_bits.bend` | the bitwise operations and the one-bit shift (`and_comm` ... `not_sub`, `shl_one_wrap`) |
+| `LAWS_text.bend`, `PROOF_text.bend` | decimal text (`show_reads`) |
+| `gen/proof.py` | writes the four `PROOF_<part>.bend` (ring identities by `scripts/natproof.py`) |
 | `proof_value.bend` | the lemmas the value laws rest on, for two halves of any width |
 | `proof_shift.bend` | the lemmas the shift laws rest on, for two halves of any width |
 | `check.bend` | examples, with their expected output |
@@ -102,13 +107,57 @@ are the shift right by n - k (a value below 2^n has one quotient and
 remainder by 2^n), and an `or` of two halves whose bits do not meet is
 their sum.
 
-**Not proved for every input**, and tested instead: the product from
-16-bit partial products (`mul`), division by shift-and-subtract (by zero:
-quotient 0, remainder `a`), the bit operations (`and`, `or`, `xor`, `not`)
-as values, and decimal and hex text by division through 16-bit pieces.
-These need multiplication and division facts that bend-osdev-u32 does not
-state yet. `ref/run.sh` checks every operation against Python's exact
-integers.
+The further pairs (each proof file checked in a process of its own; a
+dependent imports the pair that holds the law it uses):
+
+* **multiplication** (`LAWS_mul.bend`), for every input: `W64.mulhi(a, b)`
+  is the high 32 bits of the product of two 32-bit words, with `U32.mul`
+  the whole product (`mulhi_value`); `W64.mul` is the product modulo 2^64:
+  its value is the low 64 bits of the product of the values
+  (`U32Nat.low`), what wraps is 2^64 times the rest, and with the product
+  no more than a word's value nothing wraps (`mul_wrap`, `mul_low`,
+  `mul_value`). The proof puts the 16-bit partial products of `mulhi`
+  together at a width n of two halves h (a lemma for any h and n = 2h,
+  used at 16 and 32), from bend-osdev-u32's `u32_mul_*` laws.
+* **division** (`LAWS_div.bend`), for every input: for b not 0, `W64.div`
+  and `W64.mod` are the `Nat` quotient and remainder, a = q b + r with r <
+  b (`divmod_value`, `mod_lt`); by 0 the quotient is 0 and the remainder a
+  (`div_zero`, `mod_zero`). The 64 steps of shift and subtract keep (q b +
+  r) 2^64 + a = a0 2^j and r < b (j steps done), each step being
+  bend-osdev-u32's `divstep_value` and `divstep_lt` at n = 64.
+* **the bits** (`LAWS_bits.bend`), for every input: and, or and xor commute
+  (`and_comm`, `or_comm`, `xor_comm`); and + or is the sum of the values,
+  and so is xor + 2 and (`and_or`, `xor_and`); with no bit in common, or
+  is the sum (`or_disjoint`); not is the subtraction from 2^64 - 1
+  (`not_sub`); a shift left by one bit is twice the value, less 2^64 for
+  the top bit going out (`shl_one_wrap`).
+* **decimal text** (`LAWS_text.bend`), for every input: the digits of
+  `W64.show(a)`, read back one by one with Base's `Nat.read.go` (the reader
+  without `Nat.read`'s 2^48 gate), are the value (`show_reads`). Each
+  division by 10 through the four 16-bit pieces is one lemma for a width n
+  of two halves h; 20 digits are enough, since 10^20 > 2^64 (10^4 >= 2^13,
+  five times).
+
+**Not proved for every input**, and tested instead: hex text
+(`W64.show_hex`, a vector here), and `W64.from_nat` (a vector).
+`ref/run.sh` checks every operation against Python's exact integers.
+
+**`PROOF_div.bend` and the kernel.** `PROOF_div.bend` ALL PROOFS CHECK,
+but `--verdict` cannot finish it: the step from `W64.div` to its loop,
+`W64.divmod.pick(False, a, b)` = `W64.div.go(64n, a, b, 0, 0)`, is one
+unfolding for bend2's checker, but BendTT normalizes both sides of a
+conversion that is not syntactically equal, and `W64.div.go`'s 64 steps
+on unknown words normalize to a term that doubles at every step (the
+shifted remainder is used twice); the kernel ran out of memory (about 3.5
+GB, then swap) on that one conversion alone (a two-line file stating it
+by `{==}` does the same). The loop invariant itself (`wd.go`, for every n)
+passes `--verdict`; only the instance at the literal fuel 64 does not. A
+proof that avoids the conversion needs `W64.div.go` to recurse on the bits
+of the dividend, as Base's `U32.divmod.go` does (it is stuck on an unknown
+word), rather than on a `Nat` count; that is a change of the code, not
+made here. Packages whose laws rest on `divmod_value` (bend-osdev-kmath's
+64-bit division and reciprocal division, bend-osdev-kstr's decimal round
+trips) have the same status.
 
 ## Tests
 
@@ -118,6 +167,11 @@ Python's integers on random words and on the edge values 0, 1, 2^32 - 1,
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (32 laws), `--verdict` ALL
-PROOFS CHECK, `check.bend` passes and `ref/run.sh` 850 cases match, both
-as native binaries.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (32 laws), `PROOF_mul.bend`
+(4), `PROOF_div.bend` (4), `PROOF_bits.bend` (8) and `PROOF_text.bend` (1)
+ALL PROOFS CHECK; `--verdict` ALL PROOFS CHECK on `PROOF.bend`,
+`PROOF_mul.bend`, `PROOF_bits.bend` and `PROOF_text.bend` (about 4 s each,
+peak 0.36 to 0.40 GB), and does not finish on `PROOF_div.bend` (the kernel
+runs out of memory: see "`PROOF_div.bend` and the kernel" above);
+`check.bend` passes and `ref/run.sh` 850 cases match, both as native
+binaries.
