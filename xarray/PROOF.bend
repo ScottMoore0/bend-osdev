@@ -2068,6 +2068,371 @@ def XP.law.insert_present(-V: Data, +t: X.XArray<V>, +i: U32, +v: V, -w: V, e: {
   %Equal.sym(Maybe<&2, V>, X.XArray.load(V, t, i), Some{w}, e) : {X.XArray.insert.go(V, Maybe.is_some(&2, V, _), t, i, v) == Fail{X.XArrayBusy{}} : Result<&2, &2, X.XArrayError, X.XArray<V>>}
   {==}
 
+# The marks' invariant (XArray.wf): XTree.sub(n, s, t) says every path that
+# holds an entry of s holds one of t
+
+def XW.and_l(x: Bool, -y: Bool, e: {Bool.and(x, y) == True{} : Bool}) -> {x == True{} : Bool}:
+  match x:
+    case True{}:
+      {==}
+    case False{}:
+      Empty.absurd({False{} == True{} : Bool}, XP.ft(e))
+
+def XW.and_r(x: Bool, -y: Bool, e: {Bool.and(x, y) == True{} : Bool}) -> {y == True{} : Bool}:
+  match x:
+    case True{}:
+      e
+    case False{}:
+      Empty.absurd({y == True{} : Bool}, XP.ft(e))
+
+def XW.and_i(-x: Bool, -y: Bool, ex: {x == True{} : Bool}, ey: {y == True{} : Bool}) -> {Bool.and(x, y) == True{} : Bool}:
+  %Equal.sym(Bool, x, True{}, ex) : {Bool.and(_, y) == True{} : Bool}
+  ey
+
+def XW.sub_nil(-V: Data, n: Nat, -t: X.XTree<V>) -> {X.XTree.sub(V, n, X.XNil{}, t) == True{} : Bool}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+m:
+      {==}
+
+def XW.issome_nil(-V: Data, n: Nat, p: Word(n)) -> {Maybe.is_some(&2, V, X.XTree.load(V, n, p, X.XNil{})) == False{} : Bool}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+m:
+      match p:
+        case WCon{b, bs}:
+          match b:
+            case False{}:
+              {==}
+            case True{}:
+              {==}
+
+# a path holding an entry of s holds one of t
+def XW.sub_load(-V: Data, n: Nat, p: Word(n), +s: X.XTree<Unit>, +t: X.XTree<V>, +e: {X.XTree.sub(V, n, s, t) == True{} : Bool}, +f: {Maybe.is_some(&2, Unit, X.XTree.load(Unit, n, p, s)) == True{} : Bool}) -> {Maybe.is_some(&2, V, X.XTree.load(V, n, p, t)) == True{} : Bool}:
+  match n:
+    case 0n:
+      match s:
+        case X.XLeaf{u}:
+          e
+        case X.XNil{}:
+          Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 0n, p, t)) == True{} : Bool}, XP.ft(f))
+        case X.XBin{a, b}:
+          Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 0n, p, t)) == True{} : Bool}, XP.ft(f))
+    case 1n+ +m:
+      match p:
+        case WCon{c, +bs}:
+          match c:
+            case False{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      XW.sub_load(V, m, bs, a, lo, XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), f)
+                    case X.XNil{}:
+                      Equal.trans(Bool, False{}, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), True{}, Equal.sym(Bool, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), False{}, XW.issome_nil(V, m, bs)), XW.sub_load(V, m, bs, a, X.XNil{}, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), f))
+                    case X.XLeaf{w}:
+                      Equal.trans(Bool, False{}, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), True{}, Equal.sym(Bool, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), False{}, XW.issome_nil(V, m, bs)), XW.sub_load(V, m, bs, a, X.XNil{}, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), f))
+                case X.XNil{}:
+                  Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 1n+m, WCon{False{}, bs}, t)) == True{} : Bool}, XP.ft(f))
+                case X.XLeaf{u}:
+                  Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 1n+m, WCon{False{}, bs}, t)) == True{} : Bool}, XP.ft(f))
+            case True{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      XW.sub_load(V, m, bs, b, hi, XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), f)
+                    case X.XNil{}:
+                      Equal.trans(Bool, False{}, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), True{}, Equal.sym(Bool, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), False{}, XW.issome_nil(V, m, bs)), XW.sub_load(V, m, bs, b, X.XNil{}, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), f))
+                    case X.XLeaf{w}:
+                      Equal.trans(Bool, False{}, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), True{}, Equal.sym(Bool, Maybe.is_some(&2, V, X.XTree.load(V, m, bs, X.XNil{})), False{}, XW.issome_nil(V, m, bs)), XW.sub_load(V, m, bs, b, X.XNil{}, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), f))
+                case X.XNil{}:
+                  Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 1n+m, WCon{True{}, bs}, t)) == True{} : Bool}, XP.ft(f))
+                case X.XLeaf{u}:
+                  Empty.absurd({Maybe.is_some(&2, V, X.XTree.load(V, 1n+m, WCon{True{}, bs}, t)) == True{} : Bool}, XP.ft(f))
+
+# a store into t keeps s within it
+def XW.sub_store(-V: Data, n: Nat, p: Word(n), +t: X.XTree<V>, +s: X.XTree<Unit>, +v: V, +e: {X.XTree.sub(V, n, s, t) == True{} : Bool}) -> {X.XTree.sub(V, n, s, X.XTree.store(V, n, p, t, v)) == True{} : Bool}:
+  match n:
+    case 0n:
+      match s:
+        case X.XLeaf{u}:
+          {==}
+        case X.XNil{}:
+          {==}
+        case X.XBin{a, b}:
+          {==}
+    case 1n+ +m:
+      match p:
+        case WCon{c, +bs}:
+          match c:
+            case False{}:
+              match t:
+                case X.XBin{lo, hi}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, X.XTree.store(V, m, bs, lo, v)), X.XTree.sub(V, m, b, hi), XW.sub_store(V, m, bs, lo, a, v, XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)), XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+                case X.XNil{}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, X.XTree.store(V, m, bs, X.XNil{}, v)), X.XTree.sub(V, m, b, X.XNil{}), XW.sub_store(V, m, bs, X.XNil{}, a, v, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)), XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+                case X.XLeaf{w}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, X.XTree.store(V, m, bs, X.XNil{}, v)), X.XTree.sub(V, m, b, X.XNil{}), XW.sub_store(V, m, bs, X.XNil{}, a, v, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)), XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+            case True{}:
+              match t:
+                case X.XBin{lo, hi}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, X.XTree.store(V, m, bs, hi, v)), XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), XW.sub_store(V, m, bs, hi, b, v, XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+                case X.XNil{}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XTree.store(V, m, bs, X.XNil{}, v)), XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), XW.sub_store(V, m, bs, X.XNil{}, b, v, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+                case X.XLeaf{w}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XTree.store(V, m, bs, X.XNil{}, v)), XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), XW.sub_store(V, m, bs, X.XNil{}, b, v, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)))
+                    case X.XNil{}:
+                      {==}
+                    case X.XLeaf{u}:
+                      {==}
+
+# marking a path that holds an entry of t keeps s within t
+def XW.sub_mark(-V: Data, n: Nat, p: Word(n), +t: X.XTree<V>, +s: X.XTree<Unit>, +e: {X.XTree.sub(V, n, s, t) == True{} : Bool}, +f: {Maybe.is_some(&2, V, X.XTree.load(V, n, p, t)) == True{} : Bool}) -> {X.XTree.sub(V, n, X.XTree.store(Unit, n, p, s, Unit{}), t) == True{} : Bool}:
+  match n:
+    case 0n:
+      f
+    case 1n+ +m:
+      match p:
+        case WCon{c, +bs}:
+          match c:
+            case False{}:
+              match t:
+                case X.XBin{lo, hi}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, a, Unit{}), lo), X.XTree.sub(V, m, b, hi), XW.sub_mark(V, m, bs, lo, a, XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), f), XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e))
+                    case X.XNil{}:
+                      XW.and_i(X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, X.XNil{}, Unit{}), lo), X.XTree.sub(V, m, X.XNil{}, hi), XW.sub_mark(V, m, bs, lo, X.XNil{}, XW.sub_nil(V, m, lo), f), XW.sub_nil(V, m, hi))
+                    case X.XLeaf{u}:
+                      XW.and_i(X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, X.XNil{}, Unit{}), lo), X.XTree.sub(V, m, X.XNil{}, hi), XW.sub_mark(V, m, bs, lo, X.XNil{}, XW.sub_nil(V, m, lo), f), XW.sub_nil(V, m, hi))
+                case X.XNil{}:
+                  Empty.absurd({X.XTree.sub(V, 1n+m, X.XTree.store(Unit, 1n+m, WCon{False{}, bs}, s, Unit{}), X.XNil{}) == True{} : Bool}, XP.ft(f))
+                case X.XLeaf{w}:
+                  Empty.absurd({X.XTree.sub(V, 1n+m, X.XTree.store(Unit, 1n+m, WCon{False{}, bs}, s, Unit{}), X.XLeaf{w}) == True{} : Bool}, XP.ft(f))
+            case True{}:
+              match t:
+                case X.XBin{lo, hi}:
+                  match s:
+                    case X.XBin{a, b}:
+                      XW.and_i(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, b, Unit{}), hi), XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), XW.sub_mark(V, m, bs, hi, b, XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), f))
+                    case X.XNil{}:
+                      XW.and_i(X.XTree.sub(V, m, X.XNil{}, lo), X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, X.XNil{}, Unit{}), hi), XW.sub_nil(V, m, lo), XW.sub_mark(V, m, bs, hi, X.XNil{}, XW.sub_nil(V, m, hi), f))
+                    case X.XLeaf{u}:
+                      XW.and_i(X.XTree.sub(V, m, X.XNil{}, lo), X.XTree.sub(V, m, X.XTree.store(Unit, m, bs, X.XNil{}, Unit{}), hi), XW.sub_nil(V, m, lo), XW.sub_mark(V, m, bs, hi, X.XNil{}, XW.sub_nil(V, m, hi), f))
+                case X.XNil{}:
+                  Empty.absurd({X.XTree.sub(V, 1n+m, X.XTree.store(Unit, 1n+m, WCon{True{}, bs}, s, Unit{}), X.XNil{}) == True{} : Bool}, XP.ft(f))
+                case X.XLeaf{w}:
+                  Empty.absurd({X.XTree.sub(V, 1n+m, X.XTree.store(Unit, 1n+m, WCon{True{}, bs}, s, Unit{}), X.XLeaf{w}) == True{} : Bool}, XP.ft(f))
+
+# join's halves, as the node of them, for sub on either side
+def XW.join_sub(-V: Data, +m: Nat, +x: X.XTree<Unit>, +y: X.XTree<Unit>, +t: X.XTree<V>) -> {X.XTree.sub(V, 1n+m, X.XTree.join(Unit, x, y), t) == X.XTree.sub(V, 1n+m, X.XBin{x, y}, t) : Bool}:
+  match x:
+    case X.XNil{}:
+      match y:
+        case X.XNil{}:
+          match t:
+            case X.XBin{c, d}:
+              Equal.sym(Bool, Bool.and(X.XTree.sub(V, m, X.XNil{}, c), X.XTree.sub(V, m, X.XNil{}, d)), True{}, XW.and_i(X.XTree.sub(V, m, X.XNil{}, c), X.XTree.sub(V, m, X.XNil{}, d), XW.sub_nil(V, m, c), XW.sub_nil(V, m, d)))
+            case X.XNil{}:
+              Equal.sym(Bool, Bool.and(X.XTree.sub(V, m, X.XNil{}, X.XNil{}), X.XTree.sub(V, m, X.XNil{}, X.XNil{})), True{}, XW.and_i(X.XTree.sub(V, m, X.XNil{}, X.XNil{}), X.XTree.sub(V, m, X.XNil{}, X.XNil{}), XW.sub_nil(V, m, X.XNil{}), XW.sub_nil(V, m, X.XNil{})))
+            case X.XLeaf{w}:
+              Equal.sym(Bool, Bool.and(X.XTree.sub(V, m, X.XNil{}, X.XNil{}), X.XTree.sub(V, m, X.XNil{}, X.XNil{})), True{}, XW.and_i(X.XTree.sub(V, m, X.XNil{}, X.XNil{}), X.XTree.sub(V, m, X.XNil{}, X.XNil{}), XW.sub_nil(V, m, X.XNil{}), XW.sub_nil(V, m, X.XNil{})))
+        case X.XLeaf{u}:
+          {==}
+        case X.XBin{a, b}:
+          {==}
+    case X.XLeaf{u}:
+      {==}
+    case X.XBin{a, b}:
+      {==}
+
+def XW.sub_join(-V: Data, +m: Nat, +z: X.XTree<V>, +w: X.XTree<V>, +s: X.XTree<Unit>) -> {X.XTree.sub(V, 1n+m, s, X.XTree.join(V, z, w)) == X.XTree.sub(V, 1n+m, s, X.XBin{z, w}) : Bool}:
+  match z:
+    case X.XNil{}:
+      match w:
+        case X.XNil{}:
+          match s:
+            case X.XBin{a, b}:
+              {==}
+            case X.XNil{}:
+              {==}
+            case X.XLeaf{u}:
+              {==}
+        case X.XLeaf{u}:
+          {==}
+        case X.XBin{a, b}:
+          {==}
+    case X.XLeaf{u}:
+      {==}
+    case X.XBin{a, b}:
+      {==}
+
+# an erase from s keeps it within t
+def XW.sub_clear(-V: Data, n: Nat, p: Word(n), +s: X.XTree<Unit>, +t: X.XTree<V>, +e: {X.XTree.sub(V, n, s, t) == True{} : Bool}) -> {X.XTree.sub(V, n, X.XTree.erase(Unit, n, p, s), t) == True{} : Bool}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+ +m:
+      match p:
+        case WCon{c, +bs}:
+          match c:
+            case False{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XBin{lo, hi}), X.XTree.sub(V, 1n+m, X.XBin{X.XTree.erase(Unit, m, bs, a), b}, X.XBin{lo, hi}), True{}, XW.join_sub(V, m, X.XTree.erase(Unit, m, bs, a), b, X.XBin{lo, hi}), XW.and_i(X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, a), lo), X.XTree.sub(V, m, b, hi), XW.sub_clear(V, m, bs, a, lo, XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)), XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)))
+                    case X.XNil{}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XNil{}), X.XTree.sub(V, 1n+m, X.XBin{X.XTree.erase(Unit, m, bs, a), b}, X.XNil{}), True{}, XW.join_sub(V, m, X.XTree.erase(Unit, m, bs, a), b, X.XNil{}), XW.and_i(X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, a), X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), XW.sub_clear(V, m, bs, a, X.XNil{}, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)), XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)))
+                    case X.XLeaf{w}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XLeaf{w}), X.XTree.sub(V, 1n+m, X.XBin{X.XTree.erase(Unit, m, bs, a), b}, X.XLeaf{w}), True{}, XW.join_sub(V, m, X.XTree.erase(Unit, m, bs, a), b, X.XLeaf{w}), XW.and_i(X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, a), X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), XW.sub_clear(V, m, bs, a, X.XNil{}, XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)), XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e)))
+                case X.XNil{}:
+                  {==}
+                case X.XLeaf{u}:
+                  {==}
+            case True{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XBin{lo, hi}), X.XTree.sub(V, 1n+m, X.XBin{a, X.XTree.erase(Unit, m, bs, b)}, X.XBin{lo, hi}), True{}, XW.join_sub(V, m, a, X.XTree.erase(Unit, m, bs, b), X.XBin{lo, hi}), XW.and_i(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, b), hi), XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), XW.sub_clear(V, m, bs, b, hi, XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e))))
+                    case X.XNil{}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XNil{}), X.XTree.sub(V, 1n+m, X.XBin{a, X.XTree.erase(Unit, m, bs, b)}, X.XNil{}), True{}, XW.join_sub(V, m, a, X.XTree.erase(Unit, m, bs, b), X.XNil{}), XW.and_i(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, b), X.XNil{}), XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), XW.sub_clear(V, m, bs, b, X.XNil{}, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e))))
+                    case X.XLeaf{w}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XLeaf{w}), X.XTree.sub(V, 1n+m, X.XBin{a, X.XTree.erase(Unit, m, bs, b)}, X.XLeaf{w}), True{}, XW.join_sub(V, m, a, X.XTree.erase(Unit, m, bs, b), X.XLeaf{w}), XW.and_i(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, b), X.XNil{}), XW.and_l(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e), XW.sub_clear(V, m, bs, b, X.XNil{}, XW.and_r(X.XTree.sub(V, m, a, X.XNil{}), X.XTree.sub(V, m, b, X.XNil{}), e))))
+                case X.XNil{}:
+                  {==}
+                case X.XLeaf{u}:
+                  {==}
+
+# an erase from both keeps s within t
+def XW.sub_erase(-V: Data, n: Nat, p: Word(n), +s: X.XTree<Unit>, +t: X.XTree<V>, +e: {X.XTree.sub(V, n, s, t) == True{} : Bool}) -> {X.XTree.sub(V, n, X.XTree.erase(Unit, n, p, s), X.XTree.erase(V, n, p, t)) == True{} : Bool}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+ +m:
+      match p:
+        case WCon{c, +bs}:
+          match c:
+            case False{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XTree.join(V, X.XTree.erase(V, m, bs, lo), hi)), X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XBin{X.XTree.erase(V, m, bs, lo), hi}), True{}, XW.sub_join(V, m, X.XTree.erase(V, m, bs, lo), hi, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b)), Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, X.XTree.erase(Unit, m, bs, a), b), X.XBin{X.XTree.erase(V, m, bs, lo), hi}), X.XTree.sub(V, 1n+m, X.XBin{X.XTree.erase(Unit, m, bs, a), b}, X.XBin{X.XTree.erase(V, m, bs, lo), hi}), True{}, XW.join_sub(V, m, X.XTree.erase(Unit, m, bs, a), b, X.XBin{X.XTree.erase(V, m, bs, lo), hi}), XW.and_i(X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, a), X.XTree.erase(V, m, bs, lo)), X.XTree.sub(V, m, b, hi), XW.sub_erase(V, m, bs, a, lo, XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)), XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e))))
+                    case X.XNil{}:
+                      XW.sub_clear(V, 1n+m, WCon{False{}, bs}, X.XBin{a, b}, X.XNil{}, e)
+                    case X.XLeaf{w}:
+                      XW.sub_clear(V, 1n+m, WCon{False{}, bs}, X.XBin{a, b}, X.XLeaf{w}, e)
+                case X.XNil{}:
+                  {==}
+                case X.XLeaf{u}:
+                  {==}
+            case True{}:
+              match s:
+                case X.XBin{a, b}:
+                  match t:
+                    case X.XBin{lo, hi}:
+                      Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XTree.join(V, lo, X.XTree.erase(V, m, bs, hi))), X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XBin{lo, X.XTree.erase(V, m, bs, hi)}), True{}, XW.sub_join(V, m, lo, X.XTree.erase(V, m, bs, hi), X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b))), Equal.trans(Bool, X.XTree.sub(V, 1n+m, X.XTree.join(Unit, a, X.XTree.erase(Unit, m, bs, b)), X.XBin{lo, X.XTree.erase(V, m, bs, hi)}), X.XTree.sub(V, 1n+m, X.XBin{a, X.XTree.erase(Unit, m, bs, b)}, X.XBin{lo, X.XTree.erase(V, m, bs, hi)}), True{}, XW.join_sub(V, m, a, X.XTree.erase(Unit, m, bs, b), X.XBin{lo, X.XTree.erase(V, m, bs, hi)}), XW.and_i(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, X.XTree.erase(Unit, m, bs, b), X.XTree.erase(V, m, bs, hi)), XW.and_l(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e), XW.sub_erase(V, m, bs, b, hi, XW.and_r(X.XTree.sub(V, m, a, lo), X.XTree.sub(V, m, b, hi), e)))))
+                    case X.XNil{}:
+                      XW.sub_clear(V, 1n+m, WCon{True{}, bs}, X.XBin{a, b}, X.XNil{}, e)
+                    case X.XLeaf{w}:
+                      XW.sub_clear(V, 1n+m, WCon{True{}, bs}, X.XBin{a, b}, X.XLeaf{w}, e)
+                case X.XNil{}:
+                  {==}
+                case X.XLeaf{u}:
+                  {==}
+
+# The invariant's laws
+def XW.law.wf_empty(-V: Data) -> {X.XArray.wf(V, X.XArray.empty(V)) == True{} : Bool}:
+  {==}
+
+def XW.law.wf_store(-V: Data, +t: X.XArray<V>, +i: U32, +v: V, +e: {X.XArray.wf(V, t) == True{} : Bool}) -> {X.XArray.wf(V, X.XArray.store(V, t, i, v)) == True{} : Bool}:
+  match t:
+    case X.XArray{+vals, +m0, +m1, +m2}:
+      XW.and_i(X.XTree.sub(V, 32n, m0, X.XTree.store(V, 32n, X.XArray.path(i), vals, v)), Bool.and(X.XTree.sub(V, 32n, m1, X.XTree.store(V, 32n, X.XArray.path(i), vals, v)), X.XTree.sub(V, 32n, m2, X.XTree.store(V, 32n, X.XArray.path(i), vals, v))), XW.sub_store(V, 32n, X.XArray.path(i), vals, m0, v, XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.and_i(X.XTree.sub(V, 32n, m1, X.XTree.store(V, 32n, X.XArray.path(i), vals, v)), X.XTree.sub(V, 32n, m2, X.XTree.store(V, 32n, X.XArray.path(i), vals, v)), XW.sub_store(V, 32n, X.XArray.path(i), vals, m1, v, XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))), XW.sub_store(V, 32n, X.XArray.path(i), vals, m2, v, XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)))))
+
+def XW.law.wf_erase(-V: Data, +t: X.XArray<V>, +i: U32, +e: {X.XArray.wf(V, t) == True{} : Bool}) -> {X.XArray.wf(V, X.XArray.erase(V, t, i)) == True{} : Bool}:
+  match t:
+    case X.XArray{+vals, +m0, +m1, +m2}:
+      XW.and_i(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m0), X.XTree.erase(V, 32n, X.XArray.path(i), vals)), Bool.and(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m1), X.XTree.erase(V, 32n, X.XArray.path(i), vals)), X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m2), X.XTree.erase(V, 32n, X.XArray.path(i), vals))), XW.sub_erase(V, 32n, X.XArray.path(i), m0, vals, XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.and_i(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m1), X.XTree.erase(V, 32n, X.XArray.path(i), vals)), X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m2), X.XTree.erase(V, 32n, X.XArray.path(i), vals)), XW.sub_erase(V, 32n, X.XArray.path(i), m1, vals, XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))), XW.sub_erase(V, 32n, X.XArray.path(i), m2, vals, XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)))))
+
+def XW.set_go(-V: Data, pr: Bool, +m: X.XMark, +p: Word(32n), +vals: X.XTree<V>, +m0: X.XTree<Unit>, +m1: X.XTree<Unit>, +m2: X.XTree<Unit>, +hp: {Maybe.is_some(&2, V, X.XTree.load(V, 32n, p, vals)) == pr : Bool}, +e: {X.XArray.wf(V, X.XArray{vals, m0, m1, m2}) == True{} : Bool}) -> {X.XArray.wf(V, X.XArray.set_mark.go(V, pr, m, p, vals, m0, m1, m2)) == True{} : Bool}:
+  match pr:
+    case False{}:
+      e
+    case True{}:
+      match m:
+        case X.XMark0{}:
+          XW.and_i(X.XTree.sub(V, 32n, X.XTree.store(Unit, 32n, p, m0, Unit{}), vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), XW.sub_mark(V, 32n, p, vals, m0, XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), hp), XW.and_i(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))))
+        case X.XMark1{}:
+          XW.and_i(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, X.XTree.store(Unit, 32n, p, m1, Unit{}), vals), X.XTree.sub(V, 32n, m2, vals)), XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), XW.and_i(X.XTree.sub(V, 32n, X.XTree.store(Unit, 32n, p, m1, Unit{}), vals), X.XTree.sub(V, 32n, m2, vals), XW.sub_mark(V, 32n, p, vals, m1, XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), hp), XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))))
+        case X.XMark2{}:
+          XW.and_i(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, X.XTree.store(Unit, 32n, p, m2, Unit{}), vals)), XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), XW.and_i(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, X.XTree.store(Unit, 32n, p, m2, Unit{}), vals), XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.sub_mark(V, 32n, p, vals, m2, XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), hp)))
+
+def XW.law.wf_set_mark(-V: Data, +t: X.XArray<V>, +i: U32, +m: X.XMark, +e: {X.XArray.wf(V, t) == True{} : Bool}) -> {X.XArray.wf(V, X.XArray.set_mark(V, t, i, m)) == True{} : Bool}:
+  match t:
+    case X.XArray{+vals, +m0, +m1, +m2}:
+      XW.set_go(V, Maybe.is_some(&2, V, X.XTree.load(V, 32n, X.XArray.path(i), vals)), m, X.XArray.path(i), vals, m0, m1, m2, {==}, e)
+
+def XW.law.wf_clear_mark(-V: Data, +t: X.XArray<V>, +i: U32, +m: X.XMark, +e: {X.XArray.wf(V, t) == True{} : Bool}) -> {X.XArray.wf(V, X.XArray.clear_mark(V, t, i, m)) == True{} : Bool}:
+  match t:
+    case X.XArray{+vals, +m0, +m1, +m2}:
+      match m:
+        case X.XMark0{}:
+          XW.and_i(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m0), vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), XW.sub_clear(V, 32n, X.XArray.path(i), m0, vals, XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.and_i(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))))
+        case X.XMark1{}:
+          XW.and_i(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m1), vals), X.XTree.sub(V, 32n, m2, vals)), XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), XW.and_i(X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m1), vals), X.XTree.sub(V, 32n, m2, vals), XW.sub_clear(V, 32n, X.XArray.path(i), m1, vals, XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))), XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e))))
+        case X.XMark2{}:
+          XW.and_i(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m2), vals)), XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), XW.and_i(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, X.XTree.erase(Unit, 32n, X.XArray.path(i), m2), vals), XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), XW.sub_clear(V, 32n, X.XArray.path(i), m2, vals, XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)))))
+
+def XW.law.wf_mark_present(-V: Data, +t: X.XArray<V>, +i: U32, +m: X.XMark, +e: {X.XArray.wf(V, t) == True{} : Bool}, +f: {X.XArray.get_mark(V, t, i, m) == True{} : Bool}) -> {Maybe.is_some(&2, V, X.XArray.load(V, t, i)) == True{} : Bool}:
+  match t:
+    case X.XArray{+vals, +m0, +m1, +m2}:
+      match m:
+        case X.XMark0{}:
+          XW.sub_load(V, 32n, X.XArray.path(i), m0, vals, XW.and_l(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e), f)
+        case X.XMark1{}:
+          XW.sub_load(V, 32n, X.XArray.path(i), m1, vals, XW.and_l(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), f)
+        case X.XMark2{}:
+          XW.sub_load(V, 32n, X.XArray.path(i), m2, vals, XW.and_r(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals), XW.and_r(X.XTree.sub(V, 32n, m0, vals), Bool.and(X.XTree.sub(V, 32n, m1, vals), X.XTree.sub(V, 32n, m2, vals)), e)), f)
+
+
 # Each law, from its proof above
 
 def Laws.insert_absent(V, t, i, v, e):
@@ -2192,3 +2557,21 @@ def Laws.find_marked_first(V, t, s, m, k, j, e, h1, h2):
 
 def Laws.find_marked_none(V, t, s, m, j, e, h):
   XP.law.find_marked_none(V, t, s, m, j, e, h)
+
+def Laws.wf_empty(V):
+  XW.law.wf_empty(V)
+
+def Laws.wf_store(V, t, i, v, e):
+  XW.law.wf_store(V, t, i, v, e)
+
+def Laws.wf_erase(V, t, i, e):
+  XW.law.wf_erase(V, t, i, e)
+
+def Laws.wf_set_mark(V, t, i, m, e):
+  XW.law.wf_set_mark(V, t, i, m, e)
+
+def Laws.wf_clear_mark(V, t, i, m, e):
+  XW.law.wf_clear_mark(V, t, i, m, e)
+
+def Laws.wf_mark_present(V, t, i, m, e, f):
+  XW.law.wf_mark_present(V, t, i, m, e, f)

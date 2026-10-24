@@ -23,6 +23,10 @@
 # erase clears the index's marks; a store keeps them; find_marked is find over
 # the indices that carry the mark.
 #
+# The marks' invariant: XArray.wf (every index carrying a mark holds a
+# value) holds of the empty array and is kept by every update, and on an
+# array that has it a marked index holds a value.
+#
 # Vectors: a small array, its searches and its range.
 import Base
 import ./xarray.bend as X
@@ -421,3 +425,52 @@ law vec_erase_empty:
 
 law vec_find_marked:
   {X.XArray.find_marked(U32, X.XArray.set_mark(U32, X.XArray.store(U32, X.XArray.store(U32, X.XArray.store(U32, X.XArray.empty(U32), 5, 50), 4000000000, 7), 6, 60), 6, X.XMark1{}), 0, X.XMark1{}) == Some{6} : Maybe<&2, U32>}
+
+# The marks' invariant: XArray.wf(t) says every index carrying a mark holds a
+# value. The empty array has it, and store, erase, set_mark and clear_mark
+# keep it (insert is store, insert_absent), so every array the defs build has
+# it; and on such an array a marked index holds a value.
+
+law wf_empty:
+  for -V: Data
+  {X.XArray.wf(V, X.XArray.empty(V)) == True{} : Bool}
+
+law wf_store:
+  for -V: Data
+  for t: X.XArray<V>
+  for i: U32
+  for v: V
+  for e: {X.XArray.wf(V, t) == True{} : Bool}
+  {X.XArray.wf(V, X.XArray.store(V, t, i, v)) == True{} : Bool}
+
+law wf_erase:
+  for -V: Data
+  for t: X.XArray<V>
+  for i: U32
+  for e: {X.XArray.wf(V, t) == True{} : Bool}
+  {X.XArray.wf(V, X.XArray.erase(V, t, i)) == True{} : Bool}
+
+law wf_set_mark:
+  for -V: Data
+  for t: X.XArray<V>
+  for i: U32
+  for m: X.XMark
+  for e: {X.XArray.wf(V, t) == True{} : Bool}
+  {X.XArray.wf(V, X.XArray.set_mark(V, t, i, m)) == True{} : Bool}
+
+law wf_clear_mark:
+  for -V: Data
+  for t: X.XArray<V>
+  for i: U32
+  for m: X.XMark
+  for e: {X.XArray.wf(V, t) == True{} : Bool}
+  {X.XArray.wf(V, X.XArray.clear_mark(V, t, i, m)) == True{} : Bool}
+
+law wf_mark_present:
+  for -V: Data
+  for t: X.XArray<V>
+  for i: U32
+  for m: X.XMark
+  for e: {X.XArray.wf(V, t) == True{} : Bool}
+  for f: {X.XArray.get_mark(V, t, i, m) == True{} : Bool}
+  {Maybe.is_some(&2, V, X.XArray.load(V, t, i)) == True{} : Bool}
