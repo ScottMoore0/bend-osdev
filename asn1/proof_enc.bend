@@ -20,6 +20,10 @@ import ./proof_list.bend as AL
 import ./proof_u32.bend as AU
 import ./proof_num.bend as PN
 import ./proof_head.bend as PH
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # The encoder's octets are already masked
 
@@ -190,7 +194,7 @@ def pe.lt_plus(+a: Nat, +x: Nat, +y: Nat, +ha: {Nat.is_le(1n, a) == True{} : Boo
     case 0n:
       Empty.absurd({Nat.is_lt(x, Nat.add(0n, y)) == True{} : Bool}, AN.an.ft(ha))
     case 1n+q:
-      AN.an.le_lt_succ(x, Nat.add(q, y), AN.an.le_trans(x, y, Nat.add(q, y), hx, AN.an.le_add_l(q, y)))
+      AN.an.le_lt_succ(x, Nat.add(q, y), UO.nat_le_trans(x, y, Nat.add(q, y), hx, UL.nat_le_add(y, q)))
 
 # the length of an element's octets
 def pe.len_tlv(+c: T.Asn1Class, +cons: Bool, +n: Nat, +cs: List<&2, U32>, +rest: List<&2, U32>) -> {List.length(&2, U32, En.a1.tlv(c, cons, n, cs, rest)) == Nat.add(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), Nat.add(List.length(&2, U32, L.a1.len_bytes(List.length(&2, U32, cs))), Nat.add(List.length(&2, U32, cs), List.length(&2, U32, rest)))) : Nat}:
@@ -208,18 +212,18 @@ def pe.lt_tlv_rest(+c: T.Asn1Class, +cons: Bool, +n: Nat, +cs: List<&2, U32>, +r
   +lr = List.length(&2, U32, rest)
   +ll = List.length(&2, U32, L.a1.len_bytes(lc))
   %Equal.sym(Nat, List.length(&2, U32, En.a1.tlv(c, cons, n, cs, rest)), Nat.add(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), Nat.add(ll, Nat.add(lc, lr))), pe.len_tlv(c, cons, n, cs, rest)) : {Nat.is_lt(lr, _) == True{} : Bool}
-  pe.lt_plus(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), lr, Nat.add(ll, Nat.add(lc, lr)), pe.id_ne(c, cons, n), AN.an.le_trans(lr, Nat.add(lc, lr), Nat.add(ll, Nat.add(lc, lr)), AN.an.le_add_l(lc, lr), AN.an.le_add_l(ll, Nat.add(lc, lr))))
+  pe.lt_plus(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), lr, Nat.add(ll, Nat.add(lc, lr)), pe.id_ne(c, cons, n), UO.nat_le_trans(lr, Nat.add(lc, lr), Nat.add(ll, Nat.add(lc, lr)), UL.nat_le_add(lr, lc), UL.nat_le_add(Nat.add(lc, lr), ll)))
 
 def pe.lt_tlv_cs(+c: T.Asn1Class, +cons: Bool, +n: Nat, +cs: List<&2, U32>, +rest: List<&2, U32>) -> {Nat.is_lt(List.length(&2, U32, cs), List.length(&2, U32, En.a1.tlv(c, cons, n, cs, rest))) == True{} : Bool}:
   +lc = List.length(&2, U32, cs)
   +lr = List.length(&2, U32, rest)
   +ll = List.length(&2, U32, L.a1.len_bytes(lc))
   %Equal.sym(Nat, List.length(&2, U32, En.a1.tlv(c, cons, n, cs, rest)), Nat.add(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), Nat.add(ll, Nat.add(lc, lr))), pe.len_tlv(c, cons, n, cs, rest)) : {Nat.is_lt(lc, _) == True{} : Bool}
-  pe.lt_plus(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), lc, Nat.add(ll, Nat.add(lc, lr)), pe.id_ne(c, cons, n), AN.an.le_trans(lc, Nat.add(lc, lr), Nat.add(ll, Nat.add(lc, lr)), AN.an.le_add(lc, lr), AN.an.le_add_l(ll, Nat.add(lc, lr))))
+  pe.lt_plus(List.length(&2, U32, T.a1.id_bytes(c, cons, n)), lc, Nat.add(ll, Nat.add(lc, lr)), pe.id_ne(c, cons, n), UO.nat_le_trans(lc, Nat.add(lc, lr), Nat.add(ll, Nat.add(lc, lr)), UO.nat_le_add_r(lc, lr), UL.nat_le_add(Nat.add(lc, lr), ll)))
 
 # fuel above an element's octets is fuel above what is inside it
 def pe.fuel_in(+x: Nat, +len: Nat, +g: Nat, +hx: {Nat.is_lt(x, len) == True{} : Bool}, +hf: {Nat.is_lt(len, 1n+g) == True{} : Bool}) -> {Nat.is_lt(x, g) == True{} : Bool}:
-  AN.an.lt_le_trans(x, len, g, hx, AN.an.lt_succ_le(len, g, hf))
+  UO.nat_lt_le_trans(x, len, g, hx, AN.an.lt_succ_le(len, g, hf))
 
 def pe.no_fuel(+x: Nat, +hf: {Nat.is_lt(x, 0n) == True{} : Bool}) -> Empty:
   AN.an.ft(Equal.trans(Bool, False{}, Nat.is_lt(x, 0n), True{}, Equal.sym(Bool, Nat.is_lt(x, 0n), False{}, AN.an.lt0(x)), hf))
@@ -378,7 +382,7 @@ def pe.de(m: Maybe<&2, E.Asn1Error>, +r: R.Asn1Rules, +x0: N.Asn1Node, -b: B.Oct
       %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(ee)), B.mask(ee), AL.al.to_of(ee)) : {A.a1.top(r, A.a1.run(r, A.A1One{}, _)) == Done{x0} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}
       %Equal.sym(List<&2, U32>, B.mask(ee), ee, pe.mask_enc([x0], Nil{})) : {A.a1.top(r, A.a1.run(r, A.A1One{}, _)) == Done{x0} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}
       +lee = List.length(&2, U32, ee)
-      %Equal.sym(Result<&2, &2, E.Asn1Error, A.A1Out>, A.a1.dec(1n+lee, r, A.A1One{}, A.a1.head(r, ee)), Done{A.A1Out{[x0], Nil{}}}, pe.one(x0, 1n+lee, r, em, hc, AN.an.le_lt_succ(lee, lee, AN.an.le_refl(lee)))) : {A.a1.top(r, _) == Done{x0} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}
+      %Equal.sym(Result<&2, &2, E.Asn1Error, A.A1Out>, A.a1.dec(1n+lee, r, A.A1One{}, A.a1.head(r, ee)), Done{A.A1Out{[x0], Nil{}}}, pe.one(x0, 1n+lee, r, em, hc, AN.an.le_lt_succ(lee, lee, UL.nat_le_refl(lee)))) : {A.a1.top(r, _) == Done{x0} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}
       {==}
     case Some{x}:
       Empty.absurd({A.Asn1.decode(r, b) == Done{x0} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}, pe.fd(x, b, e))

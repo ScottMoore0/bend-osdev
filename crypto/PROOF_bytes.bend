@@ -18,6 +18,8 @@ import ./inst_cm.bend as CM
 import ./inst_lc.bend as LC
 import ./proof_bits.bend as Bits
 import ./LAWS_bytes.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # How the proofs go. CrModes.octets_of writes the blocks' bytes one block
 # after another (pb.tlo: the list of them is pb.J, each block's bytes
@@ -55,22 +57,6 @@ def pb.bdisc(b: Bool) -> Type:
 def pb.bd(h: {False{} == True{} : Bool}) -> Empty:
   %h : pb.bdisc(_)
   Unit{}
-
-def pb.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pb.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def pb.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pb.add_succ(p, n) : {1n+Nat.add(p, 1n+n) == 1n+_ : Nat}
-      {==}
 
 def pb.add1(+i: Nat) -> {Nat.add(i, 1n) == 1n+i : Nat}:
   match i:
@@ -123,10 +109,10 @@ def pb.go_skip(+m: Nat, +x: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(1n+Nat.add(
     case 0n:
       {==}
     case 1n+mp:
-      Equal.trans(Nat & Nat, Nat.divmod.go(1n+Nat.add(mp, x), mp, d, 1n+r), Nat.divmod.go(x, Nat.add(mp, 1n+r), 1n+d, 0n), Nat.divmod.go(x, 1n+Nat.add(mp, r), 1n+d, 0n), pb.go_skip(mp, x, d, 1n+r), Equal.cong(Nat, Nat & Nat, z => Nat.divmod.go(x, z, 1n+d, 0n), Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), pb.add_succ(mp, r)))
+      Equal.trans(Nat & Nat, Nat.divmod.go(1n+Nat.add(mp, x), mp, d, 1n+r), Nat.divmod.go(x, Nat.add(mp, 1n+r), 1n+d, 0n), Nat.divmod.go(x, 1n+Nat.add(mp, r), 1n+d, 0n), pb.go_skip(mp, x, d, 1n+r), Equal.cong(Nat, Nat & Nat, z => Nat.divmod.go(x, z, 1n+d, 0n), Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), UL.nat_add_succ(mp, r)))
 
 def pb.mod_add(+q: Nat, +x: Nat) -> {Nat.mod(Nat.add(1n+q, x), 1n+q) == Nat.mod(x, 1n+q) : Nat}:
-  Equal.trans(Nat, Pair.snd(Nat, Nat, Nat.divmod.go(1n+Nat.add(q, x), q, 0n, 0n)), Pair.snd(Nat, Nat, Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n)), Nat.mod(x, 1n+q), Equal.cong(Nat & Nat, Nat, p => Pair.snd(Nat, Nat, p), Nat.divmod.go(1n+Nat.add(q, x), q, 0n, 0n), Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n), pb.go_skip(q, x, 0n, 0n)), Equal.trans(Nat, Pair.snd(Nat, Nat, Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n)), Pair.snd(Nat, Nat, Nat.divmod.go(x, q, 1n, 0n)), Nat.mod(x, 1n+q), Equal.cong(Nat, Nat, z => Pair.snd(Nat, Nat, Nat.divmod.go(x, z, 1n, 0n)), Nat.add(q, 0n), q, pb.add_zero(q)), pb.snd_go(x, q, 1n, 0n, 0n)))
+  Equal.trans(Nat, Pair.snd(Nat, Nat, Nat.divmod.go(1n+Nat.add(q, x), q, 0n, 0n)), Pair.snd(Nat, Nat, Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n)), Nat.mod(x, 1n+q), Equal.cong(Nat & Nat, Nat, p => Pair.snd(Nat, Nat, p), Nat.divmod.go(1n+Nat.add(q, x), q, 0n, 0n), Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n), pb.go_skip(q, x, 0n, 0n)), Equal.trans(Nat, Pair.snd(Nat, Nat, Nat.divmod.go(x, Nat.add(q, 0n), 1n, 0n)), Pair.snd(Nat, Nat, Nat.divmod.go(x, q, 1n, 0n)), Nat.mod(x, 1n+q), Equal.cong(Nat, Nat, z => Pair.snd(Nat, Nat, Nat.divmod.go(x, z, 1n, 0n)), Nat.add(q, 0n), q, UL.nat_add_zero(q)), pb.snd_go(x, q, 1n, 0n, 0n)))
 
 # Lists of bytes
 
@@ -171,7 +157,7 @@ def pb.piece(t: List<&2, U32>, +x: U32, +r: List<&2, U32>, +n: Nat, +i: Nat, +cu
         {==}
     case Con{+y, +t2}:
       +h => %Equal.sym(Bool, Nat.is_eq(1n+i, n), False{}, pb.notfull(i, B.len(t2), n)(h)) : {pb.ch(Con{y, B.append(t2, r)}, n, _, Con{x, cur}, i, acc) == Md.cr.chunks(r, n, 0n, Nil{}, Con{St.cr.rev_onto(St.cr.rev_onto(t2, Con{y, Con{x, cur}}), Nil{}), acc}) : List<&2, List<&2, U32>>}
-        pb.piece(t2, y, r, n, 1n+i, Con{x, cur}, acc)(Equal.trans(Nat, 1n+Nat.add(i, 1n+B.len(t2)), Nat.add(i, 2n+B.len(t2)), n, Equal.sym(Nat, Nat.add(i, 2n+B.len(t2)), 1n+Nat.add(i, 1n+B.len(t2)), pb.add_succ(i, 1n+B.len(t2))), h))
+        pb.piece(t2, y, r, n, 1n+i, Con{x, cur}, acc)(Equal.trans(Nat, 1n+Nat.add(i, 1n+B.len(t2)), Nat.add(i, 2n+B.len(t2)), n, Equal.sym(Nat, Nat.add(i, 2n+B.len(t2)), 1n+Nat.add(i, 1n+B.len(t2)), UL.nat_add_succ(i, 1n+B.len(t2))), h))
 
 # a piece p of 1 + q bytes, from the start of a piece
 def pb.piece0(p: List<&2, U32>, +r: List<&2, U32>, +q: Nat, +acc: List<&2, List<&2, U32>>) -> {B.len(p) == 1n+q : Nat} -> {Md.cr.chunks(B.append(p, r), 1n+q, 0n, Nil{}, acc) == Md.cr.chunks(r, 1n+q, 0n, Nil{}, Con{p, acc}) : List<&2, List<&2, U32>>}:

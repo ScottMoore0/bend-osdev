@@ -22,6 +22,10 @@ import ./proof_list.bend as AL
 import ./proof_u32.bend as AU
 import ./proof_enc.bend as PE
 import ./proof_num.bend as PN
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def pw.len(xs: List<&2, U32>) -> Nat:
   List.length(&2, U32, xs)
@@ -78,17 +82,17 @@ def pw.lb(l: L.A1Len, xs: List<&2, U32>) -> Bool:
       True{}
 
 def pw.le_succ_mono(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
-  AN.an.le_trans(a, b, 1n+b, h, AN.an.le_succ(b))
+  UO.nat_le_trans(a, b, 1n+b, h, AN.an.le_succ(b))
 
 # Spans
 
 def pw.span_cons(x: N.Asn1Node, +ns: List<&2, N.Asn1Node>) -> {N.a1.span_list(Con{x, ns}) == Nat.add(N.a1.span_list([x]), N.a1.span_list(ns)) : Nat}:
   match x:
     case N.Asn1Prim{t, +c}:
-      %Equal.sym(Nat, Nat.add(B.Octets.len(c), 0n), B.Octets.len(c), AN.an.add_zero(B.Octets.len(c))) : {Nat.add(2n, Nat.add(B.Octets.len(c), N.a1.span_list(ns))) == Nat.add(Nat.add(2n, _), N.a1.span_list(ns)) : Nat}
+      %Equal.sym(Nat, Nat.add(B.Octets.len(c), 0n), B.Octets.len(c), UL.nat_add_zero(B.Octets.len(c))) : {Nat.add(2n, Nat.add(B.Octets.len(c), N.a1.span_list(ns))) == Nat.add(Nat.add(2n, _), N.a1.span_list(ns)) : Nat}
       {==}
     case N.Asn1Cons{t, +xs}:
-      %Equal.sym(Nat, Nat.add(N.a1.span_list(xs), 0n), N.a1.span_list(xs), AN.an.add_zero(N.a1.span_list(xs))) : {Nat.add(2n, Nat.add(N.a1.span_list(xs), N.a1.span_list(ns))) == Nat.add(Nat.add(2n, _), N.a1.span_list(ns)) : Nat}
+      %Equal.sym(Nat, Nat.add(N.a1.span_list(xs), 0n), N.a1.span_list(xs), UL.nat_add_zero(N.a1.span_list(xs))) : {Nat.add(2n, Nat.add(N.a1.span_list(xs), N.a1.span_list(ns))) == Nat.add(Nat.add(2n, _), N.a1.span_list(ns)) : Nat}
       {==}
 
 def pw.rb_mono(res: Result<&2, &2, E.Asn1Error, A.A1Out>, +k: Nat, +k2: Nat, +hk: {Nat.is_le(k, k2) == True{} : Bool}, +h: {pw.rb(res, k) == True{} : Bool}) -> {pw.rb(res, k2) == True{} : Bool}:
@@ -96,7 +100,7 @@ def pw.rb_mono(res: Result<&2, &2, E.Asn1Error, A.A1Out>, +k: Nat, +k2: Nat, +hk
     case Fail{e}:
       {==}
     case Done{A.A1Out{+ns, +rest}}:
-      AN.an.le_trans(Nat.add(N.a1.span_list(ns), List.length(&2, U32, rest)), k, k2, h, hk)
+      UO.nat_le_trans(Nat.add(N.a1.span_list(ns), List.length(&2, U32, rest)), k, k2, h, hk)
 
 def pw.rb_more(a: Result<&2, &2, E.Asn1Error, N.Asn1Node>, b: Result<&2, &2, E.Asn1Error, A.A1Out>, +k1: Nat, +k2: Nat, +ha: {pw.nb(a, k1) == True{} : Bool}, +hb: {pw.rb(b, k2) == True{} : Bool}) -> {pw.rb(A.a1.more(a, b), Nat.add(k1, k2)) == True{} : Bool}:
   match a b:
@@ -109,7 +113,7 @@ def pw.rb_more(a: Result<&2, &2, E.Asn1Error, N.Asn1Node>, b: Result<&2, &2, E.A
       +sn = N.a1.span_list(ns)
       +lr = List.length(&2, U32, rest)
       %Equal.sym(Nat, N.a1.span_list(Con{x, ns}), Nat.add(sx, sn), pw.span_cons(x, ns)) : {Nat.is_le(Nat.add(_, lr), Nat.add(k1, k2)) == True{} : Bool}
-      %Equal.sym(Nat, Nat.add(Nat.add(sx, sn), lr), Nat.add(sx, Nat.add(sn, lr)), AN.an.add_assoc(sx, sn, lr)) : {Nat.is_le(_, Nat.add(k1, k2)) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(Nat.add(sx, sn), lr), Nat.add(sx, Nat.add(sn, lr)), UL.nat_add_assoc(sx, sn, lr)) : {Nat.is_le(_, Nat.add(k1, k2)) == True{} : Bool}
       AN.an.le_add2(sx, Nat.add(sn, lr), k1, k2, ha, hb)
 
 def pw.rb_one(a: Result<&2, &2, E.Asn1Error, N.Asn1Node>, +rest: List<&2, U32>, +k1: Nat, +ha: {pw.nb(a, k1) == True{} : Bool}) -> {pw.rb(A.a1.one(a, rest), Nat.add(k1, List.length(&2, U32, rest))) == True{} : Bool}:
@@ -124,7 +128,7 @@ def pw.rb_one(a: Result<&2, &2, E.Asn1Error, N.Asn1Node>, +rest: List<&2, U32>, 
 def pw.nb_pick(ok: Bool, +t: T.Asn1Tag, +o: B.Octets) -> {pw.nb(A.a1.mk_prim.pick(ok, t, o), N.a1.span_list([N.Asn1Prim{t, o}])) == True{} : Bool}:
   match ok:
     case True{}:
-      AN.an.le_refl(N.a1.span_list([N.Asn1Prim{t, o}]))
+      UL.nat_le_refl(N.a1.span_list([N.Asn1Prim{t, o}]))
     case False{}:
       {==}
 
@@ -134,7 +138,7 @@ def pw.nb_prim(+r: R.Asn1Rules, +t: T.Asn1Tag, +o: B.Octets) -> {pw.nb(A.a1.mk_p
 def pw.nb_set(ok: Bool, +t: T.Asn1Tag, +xs: List<&2, N.Asn1Node>, +k: Nat, +hk: {Nat.is_le(N.a1.span_list(xs), k) == True{} : Bool}) -> {pw.nb(A.a1.mk_cons.set(ok, t, xs), Nat.add(2n, k)) == True{} : Bool}:
   match ok:
     case True{}:
-      %Equal.sym(Nat, Nat.add(N.a1.span_list(xs), 0n), N.a1.span_list(xs), AN.an.add_zero(N.a1.span_list(xs))) : {Nat.is_le(Nat.add(2n, _), Nat.add(2n, k)) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(N.a1.span_list(xs), 0n), N.a1.span_list(xs), UL.nat_add_zero(N.a1.span_list(xs))) : {Nat.is_le(Nat.add(2n, _), Nat.add(2n, k)) == True{} : Bool}
       hk
     case False{}:
       {==}
@@ -152,7 +156,7 @@ def pw.nb_cons(+r: R.Asn1Rules, +t: T.Asn1Tag, inner: Result<&2, &2, E.Asn1Error
       {==}
     case Done{A.A1Out{+xs, +rest}}:
       +sx = N.a1.span_list(xs)
-      pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, k, AN.an.le_trans(sx, Nat.add(sx, List.length(&2, U32, rest)), k, AN.an.le_add(sx, List.length(&2, U32, rest)), h))
+      pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, k, UO.nat_le_trans(sx, Nat.add(sx, List.length(&2, U32, rest)), k, UO.nat_le_add_r(sx, List.length(&2, U32, rest)), h))
 
 # an indefinite constructed element: its contents, and what follows its
 # end-of-contents octets, fit in what follows its header
@@ -163,7 +167,7 @@ def pw.indef_one(+r: R.Asn1Rules, +t: T.Asn1Tag, inner: Result<&2, &2, E.Asn1Err
     case Done{A.A1Out{+xs, +r2}}:
       +sx = N.a1.span_list(xs)
       +l2 = List.length(&2, U32, r2)
-      +hn = pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, sx, AN.an.le_refl(sx))
+      +hn = pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, sx, UL.nat_le_refl(sx))
       +ho = pw.rb_one(A.a1.mk_cons.form(R.a1.form_ok(r, t, True{}), r, t, xs), r2, Nat.add(2n, sx), hn)
       pw.rb_mono(A.a1.one(A.a1.mk_cons.form(R.a1.form_ok(r, t, True{}), r, t, xs), r2), Nat.add(Nat.add(2n, sx), l2), Nat.add(2n, k), h, ho)
 
@@ -174,7 +178,7 @@ def pw.indef_more(+r: R.Asn1Rules, +t: T.Asn1Tag, +mode: A.A1Mode, +g: Nat, inne
     case Done{A.A1Out{+xs, +r2}}:
       +sx = N.a1.span_list(xs)
       +l2 = List.length(&2, U32, r2)
-      +hn = pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, sx, AN.an.le_refl(sx))
+      +hn = pw.nb_form(R.a1.form_ok(r, t, True{}), r, t, xs, sx, UL.nat_le_refl(sx))
       +hm = pw.rb_more(A.a1.mk_cons.form(R.a1.form_ok(r, t, True{}), r, t, xs), A.a1.dec(g, r, mode, A.a1.head(r, r2)), Nat.add(2n, sx), l2, hn, ih(r2))
       pw.rb_mono(A.a1.more(A.a1.mk_cons.form(R.a1.form_ok(r, t, True{}), r, t, xs), A.a1.dec(g, r, mode, A.a1.head(r, r2))), Nat.add(Nat.add(2n, sx), l2), Nat.add(2n, k), h, hm)
 
@@ -183,7 +187,7 @@ def pw.indef_more(+r: R.Asn1Rules, +t: T.Asn1Tag, +mode: A.A1Mode, +g: Nat, inne
 def pw.drop_le(k: Nat, xs: List<&2, U32>) -> {Nat.is_le(List.length(&2, U32, B.drop(k, xs)), List.length(&2, U32, xs)) == True{} : Bool}:
   match k xs:
     case 0n _:
-      AN.an.le_refl(List.length(&2, U32, xs))
+      UL.nat_le_refl(List.length(&2, U32, xs))
     case 1n+j Nil{}:
       {==}
     case 1n+ +j Con{b, +t}:
@@ -217,7 +221,7 @@ def pw.r128_mb(t: List<&2, U32>, more: Bool, k: Nat, +acc: Nat) -> {pw.mb(Nu.a1.
     case Nil{} True{} _:
       {==}
     case Con{x, +u} False{} _:
-      AN.an.le_refl(1n+List.length(&2, U32, u))
+      UL.nat_le_refl(1n+List.length(&2, U32, u))
     case Con{x, u} True{} 0n:
       {==}
     case Con{+x, +u} True{} 1n+ +j:
@@ -257,14 +261,14 @@ def pw.lres(is127: Bool, +k: Nat, +y: U32, +t: List<&2, U32>) -> {pw.lb(L.a1.len
 def pw.llong(+k: Nat, +y: U32, +t: List<&2, U32>) -> {pw.lb(L.a1.len.long(k, y, t), Con{y, t}) == True{} : Bool}:
   match k:
     case 0n:
-      AN.an.le_lt_succ(List.length(&2, U32, t), List.length(&2, U32, t), AN.an.le_refl(List.length(&2, U32, t)))
+      AN.an.le_lt_succ(List.length(&2, U32, t), List.length(&2, U32, t), UL.nat_le_refl(List.length(&2, U32, t)))
     case 1n+j:
       pw.lres(Nat.is_eq(1n+j, 127n), 1n+j, y, t)
 
 def pw.lfirst(lt: Bool, +v: Nat, +y: U32, +t: List<&2, U32>) -> {pw.lb(L.a1.len.first(lt, v, y, t), Con{y, t}) == True{} : Bool}:
   match lt:
     case True{}:
-      AN.an.le_lt_succ(List.length(&2, U32, t), List.length(&2, U32, t), AN.an.le_refl(List.length(&2, U32, t)))
+      AN.an.le_lt_succ(List.length(&2, U32, t), List.length(&2, U32, t), UL.nat_le_refl(List.length(&2, U32, t)))
     case False{}:
       pw.llong(Nat.sub(v, 128n), y, t)
 
@@ -283,10 +287,10 @@ def pw.fit(ok: Bool, +t: T.Asn1Tag, cons: Bool, +n: Nat, +rest: List<&2, U32>) -
       AN.an.le_zero(Nat.add(2n, List.length(&2, U32, rest)))
     case True{} False{}:
       %Equal.sym(Nat, Nat.add(List.length(&2, U32, B.take(n, rest)), List.length(&2, U32, B.drop(n, rest))), List.length(&2, U32, rest), pw.take_drop_len(n, rest)) : {Nat.is_le(Nat.add(2n, _), Nat.add(2n, List.length(&2, U32, rest))) == True{} : Bool}
-      AN.an.le_refl(List.length(&2, U32, rest))
+      UL.nat_le_refl(List.length(&2, U32, rest))
     case True{} True{}:
       %Equal.sym(Nat, Nat.add(List.length(&2, U32, B.take(n, rest)), List.length(&2, U32, B.drop(n, rest))), List.length(&2, U32, rest), pw.take_drop_len(n, rest)) : {Nat.is_le(Nat.add(2n, _), Nat.add(2n, List.length(&2, U32, rest))) == True{} : Bool}
-      AN.an.le_refl(List.length(&2, U32, rest))
+      UL.nat_le_refl(List.length(&2, U32, rest))
 
 def pw.min(ok: Bool, +t: T.Asn1Tag, +cons: Bool, +n: Nat, +rest: List<&2, U32>) -> {Nat.is_le(pw.hlen(A.a1.head.min(ok, t, cons, n, rest)), Nat.add(2n, List.length(&2, U32, rest))) == True{} : Bool}:
   match ok:
@@ -302,22 +306,22 @@ def pw.indef(allowed: Bool, cons: Bool, +t: T.Asn1Tag, +rest: List<&2, U32>) -> 
     case True{} False{}:
       AN.an.le_zero(Nat.add(2n, List.length(&2, U32, rest)))
     case True{} True{}:
-      AN.an.le_refl(Nat.add(2n, List.length(&2, U32, rest)))
+      UL.nat_le_refl(Nat.add(2n, List.length(&2, U32, rest)))
 
 def pw.hl_len(+r: R.Asn1Rules, +t: T.Asn1Tag, +cons: Bool, l: L.A1Len, +xs: List<&2, U32>, +hl: {pw.lb(l, xs) == True{} : Bool}) -> {Nat.is_le(pw.hlen(A.a1.head.len(r, t, cons, l)), Nat.add(1n, List.length(&2, U32, xs))) == True{} : Bool}:
   match l:
     case L.A1LErr{e}:
       AN.an.le_zero(Nat.add(1n, List.length(&2, U32, xs)))
     case L.A1LIndef{+rest}:
-      AN.an.le_trans(pw.hlen(A.a1.head.indef(R.Asn1Rules.indefinite(r), cons, t, rest)), Nat.add(2n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, xs)), pw.indef(R.Asn1Rules.indefinite(r), cons, t, rest), pw.lt_le_succ(List.length(&2, U32, rest), List.length(&2, U32, xs), hl))
+      UO.nat_le_trans(pw.hlen(A.a1.head.indef(R.Asn1Rules.indefinite(r), cons, t, rest)), Nat.add(2n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, xs)), pw.indef(R.Asn1Rules.indefinite(r), cons, t, rest), pw.lt_le_succ(List.length(&2, U32, rest), List.length(&2, U32, xs), hl))
     case L.A1LDef{+n, +u, +rest}:
       +ok = R.a1.when(R.Asn1Rules.min_length(r), Bool.and(L.a1.len_ok(n), Nu.a1.leq(L.a1.len_bytes(n), u)))
-      AN.an.le_trans(pw.hlen(A.a1.head.min(ok, t, cons, n, rest)), Nat.add(2n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, xs)), pw.min(ok, t, cons, n, rest), pw.lt_le_succ(List.length(&2, U32, rest), List.length(&2, U32, xs), hl))
+      UO.nat_le_trans(pw.hlen(A.a1.head.min(ok, t, cons, n, rest)), Nat.add(2n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, xs)), pw.min(ok, t, cons, n, rest), pw.lt_le_succ(List.length(&2, U32, rest), List.length(&2, U32, xs), hl))
 
 def pw.eoc2(z: Bool, +t: List<&2, U32>) -> {Nat.is_le(pw.hlen(A.a1.head.eoc2(z, t)), Nat.add(2n, List.length(&2, U32, t))) == True{} : Bool}:
   match z:
     case True{}:
-      AN.an.le_refl(Nat.add(2n, List.length(&2, U32, t)))
+      UL.nat_le_refl(Nat.add(2n, List.length(&2, U32, t)))
     case False{}:
       AN.an.le_zero(Nat.add(2n, List.length(&2, U32, t)))
 
@@ -352,7 +356,7 @@ def pw.num(+r: R.Asn1Rules, +c: T.Asn1Class, +cons: Bool, +x: U32, m: Maybe<&2, 
       AN.an.le_zero(Nat.add(1n, List.length(&2, U32, t)))
     case Some{Nu.A1Num{+n, +u, +rest}}:
       +ids : List<&2, U32> = Con{x, u}
-      AN.an.le_trans(pw.hlen(A.a1.head.tag(r, c, cons, n, ids, rest)), Nat.add(1n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, t)), pw.tag2(Nu.a1.leq(T.a1.id_bytes(c, cons, n), ids), r, c, cons, n, rest), hm)
+      UO.nat_le_trans(pw.hlen(A.a1.head.tag(r, c, cons, n, ids, rest)), Nat.add(1n, List.length(&2, U32, rest)), Nat.add(1n, List.length(&2, U32, t)), pw.tag2(Nu.a1.leq(T.a1.id_bytes(c, cons, n), ids), r, c, cons, n, rest), hm)
 
 def pw.hi(hi: Bool, +r: R.Asn1Rules, +c: T.Asn1Class, +cons: Bool, +low: Nat, +x: U32, +t: List<&2, U32>) -> {Nat.is_le(pw.hlen(A.a1.head.hi(hi, r, c, cons, low, x, t)), Nat.add(1n, List.length(&2, U32, t))) == True{} : Bool}:
   match hi:
@@ -520,12 +524,12 @@ def pw.olen_of(+cs: List<&2, U32>) -> {B.Octets.len(B.Octets.of_list(cs)) == Lis
 # a primitive element's span and what follows it fit where its header said
 def pw.prim_le(+t: T.Asn1Tag, +cs: List<&2, U32>, +rest: List<&2, U32>, +xs: List<&2, U32>, +hh: {Nat.is_le(Nat.add(2n, Nat.add(List.length(&2, U32, cs), List.length(&2, U32, rest))), List.length(&2, U32, xs)) == True{} : Bool}) -> {Nat.is_le(Nat.add(N.a1.span_list([N.Asn1Prim{t, B.Octets.of_list(cs)}]), List.length(&2, U32, rest)), List.length(&2, U32, xs)) == True{} : Bool}:
   +lo = B.Octets.len(B.Octets.of_list(cs))
-  %Equal.sym(Nat, Nat.add(lo, 0n), lo, AN.an.add_zero(lo)) : {Nat.is_le(Nat.add(Nat.add(2n, _), List.length(&2, U32, rest)), List.length(&2, U32, xs)) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(lo, 0n), lo, UL.nat_add_zero(lo)) : {Nat.is_le(Nat.add(Nat.add(2n, _), List.length(&2, U32, rest)), List.length(&2, U32, xs)) == True{} : Bool}
   %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(cs)), List.length(&2, U32, cs), pw.olen_of(cs)) : {Nat.is_le(Nat.add(Nat.add(2n, _), List.length(&2, U32, rest)), List.length(&2, U32, xs)) == True{} : Bool}
   hh
 
 def pw.eoc_le(+rest: List<&2, U32>, +xs: List<&2, U32>, +hh: {Nat.is_le(Nat.add(2n, List.length(&2, U32, rest)), List.length(&2, U32, xs)) == True{} : Bool}) -> {Nat.is_le(List.length(&2, U32, rest), List.length(&2, U32, xs)) == True{} : Bool}:
-  AN.an.le_trans(List.length(&2, U32, rest), Nat.add(2n, List.length(&2, U32, rest)), List.length(&2, U32, xs), AN.an.le_add_l(2n, List.length(&2, U32, rest)), hh)
+  UO.nat_le_trans(List.length(&2, U32, rest), Nat.add(2n, List.length(&2, U32, rest)), List.length(&2, U32, xs), UL.nat_le_add(List.length(&2, U32, rest), 2n), hh)
 
 # whatever the decoder answers from a header within xs fits in xs
 def pw.dec(f: Nat, +r: R.Asn1Rules, mode: A.A1Mode, h: A.A1Head, +xs: List<&2, U32>, +hh: {Nat.is_le(pw.hlen(h), List.length(&2, U32, xs)) == True{} : Bool}) -> {pw.rb(A.a1.dec(f, r, mode, h), List.length(&2, U32, xs)) == True{} : Bool}:
@@ -647,11 +651,11 @@ def pw.top_inv(+r: R.Asn1Rules, res: Result<&2, &2, E.Asn1Error, A.A1Out>, -n: N
       Empty.absurd({Nat.is_le(N.a1.span_list([n]), k) == True{} : Bool}, pw.fd(E.Asn1Truncated{}, n, e))
     case Done{A.A1Out{Con{+m, Nil{}}, Nil{}}}:
       %Equal.cong(Result<&2, &2, E.Asn1Error, N.Asn1Node>, N.Asn1Node, z => pw.dval(z, m), Done{m}, Done{n}, e) : {Nat.is_le(N.a1.span_list([_]), k) == True{} : Bool}
-      %AN.an.add_zero(N.a1.span_list([m])) : {Nat.is_le(_, k) == True{} : Bool}
+      %UL.nat_add_zero(N.a1.span_list([m])) : {Nat.is_le(_, k) == True{} : Bool}
       hrb
     case Done{A.A1Out{Con{+m, Nil{}}, Con{y, +t}}}:
       %pw.end_inv(R.Asn1Rules.trailing(r), m, n, e) : {Nat.is_le(N.a1.span_list([_]), k) == True{} : Bool}
-      AN.an.le_trans(N.a1.span_list([m]), Nat.add(N.a1.span_list([m]), 1n+List.length(&2, U32, t)), k, AN.an.le_add(N.a1.span_list([m]), 1n+List.length(&2, U32, t)), hrb)
+      UO.nat_le_trans(N.a1.span_list([m]), Nat.add(N.a1.span_list([m]), 1n+List.length(&2, U32, t)), k, UO.nat_le_add_r(N.a1.span_list([m]), 1n+List.length(&2, U32, t)), hrb)
 
 def pw.prdisc(r: Result<&2, &2, E.Asn1Error, A.Asn1Read>) -> Type:
   match r:
@@ -693,7 +697,7 @@ def pw.read_inv(res: Result<&2, &2, E.Asn1Error, A.A1Out>, -n: N.Asn1Node, -rest
       +ss = N.a1.span_list(ms)
       +lr = List.length(&2, U32, rl)
       +h1 = Equal.trans(Bool, Nat.is_le(Nat.add(Nat.add(sm, ss), lr), k), Nat.is_le(Nat.add(N.a1.span_list(Con{m, ms}), lr), k), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(Nat.add(z, lr), k), Nat.add(sm, ss), N.a1.span_list(Con{m, ms}), Equal.sym(Nat, N.a1.span_list(Con{m, ms}), Nat.add(sm, ss), pw.span_cons(m, ms))), hrb)
-      AN.an.le_trans(Nat.add(sm, lr), Nat.add(Nat.add(sm, ss), lr), k, AN.an.le_add_mono_r(lr, sm, Nat.add(sm, ss), AN.an.le_add(sm, ss)), h1)
+      UO.nat_le_trans(Nat.add(sm, lr), Nat.add(Nat.add(sm, ss), lr), k, AN.an.le_add_mono_r(lr, sm, Nat.add(sm, ss), UO.nat_le_add_r(sm, ss)), h1)
 
 def pw.ardisc(r: Result<&2, &2, E.Asn1Error, List<&2, N.Asn1Node>>) -> Type:
   match r:
@@ -719,7 +723,7 @@ def pw.all_inv(res: Result<&2, &2, E.Asn1Error, A.A1Out>, -ns: List<&2, N.Asn1No
       Empty.absurd({Nat.is_le(N.a1.span_list(ns), k) == True{} : Bool}, pw.afd(x, ns, e))
     case Done{A.A1Out{+ms, +rl}}:
       %Equal.cong(Result<&2, &2, E.Asn1Error, List<&2, N.Asn1Node>>, List<&2, N.Asn1Node>, z => pw.aval(z, ms), Done{ms}, Done{ns}, e) : {Nat.is_le(N.a1.span_list(_), k) == True{} : Bool}
-      AN.an.le_trans(N.a1.span_list(ms), Nat.add(N.a1.span_list(ms), List.length(&2, U32, rl)), k, AN.an.le_add(N.a1.span_list(ms), List.length(&2, U32, rl)), hrb)
+      UO.nat_le_trans(N.a1.span_list(ms), Nat.add(N.a1.span_list(ms), List.length(&2, U32, rl)), k, UO.nat_le_add_r(N.a1.span_list(ms), List.length(&2, U32, rl)), hrb)
 
 def pw.blen(+b: B.Octets) -> {List.length(&2, U32, B.Octets.to_list(b)) == B.Octets.len(b) : Nat}:
   Equal.sym(Nat, B.Octets.len(b), List.length(&2, U32, B.Octets.to_list(b)), BL.octets_len_list(b))

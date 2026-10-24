@@ -4,6 +4,10 @@
 # names and arcs are unique (one def per entry), and induction over any list
 # of entries for the rest.
 import Base
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 import ./oid.bend as O
 import ./registry.bend as R
 import ./LAWS_registry.bend as Laws
@@ -78,27 +82,6 @@ def rp.ns(-y: R.OidEntry, e: {None{} == Some{y} : Maybe<&2, R.OidEntry>}) -> Emp
 
 # ---------------------------------------------------------------- equality with itself
 
-def rp.fin_self(b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def rp.word_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{}, Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, rp.word_self(p, t)), rp.fin_self(b))
-
-def rp.u32_self(a: U32) -> {U32.cmp(a, a) == EQ{} : Cmp}:
-  match a:
-    case U32{+w}:
-      rp.word_self(32n, w)
-
 def rp.rec_snd(a: Char, b: Char, rr: (String & String) & Cmp) -> {Pair.snd(String & String, Cmp, String.cmp.rec(a, b, rr)) == Pair.snd(String & String, Cmp, rr) : Cmp}:
   match rr:
     case (p, r):
@@ -113,7 +96,7 @@ def rp.str_self(s: String) -> {Pair.snd(String & String, Cmp, String.cmp(s, s)) 
     case SCon{h, +t}:
       match h:
         case Chr{+x}:
-          %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, rp.u32_self(x)) : {Pair.snd(String & String, Cmp, String.cmp.fin(t, t, ((Chr{x}, Chr{x}), _))) == EQ{} : Cmp}
+          %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {Pair.snd(String & String, Cmp, String.cmp.fin(t, t, ((Chr{x}, Chr{x}), _))) == EQ{} : Cmp}
           Equal.trans(Cmp, Pair.snd(String & String, Cmp, String.cmp.rec(Chr{x}, Chr{x}, String.cmp(t, t))), Pair.snd(String & String, Cmp, String.cmp(t, t)), EQ{}, rp.rec_snd(Chr{x}, Chr{x}, String.cmp(t, t)), rp.str_self(t))
 
 def rp.seq_self(+s: String) -> {String.eq(s, s) == True{} : Bool}:
@@ -371,20 +354,6 @@ def rp.founda(es: List<&2, R.OidEntry>, i: Nat, +e: R.OidEntry, +hd: {rp.dista(e
 
 # ---------------------------------------------------------------- the registry, entry by entry
 
-def rp.add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, 0n), p, rp.add_zero(p))
-
-def rp.add_succ(m: Nat, +b: Nat) -> {Nat.add(m, 1n+b) == 1n+Nat.add(m, b) : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+ +q:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(q, 1n+b), 1n+Nat.add(q, b), rp.add_succ(q, b))
-
 def rp.lt_add(k: Nat, +m: Nat) -> {Nat.is_lt(k, Nat.add(k, 1n+m)) == True{} : Bool}:
   match k:
     case 0n:
@@ -411,11 +380,11 @@ def rp.upton(n: Nat, +k: Nat) -> Bool:
 def rp.bridgen(n: Nat, +k: Nat, +h: {rp.upton(n, k) == True{} : Bool}, +hl: {Nat.add(k, n) == List.length(&2, R.OidEntry, R.Oid.registry()) : Nat}) -> {rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), k)) == True{} : Bool}:
   match n:
     case 0n:
-      %Equal.sym(Nat, k, List.length(&2, R.OidEntry, R.Oid.registry()), Equal.trans(Nat, k, Nat.add(k, 0n), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 0n), k, rp.add_zero(k)), hl)) : {rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), _)) == True{} : Bool}
+      %Equal.sym(Nat, k, List.length(&2, R.OidEntry, R.Oid.registry()), Equal.trans(Nat, k, Nat.add(k, 0n), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 0n), k, UL.nat_add_zero(k)), hl)) : {rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), _)) == True{} : Bool}
       %Equal.sym(List<&2, R.OidEntry>, List.drop(&2, R.OidEntry, R.Oid.registry(), List.length(&2, R.OidEntry, R.Oid.registry())), Nil{}, rp.drop_len(R.Oid.registry())) : {rp.distn(_) == True{} : Bool}
       {==}
     case 1n+ +m:
-      Equal.trans(Bool, rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), Bool.and(rp.alln(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k))), True{}, rp.chainn(R.Oid.registry(), k, Equal.trans(Bool, Nat.is_lt(k, List.length(&2, R.OidEntry, R.Oid.registry())), Nat.is_lt(k, Nat.add(k, 1n+m)), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(k, z), List.length(&2, R.OidEntry, R.Oid.registry()), Nat.add(k, 1n+m), Equal.sym(Nat, Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), hl)), rp.lt_add(k, m))), rp.and_i(rp.alln(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), Equal.trans(Bool, rp.alln(rp.at(k), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), True{}, rp.alln_i(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.and_l(rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.upton(m, 1n+k), h)), rp.bridgen(m, 1n+k, rp.and_r(rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.upton(m, 1n+k), h), Equal.trans(Nat, 1n+Nat.add(k, m), Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 1n+m), 1n+Nat.add(k, m), rp.add_succ(k, m)), hl))))
+      Equal.trans(Bool, rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), Bool.and(rp.alln(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k))), True{}, rp.chainn(R.Oid.registry(), k, Equal.trans(Bool, Nat.is_lt(k, List.length(&2, R.OidEntry, R.Oid.registry())), Nat.is_lt(k, Nat.add(k, 1n+m)), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(k, z), List.length(&2, R.OidEntry, R.Oid.registry()), Nat.add(k, 1n+m), Equal.sym(Nat, Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), hl)), rp.lt_add(k, m))), rp.and_i(rp.alln(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.distn(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), Equal.trans(Bool, rp.alln(rp.at(k), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), True{}, rp.alln_i(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.and_l(rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.upton(m, 1n+k), h)), rp.bridgen(m, 1n+k, rp.and_r(rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.upton(m, 1n+k), h), Equal.trans(Nat, 1n+Nat.add(k, m), Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 1n+m), 1n+Nat.add(k, m), UL.nat_add_succ(k, m)), hl))))
 
 # one step of rp.upton, without computing it
 def rp.unfn(+n: Nat, +k: Nat) -> {rp.upton(1n+n, k) == Bool.and(rp.allni(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.upton(n, 1n+k)) : Bool}:
@@ -1202,11 +1171,11 @@ def rp.uptoa(n: Nat, +k: Nat) -> Bool:
 def rp.bridgea(n: Nat, +k: Nat, +h: {rp.uptoa(n, k) == True{} : Bool}, +hl: {Nat.add(k, n) == List.length(&2, R.OidEntry, R.Oid.registry()) : Nat}) -> {rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), k)) == True{} : Bool}:
   match n:
     case 0n:
-      %Equal.sym(Nat, k, List.length(&2, R.OidEntry, R.Oid.registry()), Equal.trans(Nat, k, Nat.add(k, 0n), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 0n), k, rp.add_zero(k)), hl)) : {rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), _)) == True{} : Bool}
+      %Equal.sym(Nat, k, List.length(&2, R.OidEntry, R.Oid.registry()), Equal.trans(Nat, k, Nat.add(k, 0n), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 0n), k, UL.nat_add_zero(k)), hl)) : {rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), _)) == True{} : Bool}
       %Equal.sym(List<&2, R.OidEntry>, List.drop(&2, R.OidEntry, R.Oid.registry(), List.length(&2, R.OidEntry, R.Oid.registry())), Nil{}, rp.drop_len(R.Oid.registry())) : {rp.dista(_) == True{} : Bool}
       {==}
     case 1n+ +m:
-      Equal.trans(Bool, rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), Bool.and(rp.alla(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k))), True{}, rp.chaina(R.Oid.registry(), k, Equal.trans(Bool, Nat.is_lt(k, List.length(&2, R.OidEntry, R.Oid.registry())), Nat.is_lt(k, Nat.add(k, 1n+m)), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(k, z), List.length(&2, R.OidEntry, R.Oid.registry()), Nat.add(k, 1n+m), Equal.sym(Nat, Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), hl)), rp.lt_add(k, m))), rp.and_i(rp.alla(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), Equal.trans(Bool, rp.alla(rp.at(k), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), True{}, rp.alla_i(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.and_l(rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.uptoa(m, 1n+k), h)), rp.bridgea(m, 1n+k, rp.and_r(rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.uptoa(m, 1n+k), h), Equal.trans(Nat, 1n+Nat.add(k, m), Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 1n+m), 1n+Nat.add(k, m), rp.add_succ(k, m)), hl))))
+      Equal.trans(Bool, rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), Bool.and(rp.alla(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k))), True{}, rp.chaina(R.Oid.registry(), k, Equal.trans(Bool, Nat.is_lt(k, List.length(&2, R.OidEntry, R.Oid.registry())), Nat.is_lt(k, Nat.add(k, 1n+m)), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(k, z), List.length(&2, R.OidEntry, R.Oid.registry()), Nat.add(k, 1n+m), Equal.sym(Nat, Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), hl)), rp.lt_add(k, m))), rp.and_i(rp.alla(rp.hd(List.drop(&2, R.OidEntry, R.Oid.registry(), k)), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.dista(List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), Equal.trans(Bool, rp.alla(rp.at(k), List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), True{}, rp.alla_i(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.and_l(rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.uptoa(m, 1n+k), h)), rp.bridgea(m, 1n+k, rp.and_r(rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.uptoa(m, 1n+k), h), Equal.trans(Nat, 1n+Nat.add(k, m), Nat.add(k, 1n+m), List.length(&2, R.OidEntry, R.Oid.registry()), Equal.sym(Nat, Nat.add(k, 1n+m), 1n+Nat.add(k, m), UL.nat_add_succ(k, m)), hl))))
 
 # one step of rp.uptoa, without computing it
 def rp.unfa(+n: Nat, +k: Nat) -> {rp.uptoa(1n+n, k) == Bool.and(rp.allai(k, List.drop(&2, R.OidEntry, R.Oid.registry(), 1n+k)), rp.uptoa(n, 1n+k)) : Bool}:

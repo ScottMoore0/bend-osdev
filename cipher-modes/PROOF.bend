@@ -18,6 +18,8 @@ import bend-collections@1.0.0.0/src/crypto/aes/aes.bend as A
 import bend-collections@1.0.0.0/src/crypto/aes/types.bend as TT
 import bend-collections@1.0.0.0/src/crypto/aes/sbox.bend as SB
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # How the proofs go. The modes work on blocks; the byte layer splits a byte
 # string into blocks and joins blocks back. The lemmas below show:
@@ -885,20 +887,6 @@ def cbcp.iv(+iv: B.Octets, h: {B.Octets.len(iv) == 16n : Nat}) -> {C.cbc.iv(iv) 
 # layers built from them are the structural byte layers, and so are the
 # public defs (Cbc.encrypt == Cbc.encrypt.ref, ...).
 
-def tr.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+q:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(q, 1n+n), 1n+Nat.add(q, n), tr.add_succ(q, n))
-
-def tr.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+q:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(q, 0n), q, tr.add_zero(q))
-
 def tr.rr(xs: List<&2, M.CmBlock>, acc: List<&2, M.CmBlock>, b: List<&2, M.CmBlock>) -> {M.cm.blocks.rev_onto(M.cm.blocks.rev_onto(xs, acc), b) == M.cm.blocks.rev_onto(acc, List.append(&2, M.CmBlock, xs, b)) : List<&2, M.CmBlock>}:
   match xs:
     case Nil{}:
@@ -914,10 +902,10 @@ def tr.len_go(+bs: List<&2, M.CmBlock>, +n: Nat) -> {M.cm.blocks.len.go(bs, n) =
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.trans(Nat, M.cm.blocks.len.go(t, 1n+n), Nat.add(List.length(&2, M.CmBlock, t), 1n+n), 1n+Nat.add(List.length(&2, M.CmBlock, t), n), tr.len_go(t, 1n+n), tr.add_succ(List.length(&2, M.CmBlock, t), n))
+      Equal.trans(Nat, M.cm.blocks.len.go(t, 1n+n), Nat.add(List.length(&2, M.CmBlock, t), 1n+n), 1n+Nat.add(List.length(&2, M.CmBlock, t), n), tr.len_go(t, 1n+n), UL.nat_add_succ(List.length(&2, M.CmBlock, t), n))
 
 def tr.len_eq(+bs: List<&2, M.CmBlock>) -> {List.length(&2, M.CmBlock, bs) == M.cm.blocks.len(bs) : Nat}:
-  Equal.sym(Nat, M.cm.blocks.len(bs), List.length(&2, M.CmBlock, bs), Equal.trans(Nat, M.cm.blocks.len.go(bs, 0n), Nat.add(List.length(&2, M.CmBlock, bs), 0n), List.length(&2, M.CmBlock, bs), tr.len_go(bs, 0n), tr.add_zero(List.length(&2, M.CmBlock, bs))))
+  Equal.sym(Nat, M.cm.blocks.len(bs), List.length(&2, M.CmBlock, bs), Equal.trans(Nat, M.cm.blocks.len.go(bs, 0n), Nat.add(List.length(&2, M.CmBlock, bs), 0n), List.length(&2, M.CmBlock, bs), tr.len_go(bs, 0n), UL.nat_add_zero(List.length(&2, M.CmBlock, bs))))
 
 # Splitting: the blocks so far, reversed in acc, go in front of the
 # structural split's blocks
@@ -1742,22 +1730,6 @@ def li.xor_xor(xs: List<&2, U32>, ys: List<&2, U32>) -> {Nat.is_le(B.len(xs), B.
 def li.len_bytes(+b: M.CmBlock, +rest: List<&2, U32>) -> {B.len(M.cm.bytes_onto(b, rest)) == Nat.add(16n, B.len(rest)) : Nat}:
   {==}
 
-def na.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %na.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def na.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %na.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
 def na.sub_zero(a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
   match a:
     case 0n:
@@ -1769,28 +1741,11 @@ def na.sub_zero(a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
 def na.sub_add(+a: Nat, +b: Nat) -> {Nat.sub(Nat.add(a, b), b) == a : Nat}:
   match b:
     case 0n:
-      %Equal.sym(Nat, Nat.add(a, 0n), a, na.add_zero(a)) : {Nat.sub(_, 0n) == a : Nat}
+      %Equal.sym(Nat, Nat.add(a, 0n), a, UL.nat_add_zero(a)) : {Nat.sub(_, 0n) == a : Nat}
       na.sub_zero(a)
     case 1n+p:
-      %Equal.sym(Nat, Nat.add(a, 1n+p), 1n+Nat.add(a, p), na.add_succ(a, p)) : {Nat.sub(_, 1n+p) == a : Nat}
+      %Equal.sym(Nat, Nat.add(a, 1n+p), 1n+Nat.add(a, p), UL.nat_add_succ(a, p)) : {Nat.sub(_, 1n+p) == a : Nat}
       na.sub_add(a, p)
-
-def na.le_zero(a: Nat) -> {Nat.is_le(0n, a) == True{} : Bool}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+q:
-      {==}
-
-# b <= a + b
-def na.le_add(+a: Nat, +b: Nat) -> {Nat.is_le(b, Nat.add(a, b)) == True{} : Bool}:
-  match b:
-    case 0n:
-      %Equal.sym(Nat, Nat.add(a, 0n), a, na.add_zero(a)) : {Nat.is_le(0n, _) == True{} : Bool}
-      na.le_zero(a)
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(a, 1n+p), 1n+Nat.add(a, p), na.add_succ(a, p)) : {Nat.is_le(1n+p, _) == True{} : Bool}
-      na.le_add(a, p)
 
 def bo.and_r(+a: Bool, +b: Bool) -> {Bool.and(a, b) == True{} : Bool} -> {b == True{} : Bool}:
   match a:
@@ -1946,7 +1901,7 @@ def ccmp.main(~K: Data, ~enc: K -> M.CmBlock -> M.CmBlock, +k: K, +m: Nat, +nonc
         # it is longer than the tag
         %Equal.sym(Nat, B.len(B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce))))))), Nat.add(B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))), m), leb) : {CC.ccm.d2(~K, ~enc, Nat.is_le(m, _), k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce))))))) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
         # 
-        %Equal.sym(Bool, Nat.is_le(m, Nat.add(B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))), m)), True{}, na.le_add(B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))), m)) : {CC.ccm.d2(~K, ~enc, _, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce))))))) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
+        %Equal.sym(Bool, Nat.is_le(m, Nat.add(B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))), m)), True{}, UL.nat_le_add(m, B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))))) : {CC.ccm.d2(~K, ~enc, _, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce))))))) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
         # its body is as long as the message
         %Equal.sym(Nat, B.len(B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce))))))), Nat.add(B.len(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p)))), m), leb) : {CC.ccm.d3(~K, ~enc, k, m, B.Octets.to_list(nonce), B.Octets.to_list(aad), B.append(CC.ccm.xcrypt(~K, ~enc, k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)), M.cm.split(B.Octets.to_list(p))), M.cm.xor_bytes(CC.ccm.tag(~K, ~enc, k, m, Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce), B.Octets.to_list(aad), B.Octets.to_list(p)), M.cm.bytes_of(enc(k, CC.ccm.a0(Nat.sub(15n, B.len(B.Octets.to_list(nonce))), B.Octets.to_list(nonce)))))), CC.ccm.checks(m, B.len(B.Octets.to_list(nonce)), Nat.sub(_, m))) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
         # 

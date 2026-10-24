@@ -13,6 +13,12 @@ import ./proof_nat.bend as AN
 import ./proof_list.bend as AL
 import ./proof_u32.bend as AU
 import ./proof_byte.bend as AB
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # every element of ds is below b
 def pn.all_lt(ds: List<&2, Nat>, +b: Nat) -> Bool:
@@ -64,7 +70,7 @@ def pn.horner_digits(fuel: Nat, lt: Bool, +bp: Nat, +n: Nat) -> {Nu.a1.horner(Nu
       +ds = Nu.a1.digits.go(f, Nat.is_lt(q, 1n+bp), 1n+bp, q)
       %Equal.sym(Nat, Nu.a1.horner(List.append(&2, Nat, ds, [Nat.mod(n, 1n+bp)]), 1n+bp, 0n), Nat.add(Nat.mul(Nu.a1.horner(ds, 1n+bp, 0n), 1n+bp), Nat.mod(n, 1n+bp)), pn.horner_snoc(ds, 1n+bp, 0n, Nat.mod(n, 1n+bp))) : {_ == n : Nat}
       %Equal.sym(Nat, Nu.a1.horner(ds, 1n+bp, 0n), q, pn.horner_digits(f, Nat.is_lt(q, 1n+bp), bp, q)) : {Nat.add(Nat.mul(_, 1n+bp), Nat.mod(n, 1n+bp)) == n : Nat}
-      AN.an.recon(n, bp)
+      UD.nat_div_mod(n, bp)
 
 def pn.horner_digits_top(+bp: Nat, +n: Nat) -> {Nu.a1.horner(Nu.a1.digits(1n+bp, n), 1n+bp, 0n) == n : Nat}:
   pn.horner_digits(n, Nat.is_lt(n, 1n+bp), bp, n)
@@ -96,13 +102,13 @@ def pn.digits_lt(fuel: Nat, lt: Bool, +bp: Nat, +n: Nat, +hl: {Nat.is_lt(n, 2n+b
       +b : Nat = 2n+bp
       +q = Nat.div(n, b)
       +hb = Equal.trans(Bool, Nat.is_le(b, n), Bool.not(Nat.is_lt(n, b)), True{}, pn.le_not_lt(b, n), Equal.cong(Bool, Bool, z => Bool.not(z), Nat.is_lt(n, b), False{}, hl))
-      +hq = AN.an.lt_succ_le(q, f, AN.an.lt_le_trans(q, n, 1n+f, AN.an.div_lt(n, bp, hb), hf))
+      +hq = AN.an.lt_succ_le(q, f, UO.nat_lt_le_trans(q, n, 1n+f, AN.an.div_lt(n, bp, hb), hf))
       +ih = pn.digits_lt(f, Nat.is_lt(q, b), bp, q, {==}, hq)
-      pn.all_lt_app(Nu.a1.digits.go(f, Nat.is_lt(q, b), b, q), [Nat.mod(n, b)], b, ih, AN.an.and_i(Nat.is_lt(Nat.mod(n, b), b), True{}, AN.an.mod_lt(n, 1n+bp), {==}))
+      pn.all_lt_app(Nu.a1.digits.go(f, Nat.is_lt(q, b), b, q), [Nat.mod(n, b)], b, ih, AN.an.and_i(Nat.is_lt(Nat.mod(n, b), b), True{}, UD.nat_mod_lt(n, 1n+bp), {==}))
 
 
 def pn.digits_lt_top(+bp: Nat, +n: Nat) -> {pn.all_lt(Nu.a1.digits(2n+bp, n), 2n+bp) == True{} : Bool}:
-  pn.digits_lt(n, Nat.is_lt(n, 2n+bp), bp, n, {==}, AN.an.le_refl(n))
+  pn.digits_lt(n, Nat.is_lt(n, 2n+bp), bp, n, {==}, UL.nat_le_refl(n))
 
 def pn.digits_ne(fuel: Nat, lt: Bool, +b: Nat, +n: Nat) -> {pn.ne(Nu.a1.digits.go(fuel, lt, b, n)) == True{} : Bool}:
   match fuel lt:
@@ -120,7 +126,7 @@ def pn.digits_ne_top(+b: Nat, +n: Nat) -> {pn.ne(Nu.a1.digits(b, n)) == True{} :
 # Base-128 octets
 
 def pn.lt128_256(+d: Nat, +h: {Nat.is_lt(d, 128n) == True{} : Bool}) -> {Nat.is_lt(d, 256n) == True{} : Bool}:
-  AN.an.lt_le_trans(d, 128n, 256n, h, {==})
+  UO.nat_lt_le_trans(d, 128n, 256n, h, {==})
 
 def pn.lt_add128(+d: Nat, +h: {Nat.is_lt(d, 128n) == True{} : Bool}) -> {Nat.is_lt(Nat.add(128n, d), 256n) == True{} : Bool}:
   h
@@ -157,7 +163,7 @@ def pn.r128_more(+d: Nat, +t: List<&2, U32>, +j: Nat, +acc: Nat, +hd: {Nat.is_lt
   +hv = AB.ab.byte(Nat.add(128n, d), pn.lt_add128(d, hd))
   +want : Maybe<&2, Nu.A1Num> = Nu.a1.num_cons(x, Nu.a1.r128(t, True{}, j, Nat.add(Nat.mul(acc, 128n), d)))
   %pn.step_sym(x, t, j, acc, Nat.add(128n, d), hv) : {_ == want : Maybe<&2, Nu.A1Num>}
-  %Equal.sym(Bool, Nat.is_le(128n, Nat.add(128n, d)), True{}, AN.an.le_add(128n, d)) : {Nu.a1.num_cons(x, Nu.a1.r128(t, _, j, Nat.add(Nat.mul(acc, 128n), Nat.sub(Nat.add(128n, d), Bool.pick(Nat, _, 128n, 0n))))) == want : Maybe<&2, Nu.A1Num>}
+  %Equal.sym(Bool, Nat.is_le(128n, Nat.add(128n, d)), True{}, UO.nat_le_add_r(128n, d)) : {Nu.a1.num_cons(x, Nu.a1.r128(t, _, j, Nat.add(Nat.mul(acc, 128n), Nat.sub(Nat.add(128n, d), Bool.pick(Nat, _, 128n, 0n))))) == want : Maybe<&2, Nu.A1Num>}
   %Equal.sym(Nat, Nat.sub(Nat.add(128n, d), 128n), d, AN.an.sub_add_l(128n, d)) : {Nu.a1.num_cons(x, Nu.a1.r128(t, True{}, j, Nat.add(Nat.mul(acc, 128n), _))) == want : Maybe<&2, Nu.A1Num>}
   {==}
 
@@ -279,7 +285,7 @@ def pn.long_pos(+k: Nat, +y: U32, +t: List<&2, U32>, +hk: {Nat.is_le(1n, k) == T
 def pn.rbe_app(+ds: List<&2, U32>, +rest: List<&2, U32>) -> {Nu.a1.rbe(List.length(&2, U32, ds), List.append(&2, U32, ds, rest)) == Some{Nu.A1Num{Nu.a1.fold256(ds, 0n), ds, rest}} : Maybe<&2, Nu.A1Num>}:
   +m = List.length(&2, U32, ds)
   +xs = List.append(&2, U32, ds, rest)
-  +hle = Equal.trans(Bool, Nat.is_le(m, List.length(&2, U32, xs)), Nat.is_le(m, Nat.add(m, List.length(&2, U32, rest))), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(m, z), List.length(&2, U32, xs), Nat.add(m, List.length(&2, U32, rest)), AL.al.app_len(ds, rest)), AN.an.le_add(m, List.length(&2, U32, rest)))
+  +hle = Equal.trans(Bool, Nat.is_le(m, List.length(&2, U32, xs)), Nat.is_le(m, Nat.add(m, List.length(&2, U32, rest))), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(m, z), List.length(&2, U32, xs), Nat.add(m, List.length(&2, U32, rest)), AL.al.app_len(ds, rest)), UO.nat_le_add_r(m, List.length(&2, U32, rest)))
   %Equal.sym(Bool, Nat.is_le(m, List.length(&2, U32, xs)), True{}, hle) : {Nu.a1.rbe.pick(_, m, xs) == Some{Nu.A1Num{Nu.a1.fold256(ds, 0n), ds, rest}} : Maybe<&2, Nu.A1Num>}
   %Equal.sym(List<&2, U32>, B.take(m, xs), ds, AL.al.take_app(ds, rest)) : {Some{Nu.A1Num{Nu.a1.fold256(_, 0n), _, B.drop(m, xs)}} == Some{Nu.A1Num{Nu.a1.fold256(ds, 0n), ds, rest}} : Maybe<&2, Nu.A1Num>}
   %Equal.sym(List<&2, U32>, B.drop(m, xs), rest, AL.al.drop_app(ds, rest)) : {Some{Nu.A1Num{Nu.a1.fold256(ds, 0n), ds, _}} == Some{Nu.A1Num{Nu.a1.fold256(ds, 0n), ds, rest}} : Maybe<&2, Nu.A1Num>}
@@ -293,8 +299,8 @@ def pn.lr_long(+n: Nat, +rest: List<&2, U32>, +h: {Nat.is_lt(n, 128n) == False{}
   +want : L.A1Len = L.A1LDef{n, Con{y, ds}, rest}
   +hm = pn.okm(n, h, hok)
   +hm7 = AN.an.le_lt_succ(m, 6n, hm)
-  +hm127 = AN.an.lt_le_trans(m, 7n, 127n, hm7, {==})
-  +hm128 = AN.an.lt_le_trans(m, 7n, 128n, hm7, {==})
+  +hm127 = UO.nat_lt_le_trans(m, 7n, 127n, hm7, {==})
+  +hm128 = UO.nat_lt_le_trans(m, 7n, 128n, hm7, {==})
   %Equal.sym(Nat, U32.to_nat(y), Nat.add(128n, m), AB.ab.byte(Nat.add(128n, m), pn.lt_add128(m, hm128))) : {L.a1.len.first(Nat.is_lt(_, 128n), _, y, t) == want : L.A1Len}
   %Equal.sym(Bool, Nat.is_lt(m, 0n), False{}, AN.an.lt0(m)) : {L.a1.len.first(_, Nat.add(128n, m), y, t) == want : L.A1Len}
   %Equal.sym(Nat, Nat.sub(Nat.add(128n, m), 128n), m, AN.an.sub_add_l(128n, m)) : {L.a1.len.long(_, y, t) == want : L.A1Len}

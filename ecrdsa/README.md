@@ -124,6 +124,9 @@ random source (this package has none).
 integers, and its `octets_round_trip` in the proofs), `ecc` (the curves,
 points, signatures and RFC 6979), `hashes` (Streebog).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK

@@ -14,6 +14,10 @@ import ./proof_byte.bend as NB
 import ./proof_nat.bend as NN
 import ./proof_list.bend as NQ
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # The 16-bit fields: a value whose high byte is below 256, written as two
 # bytes and masked, reads back as itself
@@ -37,22 +41,22 @@ def pr.hi_lt(+t: Nat, nd: Bool, nb: Bool, +ht: {H.nla.type_ok(t) == True{} : Boo
     case True{} True{}:
       ht
     case True{} False{}:
-      NN.nn.lt_le_trans(Nat.div(t, 256n), 64n, 128n, ht, {==})
+      UO.nat_lt_le_trans(Nat.div(t, 256n), 64n, 128n, ht, {==})
     case False{} True{}:
-      NN.nn.lt_le_trans(Nat.div(t, 256n), 64n, 192n, ht, {==})
+      UO.nat_lt_le_trans(Nat.div(t, 256n), 64n, 192n, ht, {==})
     case False{} False{}:
-      NN.nn.lt_le_trans(Nat.div(t, 256n), 64n, 256n, ht, {==})
+      UO.nat_lt_le_trans(Nat.div(t, 256n), 64n, 256n, ht, {==})
 
 def pr.dec_tt(+t: Nat, -xs: List<&2, U32>) -> {N.nla.parse.attr1(H.nla.has(H.nla.type_hi(t, True{}, True{}), 128n), Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}:
   +d = Nat.div(t, 256n)
-  %Equal.sym(Bool, Nat.is_le(64n, Nat.add(64n, d)), True{}, NN.nn.le_add(64n, d)) : {N.nla.parse.attr2(H.nla.has.go(Nat.add(64n, d), 64n, _), True{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
+  %Equal.sym(Bool, Nat.is_le(64n, Nat.add(64n, d)), True{}, UO.nat_le_add_r(64n, d)) : {N.nla.parse.attr2(H.nla.has.go(Nat.add(64n, d), 64n, _), True{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.sub(Nat.add(64n, d), 64n), d, NN.nn.sub_add_l(64n, d)) : {N.NlAttr{Nat.add(Nat.mul(_, 256n), Nat.mod(t, 256n)), True{}, True{}, B.Octets.of_list(xs)} == N.NlAttr{t, True{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.add(Nat.mul(d, 256n), Nat.mod(t, 256n)), t, NN.nn.recon(t)) : {N.NlAttr{_, True{}, True{}, B.Octets.of_list(xs)} == N.NlAttr{t, True{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   {==}
 
 def pr.dec_tf(+t: Nat, -xs: List<&2, U32>, +ht: {H.nla.type_ok(t) == True{} : Bool}) -> {N.nla.parse.attr1(H.nla.has(H.nla.type_hi(t, True{}, False{}), 128n), Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}:
   +d = Nat.div(t, 256n)
-  %Equal.sym(Bool, Nat.is_le(128n, Nat.add(128n, d)), True{}, NN.nn.le_add(128n, d)) : {N.nla.parse.attr1(H.nla.has.go(Nat.add(128n, d), 128n, _), Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
+  %Equal.sym(Bool, Nat.is_le(128n, Nat.add(128n, d)), True{}, UO.nat_le_add_r(128n, d)) : {N.nla.parse.attr1(H.nla.has.go(Nat.add(128n, d), 128n, _), Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.sub(Nat.add(128n, d), 128n), d, NN.nn.sub_add_l(128n, d)) : {N.nla.parse.attr2(H.nla.has(_, 64n), True{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Bool, Nat.is_le(64n, d), False{}, NN.nn.lt_nle(d, 64n, ht)) : {N.nla.parse.attr2(H.nla.has.go(d, 64n, _), True{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.add(Nat.mul(d, 256n), Nat.mod(t, 256n)), t, NN.nn.recon(t)) : {N.NlAttr{_, True{}, False{}, B.Octets.of_list(xs)} == N.NlAttr{t, True{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
@@ -61,14 +65,14 @@ def pr.dec_tf(+t: Nat, -xs: List<&2, U32>, +ht: {H.nla.type_ok(t) == True{} : Bo
 def pr.dec_ft(+t: Nat, -xs: List<&2, U32>, +ht: {H.nla.type_ok(t) == True{} : Bool}) -> {N.nla.parse.attr1(H.nla.has(H.nla.type_hi(t, False{}, True{}), 128n), Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}:
   +d = Nat.div(t, 256n)
   %Equal.sym(Bool, Nat.is_le(128n, Nat.add(64n, d)), False{}, NN.nn.lt_nle(d, 64n, ht)) : {N.nla.parse.attr1(H.nla.has.go(Nat.add(64n, d), 128n, _), Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
-  %Equal.sym(Bool, Nat.is_le(64n, Nat.add(64n, d)), True{}, NN.nn.le_add(64n, d)) : {N.nla.parse.attr2(H.nla.has.go(Nat.add(64n, d), 64n, _), False{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
+  %Equal.sym(Bool, Nat.is_le(64n, Nat.add(64n, d)), True{}, UO.nat_le_add_r(64n, d)) : {N.nla.parse.attr2(H.nla.has.go(Nat.add(64n, d), 64n, _), False{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.sub(Nat.add(64n, d), 64n), d, NN.nn.sub_add_l(64n, d)) : {N.NlAttr{Nat.add(Nat.mul(_, 256n), Nat.mod(t, 256n)), False{}, True{}, B.Octets.of_list(xs)} == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.add(Nat.mul(d, 256n), Nat.mod(t, 256n)), t, NN.nn.recon(t)) : {N.NlAttr{_, False{}, True{}, B.Octets.of_list(xs)} == N.NlAttr{t, False{}, True{}, B.Octets.of_list(xs)} : N.NlAttr}
   {==}
 
 def pr.dec_ff(+t: Nat, -xs: List<&2, U32>, +ht: {H.nla.type_ok(t) == True{} : Bool}) -> {N.nla.parse.attr1(H.nla.has(H.nla.type_hi(t, False{}, False{}), 128n), Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}:
   +d = Nat.div(t, 256n)
-  %Equal.sym(Bool, Nat.is_le(128n, d), False{}, NN.nn.lt_nle(d, 128n, NN.nn.lt_le_trans(d, 64n, 128n, ht, {==}))) : {N.nla.parse.attr1(H.nla.has.go(d, 128n, _), Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
+  %Equal.sym(Bool, Nat.is_le(128n, d), False{}, NN.nn.lt_nle(d, 128n, UO.nat_lt_le_trans(d, 64n, 128n, ht, {==}))) : {N.nla.parse.attr1(H.nla.has.go(d, 128n, _), Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Bool, Nat.is_le(64n, d), False{}, NN.nn.lt_nle(d, 64n, ht)) : {N.nla.parse.attr2(H.nla.has.go(d, 64n, _), False{}, Nat.mod(t, 256n), xs) == N.NlAttr{t, False{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   %Equal.sym(Nat, Nat.add(Nat.mul(d, 256n), Nat.mod(t, 256n)), t, NN.nn.recon(t)) : {N.NlAttr{_, False{}, False{}, B.Octets.of_list(xs)} == N.NlAttr{t, False{}, False{}, B.Octets.of_list(xs)} : N.NlAttr}
   {==}
@@ -112,8 +116,8 @@ def pr.step(+o: H.NlOrder, +s: Bool, +f: Nat, +t: Nat, +nd: Bool, +nb: Bool, +pa
   %Equal.sym(List<&2, U32>, rr, r, pr.body(o, pay, l)) : {N.nla.parse.check(Bool.and(Nat.is_le(4n, n), Nat.is_le(Nat.sub(n, 4n), List.length(&2, U32, _))), o, b2, b3, n, _, N.nla.parse.go(f, N.NlOpts{o, s}, N.nla.parse.rest(n, _))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
   %Equal.sym(Nat, Nat.sub(n, 4n), lp, NN.nn.sub_add_l(4n, lp)) : {N.nla.parse.check(Bool.and(Nat.is_le(4n, n), Nat.is_le(_, List.length(&2, U32, r))), o, b2, b3, n, r, N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, List.drop(&2, U32, r, _), H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
   +lenr = NQ.nq.app_len(p, List.append(&2, U32, z, B.mask(l)))
-  +okr = Equal.trans(Bool, Nat.is_le(lp, List.length(&2, U32, r)), Nat.is_le(lp, Nat.add(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l))))), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(lp, x), List.length(&2, U32, r), Nat.add(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l)))), lenr), NN.nn.le_add(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l)))))
-  %Equal.sym(Bool, Bool.and(Nat.is_le(4n, n), Nat.is_le(lp, List.length(&2, U32, r))), True{}, NN.nn.and_i(Nat.is_le(4n, n), Nat.is_le(lp, List.length(&2, U32, r)), NN.nn.le_add(4n, lp), okr)) : {N.nla.parse.check(_, o, b2, b3, n, r, N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, List.drop(&2, U32, r, lp), H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
+  +okr = Equal.trans(Bool, Nat.is_le(lp, List.length(&2, U32, r)), Nat.is_le(lp, Nat.add(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l))))), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(lp, x), List.length(&2, U32, r), Nat.add(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l)))), lenr), UO.nat_le_add_r(lp, List.length(&2, U32, List.append(&2, U32, z, B.mask(l)))))
+  %Equal.sym(Bool, Bool.and(Nat.is_le(4n, n), Nat.is_le(lp, List.length(&2, U32, r))), True{}, NN.nn.and_i(Nat.is_le(4n, n), Nat.is_le(lp, List.length(&2, U32, r)), UO.nat_le_add_r(4n, lp), okr)) : {N.nla.parse.check(_, o, b2, b3, n, r, N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, List.drop(&2, U32, r, lp), H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
   %Equal.sym(Nat, Nat.sub(n, 4n), lp, NN.nn.sub_add_l(4n, lp)) : {N.nla.parse.cons(N.nla.parse.attr_o(o, b2, b3, List.take(&2, U32, r, _)), N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, List.drop(&2, U32, r, lp), H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
   %Equal.sym(List<&2, U32>, List.take(&2, U32, r, lp), p, NQ.nq.take_app(p, List.append(&2, U32, z, B.mask(l)))) : {N.nla.parse.cons(N.nla.parse.attr_o(o, b2, b3, _), N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, List.drop(&2, U32, r, lp), H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
   %Equal.sym(List<&2, U32>, List.drop(&2, U32, r, lp), List.append(&2, U32, z, B.mask(l)), NQ.nq.drop_app(p, List.append(&2, U32, z, B.mask(l)))) : {N.nla.parse.cons(N.nla.parse.attr_o(o, b2, b3, p), N.nla.parse.go(f, N.NlOpts{o, s}, List.drop(&2, U32, _, H.nla.pad(n)))) == Done{Con{N.NlAttr{t, nd, nb, pay}, ts}} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
@@ -153,7 +157,7 @@ def pr.fe_rest(b: Bool, -a: N.NlAttr, -r: Maybe<&2, N.NlError>, +h: {N.nla.first
 
 def pr.le_app(+xs: List<&2, U32>, +ys: List<&2, U32>) -> {Nat.is_le(List.length(&2, U32, ys), List.length(&2, U32, List.append(&2, U32, xs, ys))) == True{} : Bool}:
   %Equal.sym(Nat, List.length(&2, U32, List.append(&2, U32, xs, ys)), Nat.add(List.length(&2, U32, xs), List.length(&2, U32, ys)), NQ.nq.app_len(xs, ys)) : {Nat.is_le(List.length(&2, U32, ys), _) == True{} : Bool}
-  NN.nn.le_add_l(List.length(&2, U32, xs), List.length(&2, U32, ys))
+  UL.nat_le_add(List.length(&2, U32, ys), List.length(&2, U32, xs))
 
 def pr.rt(+as: List<&2, N.NlAttr>, +o: H.NlOrder, +s: Bool, +fu: Nat, +ha: {N.nla.first_err(as) == None{} : Maybe<&2, N.NlError>}, +hf: {Nat.is_le(List.length(&2, U32, N.nla.enc_all(o, as)), fu) == True{} : Bool}) -> {N.nla.parse.go(fu, N.NlOpts{o, s}, B.mask(N.nla.enc_all(o, as))) == Done{as} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}:
   match as:
@@ -178,8 +182,8 @@ def pr.rt(+as: List<&2, N.NlAttr>, +o: H.NlOrder, +s: Bool, +fu: Nat, +ha: {N.nl
           +hok = pr.fe_ok(N.nla.ok(a), a, N.nla.first_err(rest), ha)
           +ht = NN.nn.and_l(H.nla.type_ok(t0), H.nla.fits16(N.nla.len_of(a)), hok)
           +hn = Equal.trans(Bool, H.nla.fits16(n), H.nla.fits16(N.nla.len_of(a)), True{}, Equal.cong(Nat, Bool, x => H.nla.fits16(Nat.add(4n, x)), List.length(&2, U32, p), B.Octets.len(pay), Equal.sym(Nat, B.Octets.len(pay), List.length(&2, U32, p), NQ.nq.olen(pay))), NN.nn.and_r(H.nla.type_ok(t0), H.nla.fits16(N.nla.len_of(a)), hok))
-          +het = NN.nn.le_trans(List.length(&2, U32, et), List.length(&2, U32, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)), List.length(&2, U32, w), pr.le_app(B.zeros(H.nla.pad(n)), et), pr.le_app(p, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)))
-          +ih = pr.rt(rest, H.NlLittle{}, s, f, pr.fe_rest(N.nla.ok(a), a, N.nla.first_err(rest), ha), NN.nn.le_trans(List.length(&2, U32, et), List.length(&2, U32, w), f, het, NN.nn.le_trans(List.length(&2, U32, w), Nat.add(3n, List.length(&2, U32, w)), f, NN.nn.le_add_l(3n, List.length(&2, U32, w)), hf)))
+          +het = UO.nat_le_trans(List.length(&2, U32, et), List.length(&2, U32, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)), List.length(&2, U32, w), pr.le_app(B.zeros(H.nla.pad(n)), et), pr.le_app(p, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)))
+          +ih = pr.rt(rest, H.NlLittle{}, s, f, pr.fe_rest(N.nla.ok(a), a, N.nla.first_err(rest), ha), UO.nat_le_trans(List.length(&2, U32, et), List.length(&2, U32, w), f, het, UO.nat_le_trans(List.length(&2, U32, w), Nat.add(3n, List.length(&2, U32, w)), f, UL.nat_le_add(List.length(&2, U32, w), 3n), hf)))
           +b2 = B.byte(H.nla.byte(Nat.mod(t0, 256n)))
           +b3 = B.byte(H.nla.byte(H.nla.type_hi(t0, nd, nb)))
           +nv = H.nla.u16_value(H.NlLittle{}, B.byte(H.nla.byte(Nat.mod(n, 256n))), B.byte(H.nla.byte(Nat.div(n, 256n))))
@@ -194,8 +198,8 @@ def pr.rt(+as: List<&2, N.NlAttr>, +o: H.NlOrder, +s: Bool, +fu: Nat, +ha: {N.nl
           +hok = pr.fe_ok(N.nla.ok(a), a, N.nla.first_err(rest), ha)
           +ht = NN.nn.and_l(H.nla.type_ok(t0), H.nla.fits16(N.nla.len_of(a)), hok)
           +hn = Equal.trans(Bool, H.nla.fits16(n), H.nla.fits16(N.nla.len_of(a)), True{}, Equal.cong(Nat, Bool, x => H.nla.fits16(Nat.add(4n, x)), List.length(&2, U32, p), B.Octets.len(pay), Equal.sym(Nat, B.Octets.len(pay), List.length(&2, U32, p), NQ.nq.olen(pay))), NN.nn.and_r(H.nla.type_ok(t0), H.nla.fits16(N.nla.len_of(a)), hok))
-          +het = NN.nn.le_trans(List.length(&2, U32, et), List.length(&2, U32, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)), List.length(&2, U32, w), pr.le_app(B.zeros(H.nla.pad(n)), et), pr.le_app(p, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)))
-          +ih = pr.rt(rest, H.NlBig{}, s, f, pr.fe_rest(N.nla.ok(a), a, N.nla.first_err(rest), ha), NN.nn.le_trans(List.length(&2, U32, et), List.length(&2, U32, w), f, het, NN.nn.le_trans(List.length(&2, U32, w), Nat.add(3n, List.length(&2, U32, w)), f, NN.nn.le_add_l(3n, List.length(&2, U32, w)), hf)))
+          +het = UO.nat_le_trans(List.length(&2, U32, et), List.length(&2, U32, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)), List.length(&2, U32, w), pr.le_app(B.zeros(H.nla.pad(n)), et), pr.le_app(p, List.append(&2, U32, B.zeros(H.nla.pad(n)), et)))
+          +ih = pr.rt(rest, H.NlBig{}, s, f, pr.fe_rest(N.nla.ok(a), a, N.nla.first_err(rest), ha), UO.nat_le_trans(List.length(&2, U32, et), List.length(&2, U32, w), f, het, UO.nat_le_trans(List.length(&2, U32, w), Nat.add(3n, List.length(&2, U32, w)), f, UL.nat_le_add(List.length(&2, U32, w), 3n), hf)))
           +b2 = B.byte(H.nla.byte(H.nla.type_hi(t0, nd, nb)))
           +b3 = B.byte(H.nla.byte(Nat.mod(t0, 256n)))
           +nv = H.nla.u16_value(H.NlBig{}, B.byte(H.nla.byte(Nat.div(n, 256n))), B.byte(H.nla.byte(Nat.mod(n, 256n))))
@@ -226,7 +230,7 @@ def pr.pb(m: Maybe<&2, N.NlError>, +o: H.NlOrder, +s: Bool, +as: List<&2, N.NlAt
       +ee = N.nla.enc_all(o, as)
       %Equal.cong(Result<&2, &2, N.NlError, B.Octets>, B.Octets, z => pr.od(z), Done{B.Octets.of_list(ee)}, Done{b}, e) : {N.nla.parse(N.NlOpts{o, s}, _) == Done{as} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
       %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(ee)), B.mask(ee), BL.octets_to_of(ee)) : {N.nla.parse.go(List.length(&2, U32, _), N.NlOpts{o, s}, _) == Done{as} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}
-      pr.rt(as, o, s, List.length(&2, U32, B.mask(ee)), em, Equal.trans(Bool, Nat.is_le(List.length(&2, U32, ee), List.length(&2, U32, B.mask(ee))), Nat.is_le(List.length(&2, U32, ee), List.length(&2, U32, ee)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(List.length(&2, U32, ee), z), List.length(&2, U32, B.mask(ee)), List.length(&2, U32, ee), NQ.nq.mask_len(ee)), NN.nn.le_refl(List.length(&2, U32, ee))))
+      pr.rt(as, o, s, List.length(&2, U32, B.mask(ee)), em, Equal.trans(Bool, Nat.is_le(List.length(&2, U32, ee), List.length(&2, U32, B.mask(ee))), Nat.is_le(List.length(&2, U32, ee), List.length(&2, U32, ee)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(List.length(&2, U32, ee), z), List.length(&2, U32, B.mask(ee)), List.length(&2, U32, ee), NQ.nq.mask_len(ee)), UL.nat_le_refl(List.length(&2, U32, ee))))
     case Some{x}:
       Empty.absurd({N.nla.parse(N.NlOpts{o, s}, b) == Done{as} : Result<&2, &2, N.NlError, List<&2, N.NlAttr>>}, pr.ofd(x, b, e))
 
@@ -426,7 +430,7 @@ def pr.swc(ok: Bool, +o: H.NlOrder, +b2: U32, +b3: U32, +n: Nat, +rest: List<&2,
           +h2 = NN.nn.and_r(Nat.is_le(4n, n), Nat.is_le(k, List.length(&2, U32, rest)), hok)
           +sy = N.nla.span(ys)
           +ld = List.length(&2, U32, d)
-          +hs = NN.nn.le_trans(sy, List.length(&2, U32, List.drop(&2, U32, d, H.nla.pad(n))), ld, ih(ys, {==}), NQ.nq.drop_le(d, H.nla.pad(n)))
+          +hs = UO.nat_le_trans(sy, List.length(&2, U32, List.drop(&2, U32, d, H.nla.pad(n))), ld, ih(ys, {==}), NQ.nq.drop_le(d, H.nla.pad(n)))
           %Equal.cong(Result<&2, &2, N.NlError, List<&2, N.NlAttr>>, List<&2, N.NlAttr>, z => pr.rd(z), Done{Con{a, ys}}, Done{as}, e) : {Nat.is_le(N.nla.span(_), Nat.add(4n, List.length(&2, U32, rest))) == True{} : Bool}
           %Equal.sym(Nat, N.nla.len_of(a), Nat.add(4n, B.Octets.len(B.Octets.of_list(xs))), pr.lao(o, b2, b3, xs)) : {Nat.is_le(Nat.add(_, sy), Nat.add(4n, List.length(&2, U32, rest))) == True{} : Bool}
           %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(xs)), List.length(&2, U32, xs), NQ.nq.olen_of(xs)) : {Nat.is_le(Nat.add(Nat.add(4n, _), sy), Nat.add(4n, List.length(&2, U32, rest))) == True{} : Bool}

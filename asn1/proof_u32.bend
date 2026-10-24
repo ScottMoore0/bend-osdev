@@ -4,28 +4,13 @@
 import Base
 import ./number.bend as Nu
 import ./proof_nat.bend as AN
-
-def au.fin_refl(b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def au.cmp_refl(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, +t}:
-          %Equal.sym(Cmp, Word.cmp(p, t, t), EQ{}, au.cmp_refl(p, t)) : {Word.cmp.fin(b, b, _) == EQ{} : Cmp}
-          au.fin_refl(b)
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 def au.is_eq_refl(x: U32) -> {U32.is_eq(x, x) == True{} : Bool}:
   match x:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, au.cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def au.cdisc(c: Cmp) -> Type:

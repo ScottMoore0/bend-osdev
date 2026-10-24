@@ -21,6 +21,8 @@ import ./proof_nat.bend as AN
 import ./proof_list.bend as AL
 import ./proof_byte.bend as AB
 import ./proof_int.bend as PI
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Bool
 
@@ -85,7 +87,7 @@ def pp.bits_prim(+r: R.Asn1Rules, +t: T.Asn1Tag, +c: B.Octets) -> {Bi.a1.bits.of
 # without DER's check of the unused bits, every well-formed bit string
 def pp.bits_ber(+r: R.Asn1Rules, +hv: {R.Asn1Rules.values(r) == False{} : Bool}, +t: T.Asn1Tag, +u: Nat, +o: B.Octets, +hok: {Bi.Asn1Bits.ok(Bi.Asn1Bits{u, o}) == True{} : Bool}) -> {Bi.Asn1.get_bits_as(r, t, Bi.Asn1.bits_as(t, Bi.Asn1Bits{u, o})) == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}:
   +hu = AN.an.and_l(Nat.is_le(u, 7n), Bool.or(Nat.is_lt(0n, B.Octets.len(o)), Nat.is_eq(u, 0n)), hok)
-  +hb = AB.ab.byte(u, AN.an.le_lt_succ(u, 255n, AN.an.le_trans(u, 7n, 255n, hu, {==})))
+  +hb = AB.ab.byte(u, AN.an.le_lt_succ(u, 255n, UO.nat_le_trans(u, 7n, 255n, hu, {==})))
   %pp.bits_prim(r, t, B.Octets.cons(U32.from_nat(u), o)) : {_ == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}
   %Equal.sym(Bool, R.Asn1Rules.values(r), False{}, hv) : {Bi.a1.bits.of_prim(_, B.Octets.to_list(B.Octets.cons(U32.from_nat(u), o))) == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.cons(U32.from_nat(u), o)), Con{B.byte(U32.from_nat(u)), B.Octets.to_list(o)}, BL.octets_cons_list(U32.from_nat(u), o)) : {Bi.a1.bits.of_prim(False{}, _) == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}
@@ -97,7 +99,7 @@ def pp.bits_ber(+r: R.Asn1Rules, +hv: {R.Asn1Rules.values(r) == False{} : Bool},
 # under any rules, a well-formed bit string whose unused bits are zero
 def pp.bits_rt(+r: R.Asn1Rules, +t: T.Asn1Tag, +u: Nat, +o: B.Octets, +hok: {Bi.Asn1Bits.ok(Bi.Asn1Bits{u, o}) == True{} : Bool}, +hc: {Bi.a1.bits.clear(u, o) == True{} : Bool}) -> {Bi.Asn1.get_bits_as(r, t, Bi.Asn1.bits_as(t, Bi.Asn1Bits{u, o})) == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}:
   +hu = AN.an.and_l(Nat.is_le(u, 7n), Bool.or(Nat.is_lt(0n, B.Octets.len(o)), Nat.is_eq(u, 0n)), hok)
-  +hb = AB.ab.byte(u, AN.an.le_lt_succ(u, 255n, AN.an.le_trans(u, 7n, 255n, hu, {==})))
+  +hb = AB.ab.byte(u, AN.an.le_lt_succ(u, 255n, UO.nat_le_trans(u, 7n, 255n, hu, {==})))
   +der = R.Asn1Rules.values(r)
   %pp.bits_prim(r, t, B.Octets.cons(U32.from_nat(u), o)) : {_ == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.cons(U32.from_nat(u), o)), Con{B.byte(U32.from_nat(u)), B.Octets.to_list(o)}, BL.octets_cons_list(U32.from_nat(u), o)) : {Bi.a1.bits.of_prim(der, _) == Done{Bi.Asn1Bits{u, o}} : Result<&2, &2, E.Asn1Error, Bi.Asn1Bits>}

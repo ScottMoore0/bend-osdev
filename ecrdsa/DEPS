@@ -2,3 +2,4 @@ bytes
 bignum
 ecc
 hashes
+u32

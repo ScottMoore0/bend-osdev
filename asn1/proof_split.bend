@@ -22,6 +22,8 @@ import ./asn1.bend as A
 import ./proof_nat.bend as AN
 import ./proof_list.bend as AL
 import ./proof_oct.bend as OA
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # ys is a suffix of xs: the octets after some others
 def ps.suf(ys: List<&2, U32>, xs: List<&2, U32>) -> Type:
@@ -484,7 +486,7 @@ def ps.used(+p: List<&2, U32>, +rest: List<&2, U32>) -> {B.take(Nat.sub(List.len
   +lr = List.length(&2, U32, rest)
   +pr = List.append(&2, U32, p, rest)
   %Equal.sym(Nat, List.length(&2, U32, pr), Nat.add(lp, lr), AL.al.app_len(p, rest)) : {B.take(Nat.sub(_, lr), pr) == p : List<&2, U32>}
-  %AN.an.add_comm(lr, lp) : {B.take(Nat.sub(_, lr), pr) == p : List<&2, U32>}
+  %UL.nat_add_comm(lr, lp) : {B.take(Nat.sub(_, lr), pr) == p : List<&2, U32>}
   %Equal.sym(Nat, Nat.sub(Nat.add(lr, lp), lr), lp, AN.an.sub_add_l(lr, lp)) : {B.take(_, pr) == p : List<&2, U32>}
   AL.al.take_app(p, rest)
 
