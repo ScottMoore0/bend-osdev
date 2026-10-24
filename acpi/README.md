@@ -132,6 +132,7 @@ Choices this package makes where the specification leaves room:
 | `example.bend` | `AcpiExample`: a sample machine (tables, a DSDT and an SSDT, its memory and host) |
 | `fields.bend` | internal: little-endian fields at offsets |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_tables.bend`, `PROOF_tables.bend` | the structures' round trips (GAS, HPET, BGRT, FACS, XSDT, RSDT, MCFG, DSDT/SSDT) and their proofs, checked in a process of their own |
 | `check.bend` | examples with their expected output |
 | `ref/gen.py`, `ref/run.sh`, `ref/runner.bend` | the differential test |
 
@@ -459,9 +460,52 @@ of `Name (_HID, EISAID ("PNP0C0C"))` and `Method (_STA) { Return (0x0F) }`
 as ASL compilers write them; a built table's checksum, and one byte
 appended breaking it; that method loaded and evaluated.
 
-The interpreter's semantics, the table parsers other than the header, the
-resource templates and the device helpers are covered by `check.bend` and
-the differential test, not by laws for every input.
+`LAWS_tables.bend` has 8 laws, proved in `PROOF_tables.bend` (checked in
+a process of its own; it imports bytes' and word64's proofs, not
+`PROOF.bend`), for every input:
+
+* `gas_round_trip`: a Generic Address Structure reads back at offset
+  `len(a)` of `a ++ AcpiGas.encode(g) ++ b`, whatever is around it, when
+  its four byte fields are bytes.
+* `hpet_round_trip`, `bgrt_round_trip`, `xsdt_round_trip`,
+  `rsdt_round_trip`, `mcfg_round_trip`, `aml_round_trip`: the body that
+  each table's `build` writes (`B.Octets.drop(36n, build(t))`, everything
+  after the header) is read back by its `of_sdt`, with any header `h`:
+  `of_sdt(AcpiSdt{h, drop(36, build(t))}) == Done{t'}`, `t'` being `t`
+  with its header `h`. The header `build` was given must have text fields
+  of their sizes (OEMID 6, OEM table ID 8, creator ID 4 bytes; for a DSDT
+  or SSDT, whose signature is kept, also the signature 4), and, for the
+  HPET and BGRT, which read their fields through the whole table, so must
+  `h`. The HPET's and BGRT's byte fields must be bytes and their 16-bit
+  fields 16 bits. The RSDT reads back each address's low 32 bits
+  (`acpilaw.low32`: what an RSDT entry holds), the MCFG each structure
+  with its segment group's low 16 bits and its bus numbers' low 8 bits
+  (`acpilaw.mcfg_fit`), the XSDT the addresses, and a DSDT or SSDT its
+  definition block, as written. Every table built by `AcpiSdt.build`
+  rests on one lemma (`tb.sdt_body`): its header is 36 bytes, and the
+  checksum byte that `AcpiChecksum.fix` writes is byte 9, inside it, so
+  the bytes after the header are the body as given.
+* `facs_round_trip`: `AcpiFacs.parse(AcpiFacs.build(f))` gives `f` back,
+  its Length being the 64 that `build` writes, when the version is a
+  byte. The FACS has no header and no checksum, so this is the whole
+  round trip.
+
+**What is not proved.** The tables' whole round trip,
+`parse(build(t))`, also needs `build`'s checksum byte to make the table's
+bytes sum to zero modulo 256, for every content: that is arithmetic modulo
+256 over a sum of unknown bytes, which the proofs here cannot reach (they
+compute on words split into their bits, and a sum of unknown bytes does
+not compute). The tables not covered yet, most used first: the MADT (its
+entry list is split by length bytes with fuel and offsets, and each of its
+15 entry kinds needs its own read-back, plus a rule for `AcpiMadtOther`
+entries whose type is a known one), the FADT (about 50 fields and 15 GASes
+in versioned parts; `None` parts are written as zeros and read back as
+present, so the law needs a normalisation of every part), the SRAT (an
+entry list like the MADT's), the SLIT (an `n` by `n` matrix fitted to
+`n * n` bytes) and the RSDP (two checksums of its own, the reason above).
+The interpreter's semantics, the resource templates and the device
+helpers are covered by `check.bend` and the differential test, not by laws
+for every input.
 
 ## Tests
 
@@ -528,9 +572,15 @@ to provide `$ACPI_TABLES`).
   and its list layer, and `W64` only through word64's public defs. The
   PkgLength and header proofs compute through `B.mask`, `B.byte` and
   `B.le32` on words split into their bits, as bytes' own proofs do, and
-  the closed vectors compute through the package's code. These proofs
-  would need revisiting if those packages' representations changed; the
-  laws would not change.
+  the closed vectors compute through the package's code. The proofs in
+  `PROOF_tables.bend` also use bytes' laws for fields read at offsets
+  inside joined, cut and dropped bytes (`octets_le64_at_append_add`,
+  `octets_drop_append_add`, `octets_concat_cons`, ...), and compute the
+  tables' bodies on words split into their bits; a W64 field is split
+  through word64's `parts_of` into `W64.from_parts` of its halves, which
+  `le64` and `from_parts` then compute through word64's definitions.
+  These proofs would need revisiting if those packages' representations
+  changed; the laws would not change.
 * The step-bound laws are stated for `AmlMemHost` only (above).
 * The interpreter's semantics are tested, not proved.
 
@@ -552,6 +602,7 @@ are `Nat`.
 ## Status
 
 Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
-`PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
-passes, `ref/run.sh` 409 cases match (Python reference only; skips with 77
-for want of `iasl`; real tables not tested), `scripts/deps.sh acpi` ok.
+`PROOF.bend` and `PROOF_tables.bend` ALL PROOFS CHECK, `--verdict` ALL
+PROOFS CHECK, `check.bend` passes, `ref/run.sh` 415 cases match (the Python reference's, and 6
+programs compiled by `iasl`; real tables not tested), `scripts/deps.sh
+acpi` ok.

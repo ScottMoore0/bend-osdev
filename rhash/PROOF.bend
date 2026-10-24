@@ -806,7 +806,7 @@ def after_size(~K: Data, ~V: Data, ~hash: U32 -> List<&2, U32> -> U32, t: R.RHas
 def Laws.lookup_new(K, V, kenc, hash, p, k):
   match p:
     case R.RhParams{gp, sp, au, mn, mx, +il, st, +s0, ss}:
-      %Equal.sym(List<&2, R.RhEntry<K, V>>, R.RhTree.get(~K, ~V, R.RhTree.full(~K, ~V, il), R.RhTab.path(~hash, il, s0, kenc(k))), Nil{}, get_full(~K, ~V, il, R.RhTab.path(~hash, il, s0, kenc(k)))) : {R.rh.orelse(~V, R.rh.find(~K, ~V, kenc(k), _), None{}) == None{} : Maybe<&2, V>}
+      %Equal.sym(List<&2, R.RhEntry<K, V>>, R.RhTree.get(~K, ~V, R.RhTree.full(~K, ~V, R.rh.clamp(il)), R.RhTab.path(~hash, R.rh.clamp(il), s0, kenc(k))), Nil{}, get_full(~K, ~V, R.rh.clamp(il), R.RhTab.path(~hash, R.rh.clamp(il), s0, kenc(k)))) : {R.rh.orelse(~V, R.rh.find(~K, ~V, kenc(k), _), None{}) == None{} : Maybe<&2, V>}
       {==}
 
 def Laws.size_new(K, V, p):
@@ -862,10 +862,10 @@ def Laws.lookup_drain(K, V, kenc, hash, t, k):
   drain_lookup(~K, ~V, ~hash, t, kenc(k))
 
 def resize_lookup(~K: Data, ~V: Data, ~hash: U32 -> List<&2, U32> -> U32, +t: R.RHash<K, V>, +log: Nat, +seed: U32, +kw: List<&2, U32>) -> {R.rh.lookup(~K, ~V, ~hash, R.RHash.resize(~K, ~V, ~hash, t, log, seed), kw) == R.rh.lookup(~K, ~V, ~hash, t, kw) : Maybe<&2, V>}:
-  Equal.trans(Maybe<&2, V>, R.rh.lookup(~K, ~V, ~hash, R.rh.start(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), log, seed), kw), R.rh.lookup(~K, ~V, ~hash, R.RHash.drain(~K, ~V, ~hash, t), kw), R.rh.lookup(~K, ~V, ~hash, t, kw), start_lookup(~K, ~V, ~hash, R.RHash.drain(~K, ~V, ~hash, t), log, seed, kw), drain_lookup(~K, ~V, ~hash, t, kw))
+  Equal.trans(Maybe<&2, V>, R.rh.lookup(~K, ~V, ~hash, R.rh.start(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), R.rh.clamp(log), seed), kw), R.rh.lookup(~K, ~V, ~hash, R.RHash.drain(~K, ~V, ~hash, t), kw), R.rh.lookup(~K, ~V, ~hash, t, kw), start_lookup(~K, ~V, ~hash, R.RHash.drain(~K, ~V, ~hash, t), R.rh.clamp(log), seed, kw), drain_lookup(~K, ~V, ~hash, t, kw))
 
 def resize_size(~K: Data, ~V: Data, ~hash: U32 -> List<&2, U32> -> U32, +t: R.RHash<K, V>, +log: Nat, +seed: U32) -> {R.RHash.size(~K, ~V, R.RHash.resize(~K, ~V, ~hash, t, log, seed)) == R.RHash.size(~K, ~V, t) : Nat}:
-  Equal.trans(Nat, R.RHash.size(~K, ~V, R.rh.start(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), log, seed)), R.RHash.size(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t)), R.RHash.size(~K, ~V, t), start_size(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), log, seed), steps_size(~K, ~V, ~hash, R.rh.pow2(R.rh.old_log(~K, ~V, t)), t))
+  Equal.trans(Nat, R.RHash.size(~K, ~V, R.rh.start(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), R.rh.clamp(log), seed)), R.RHash.size(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t)), R.RHash.size(~K, ~V, t), start_size(~K, ~V, R.RHash.drain(~K, ~V, ~hash, t), R.rh.clamp(log), seed), steps_size(~K, ~V, ~hash, R.rh.pow2(R.rh.old_log(~K, ~V, t)), t))
 
 def Laws.lookup_resize(K, V, kenc, hash, t, log, seed, k):
   resize_lookup(~K, ~V, ~hash, t, log, seed, kenc(k))

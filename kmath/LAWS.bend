@@ -2,14 +2,18 @@
 #  * the integer square root (isqrt.bend): for every n below 4^bits,
 #    r = isqrt_nat(bits, n) has r^2 <= n < (r + 1)^2, and so for every U32;
 #  * the greatest common divisor (kmath.bend): gcd(a, b) divides a and b,
-#    for every a and b (with witnesses: k * gcd(a, b) = a).
+#    for every a and b (with witnesses: k * gcd(a, b) = a), and every common
+#    divisor divides it; gcd(m a, m b) = m gcd(a, b);
+#  * the least common multiple: lcm(a, b) is a multiple of a and of b, and
+#    divides every common multiple; lcm(a, 0) = lcm(0, b) = 0.
 #
 # Vectors for the rest: 64-bit division (unsigned and signed), reciprocal
 # division (Granlund and Montgomery's exactness, at the edges: d = 1, 3, 7,
 # 2^31 and 2^32 - 1, with a = 0, d - 1, d and 2^32 - 1), the best rational
 # approximation (355/113 for pi), CORDIC at 0 and 90 degrees, primality,
-# powers and lcm. The vectors keep Nat values small: a Nat is unary inside
-# the checkers. ref/run.sh and check.bend test them on large values.
+# powers and lcm values. The vectors keep Nat values small: a Nat is unary
+# inside the checkers. ref/run.sh and check.bend test them on large values.
+# Primality for every input is in LAWS_prime.bend.
 import Base
 import ../word64/word64.bend as W
 import ./kmath.bend as K
@@ -53,6 +57,66 @@ law gcd_divides_r:
   for +b: Nat
   exs k: Nat
   {Nat.mul(k, K.KMath.gcd(a, b)) == b : Nat}
+
+# every common divisor d of a and b divides gcd(a, b), so it is the
+# greatest (in the order of divisibility, and so of size when it is not 0)
+law gcd_greatest:
+  for +a: Nat
+  for +b: Nat
+  for +d: Nat
+  for +u: Nat
+  for +v: Nat
+  for eu: {Nat.mul(u, d) == a : Nat}
+  for ev: {Nat.mul(v, d) == b : Nat}
+  exs k: Nat
+  {Nat.mul(k, d) == K.KMath.gcd(a, b) : Nat}
+
+law gcd_mul:
+  for +m: Nat
+  for +a: Nat
+  for +b: Nat
+  {K.KMath.gcd(Nat.mul(m, a), Nat.mul(m, b)) == Nat.mul(m, K.KMath.gcd(a, b)) : Nat}
+
+law gcd_zero_l:
+  for +b: Nat
+  {K.KMath.gcd(0n, b) == b : Nat}
+
+law gcd_zero_r:
+  for +a: Nat
+  {K.KMath.gcd(a, 0n) == a : Nat}
+
+# lcm(a, b) is a common multiple of a and b and divides every common
+# multiple, so it is the least; lcm(a, 0) = lcm(0, b) = 0
+law lcm_multiple_l:
+  for +a: Nat
+  for +b: Nat
+  exs k: Nat
+  {Nat.mul(k, a) == K.KMath.lcm(a, b) : Nat}
+
+law lcm_multiple_r:
+  for +a: Nat
+  for +b: Nat
+  exs k: Nat
+  {Nat.mul(k, b) == K.KMath.lcm(a, b) : Nat}
+
+law lcm_least:
+  for +a: Nat
+  for +b: Nat
+  for +m: Nat
+  for +u: Nat
+  for +v: Nat
+  for eu: {Nat.mul(u, a) == m : Nat}
+  for ev: {Nat.mul(v, b) == m : Nat}
+  exs k: Nat
+  {Nat.mul(k, K.KMath.lcm(a, b)) == m : Nat}
+
+law lcm_zero_l:
+  for +b: Nat
+  {K.KMath.lcm(0n, b) == 0n : Nat}
+
+law lcm_zero_r:
+  for +a: Nat
+  {K.KMath.lcm(a, 0n) == 0n : Nat}
 
 # gcd, lcm, powers
 
