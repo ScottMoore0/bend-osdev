@@ -23,11 +23,12 @@ GPL source was read.
 | `rational.bend` | `KRational`, `KMath.rational_best` |
 | `cordic.bend`, `cordic_table.bend` | `KCordic`, `KMath.cordic`, `KMath.angle_of_degrees`; the generated constants |
 | `prime.bend` | `KMath.is_prime`, `KMath.next_prime` |
-| `LAWS.bend`, `PROOF.bend` | the square root and gcd laws and the vectors, and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the square root, gcd and lcm laws and the vectors, and their proofs |
 | `LAWS_div.bend`, `PROOF_div.bend` | 64-bit division for every input |
 | `LAWS_fls.bend`, `PROOF_fls.bend` | the number of bits (`KMath.fls`) for every input |
 | `LAWS_recip.bend`, `PROOF_recip.bend` | reciprocal division's exactness for every input |
-| `gen/proof.py` | writes the four proof files (`gen/proof_div64.py`, `gen/proof_recip.py`, `gen/proof_krecip.py`; ring identities by `scripts/natproof.py`) |
+| `LAWS_prime.bend`, `PROOF_prime.bend` | primality (`KMath.is_prime`) for every input |
+| `gen/proof.py` | writes the five proof files (`gen/proof_gcd.py`, `gen/proof_div64.py`, `gen/proof_recip.py`, `gen/proof_krecip.py`, `gen/proof_prime.py`; ring identities by `scripts/natproof.py`) |
 
 ## API
 
@@ -68,10 +69,27 @@ Natively a `Nat` holds values below 2^48, which bounds the `Nat` functions.
 * **for every input:** for every n < 4^bits, r = `isqrt_nat(bits, n)` has
   r² ≤ n < (r + 1)², and so for every `U32` (every `U32` is below 4^16);
   `gcd(a, b)` divides a and b for every a and b, with witnesses
-  (k · gcd(a, b) = a). The proofs (`gen/proof.py`) build a small Nat
-  library: addition and multiplication's identities, inequalities as
-  witnesses, and the specification of Base's `Nat.divmod` (q·b + r = a with
-  r < b), by induction on its loop.
+  (k · gcd(a, b) = a) (`gcd_divides_l`, `gcd_divides_r`), and every common
+  divisor d of a and b (u d = a, v d = b) divides `gcd(a, b)`, so it is the
+  greatest (`gcd_greatest`); `gcd(m a, m b) = m gcd(a, b)` (`gcd_mul`);
+  `gcd(0, b) = b`, `gcd(a, 0) = a` (`gcd_zero_l`, `gcd_zero_r`).
+  `lcm(a, b)` is a multiple of a and of b (`lcm_multiple_l`,
+  `lcm_multiple_r`) and divides every common multiple m (u a = v b = m;
+  `lcm_least`), with `lcm(0, b) = lcm(a, 0) = 0` (`lcm_zero_l`,
+  `lcm_zero_r`), the zero cases as the code defines them (lcm(0, 0) = 0
+  divides only 0, the only common multiple of 0 and 0). The proofs
+  (`gen/proof.py`, `gen/proof_gcd.py`) build a small Nat library:
+  addition and multiplication's identities, inequalities as witnesses,
+  and the specification of Base's `Nat.divmod` (q·b + r = a with r < b),
+  by induction on its loop. Euclid's invariant: a common divisor of a and
+  1 + q divides a mod (1 + q) (r + (a / (1 + q)) v d = u d gives r = (u −
+  (a / (1 + q)) v) d), so by induction on Euclid's fuel it divides the
+  gcd. Homogeneity: (m a) mod (m b) = m (a mod b) by the uniqueness of a
+  remainder (u32's `nat_mod_unique`), and the two runs of the loop step
+  together. For lcm, with g = gcd(a, b) not 0 (b not 0), a / g = k1 where
+  a = k1 g (`nat_div_unique`), so lcm = k1 b = k2 a; a common multiple m
+  not 0 has a b dividing m a and m b, so a b divides gcd(m a, m b) = m g,
+  and a b = lcm · g; cancelling g gives lcm dividing m.
 * **vectors:** gcd, lcm, powers, small square roots, 64-bit division signed
   and unsigned, reciprocal division at the edges (d = 1, 3, 7, 2^31,
   2^32 − 1 with a = 0, d − 1, d, 2^32 − 1), the best approximation of π
@@ -92,6 +110,25 @@ The further pairs, each proof file checked in a process of its own:
 * **the number of bits** (`LAWS_fls.bend`), for every `U32` x: x < 2^fls(x)
   (`fls_lt`), 2^fls(x) <= 2 x for x not 0 (`fls_le`), fls(x) <= 32
   (`fls_bound`); by induction on `krecip.bits.go`'s 32 steps.
+* **primality** (`LAWS_prime.bend`), for every `U32` n with value N:
+  `is_prime(n)` is True exactly when N ≥ 2 and no d with 2 ≤ d < N divides
+  N, as three laws: a prime has N ≥ 2 (`prime_ge2`); for a prime there is
+  no d with 2 ≤ d < N and k d = N (`prime_no_divisor`); and an N ≥ 2 that
+  is not prime has such a d, with its cofactor (`composite_divisor`). The
+  proofs (`gen/proof_prime.py`) follow the trial division: 2 for an even
+  n, then the odd d = 3, 5, … while d ≤ n / d. "Past" (d > n / d, through
+  u32's `U32.cmp` law) means N < d², and not past d² ≤ N. The loop runs on
+  d = 3 + 2i with 2f + d = c for its fuel f, c = 2 · 32768 + 3 = 65539, so
+  d + 2 never wraps (d + 2 ≤ c < 2^17) and the fuel runs out only at d = c
+  > 2^16. A composite N = k e (2 ≤ e < N) gives k ≥ 2, so N ≥ 4; N is odd,
+  so m = min(e, k) is odd, at least 3, divides N and has m² ≤ N; the loop,
+  at an odd d ≤ m, stops at d = m (m divides N), or passes it by 2 (both
+  odd), never stops past (d² ≤ m² ≤ N) and never runs out of fuel (c² >
+  2^32 > N), so it answers False. It answers False only at a d that
+  divides N with d² ≤ N, and then 3 ≤ d < N. The constant c stays the
+  expression `2 · 32768 + to_nat(3)`, a parameter of the loop lemmas: an
+  equation between closed Nat values of that size overflows the checkers'
+  stack (an order test such as c < 2^17 does not).
 * **reciprocal division is exact** (`LAWS_recip.bend`, Granlund and
   Montgomery's Theorem 4.2): `KRecip.divide(a, KRecip.of(d)) == U32.div(a,
   d)` for every a and every d not 0 (`recip_exact`). With l = fls(d - 1),
@@ -109,10 +146,12 @@ Not proved for every input, and why:
   handling around the unsigned laws above is not stated yet; vectors and
   `ref/run.sh`.
 * **The best rational approximation's optimality**, **CORDIC's error
-  bound** and **primality**: vectors and `ref/run.sh`. CORDIC's bound is
-  documented in `cordic.bend`: at most 64 units of 2^-30 (2^-24); an exact
-  model of its steps gives at most 18.3 over 200,000 angles.
-* **lcm** and **gcd's greatest-ness**: vectors and `ref/run.sh`.
+  bound** and **`next_prime`** (that it is the least prime above n):
+  vectors and `ref/run.sh`. CORDIC's bound is documented in `cordic.bend`:
+  at most 64 units of 2^-30 (2^-24); an exact model of its steps gives at
+  most 18.3 over 200,000 angles.
+* **The `U32` forms** `gcd32`, `lcm32` (lcm modulo 2^32) and `pow32`, and
+  `pow`: vectors and `ref/run.sh`.
 
 ## Tests
 
@@ -126,9 +165,10 @@ division for primes, on random and edge inputs.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (28 laws), `PROOF_div.bend` (10), `PROOF_fls.bend`
-(3) and `PROOF_recip.bend` (1) ALL PROOFS CHECK; `--verdict` ALL PROOFS
-CHECK on each (`PROOF.bend` about 22 s, peak 0.21 GB; `PROOF_div.bend`
-about 4 s, 0.41 GB; `PROOF_fls.bend` about 1 s, 0.26 GB; `PROOF_recip.bend`
-about 6 s, 0.59 GB); `check.bend` passes,
+Bend 2.0.37: `PROOF.bend` (37 laws), `PROOF_div.bend` (10), `PROOF_fls.bend`
+(3), `PROOF_prime.bend` (3) and `PROOF_recip.bend` (1) ALL PROOFS CHECK;
+`--verdict` ALL PROOFS CHECK on each (`PROOF.bend` about 14 s, peak 0.40
+GB; `PROOF_div.bend` about 4 s, 0.41 GB; `PROOF_fls.bend` about 1 s, 0.26
+GB; `PROOF_prime.bend` about 3 s, 0.36 GB; `PROOF_recip.bend` about 6 s,
+0.59 GB); `check.bend` passes,
 `ref/run.sh` 653 cases match, `scripts/deps.sh` passes.
