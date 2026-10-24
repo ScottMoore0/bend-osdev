@@ -100,10 +100,10 @@ def list.length_drop_le(xs: List<&2, U32>, n: Nat) -> {Nat.is_le(List.length(&2,
     case Nil{} _:
       {==}
     case Con{h, +t} 0n:
-      nat.le_refl(List.length(&2, U32, t))
+      UL.nat_le_refl(List.length(&2, U32, t))
     case Con{h, +t} 1n+ +p:
       +lt = List.length(&2, U32, t)
-      nat.le_trans(List.length(&2, U32, List.drop(&2, U32, t, p)), lt, 1n+lt, list.length_drop_le(t, p), nat.le_succ(lt, lt, nat.le_refl(lt)))
+      UO.nat_le_trans(List.length(&2, U32, List.drop(&2, U32, t, p)), lt, 1n+lt, list.length_drop_le(t, p), nat.le_succ(lt, lt, UL.nat_le_refl(lt)))
 
 def list.length_append(a: List<&2, U32>, +b: List<&2, U32>) -> {List.length(&2, U32, List.append(&2, U32, a, b)) == Nat.add(List.length(&2, U32, a), List.length(&2, U32, b)) : Nat}:
   match a:
@@ -169,14 +169,14 @@ def mo.push_list_valid(%s, +xs: %s, h: {M.model.valid(m) == True{} : Bool}) -> {
     case M.RingModel{+cap, +items}:
       %%Equal.sym(Nat, List.length(&2, U32, List.append(&2, U32, items, List.take(&2, U32, xs, %s))), Nat.add(%s, List.length(&2, U32, List.take(&2, U32, xs, %s))), list.length_append(items, List.take(&2, U32, xs, %s))) : {Nat.is_le(_, cap) == True{} : Bool}
       %%Equal.sym(Nat, List.length(&2, U32, List.take(&2, U32, xs, %s)), Nat.min(%s, %s), list.length_take(xs, %s)) : {Nat.is_le(Nat.add(%s, _), cap) == True{} : Bool}
-      nat.add_le_sub(%s, Nat.min(%s, %s), cap, h, nat.le_trans(Nat.min(%s, %s), %s, %s, nat.min_le_l(%s, %s), nat.min_le_r(%s, %s)))
+      nat.add_le_sub(%s, Nat.min(%s, %s), cap, h, UO.nat_le_trans(Nat.min(%s, %s), %s, %s, nat.min_le_l(%s, %s), nat.min_le_r(%s, %s)))
 """ % (MH, L, K, li, K, K, K, K, LXS, K, li, li, K, LXS, K, LXS, K, AVM, K, LXS, LXS, AVM))
 
 d("""
 def mo.pop_list_valid(%s, +n: Nat, h: {M.model.valid(m) == True{} : Bool}) -> {M.model.valid(Pair.fst(M.RingModel, %s, M.model.pop_list(m, n))) == True{} : Bool}:
   match m:
     case M.RingModel{+cap, +items}:
-      nat.le_trans(List.length(&2, U32, List.drop(&2, U32, items, n)), %s, cap, list.length_drop_le(items, n), h)
+      UO.nat_le_trans(List.length(&2, U32, List.drop(&2, U32, items, n)), %s, cap, list.length_drop_le(items, n), h)
 """ % (MH, L, li))
 
 d("""
@@ -380,7 +380,7 @@ def Laws.model_pop_valid(m, h):
         case Nil{}:
           h
         case Con{y, +t}:
-          nat.le_trans(List.length(&2, U32, t), 1n+List.length(&2, U32, t), cap, nat.le_succ(List.length(&2, U32, t), List.length(&2, U32, t), nat.le_refl(List.length(&2, U32, t))), h)
+          UO.nat_le_trans(List.length(&2, U32, t), 1n+List.length(&2, U32, t), cap, nat.le_succ(List.length(&2, U32, t), List.length(&2, U32, t), UL.nat_le_refl(List.length(&2, U32, t))), h)
 
 def Laws.model_peek_is_pop(m):
   match m:

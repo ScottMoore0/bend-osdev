@@ -24,6 +24,8 @@ import ./bm.bend as Bm
 import ./chien.bend as Ch
 import ./rs.bend as D
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions
 
@@ -994,17 +996,6 @@ def Laws.codeword_message(c, m):
 
 # Words
 
-def rsp.bx_comm(+a: Bool, +b: Bool) -> {Bool.xor(a, b) == Bool.xor(b, a) : Bool}:
-  match a b:
-    case True{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case False{} False{}:
-      {==}
-
 def rsp.bx_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, b), c) == Bool.xor(a, Bool.xor(b, c)) : Bool}:
   match a b c:
     case True{} True{} True{}:
@@ -1024,19 +1015,6 @@ def rsp.bx_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, b), c) =
     case False{} False{} False{}:
       {==}
 
-def rsp.wx_comm(n: Nat, a: Word(n), b: Word(n)) -> {Word.xor(n, a, b) == Word.xor(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{ah, at} WCon{bh, bt}:
-          %rsp.bx_comm(bh, ah) : {WCon{_, Word.xor(p, at, bt)} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          %rsp.wx_comm(p, bt, at) : {WCon{Bool.xor(bh, ah), _} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          {==}
-
 def rsp.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Word.xor(n, a, b), c) == Word.xor(n, a, Word.xor(n, b, c)) : Word(n)}:
   match n:
     case 0n:
@@ -1050,12 +1028,6 @@ def rsp.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Wor
           %rsp.wx_assoc(p, at, bt, ct) : {WCon{Bool.xor(Bool.xor(ah, bh), ch), Word.xor(p, Word.xor(p, at, bt), ct)} == WCon{Bool.xor(Bool.xor(ah, bh), ch), _} : Word(1n+p)}
           {==}
 
-def rsp.ux_comm(a: U32, b: U32) -> {U32.xor(a, b) == U32.xor(b, a) : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      %rsp.wx_comm(32n, y, x) : {U32{_} == U32{Word.xor(32n, y, x)} : U32}
-      {==}
-
 def rsp.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xor(a, U32.xor(b, c)) : U32}:
   match a b c:
     case U32{x} U32{y} U32{z}:
@@ -1065,7 +1037,7 @@ def rsp.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xo
 # GF(8) addition: a commutative, associative operation
 
 def rsp.add8_comm(+a: U32, +b: U32) -> {M.Gfm.add(C.Rs.gf8(), a, b) == M.Gfm.add(C.Rs.gf8(), b, a) : U32}:
-  %rsp.ux_comm(b, a) : {M.Gfm.elt(C.Rs.gf8(), _) == M.Gfm.elt(C.Rs.gf8(), U32.xor(b, a)) : U32}
+  %UL.u32_xor_comm(b, a) : {M.Gfm.elt(C.Rs.gf8(), _) == M.Gfm.elt(C.Rs.gf8(), U32.xor(b, a)) : U32}
   {==}
 
 def rsp.add8_assoc(+a: U32, +b: U32, +c: U32) -> {M.Gfm.add(C.Rs.gf8(), M.Gfm.add(C.Rs.gf8(), a, b), c) == M.Gfm.add(C.Rs.gf8(), a, M.Gfm.add(C.Rs.gf8(), b, c)) : U32}:

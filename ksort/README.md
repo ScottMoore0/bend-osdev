@@ -138,6 +138,9 @@ exhaustively instead (below), and by the differential test.
 `of_list_leaves`, `index_below`, `index_of_u32` and the `nth_set_*` laws).
 The code itself uses Base only.
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

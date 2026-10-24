@@ -714,7 +714,7 @@ def wd.p2(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat
     d1 = le_from("Nat.double(Q)", f"Nat.add(Nat.double({X}), tx)", f"Nat.add(Nat.double({Wq}), tx)",
                  calc(f"Nat.add(Nat.add(Nat.double({Wq}), tx), Nat.double(Q))", (f"Nat.add(Nat.double(Nat.add({Wq}, Q)), tx)", "ring"),
                       (f"Nat.add(Nat.double({X}), tx)", hyp(qle, f"Nat.add({Wq}, Q)", X))))
-    hQ = let("hQ", f"P.wn.le_lt_trans(Nat.double(Q), Nat.add(Nat.double({X}), tx), {DN}, {d1}, hX)")
+    hQ = let("hQ", f"UO.nat_le_lt_trans(Nat.double(Q), Nat.add(Nat.double({X}), tx), {DN}, {d1}, hX)")
     esq = let("esq", f"UL.dbl_nowrap(N, tq, Sq, Nat.double(Q), Nat.double(Q), fq, UL.nat_le_refl(Nat.double(Q)), {hQ})")
     bg = "U.U32Nat.bit(g)"
     eS2 = calc("Nat.add(Nat.mul(Q1, B), R1)",
@@ -803,7 +803,7 @@ def wd.p2(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat
     # the bound for the bits below: (q b + r) 2^p + hi <= (q b + r) 2^(1+p) + w
     le = le_from(Sp, TOT, f"Nat.add({Sp}, U.U32Nat.bit(x))",
                  calc(f"Nat.add(Nat.add({Sp}, U.U32Nat.bit(x)), {Sp})", (f"Nat.add(Nat.double({Sp}), U.U32Nat.bit(x))", "ring"), (TOT, tot)))
-    hXi = f"P.wn.le_lt_trans({Sp}, {TOT}, {W64v}, {le}, hX)"
+    hXi = f"UO.nat_le_lt_trans({Sp}, {TOT}, {W64v}, {le}, hX)"
     put(f"""def wd.bs(+p: Nat, +x: Bool, +hi: Word(p), +b: W.W64, +q: W.W64, +r: W.W64, +hb: {btrue(f'Nat.is_lt({vb}, {W64v})')}, +hX: {btrue(f'Nat.is_lt({TOT}, {W64v})')}, ih: {OUTB('p', 'hi')}) -> {OUTB('1n+p', 'WCon{x, hi}')}:
   (+e, +l) = ih
   %Equal.sym(W.W64 & W.W64, {PP}, (W.W64.fst({PP}), W.W64.snd({PP})), wd.eta({PP})) : {goalP}
@@ -826,7 +826,7 @@ def wd.bits(m: Nat, w: Word(m), +b: W.W64, +q: W.W64, +r: W.W64, +hR: {btrue(f'N
     X1 = f"Nat.add(Nat.mul({F1}, {vb}), {S1})"
     hR0 = btrans(f"Nat.is_lt({v64(Z)}, {vb})", f"Nat.is_lt(0n, {vb})", "True{}", "{==}",
                  f"wd.nz({vb}, Equal.trans(Bool, Nat.is_eq({vb}, 0n), W.W64.is_zero(b), False{{}}, Equal.sym(Bool, W.W64.is_zero(b), Nat.is_eq({vb}, 0n), Laws.eq_value(b, {Z})), h))")
-    hwlt = f"P.wn.lt_le_trans({hw}, {D('32n', '1n')}, {W64v}, UL.word_value_lt(32n, hw), UL.dbl_le_exp(32n, 64n, 1n, {{==}}))"
+    hwlt = f"UO.nat_lt_le_trans({hw}, {D('32n', '1n')}, {W64v}, UL.word_value_lt(32n, hw), UL.dbl_le_exp(32n, 64n, 1n, {{==}}))"
     hX0 = lt_rw(hw, W64v, f"Nat.add({D('32n', XX0)}, {hw})", W64v, "{==}", None, hwlt)
     I1 = f"wd.bits(32n, hw, b, {Z}, {Z}, {hR0}, wv.lt64(b), {hX0})"
     a1 = f"{X1}, Nat.add({D('32n', XX0)}, {hw}), {S1}, {vb}"
@@ -938,7 +938,7 @@ def wsd.mlc.go(b: Bool, +x: Nat, +y: Nat, +c: Nat, +eb: {{Nat.is_lt(x, y) == b :
     case True{{}}:
       eb
     case False{{}}:
-      Empty.absurd({btrue('Nat.is_lt(x, y)')}, P.wn.lt_irrefl(Nat.mul(y, c), P.wn.le_lt_trans(Nat.mul(y, c), Nat.mul(x, c), Nat.mul(y, c), wsd.mle(y, x, c, PS.ns.le_of_not_lt(x, y, eb)), h)))
+      Empty.absurd({btrue('Nat.is_lt(x, y)')}, P.wn.lt_irrefl(Nat.mul(y, c), UO.nat_le_lt_trans(Nat.mul(y, c), Nat.mul(x, c), Nat.mul(y, c), wsd.mle(y, x, c, PS.ns.le_of_not_lt(x, y, eb)), h)))
 
 def wsd.mlc(+x: Nat, +y: Nat, +c: Nat, +h: {btrue('Nat.is_lt(Nat.mul(x, c), Nat.mul(y, c))')}) -> {btrue('Nat.is_lt(x, y)')}:
   wsd.mlc.go(Nat.is_lt(x, y), x, y, c, {{==}}, h)
@@ -951,7 +951,7 @@ def wsd.mlc(+x: Nat, +y: Nat, +c: Nat, +h: {btrue('Nat.is_lt(Nat.mul(x, c), Nat.
     hKn = lt_rw("x", D("h", Kh), "x", Kn, None, f"Equal.sym(Nat, {Kn}, {D('h', Kh)}, wm.fn(h, n, 1n, en))", "hh")
     put(f"""# x < 2^h 10: x < 2^n (for 10 <= 2^h)
 def wsd.kn(+n: Nat, +h: Nat, +x: Nat, +en: {{Nat.add(h, h) == n : Nat}}, +h10: {btrue(f'Nat.is_le(10n, {Kh})')}, +hx: {btrue(f'Nat.is_lt(x, {D("h", "10n")})')}) -> {btrue(f'Nat.is_lt(x, {Kn})')}:
-  +hh = P.wn.lt_le_trans(x, {D('h', '10n')}, {D('h', Kh)}, hx, {hK10})
+  +hh = UO.nat_lt_le_trans(x, {D('h', '10n')}, {D('h', Kh)}, hx, {hK10})
   {hKn}
 """)
     w1, e1 = wit_lt("C", Kh, "hC")
@@ -959,7 +959,7 @@ def wsd.kn(+n: Nat, +h: Nat, +x: Nat, +en: {{Nat.add(h, h) == n : Nat}}, +h10: {
     l1 = lt_from(sv, D("h", "1n+R"), w1, calc(f"Nat.add({w1}, 1n+{sv})", (f"Nat.add({sR}, Nat.add({w1}, 1n+C))", "ring"), (f"Nat.add({sR}, {Kh})", e1), (D("h", "1n+R"), "ring")))
     l2 = btrans(f"Nat.is_le({D('h', '1n+R')}, {D('h', '10n')})", "Nat.is_le(1n+R, 10n)", "True{}", f"UL.dbl_le(h, 1n+R, 10n)",
                 btrans("Nat.is_le(1n+R, 10n)", "Nat.is_lt(R, 10n)", "True{}", "P.wn.le_succ(R, 10n)", "hR"))
-    vlt = f"P.wn.lt_le_trans({sv}, {D('h', '1n+R')}, {D('h', '10n')}, {l1}, {l2})"
+    vlt = f"UO.nat_lt_le_trans({sv}, {D('h', '1n+R')}, {D('h', '10n')}, {l1}, {l2})"
     # 2^h r < 2^h 10
     rlt = btrans(f"Nat.is_lt({sR}, {D('h', '10n')})", "Nat.is_lt(R, 10n)", "True{}", "UL.dbl_lt(h, R, 10n)", "hR")
     evm = f"Equal.trans(Nat, Vm, {low('n', sR)}, {sR}, em, UL.low_small(n, {sR}, wsd.kn(n, h, {sR}, en, h10, {rlt})))"
@@ -973,7 +973,7 @@ def wsd.kn(+n: Nat, +h: Nat, +x: Nat, +en: {{Nat.add(h, h) == n : Nat}}, +h10: {
 
 # 10 d + m = v < 2^h 10: d < 2^h
 def wsd.k2(+h: Nat, +V: Nat, +Dd: Nat, +M: Nat, +edm: {{Nat.add(Nat.mul(Dd, 10n), M) == V : Nat}}, +hv: {btrue(f'Nat.is_lt(V, {D("h", "10n")})')}) -> {btrue(f'Nat.is_lt(Dd, {Kh})')}:
-  wsd.mlc(Dd, {Kh}, 10n, P.wn.le_lt_trans(Nat.mul(Dd, 10n), V, Nat.mul({Kh}, 10n), {le_from('Nat.mul(Dd, 10n)', 'V', 'M', chain([ring('Nat.add(M, Nat.mul(Dd, 10n))', 'Nat.add(Nat.mul(Dd, 10n), M)'), hyp('edm', 'Nat.add(Nat.mul(Dd, 10n), M)', 'V')]))}, {lt_rw('V', D('h', '10n'), 'V', f'Nat.mul({Kh}, 10n)', None, ring(D('h', '10n'), f'Nat.mul({Kh}, 10n)').text, 'hv')}))
+  wsd.mlc(Dd, {Kh}, 10n, UO.nat_le_lt_trans(Nat.mul(Dd, 10n), V, Nat.mul({Kh}, 10n), {le_from('Nat.mul(Dd, 10n)', 'V', 'M', chain([ring('Nat.add(M, Nat.mul(Dd, 10n))', 'Nat.add(Nat.mul(Dd, 10n), M)'), hyp('edm', 'Nat.add(Nat.mul(Dd, 10n), M)', 'V')]))}, {lt_rw('V', D('h', '10n'), 'V', f'Nat.mul({Kh}, 10n)', None, ring(D('h', '10n'), f'Nat.mul({Kh}, 10n)').text, 'hv')}))
 
 # q < 2^h: the shift of q by h is 2^h q
 def wsd.k3(+n: Nat, +h: Nat, +Qo: Nat, +Sq: Nat, +en: {{Nat.add(h, h) == n : Nat}}, +hQ: {btrue(f'Nat.is_lt(Qo, {Kh})')}, +esq: {{Sq == {low('n', D('h', 'Qo'))} : Nat}}) -> {{Sq == {D('h', 'Qo')} : Nat}}:
@@ -1235,7 +1235,7 @@ def wsh.gg(+y: Nat) -> {btrue(f'Nat.is_le({D("13n", "y")}, {g(g("y"))})')}:
     q1, q2, q3, q4 = it("x"), it(it("x")), it(it(it("x"))), it(it(it(it("x"))))
     sde = lambda y: f"wsd.e({y}, wsd.sd({y}))"
     lef = lambda q, x: f"wsh.f1({v64(q)}, {v32(f'wsh.r({x})')}, {v64(x)}, {sde(x)})"
-    LE = P_le = "P.wn.le_trans"
+    LE = P_le = "UO.nat_le_trans"
     # x >= f(q1) >= f(f(q2)) >= g(q2) >= g(f(q3)) >= g(f(f(q4))) >= g(g(q4)) >= 2^13 q4
     c1 = lef(q1, "x")
     c2 = f"wsh.fm({v64(q1)}, {v64(q2)}" if False else None
@@ -1264,7 +1264,7 @@ def wsh.gg(+y: Nat) -> {btrue(f'Nat.is_le({D("13n", "y")}, {g(g("y"))})')}:
         yk, yk1 = ys[k], ys[k + 1]
         # dbl(13, v y_{k+1}) <= v y_k, so dbl(tot, dbl(13, v y_{k+1})) <= dbl(tot, v y_k) <= v a
         m1 = btrans(f"Nat.is_le({D(f'{tot}n', D('13n', v64(yk1)))}, {D(f'{tot}n', v64(yk))})", f"Nat.is_le({D('13n', v64(yk1))}, {v64(yk)})", "True{}", f"UL.dbl_le({tot}n, {D('13n', v64(yk1))}, {v64(yk)})", f"wsh.b4({yk})")
-        m2 = f"P.wn.le_trans({D(f'{tot}n', D('13n', v64(yk1)))}, {D(f'{tot}n', v64(yk))}, {v64('a')}, {m1}, {cur})"
+        m2 = f"UO.nat_le_trans({D(f'{tot}n', D('13n', v64(yk1)))}, {D(f'{tot}n', v64(yk))}, {v64('a')}, {m1}, {cur})"
         # dbl(tot, dbl(13, y)) = dbl(tot + 13, y)
         nxt = tot + 13
         eq = f"Equal.trans(Nat, {D(f'{tot}n', D('13n', v64(yk1)))}, {D(f'Nat.add({tot}n, 13n)', v64(yk1))}, {D(f'{nxt}n', v64(yk1))}, UL.dbl_dbl({tot}n, 13n, {v64(yk1)}), {{==}})"
@@ -1281,7 +1281,7 @@ def wsh.gg(+y: Nat) -> {btrue(f'Nat.is_le({D("13n", "y")}, {g(g("y"))})')}:
     case 0n:
       {{==}}
     case 1n+ +p:
-      Empty.absurd({{1n+p == 0n : Nat}}, P.wn.lt_irrefl(A, P.wn.lt_le_trans(A, {DN}, A, h2, P.wn.le_trans({DN}, {dd('1n+p')}, A, {le_from(DN, dd('1n+p'), f'Nat.add({DN}, {dd("p")})', ring(f'Nat.add(Nat.add({DN}, {dd("p")}), {DN})', dd('1n+p')))}, h1))))
+      Empty.absurd({{1n+p == 0n : Nat}}, P.wn.lt_irrefl(A, UO.nat_lt_le_trans(A, {DN}, A, h2, UO.nat_le_trans({DN}, {dd('1n+p')}, A, {le_from(DN, dd('1n+p'), f'Nat.add({DN}, {dd("p")})', ring(f'Nat.add(Nat.add({DN}, {dd("p")}), {DN})', dd('1n+p')))}, h1))))
 """)
     h1 = f"Equal.trans(Bool, Nat.is_le(Nat.double({D('64n', Y)}), {v64('a')}), Nat.is_le({D('65n', Y)}, {v64('a')}), True{{}}, {{==}}, {cur})"
     put(f"""def wsh.f20(+a: W.W64) -> {{W.W64.is_zero(wsh.it(20n, a)) == True{{}} : Bool}}:
@@ -1320,6 +1320,8 @@ def header(part, what, deps):
              "import ./PROOF.bend as WBP",
              "import ./proof_value.bend as P",
              "import ./proof_shift.bend as PS"]
+    if part in ("div", "text"):
+        lines += ["import ../u32/LAWS_order.bend as UO", "import ../u32/PROOF_order.bend as UOP"]
     for alias, dep in deps:
         lines.append(f"import ./LAWS_{dep}.bend as {alias}")
         lines.append(f"import ./PROOF_{dep}.bend as {alias}P")

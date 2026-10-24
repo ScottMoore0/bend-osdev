@@ -191,6 +191,9 @@ perfect array with array's `Arrays.is_perfect`, and the element laws are
 proved through array's laws (`PROOF.bend` and `proof_items.bend` import its
 `LAWS.bend` and `PROOF.bend`).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

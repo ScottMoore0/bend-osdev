@@ -22,6 +22,8 @@ import ./table.bend as T
 import ./proof_word.bend as PW
 import ./proof_engine.bend as PE
 import ./proof_cases.bend as PC
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 def cf.hd8() -> {Nat.is_lt(8n, 32n) == True{} : Bool}:
   {==}
@@ -86,7 +88,7 @@ def cf.look_low(+e: PE.CrcPfEng, j: U32) -> {A.Arrays.nth(U32, PC.ct.tab(e), U32
       PC.ct.look(e, b0, b1, b2, b3, b4, b5, b6, b7)
 
 def cf.look_any(+e: PE.CrcPfEng, +j: U32) -> {A.Arrays.nth(U32, PC.ct.tab(e), A.Arrays.index(8n, j), 0) == PE.ce.ev(e, PE.ce.lowbyte(j)) : U32}:
-  %PW.cw.ua_comm(255, j) : {A.Arrays.nth(U32, PC.ct.tab(e), U32.to_nat(_), 0) == PE.ce.ev(e, PE.ce.lowbyte(j)) : U32}
+  %UL.u32_and_comm(255, j) : {A.Arrays.nth(U32, PC.ct.tab(e), U32.to_nat(_), 0) == PE.ce.ev(e, PE.ce.lowbyte(j)) : U32}
   %Equal.sym(U32, U32.and(255, j), PE.ce.lowbyte(j), PE.ce.mask_low(j)) : {A.Arrays.nth(U32, PC.ct.tab(e), U32.to_nat(_), 0) == PE.ce.ev(e, PE.ce.lowbyte(j)) : U32}
   cf.look_low(e, j)
 
@@ -95,7 +97,7 @@ def cf.look_any(+e: PE.CrcPfEng, +j: U32) -> {A.Arrays.nth(U32, PC.ct.tab(e), A.
 def cf.step_r(+c: U32, +h: U32, +p: U32) -> {U32.xor(U32.shrn(c, 8n), A.Arrays.nth(U32, PC.ct.tab(PE.CrcPfR{p}), A.Arrays.index(8n, U32.and(U32.xor(c, h), 255)), 0)) == C.r32.bits(8n, p, U32.xor(c, U32.and(h, 255))) : U32}:
   %Equal.sym(U32, A.Arrays.nth(U32, PC.ct.tab(PE.CrcPfR{p}), A.Arrays.index(8n, U32.and(U32.xor(c, h), 255)), 0), PE.ce.ev(PE.CrcPfR{p}, PE.ce.lowbyte(U32.and(U32.xor(c, h), 255))), cf.look_any(PE.CrcPfR{p}, U32.and(U32.xor(c, h), 255))) : {U32.xor(U32.shrn(c, 8n), _) == C.r32.bits(8n, p, U32.xor(c, U32.and(h, 255))) : U32}
   %Equal.sym(U32, PE.ce.lowbyte(U32.and(U32.xor(c, h), 255)), U32.and(255, U32.xor(c, h)), PE.ce.low_and(U32.xor(c, h))) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, _)) == C.r32.bits(8n, p, U32.xor(c, U32.and(h, 255))) : U32}
-  %PW.cw.ua_comm(255, h) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, U32.and(255, U32.xor(c, h)))) == C.r32.bits(8n, p, U32.xor(c, _)) : U32}
+  %UL.u32_and_comm(255, h) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, U32.and(255, U32.xor(c, h)))) == C.r32.bits(8n, p, U32.xor(c, _)) : U32}
   %Equal.sym(U32, U32.xor(c, U32.and(255, h)), U32.xor(U32.and(4294967040, c), U32.and(255, U32.xor(c, h))), PC.ct.r_split(c, h)) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, U32.and(255, U32.xor(c, h)))) == C.r32.bits(8n, p, _) : U32}
   %Equal.sym(U32, C.r32.bits(8n, p, U32.xor(U32.and(4294967040, c), U32.and(255, U32.xor(c, h)))), PE.ce.rb(8n, p, U32.xor(U32.and(4294967040, c), U32.and(255, U32.xor(c, h)))), PE.ce.r_rb(8n, p, U32.xor(U32.and(4294967040, c), U32.and(255, U32.xor(c, h))))) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, U32.and(255, U32.xor(c, h)))) == _ : U32}
   %Equal.sym(U32, PE.ce.rb(8n, p, U32.xor(U32.and(4294967040, c), U32.and(255, U32.xor(c, h)))), U32.xor(PE.ce.rb(8n, p, U32.and(4294967040, c)), PE.ce.rb(8n, p, U32.and(255, U32.xor(c, h)))), PE.ce.r_lin(8n, p, U32.and(4294967040, c), U32.and(255, U32.xor(c, h)))) : {U32.xor(U32.shrn(c, 8n), C.r32.bits(8n, p, U32.and(255, U32.xor(c, h)))) == _ : U32}
@@ -134,8 +136,8 @@ def cf.step_n(+width: Nat, +hw: {Nat.is_lt(width, 8n) == False{} : Bool}, +c: U3
   %Equal.sym(U32, PE.ce.lowbyte(U32.and(U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h), 255)), U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), PE.ce.low_and(U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h))) : {U32.and(U32.xor(U32.shln(c, 8n), C.n32.bits(8n, p, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), U32.shln(_, Nat.sub(width, 8n)))), U32.sub(U32.shln(1, width), 1)) == C.n32.bits(8n, p, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))) : U32}
   %Equal.sym(U32, C.n32.bits(8n, p, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))), cf.n_nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n)))) : {U32.and(U32.xor(U32.shln(c, 8n), _), U32.sub(U32.shln(1, width), 1)) == C.n32.bits(8n, p, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))) : U32}
   %Equal.sym(U32, C.n32.bits(8n, p, U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))), cf.n_nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n))))) : {U32.and(U32.xor(U32.shln(c, 8n), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n)))), U32.sub(U32.shln(1, width), 1)) == _ : U32}
-  %PW.cw.ua_comm(U32.sub(U32.shln(1, width), 1), U32.xor(U32.shln(c, 8n), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))))) : {_ == PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))) : U32}
-  %PW.cw.ua_comm(255, h) : {U32.and(U32.sub(U32.shln(1, width), 1), U32.xor(U32.shln(c, 8n), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))))) == PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(_, Nat.sub(width, 8n)))) : U32}
+  %UL.u32_and_comm(U32.sub(U32.shln(1, width), 1), U32.xor(U32.shln(c, 8n), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))))) : {_ == PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(U32.and(h, 255), Nat.sub(width, 8n)))) : U32}
+  %UL.u32_and_comm(255, h) : {U32.and(U32.sub(U32.shln(1, width), 1), U32.xor(U32.shln(c, 8n), PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.shln(U32.and(255, U32.xor(U32.shrn(c, Nat.sub(width, 8n)), h)), Nat.sub(width, 8n))))) == PE.ce.nb(8n, p, Nat.sub(width, 1n), U32.sub(U32.shln(1, width), 1), U32.xor(c, U32.shln(_, Nat.sub(width, 8n)))) : U32}
   PC.ct.core(width, hw, c, h, p)
 
 def cf.loop_n(xs: List<&2, U32>, +width: Nat, +hw: {Nat.is_lt(width, 8n) == False{} : Bool}, +p: U32, +c: U32) -> {T.t32.n.raw(xs, Nat.sub(width, 8n), U32.sub(U32.shln(1, width), 1), (cf.otab(PE.CrcPfN{p, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1)}), c)) == (cf.otab(PE.CrcPfN{p, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1)}), C.n32.raw(xs, p, Nat.sub(width, 8n), U32.shln(1, Nat.sub(width, 1n)), U32.sub(U32.shln(1, width), 1), c)) : Array<U32> & U32}:

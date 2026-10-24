@@ -18,6 +18,10 @@ import ./ringbuf.bend as R
 import ../array/array.bend as A
 import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Shorthands (they unfold to the defs they name)
 
@@ -65,34 +69,6 @@ def ri.ft(e: {False{} == True{} : Bool}) -> Empty:
 
 # Nat
 
-def ri.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, ri.add_zero(p))
-
-def ri.add_succ(a: Nat, -b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+b), 1n+Nat.add(p, b), ri.add_succ(p, b))
-
-def ri.add_comm(x: Nat, +y: Nat) -> {Nat.add(x, y) == Nat.add(y, x) : Nat}:
-  match x:
-    case 0n:
-      Equal.sym(Nat, Nat.add(y, 0n), y, ri.add_zero(y))
-    case 1n+ +p:
-      Equal.trans(Nat, 1n+Nat.add(p, y), 1n+Nat.add(y, p), Nat.add(y, 1n+p), Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, y), Nat.add(y, p), ri.add_comm(p, y)), Equal.sym(Nat, Nat.add(y, 1n+p), 1n+Nat.add(y, p), ri.add_succ(y, p)))
-
-def ri.double_self(x: Nat) -> {Nat.double(x) == Nat.add(x, x) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      Equal.trans(Nat, 2n+Nat.double(p), 2n+Nat.add(p, p), 1n+Nat.add(p, 1n+p), Equal.cong(Nat, Nat, k => 2n+k, Nat.double(p), Nat.add(p, p), ri.double_self(p)), Equal.cong(Nat, Nat, k => 1n+k, 1n+Nat.add(p, p), Nat.add(p, 1n+p), Equal.sym(Nat, Nat.add(p, 1n+p), 1n+Nat.add(p, p), ri.add_succ(p, p))))
-
 def ri.sub_zero(x: Nat) -> {Nat.sub(x, 0n) == x : Nat}:
   match x:
     case 0n:
@@ -119,13 +95,6 @@ def ri.add_sub(d: Nat, s: Nat, e: {Nat.is_le(d, s) == True{} : Bool}) -> {Nat.ad
     case 1n+ +dp 1n+ +sp:
       Equal.cong(Nat, Nat, k => 1n+k, Nat.add(dp, Nat.sub(sp, dp)), sp, ri.add_sub(dp, sp, e))
 
-def ri.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      ri.le_refl(p)
-
 def ri.lt_succ_r(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_lt(x, 1n+y) == True{} : Bool}:
   match x y:
     case 0n _:
@@ -134,21 +103,6 @@ def ri.lt_succ_r(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.
       Empty.absurd({Nat.is_lt(1n+xp, 1n) == True{} : Bool}, ri.ft(h))
     case 1n+xp 1n+yp:
       ri.lt_succ_r(xp, yp, h)
-
-def ri.lt_trans(a: Nat, b: Nat, c: Nat, h1: {Nat.is_lt(a, b) == True{} : Bool}, h2: {Nat.is_lt(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n 0n _:
-      Empty.absurd({Nat.is_lt(0n, c) == True{} : Bool}, ri.ft(h1))
-    case 0n 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, ri.ft(h2))
-    case 0n 1n+bp 1n+cp:
-      {==}
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_lt(1n+ap, c) == True{} : Bool}, ri.ft(h1))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(1n+ap, 0n) == True{} : Bool}, ri.ft(h2))
-    case 1n+ap 1n+bp 1n+cp:
-      ri.lt_trans(ap, bp, cp, h1, h2)
 
 # x < y: x != y
 def ri.ne_lt(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_eq(x, y) == False{} : Bool}:
@@ -277,10 +231,10 @@ def ri.view_len(n: Nat, +k: Nat, +o: Nat, +l: List<&2, U32>) -> {List.length(&2,
 def ri.view_snoc(p: Nat, +u: Nat, +o: Nat, +l: List<&2, U32>) -> {ri.view(1n+p, u, o, l) == List.append(&2, U32, ri.view(p, u, o, l), Con{ri.at(o, l, Nat.add(u, p)), Nil{}}) : List<&2, U32>}:
   match p:
     case 0n:
-      %Equal.sym(Nat, Nat.add(u, 0n), u, ri.add_zero(u)) : {Con{ri.at(o, l, u), Nil{}} == Con{ri.at(o, l, _), Nil{}} : List<&2, U32>}
+      %Equal.sym(Nat, Nat.add(u, 0n), u, UL.nat_add_zero(u)) : {Con{ri.at(o, l, u), Nil{}} == Con{ri.at(o, l, _), Nil{}} : List<&2, U32>}
       {==}
     case 1n+ +q:
-      %Equal.sym(Nat, Nat.add(u, 1n+q), 1n+Nat.add(u, q), ri.add_succ(u, q)) : {Con{ri.at(o, l, u), ri.view(1n+q, 1n+u, o, l)} == Con{ri.at(o, l, u), List.append(&2, U32, ri.view(q, 1n+u, o, l), Con{ri.at(o, l, _), Nil{}})} : List<&2, U32>}
+      %Equal.sym(Nat, Nat.add(u, 1n+q), 1n+Nat.add(u, q), UL.nat_add_succ(u, q)) : {Con{ri.at(o, l, u), ri.view(1n+q, 1n+u, o, l)} == Con{ri.at(o, l, u), List.append(&2, U32, ri.view(q, 1n+u, o, l), Con{ri.at(o, l, _), Nil{}})} : List<&2, U32>}
       %Equal.sym(List<&2, U32>, ri.view(1n+q, 1n+u, o, l), List.append(&2, U32, ri.view(q, 1n+u, o, l), Con{ri.at(o, l, Nat.add(1n+u, q)), Nil{}}), ri.view_snoc(q, 1n+u, o, l)) : {Con{ri.at(o, l, u), _} == Con{ri.at(o, l, u), List.append(&2, U32, ri.view(q, 1n+u, o, l), Con{ri.at(o, l, 1n+Nat.add(u, q)), Nil{}})} : List<&2, U32>}
       {==}
 
@@ -355,7 +309,7 @@ def ri.idx_val(+o: Nat, +hd: {Nat.is_lt(o, 32n) == True{} : Bool}, +c: Nat, b: B
       +s = A.Arrays.slots(o)
       +r = Nat.sub(c, s)
       +ec = ri.add_sub(s, c, ri.not_lt(c, s, eb))
-      +h2 = ri.lt_rw(c, Nat.double(s), Nat.add(s, r), Nat.add(s, s), Equal.sym(Nat, Nat.add(s, r), c, ec), ri.double_self(s), hc)
+      +h2 = ri.lt_rw(c, Nat.double(s), Nat.add(s, r), Nat.add(s, s), Equal.sym(Nat, Nat.add(s, r), c, ec), UL.nat_double(s), hc)
       +hr = Equal.trans(Bool, Nat.is_lt(r, s), Nat.is_lt(Nat.add(s, r), Nat.add(s, s)), True{}, Equal.sym(Bool, Nat.is_lt(Nat.add(s, r), Nat.add(s, s)), Nat.is_lt(r, s), ri.lt_cancel(s, r, s)), h2)
       %ec : {A.Arrays.index(o, U32.from_nat(_)) == Nat.sub(c, s) : Nat}
       AL.index_wrap(o, hd, r, hr)
@@ -366,11 +320,11 @@ def ri.md_ne(bi: Bool, bc: Bool, +s: Nat, +c: Nat, +i: Nat, +ebi: {Nat.is_lt(i, 
     case True{} True{}:
       ri.ne_gt(i, c, h1)
     case True{} False{}:
-      Empty.absurd({Nat.is_eq(i, Nat.sub(c, s)) == False{} : Bool}, ri.tf(Equal.trans(Bool, True{}, Nat.is_lt(c, s), False{}, Equal.sym(Bool, Nat.is_lt(c, s), True{}, ri.lt_trans(c, i, s, h1, ebi)), ebc)))
+      Empty.absurd({Nat.is_eq(i, Nat.sub(c, s)) == False{} : Bool}, ri.tf(Equal.trans(Bool, True{}, Nat.is_lt(c, s), False{}, Equal.sym(Bool, Nat.is_lt(c, s), True{}, UO.nat_lt_trans(c, i, s, h1, ebi)), ebc)))
     case False{} True{}:
       +ip = Nat.sub(i, s)
       +ei = ri.add_sub(s, i, ri.not_lt(i, s, ebi))
-      +h2b = ri.lt_rw(i, Nat.add(c, s), Nat.add(s, ip), Nat.add(s, c), Equal.sym(Nat, Nat.add(s, ip), i, ei), ri.add_comm(c, s), h2)
+      +h2b = ri.lt_rw(i, Nat.add(c, s), Nat.add(s, ip), Nat.add(s, c), Equal.sym(Nat, Nat.add(s, ip), i, ei), UL.nat_add_comm(c, s), h2)
       ri.ne_lt(ip, c, Equal.trans(Bool, Nat.is_lt(ip, c), Nat.is_lt(Nat.add(s, ip), Nat.add(s, c)), True{}, Equal.sym(Bool, Nat.is_lt(Nat.add(s, ip), Nat.add(s, c)), Nat.is_lt(ip, c), ri.lt_cancel(s, ip, c)), h2b))
     case False{} False{}:
       +ip = Nat.sub(i, s)
@@ -382,7 +336,7 @@ def ri.md_ne(bi: Bool, bc: Bool, +s: Nat, +c: Nat, +i: Nat, +ebi: {Nat.is_lt(i, 
 
 def ri.idx_ne(+o: Nat, +hd: {Nat.is_lt(o, 32n) == True{} : Bool}, +c: Nat, +i: Nat, +h1: {Nat.is_lt(c, i) == True{} : Bool}, +h2: {Nat.is_lt(i, Nat.add(c, A.Arrays.slots(o))) == True{} : Bool}, +h3: {Nat.is_lt(i, Nat.double(A.Arrays.slots(o))) == True{} : Bool}) -> {Nat.is_eq(ri.ix(o, i), ri.ix(o, c)) == False{} : Bool}:
   +s = A.Arrays.slots(o)
-  +hc = ri.lt_trans(c, i, Nat.double(s), h1, h3)
+  +hc = UO.nat_lt_trans(c, i, Nat.double(s), h1, h3)
   %Equal.sym(Nat, ri.ix(o, i), ri.md(Nat.is_lt(i, s), s, i), ri.idx_val(o, hd, i, Nat.is_lt(i, s), {==}, h3)) : {Nat.is_eq(_, ri.ix(o, c)) == False{} : Bool}
   %Equal.sym(Nat, ri.ix(o, c), ri.md(Nat.is_lt(c, s), s, c), ri.idx_val(o, hd, c, Nat.is_lt(c, s), {==}, hc)) : {Nat.is_eq(ri.md(Nat.is_lt(i, s), s, i), _) == False{} : Bool}
   ri.md_ne(Nat.is_lt(i, s), Nat.is_lt(c, s), s, c, i, {==}, {==}, h1, h2)
@@ -396,7 +350,7 @@ def ri.view_set(n: Nat, +u: Nat, +o: Nat, +l: List<&2, U32>, +i: Nat, +x: U32, +
     case 1n+ +p:
       +s = A.Arrays.slots(o)
       +l2 = ri.set(o, l, i, x)
-      +h1b = ri.le_rw(Nat.add(u, 1n+p), i, 1n+Nat.add(u, p), i, ri.add_succ(u, p), {==}, h1)
+      +h1b = ri.le_rw(Nat.add(u, 1n+p), i, 1n+Nat.add(u, p), i, UL.nat_add_succ(u, p), {==}, h1)
       +hu = ri.lt_of_le_add(u, p, i, h1b)
       +eh = AL.nth_set_other(U32, l, ri.ix(o, i), ri.ix(o, u), x, 0, ri.idx_ne(o, hd, u, i, hu, h2, h3))
       +ih = ri.view_set(p, 1n+u, o, l, i, x, hd, h1b, ri.lt_succ_r(i, Nat.add(u, s), h2), h3)
@@ -413,9 +367,9 @@ def ri.view_push(+o: Nat, +i: Nat, +u: Nat, +l: List<&2, U32>, +x: U32, +hl: {Li
   +hns = ri.le_lt(n, s, ri.le_rw(1n+n, R.ring.size(o), 1n+n, s, {==}, ri.size_slots(o), hn))
   +hus2 = ri.lt_rw(u, R.ring.size(o), u, s, {==}, ri.size_slots(o), hus)
   +h2 = ri.lt_rw(Nat.add(u, n), Nat.add(u, s), i, Nat.add(u, s), ei, {==}, Equal.trans(Bool, Nat.is_lt(Nat.add(u, n), Nat.add(u, s)), Nat.is_lt(n, s), True{}, ri.lt_cancel(u, n, s), hns))
-  +hus3 = ri.lt_rw(Nat.add(s, u), Nat.add(s, s), Nat.add(u, s), Nat.double(s), ri.add_comm(s, u), Equal.sym(Nat, Nat.double(s), Nat.add(s, s), ri.double_self(s)), Equal.trans(Bool, Nat.is_lt(Nat.add(s, u), Nat.add(s, s)), Nat.is_lt(u, s), True{}, ri.lt_cancel(s, u, s), hus2))
-  +h3 = ri.lt_trans(i, Nat.add(u, s), Nat.double(s), h2, hus3)
-  +h1 = ri.le_rw(i, i, Nat.add(u, n), i, Equal.sym(Nat, Nat.add(u, n), i, ei), {==}, ri.le_refl(i))
+  +hus3 = ri.lt_rw(Nat.add(s, u), Nat.add(s, s), Nat.add(u, s), Nat.double(s), UL.nat_add_comm(s, u), Equal.sym(Nat, Nat.double(s), Nat.add(s, s), UL.nat_double(s)), Equal.trans(Bool, Nat.is_lt(Nat.add(s, u), Nat.add(s, s)), Nat.is_lt(u, s), True{}, ri.lt_cancel(s, u, s), hus2))
+  +h3 = UO.nat_lt_trans(i, Nat.add(u, s), Nat.double(s), h2, hus3)
+  +h1 = ri.le_rw(i, i, Nat.add(u, n), i, Equal.sym(Nat, Nat.add(u, n), i, ei), {==}, UL.nat_le_refl(i))
   +hlt = ri.lt_rw(ri.ix(o, i), s, ri.ix(o, i), List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), s, hl), AL.index_below(o, U32.from_nat(i)))
   %Equal.sym(Nat, Nat.sub(1n+i, u), 1n+n, ri.sub_succ(i, u, hui)) : {ri.view(_, u, o, l2) == List.append(&2, U32, ri.view(n, u, o, l), Con{x, Nil{}}) : List<&2, U32>}
   %Equal.sym(List<&2, U32>, ri.view(1n+n, u, o, l2), List.append(&2, U32, ri.view(n, u, o, l2), Con{ri.at(o, l2, Nat.add(u, n)), Nil{}}), ri.view_snoc(n, u, o, l2)) : {_ == List.append(&2, U32, ri.view(n, u, o, l), Con{x, Nil{}}) : List<&2, U32>}
@@ -431,12 +385,12 @@ def ri.view_wrap(n: Nat, +j: Nat, +o: Nat, +l: List<&2, U32>, +hd: {Nat.is_lt(o,
       {==}
     case 1n+ +p:
       +s = A.Arrays.slots(o)
-      +hb = ri.le_rw(Nat.add(j, 1n+p), s, 1n+Nat.add(j, p), s, ri.add_succ(j, p), {==}, h)
+      +hb = ri.le_rw(Nat.add(j, 1n+p), s, 1n+Nat.add(j, p), s, UL.nat_add_succ(j, p), {==}, h)
       +hj = ri.lt_of_le_add(j, p, s, hb)
       +ih = ri.view_wrap(p, 1n+j, o, l, hd, hb)
       %Equal.sym(Nat, A.Arrays.index(o, U32.from_nat(Nat.add(s, j))), j, AL.index_wrap(o, hd, j, hj)) : {Con{A.Arrays.nth(U32, l, _, 0), ri.view(p, 1n+Nat.add(s, j), o, l)} == Con{ri.at(o, l, j), ri.view(p, 1n+j, o, l)} : List<&2, U32>}
       %Equal.sym(Nat, A.Arrays.index(o, U32.from_nat(j)), j, AL.index_of_nat(o, hd, j, hj)) : {Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, 1n+Nat.add(s, j), o, l)} == Con{A.Arrays.nth(U32, l, _, 0), ri.view(p, 1n+j, o, l)} : List<&2, U32>}
-      %ri.add_succ(s, j) : {Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, _, o, l)} == Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, 1n+j, o, l)} : List<&2, U32>}
+      %UL.nat_add_succ(s, j) : {Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, _, o, l)} == Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, 1n+j, o, l)} : List<&2, U32>}
       %Equal.sym(List<&2, U32>, ri.view(p, Nat.add(s, 1n+j), o, l), ri.view(p, 1n+j, o, l), ih) : {Con{A.Arrays.nth(U32, l, j, 0), _} == Con{A.Arrays.nth(U32, l, j, 0), ri.view(p, 1n+j, o, l)} : List<&2, U32>}
       {==}
 
@@ -444,5 +398,5 @@ def ri.view_wrap(n: Nat, +j: Nat, +o: Nat, +l: List<&2, U32>, +hd: {Nat.is_lt(o,
 def ri.view_drop(+n: Nat, +o: Nat, +l: List<&2, U32>, +hd: {Nat.is_lt(o, 32n) == True{} : Bool}, +h: {Nat.is_le(n, R.ring.size(o)) == True{} : Bool}) -> {ri.view(n, R.ring.size(o), o, l) == ri.view(n, 0n, o, l) : List<&2, U32>}:
   +s = A.Arrays.slots(o)
   %Equal.sym(Nat, R.ring.size(o), s, ri.size_slots(o)) : {ri.view(n, _, o, l) == ri.view(n, 0n, o, l) : List<&2, U32>}
-  %ri.add_zero(s) : {ri.view(n, _, o, l) == ri.view(n, 0n, o, l) : List<&2, U32>}
+  %UL.nat_add_zero(s) : {ri.view(n, _, o, l) == ri.view(n, 0n, o, l) : List<&2, U32>}
   ri.view_wrap(n, 0n, o, l, hd, ri.le_rw(n, R.ring.size(o), Nat.add(0n, n), s, {==}, ri.size_slots(o), h))

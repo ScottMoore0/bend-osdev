@@ -130,6 +130,9 @@ so; if bytes changed how it computes `byte`, `proof_view.bend` and
 `bend-osdev-bytes` (buffers are `Octets`) and `bend-osdev-word64` (values
 are `W64`).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

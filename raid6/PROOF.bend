@@ -29,6 +29,10 @@ import ./scale.bend as S
 import ./raid6.bend as R
 import ./recover.bend as V
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -495,13 +499,6 @@ def r6p.le_zero(+n: Nat) -> {Nat.is_le(0n, n) == True{} : Bool}:
     case 1n+k:
       {==}
 
-def r6p.le_refl(n: Nat) -> {Nat.is_le(n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+k:
-      r6p.le_refl(k)
-
 def r6p.le_max(+a: Nat, +b: Nat, +l: Nat, ha: {Nat.is_le(a, l) == True{} : Bool}, hb: {Nat.is_le(b, l) == True{} : Bool}) -> {Nat.is_le(Nat.max(a, b), l) == True{} : Bool}:
   match a b:
     case 0n _:
@@ -556,7 +553,7 @@ def r6p.nat_eq(a: Nat, b: Nat, h: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b
 
 def r6p.to_le(+a: Nat, +l: Nat, e: {a == l : Nat}) -> {Nat.is_le(a, l) == True{} : Bool}:
   %e : {Nat.is_le(a, _) == True{} : Bool}
-  r6p.le_refl(a)
+  UL.nat_le_refl(a)
 
 # every block no longer than l
 def r6p.within(+l: Nat, ds: List<&2, B.Octets>) -> Bool:
@@ -615,7 +612,7 @@ def r6p.uniform_within(ds: List<&2, B.Octets>, h: {R.Raid6.uniform(ds) == True{}
     case Nil{}:
       {==}
     case Con{+d, +r}:
-      r6p.and_i(Nat.is_le(B.Octets.len(d), B.Octets.len(d)), r6p.within(B.Octets.len(d), r), r6p.le_refl(B.Octets.len(d)), r6p.same_within(B.Octets.len(d), r, h))
+      r6p.and_i(Nat.is_le(B.Octets.len(d), B.Octets.len(d)), r6p.within(B.Octets.len(d), r), UL.nat_le_refl(B.Octets.len(d)), r6p.same_within(B.Octets.len(d), r, h))
 
 def r6p.same_len(+n: Nat, ds: List<&2, B.Octets>, +k: Nat, +h: {R.r6.same(n, ds) == True{} : Bool}, +hk: {Nat.is_lt(k, R.Raid6.width(ds)) == True{} : Bool}) -> {B.Octets.len(R.Raid6.block(ds, k)) == n : Nat}:
   match ds:
@@ -728,22 +725,6 @@ def r6p.walk(n: Nat, +v: U32) -> Bool:
 def r6p.walk_ok() -> {r6p.walk(254n, G.Gf8.pow(G.Gf8.raid6(), 2, 0n)) == True{} : Bool}:
   {==}
 
-def r6p.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+k:
-      %r6p.add_succ(k, b) : {1n+Nat.add(k, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def r6p.add_zero_r(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+k:
-      %r6p.add_zero_r(k) : {1n+Nat.add(k, 0n) == 1n+_ : Nat}
-      {==}
-
 def r6p.walk_ne(+n: Nat, +d: Nat, +i: Nat, +h: {r6p.walk(n, G.Gf8.pow(G.Gf8.raid6(), 2, d)) == True{} : Bool}, +hi: {Nat.is_lt(i, n) == True{} : Bool}) -> {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+Nat.add(i, d)), 1) == False{} : Bool}:
   match n:
     case 0n:
@@ -757,12 +738,12 @@ def r6p.walk_ne(+n: Nat, +d: Nat, +i: Nat, +h: {r6p.walk(n, G.Gf8.pow(G.Gf8.raid
         case 0n:
           r6p.not_t(U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+d), 1), r6p.and_l(Bool.not(U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+d), 1)), r6p.walk(m, G.Gf8.pow(G.Gf8.raid6(), 2, 1n+d)), h))
         case 1n+j:
-          %r6p.add_succ(j, d) : {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+_), 1) == False{} : Bool}
+          %UL.nat_add_succ(j, d) : {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+_), 1) == False{} : Bool}
           r6p.walk_ne(m, 1n+d, j, r6p.and_r(Bool.not(U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+d), 1)), r6p.walk(m, G.Gf8.pow(G.Gf8.raid6(), 2, 1n+d)), h), hi)
 
 # g^(1+k) is not 1, for k < 254
 def r6p.wf(+k: Nat, +hk: {Nat.is_lt(k, 254n) == True{} : Bool}) -> {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+k), 1) == False{} : Bool}:
-  %r6p.add_zero_r(k) : {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+_), 1) == False{} : Bool}
+  %UL.nat_add_zero(k) : {U32.is_eq(G.Gf8.pow(G.Gf8.raid6(), 2, 1n+_), 1) == False{} : Bool}
   r6p.walk_ne(254n, 0n, k, r6p.walk_ok(), hk)
 
 def r6p.lt_succ(i: Nat, n: Nat, +h: {Nat.is_lt(i, n) == True{} : Bool}) -> {Nat.is_lt(i, 1n+n) == True{} : Bool}:
@@ -1089,21 +1070,6 @@ def r6p.two_n(ex: Maybe<&2, V.Raid6Error>, ey: Maybe<&2, V.Raid6Error>, ne: Bool
             case False{}:
               Empty.absurd({False{} == True{} : Bool}, r6p.msome(V.Raid6SameIndex{x}, h))
 
-def r6p.lt_le(x: Nat, n: Nat, m: Nat, +hx: {Nat.is_lt(x, n) == True{} : Bool}, +hn: {Nat.is_le(n, m) == True{} : Bool}) -> {Nat.is_lt(x, m) == True{} : Bool}:
-  match x n m:
-    case 0n 0n _:
-      Empty.absurd({Nat.is_lt(0n, m) == True{} : Bool}, r6p.ft(hx))
-    case 0n 1n+j 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, r6p.ft(hn))
-    case 0n 1n+j 1n+k:
-      {==}
-    case 1n+i 0n _:
-      Empty.absurd({Nat.is_lt(1n+i, m) == True{} : Bool}, r6p.ft(hx))
-    case 1n+i 1n+j 0n:
-      Empty.absurd({Nat.is_lt(1n+i, 0n) == True{} : Bool}, r6p.ft(hn))
-    case 1n+i 1n+j 1n+k:
-      r6p.lt_le(i, j, k, hx, hn)
-
 def r6p.dd_lost(+ds: List<&2, B.Octets>, +x: Nat, +y: Nat, +ok: {V.Raid6.check(R.Raid6.width(ds), V.Raid6LostDataData{x, y}) == None{} : Maybe<&2, V.Raid6Error>}) -> {V.r6.chk.lost(R.Raid6.width(ds), V.Raid6LostDataData{x, y}) == None{} : Maybe<&2, V.Raid6Error>}:
   r6p.size_l(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataData{x, y}, ok)
 
@@ -1179,7 +1145,7 @@ def r6p.rebuild_ok(+ds: List<&2, B.Octets>, lost: V.Raid6Lost, +u: {R.Raid6.unif
     case V.Raid6LostQ{}:
       {==}
     case V.Raid6LostDataData{+x, +y}:
-      %Equal.sym(List<&2, B.Octets>, R.Raid6.set_block(R.Raid6.set_block(r6p.e2(ds, x, y), x, r6p.xo(r6p.sc(r6p.A(x, y), r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y)))), r6p.sc(r6p.Bc(x, y), r6p.xo(r6p.QQ(ds), r6p.QQ(r6p.e2(ds, x, y)))))), y, r6p.xo(r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y))), r6p.xo(r6p.sc(r6p.A(x, y), r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y)))), r6p.sc(r6p.Bc(x, y), r6p.xo(r6p.QQ(ds), r6p.QQ(r6p.e2(ds, x, y))))))), ds, r6p.dd_ok(ds, x, y, u, r6p.dd_hx(ds, x, y, ok), r6p.dd_hy(ds, x, y, ok), r6p.dd_ne(ds, x, y, ok), r6p.lt_le(x, R.Raid6.width(ds), 255n, r6p.dd_hx(ds, x, y, ok), r6p.size_t(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataData{x, y}, ok)), r6p.lt_le(y, R.Raid6.width(ds), 255n, r6p.dd_hy(ds, x, y, ok), r6p.size_t(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataData{x, y}, ok)))) : {R.Raid6Stripe{_, X.Xorb.all(ds), r6p.QQ(ds)} == R.Raid6Stripe{ds, X.Xorb.all(ds), r6p.QQ(ds)} : R.Raid6Stripe}
+      %Equal.sym(List<&2, B.Octets>, R.Raid6.set_block(R.Raid6.set_block(r6p.e2(ds, x, y), x, r6p.xo(r6p.sc(r6p.A(x, y), r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y)))), r6p.sc(r6p.Bc(x, y), r6p.xo(r6p.QQ(ds), r6p.QQ(r6p.e2(ds, x, y)))))), y, r6p.xo(r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y))), r6p.xo(r6p.sc(r6p.A(x, y), r6p.xo(X.Xorb.all(ds), X.Xorb.all(r6p.e2(ds, x, y)))), r6p.sc(r6p.Bc(x, y), r6p.xo(r6p.QQ(ds), r6p.QQ(r6p.e2(ds, x, y))))))), ds, r6p.dd_ok(ds, x, y, u, r6p.dd_hx(ds, x, y, ok), r6p.dd_hy(ds, x, y, ok), r6p.dd_ne(ds, x, y, ok), UO.nat_lt_le_trans(x, R.Raid6.width(ds), 255n, r6p.dd_hx(ds, x, y, ok), r6p.size_t(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataData{x, y}, ok)), UO.nat_lt_le_trans(y, R.Raid6.width(ds), 255n, r6p.dd_hy(ds, x, y, ok), r6p.size_t(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataData{x, y}, ok)))) : {R.Raid6Stripe{_, X.Xorb.all(ds), r6p.QQ(ds)} == R.Raid6Stripe{ds, X.Xorb.all(ds), r6p.QQ(ds)} : R.Raid6Stripe}
       {==}
     case V.Raid6LostDataP{+x}:
       %Equal.sym(List<&2, B.Octets>, R.Raid6.set_block(r6p.e1(ds, x), x, r6p.sc(r6p.ix(x), r6p.xo(r6p.QQ(ds), r6p.QQ(r6p.e1(ds, x))))), ds, r6p.datap_ok(ds, x, u, r6p.idx_t(Nat.is_lt(x, R.Raid6.width(ds)), x, r6p.size_l(Nat.is_le(R.Raid6.width(ds), 255n), R.Raid6.width(ds), V.Raid6LostDataP{x}, ok)))) : {R.Raid6Stripe{_, X.Xorb.all(_), r6p.QQ(ds)} == R.Raid6Stripe{ds, X.Xorb.all(ds), r6p.QQ(ds)} : R.Raid6Stripe}

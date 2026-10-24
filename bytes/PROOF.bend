@@ -4,6 +4,10 @@ import ../word64/LAWS.bend as WL
 import ../word64/PROOF.bend as WP
 import ./bytes.bend as B
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def Laws.le16_round_trip(v):
   match v:
@@ -215,17 +219,6 @@ def w8s_len_app(xs: List<&2, B.OctByte>, ys: List<&2, B.OctByte>) -> {List.lengt
     case Con{h, t}:
       Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, List.append(&2, B.OctByte, t, ys)), Nat.add(List.length(&2, B.OctByte, t), List.length(&2, B.OctByte, ys)), w8s_len_app(t, ys))
 
-def nat_le_add(n: Nat, m: Nat) -> {Nat.is_le(n, Nat.add(n, m)) == True{} : Bool}:
-  match n:
-    case 0n:
-      match m:
-        case 0n:
-          {==}
-        case 1n+q:
-          {==}
-    case 1n+p:
-      nat_le_add(p, m)
-
 # Fast forms equal structural forms, for every input. bytes.bend's Octets
 # runs the tail-recursive *.fast defs; these lemmas (each stated
 # ref == fast, the direction rewrites use) carry every law proved about the
@@ -306,32 +299,18 @@ def F_take(+n: Nat, +ws: List<&2, B.OctByte>) -> {B.w8s.take(n, ws) == B.w8s.tak
 def F_app(+xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, xs, ys) == B.w8s.append.fast(xs, ys) : List<&2, B.OctByte>}:
   Equal.sym(List<&2, B.OctByte>, B.w8s.append.fast(xs, ys), List.append(&2, B.OctByte, xs, ys), r8_rr(xs, Nil{}, ys))
 
-def add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+n), 1n+Nat.add(p, n), add_succ(p, n))
-
-def add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, add_zero(p))
-
 def g_len(+ws: List<&2, B.OctByte>, +n: Nat) -> {B.w8s.len.go(ws, n) == Nat.add(List.length(&2, B.OctByte, ws), n) : Nat}:
   match ws:
     case Nil{}:
       {==}
     case Con{h, t}:
       Equal.trans(Nat, B.w8s.len.go(t, 1n+n), Nat.add(List.length(&2, B.OctByte, t), 1n+n), 1n+Nat.add(List.length(&2, B.OctByte, t), n),
-        g_len(t, 1n+n), add_succ(List.length(&2, B.OctByte, t), n))
+        g_len(t, 1n+n), UL.nat_add_succ(List.length(&2, B.OctByte, t), n))
 
 def F_len(+ws: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, ws) == B.w8s.len.fast(ws) : Nat}:
   Equal.sym(Nat, B.w8s.len.fast(ws), List.length(&2, B.OctByte, ws),
     Equal.trans(Nat, B.w8s.len.go(ws, 0n), Nat.add(List.length(&2, B.OctByte, ws), 0n), List.length(&2, B.OctByte, ws),
-      g_len(ws, 0n), add_zero(List.length(&2, B.OctByte, ws))))
+      g_len(ws, 0n), UL.nat_add_zero(List.length(&2, B.OctByte, ws))))
 
 def zeros_cons(+p: Nat, +acc: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, B.w8s.zeros(p), Con{B.oct.zero(), acc}) == Con{B.oct.zero(), List.append(&2, B.OctByte, B.w8s.zeros(p), acc)} : List<&2, B.OctByte>}:
   match p:
@@ -394,29 +373,10 @@ def Laws.octets_to_of(xs):
 def Laws.octets_of_list_idempotent(xs):
   Laws.octets_of_to(B.Octets.of_list(xs))
 
-# every word compares equal to itself: induction on its bits
-def bool_cmp_self(b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def word_cmp_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{},
-            Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, word_cmp_self(p, t)),
-            bool_cmp_self(b))
-
 def u32_eq_self(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def list_eq_self(xs: List<&2, U32>) -> {B.list_eq(xs, xs) == True{} : Bool}:
@@ -498,7 +458,7 @@ def p_octets_split_at_append(+a: B.Octets, +b: B.Octets) -> {B.Octets.split_at(B
       %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(_, List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys))), B.w8s.len.fast(xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
       %F_len(xs) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys))), _, B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
       %Equal.sym(Nat, List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys)), Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys)), w8s_len_app(xs, ys)) : {B.Octets.split_at.pick(Nat.is_le(List.length(&2, B.OctByte, xs), _), List.length(&2, B.OctByte, xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
-      %Equal.sym(Bool, Nat.is_le(List.length(&2, B.OctByte, xs), Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))), True{}, nat_le_add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))) : {B.Octets.split_at.pick(_, List.length(&2, B.OctByte, xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
+      %Equal.sym(Bool, Nat.is_le(List.length(&2, B.OctByte, xs), Nat.add(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))), True{}, UO.nat_le_add_r(List.length(&2, B.OctByte, xs), List.length(&2, B.OctByte, ys))) : {B.Octets.split_at.pick(_, List.length(&2, B.OctByte, xs), B.Octets{List.append(&2, B.OctByte, xs, ys)}) == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
       %F_take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys)) : {Some{B.OctetsSplit{B.Octets{_}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{xs}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
       %w8s_take_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{_}, B.Octets{ys}}} : Maybe<&2, B.OctetsSplit>}
       %w8s_drop_app(xs, ys) : {Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{B.w8s.drop(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}}} == Some{B.OctetsSplit{B.Octets{B.w8s.take(List.length(&2, B.OctByte, xs), List.append(&2, B.OctByte, xs, ys))}, B.Octets{_}}} : Maybe<&2, B.OctetsSplit>}
@@ -543,11 +503,11 @@ def g_lenu(+xs: List<&2, U32>, +n: Nat) -> {B.len.go(xs, n) == Nat.add(B.len(xs)
       {==}
     case Con{h, t}:
       Equal.trans(Nat, B.len.go(t, 1n+n), Nat.add(B.len(t), 1n+n), 1n+Nat.add(B.len(t), n),
-        g_lenu(t, 1n+n), add_succ(B.len(t), n))
+        g_lenu(t, 1n+n), UL.nat_add_succ(B.len(t), n))
 
 def p_len_fast(+xs: List<&2, U32>) -> {B.len(xs) == B.len.fast(xs) : Nat}:
   Equal.sym(Nat, B.len.fast(xs), B.len(xs),
-    Equal.trans(Nat, B.len.go(xs, 0n), Nat.add(B.len(xs), 0n), B.len(xs), g_lenu(xs, 0n), add_zero(B.len(xs))))
+    Equal.trans(Nat, B.len.go(xs, 0n), Nat.add(B.len(xs), 0n), B.len(xs), g_lenu(xs, 0n), UL.nat_add_zero(B.len(xs))))
 
 def Laws.len_fast(xs):
   p_len_fast(xs)

@@ -4,6 +4,8 @@
 # distributes over it, and the shifts move it bit for bit. Lemmas are
 # prefixed cw.
 import Base
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions
 
@@ -23,17 +25,6 @@ def cw.tf(e: {True{} == False{} : Bool}) -> Empty:
   Unit{}
 
 # Bool
-
-def cw.bx_comm(+a: Bool, +b: Bool) -> {Bool.xor(a, b) == Bool.xor(b, a) : Bool}:
-  match a b:
-    case True{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case False{} False{}:
-      {==}
 
 def cw.bx_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, b), c) == Bool.xor(a, Bool.xor(b, c)) : Bool}:
   match a b c:
@@ -106,17 +97,6 @@ def cw.bx_cancel(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, c), Bool
     case False{} False{} False{}:
       {==}
 
-def cw.ba_comm(+a: Bool, +b: Bool) -> {Bool.and(a, b) == Bool.and(b, a) : Bool}:
-  match a b:
-    case True{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case False{} False{}:
-      {==}
-
 def cw.ba_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.and(Bool.and(a, b), c) == Bool.and(a, Bool.and(b, c)) : Bool}:
   match a:
     case True{}:
@@ -187,17 +167,6 @@ def cw.ones(n: Nat) -> Word(n):
 # XOR on words: a commutative group with identity zero, every word its own
 # inverse
 
-def cw.wx_comm(n: Nat, a: Word(n), b: Word(n)) -> {Word.xor(n, a, b) == Word.xor(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{+ah, at} WCon{+bh, bt}:
-          cw.wcon2(p, Bool.xor(ah, bh), Bool.xor(bh, ah), Word.xor(p, at, bt), Word.xor(p, bt, at), cw.bx_comm(ah, bh), cw.wx_comm(p, at, bt))
-
 def cw.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Word.xor(n, a, b), c) == Word.xor(n, a, Word.xor(n, b, c)) : Word(n)}:
   match n:
     case 0n:
@@ -254,17 +223,6 @@ def cw.wx_cancel(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Wor
           cw.wcon2(p, Bool.xor(Bool.xor(ah, ch), Bool.xor(bh, ch)), Bool.xor(ah, bh), Word.xor(p, Word.xor(p, at, ct), Word.xor(p, bt, ct)), Word.xor(p, at, bt), cw.bx_cancel(ah, bh, ch), cw.wx_cancel(p, at, bt, ct))
 
 # AND on words
-
-def cw.wa_comm(n: Nat, a: Word(n), b: Word(n)) -> {Word.and(n, a, b) == Word.and(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{+ah, at} WCon{+bh, bt}:
-          cw.wcon2(p, Bool.and(ah, bh), Bool.and(bh, ah), Word.and(p, at, bt), Word.and(p, bt, at), cw.ba_comm(ah, bh), cw.wa_comm(p, at, bt))
 
 def cw.wa_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.and(n, Word.and(n, a, b), c) == Word.and(n, a, Word.and(n, b, c)) : Word(n)}:
   match n:
@@ -373,11 +331,6 @@ def cw.put_xor(p: Nat, +c: Bool, +d: Bool, a: Word(p), b: Word(p)) -> {Word.shl.
 
 # U32
 
-def cw.ux_comm(a: U32, b: U32) -> {U32.xor(a, b) == U32.xor(b, a) : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      cw.u32_cong(Word.xor(32n, x, y), Word.xor(32n, y, x), cw.wx_comm(32n, x, y))
-
 def cw.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xor(a, U32.xor(b, c)) : U32}:
   match a b c:
     case U32{x} U32{y} U32{z}:
@@ -394,7 +347,7 @@ def cw.ux_zero(a: U32) -> {U32.xor(a, 0) == a : U32}:
       cw.u32_cong(Word.xor(32n, x, Word.zero(32n)), x, cw.wx_zero(32n, x))
 
 def cw.ux_zero_l(+a: U32) -> {U32.xor(0, a) == a : U32}:
-  %cw.ux_comm(a, 0) : {_ == a : U32}
+  %UL.u32_xor_comm(a, 0) : {_ == a : U32}
   cw.ux_zero(a)
 
 def cw.x_swap(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xor(U32.xor(a, c), b) : U32}:
@@ -406,11 +359,6 @@ def cw.x_cancel(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, c), U32.xor(b, c)
   match a b c:
     case U32{x} U32{y} U32{z}:
       cw.u32_cong(Word.xor(32n, Word.xor(32n, x, z), Word.xor(32n, y, z)), Word.xor(32n, x, y), cw.wx_cancel(32n, x, y, z))
-
-def cw.ua_comm(a: U32, b: U32) -> {U32.and(a, b) == U32.and(b, a) : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      cw.u32_cong(Word.and(32n, x, y), Word.and(32n, y, x), cw.wa_comm(32n, x, y))
 
 def cw.ua_assoc(a: U32, b: U32, c: U32) -> {U32.and(U32.and(a, b), c) == U32.and(a, U32.and(b, c)) : U32}:
   match a b c:

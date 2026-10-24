@@ -12,6 +12,8 @@ import ./proof_list.bend as PL
 import ./proof_view.bend as PV
 import ./proof_val.bend as PW
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 def Laws.view_unview(q, bs, n, h):
   match q:
@@ -65,17 +67,6 @@ def pk.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
       {==}
     case 1n+p:
       {==}
-
-def pk.le_trans(a: Nat, b: Nat, c: Nat, +e: {Nat.is_le(a, b) == True{} : Bool}, +f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      pk.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, PL.pl.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, PL.pl.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      pk.le_trans(ap, bp, cp, e, f)
 
 def pk.tf(e: {True{} == False{} : Bool}) -> Empty:
   %e : PL.pl.bt(_)
@@ -192,7 +183,7 @@ def pk.len_f(+v: W.W64, +w: Nat, +hw: {Nat.is_le(w, 64n) == True{} : Bool}) -> {
 def pk.end_f(+q: V.PkQuirks, +l: Nat, +s: Nat, +e: Nat, +v: W.W64, +h: {P.packing.check(q, l, s, e) == None{} : Maybe<&2, P.PkError>}) -> {Nat.add(e, List.length(&2, Bool, List.take(&2, Bool, F.packing.w64_bits(v), P.packing.width(s, e)))) == 1n+s : Nat}:
   +w = P.packing.width(s, e)
   +les = pk.nlt(s, e, pk.r1(q, l, s, e, h))
-  Equal.trans(Nat, Nat.add(e, List.length(&2, Bool, List.take(&2, Bool, F.packing.w64_bits(v), w))), Nat.add(e, w), 1n+s, Equal.cong(Nat, Nat, z => Nat.add(e, z), List.length(&2, Bool, List.take(&2, Bool, F.packing.w64_bits(v), w)), w, pk.len_f(v, w, pk.nlt(64n, w, pk.r2(q, l, s, e, h)))), pk.add_sub(e, 1n+s, pk.le_trans(e, s, 1n+s, les, pk.le_succ(s))))
+  Equal.trans(Nat, Nat.add(e, List.length(&2, Bool, List.take(&2, Bool, F.packing.w64_bits(v), w))), Nat.add(e, w), 1n+s, Equal.cong(Nat, Nat, z => Nat.add(e, z), List.length(&2, Bool, List.take(&2, Bool, F.packing.w64_bits(v), w)), w, pk.len_f(v, w, pk.nlt(64n, w, pk.r2(q, l, s, e, h)))), pk.add_sub(e, 1n+s, UO.nat_le_trans(e, s, 1n+s, les, pk.le_succ(s))))
 
 # the view of the buffer after a put, and its length
 

@@ -143,6 +143,11 @@ through them; use them on header-sized lists. For long lists use the `*.fast`
 forms (or `Octets`), and turn them back into the structural forms in proofs
 with the `*_fast` laws.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

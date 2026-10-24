@@ -156,6 +156,9 @@ bend-osdev-bytes (`gf128.bend`'s octet conversions) and bend-osdev-array,
 whose laws the table proofs use (`proof_tab.bend`; no run-time code
 imports it).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Tests
 
 `ref/run.sh` (764 cases with the default seed) compares, on random inputs:

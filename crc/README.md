@@ -176,6 +176,9 @@ bend-osdev-word64 (`W64`), bend-osdev-bytes (`Octets`), and
 bend-osdev-array, whose laws the fast-path proofs use (no run-time code
 imports it).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

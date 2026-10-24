@@ -5,6 +5,8 @@ import Base
 import ../bytes/bytes.bend as B
 import ./view.bend as V
 import ./field.bend as F
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 def pl.bt(b: Bool) -> Type:
   match b:
@@ -16,22 +18,6 @@ def pl.bt(b: Bool) -> Type:
 def pl.ft(e: {False{} == True{} : Bool}) -> Empty:
   %Equal.sym(Bool, False{}, True{}, e) : pl.bt(_)
   Unit{}
-
-def pl.add_zero(m: Nat) -> {Nat.add(m, 0n) == m : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pl.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def pl.add_succ(x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pl.add_succ(p, y) : {1n+Nat.add(p, 1n+y) == 1n+_ : Nat}
-      {==}
 
 # Reversal
 
@@ -50,11 +36,11 @@ def pl.rev_len_go(-A: Data, xs: List<&2, A>, +acc: List<&2, A>) -> {List.length(
     case Nil{}:
       {==}
     case Con{+h, +t}:
-      %pl.add_succ(List.length(&2, A, t), List.length(&2, A, acc)) : {List.length(&2, A, List.reverse.go(&2, A, t, Con{h, acc})) == _ : Nat}
+      %UL.nat_add_succ(List.length(&2, A, t), List.length(&2, A, acc)) : {List.length(&2, A, List.reverse.go(&2, A, t, Con{h, acc})) == _ : Nat}
       pl.rev_len_go(A, t, Con{h, acc})
 
 def pl.rev_len(-A: Data, +xs: List<&2, A>) -> {List.length(&2, A, List.reverse(&2, A, xs)) == List.length(&2, A, xs) : Nat}:
-  Equal.trans(Nat, List.length(&2, A, List.reverse(&2, A, xs)), Nat.add(List.length(&2, A, xs), 0n), List.length(&2, A, xs), pl.rev_len_go(A, xs, Nil{}), pl.add_zero(List.length(&2, A, xs)))
+  Equal.trans(Nat, List.length(&2, A, List.reverse(&2, A, xs)), Nat.add(List.length(&2, A, xs), 0n), List.length(&2, A, xs), pl.rev_len_go(A, xs, Nil{}), UL.nat_add_zero(List.length(&2, A, xs)))
 
 def pl.rev_mask_go(xs: List<&2, U32>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, B.mask(xs), B.mask(acc)) == B.mask(List.reverse.go(&2, U32, xs, acc)) : List<&2, U32>}:
   match xs:

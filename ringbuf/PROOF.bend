@@ -6,6 +6,10 @@ import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
 import ./proof_items.bend as I
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -56,13 +60,6 @@ def nat.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def nat.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a b:
     case 0n _:
@@ -71,17 +68,6 @@ def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.i
       Empty.absurd({Nat.is_le(1n+ap, 1n) == True{} : Bool}, absurd.ft(e))
     case 1n+ap 1n+bp:
       nat.le_succ(ap, bp, e)
-
-def nat.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      nat.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, absurd.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, absurd.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.le_trans(ap, bp, cp, e, f)
 
 def nat.eq_of(a: Nat, b: Nat, e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b : Nat}:
   match a b:
@@ -108,22 +94,6 @@ def nat.sub_self(x: Nat) -> {Nat.sub(x, x) == 0n : Nat}:
       {==}
     case 1n+p:
       nat.sub_self(p)
-
-def nat.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nat.add_succ(a: Nat, -b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+b), 1n+Nat.add(p, b), nat.add_succ(p, b)) : {1n+_ == 2n+Nat.add(p, b) : Nat}
-      {==}
 
 def nat.min_zero_r(x: Nat) -> {Nat.min(x, 0n) == 0n : Nat}:
   match x:
@@ -189,7 +159,7 @@ def nat.sub_succ_le(i: Nat, u: Nat) -> {Nat.is_le(Nat.sub(i, 1n+u), Nat.sub(i, u
       {==}
     case 1n+ +ip 0n:
       %Equal.sym(Nat, Nat.sub(ip, 0n), ip, nat.sub_zero(ip)) : {Nat.is_le(_, 1n+ip) == True{} : Bool}
-      nat.le_succ(ip, ip, nat.le_refl(ip))
+      nat.le_succ(ip, ip, UL.nat_le_refl(ip))
     case 1n+ip 1n+up:
       nat.sub_succ_le(ip, up)
 
@@ -291,12 +261,12 @@ def inv.push(+o: Nat, +i: Nat, +u: Nat, +h: {R.ring.inv(o, i, u) == True{} : Boo
   inv.mk(o, 1n+i, u, inv.p1(o, i, u, h), nat.le_succ(u, i, inv.p2(o, i, u, h)), inv.push3(o, i, u, h, ec))
 
 def inv.pop_nowrap(+o: Nat, +i: Nat, +u: Nat, +h: {R.ring.inv(o, i, u) == True{} : Bool}, ne: {R.ring.empty.test(i, u) == False{} : Bool}, ew: {Nat.is_eq(1n+u, R.ring.size(o)) == False{} : Bool}) -> {R.ring.inv(o, i, 1n+u) == True{} : Bool}:
-  inv.mk(o, i, 1n+u, nat.lt_succ_ne(u, R.ring.size(o), inv.p1(o, i, u, h), ew), nat.le_ne(u, i, inv.p2(o, i, u, h), ne), nat.le_trans(Nat.sub(i, 1n+u), Nat.sub(i, u), R.ring.size(o), nat.sub_succ_le(i, u), inv.p3(o, i, u, h)))
+  inv.mk(o, i, 1n+u, nat.lt_succ_ne(u, R.ring.size(o), inv.p1(o, i, u, h), ew), nat.le_ne(u, i, inv.p2(o, i, u, h), ne), UO.nat_le_trans(Nat.sub(i, 1n+u), Nat.sub(i, u), R.ring.size(o), nat.sub_succ_le(i, u), inv.p3(o, i, u, h)))
 
 def inv.wrap3(+o: Nat, +i: Nat, +u: Nat, +h: {R.ring.inv(o, i, u) == True{} : Bool}, ew: {Nat.is_eq(1n+u, R.ring.size(o)) == True{} : Bool}) -> {Nat.is_le(Nat.sub(Nat.sub(i, R.ring.size(o)), 0n), R.ring.size(o)) == True{} : Bool}:
   %Equal.sym(Nat, Nat.sub(Nat.sub(i, R.ring.size(o)), 0n), Nat.sub(i, R.ring.size(o)), nat.sub_zero(Nat.sub(i, R.ring.size(o)))) : {Nat.is_le(_, R.ring.size(o)) == True{} : Bool}
   %nat.eq_of(1n+u, R.ring.size(o), ew) : {Nat.is_le(Nat.sub(i, _), R.ring.size(o)) == True{} : Bool}
-  nat.le_trans(Nat.sub(i, 1n+u), Nat.sub(i, u), R.ring.size(o), nat.sub_succ_le(i, u), inv.p3(o, i, u, h))
+  UO.nat_le_trans(Nat.sub(i, 1n+u), Nat.sub(i, u), R.ring.size(o), nat.sub_succ_le(i, u), inv.p3(o, i, u, h))
 
 def inv.pop_wrap(+o: Nat, +i: Nat, +u: Nat, +h: {R.ring.inv(o, i, u) == True{} : Bool}, ew: {Nat.is_eq(1n+u, R.ring.size(o)) == True{} : Bool}) -> {R.ring.inv(o, Nat.sub(i, R.ring.size(o)), 0n) == True{} : Bool}:
   inv.mk(o, Nat.sub(i, R.ring.size(o)), 0n, nat.size_pos(o), nat.le_zero(Nat.sub(i, R.ring.size(o))), inv.wrap3(o, i, u, h, ew))
@@ -489,13 +459,13 @@ def bp.count.h(c: Bool, +t: List<&2, U32>, +o: Nat, +i: Nat, +u: Nat, +ec: {R.ri
       +lt = List.length(&2, U32, t)
       +av2 = Nat.sub(R.ring.size(o), Nat.sub(1n+i, u))
       %Equal.sym(Nat, Nat.sub(R.ring.size(o), Nat.sub(i, u)), 1n+av2, avail.push(o, i, u, h, ec)) : {Pair.snd(R.RingBuf, Nat, R.ring.push_list.go(t, (R.RingBuf{o, 1n+i, u, Array.set(U32, a, U32.from_nat(i), x)}, 1n+n))) == Nat.add(n, Nat.min(1n+lt, _)) : Nat}
-      %Equal.sym(Nat, Nat.add(n, 1n+Nat.min(lt, av2)), 1n+Nat.add(n, Nat.min(lt, av2)), nat.add_succ(n, Nat.min(lt, av2))) : {Pair.snd(R.RingBuf, Nat, R.ring.push_list.go(t, (R.RingBuf{o, 1n+i, u, Array.set(U32, a, U32.from_nat(i), x)}, 1n+n))) == _ : Nat}
+      %Equal.sym(Nat, Nat.add(n, 1n+Nat.min(lt, av2)), 1n+Nat.add(n, Nat.min(lt, av2)), UL.nat_add_succ(n, Nat.min(lt, av2))) : {Pair.snd(R.RingBuf, Nat, R.ring.push_list.go(t, (R.RingBuf{o, 1n+i, u, Array.set(U32, a, U32.from_nat(i), x)}, 1n+n))) == _ : Nat}
       ih(1n+i, Array.set(U32, a, U32.from_nat(i), x), 1n+n, inv.push(o, i, u, h, ec))
 
 def bp.count(xs: List<&2, U32>, +o: Nat, +i: Nat, +u: Nat, a: Array<U32>, +n: Nat, +h: {R.ring.inv(o, i, u) == True{} : Bool}) -> {Pair.snd(R.RingBuf, Nat, R.ring.push_list.go(xs, (R.RingBuf{o, i, u, a}, n))) == Nat.add(n, Nat.min(List.length(&2, U32, xs), Nat.sub(R.ring.size(o), Nat.sub(i, u)))) : Nat}:
   match xs:
     case Nil{}:
-      Equal.sym(Nat, Nat.add(n, 0n), n, nat.add_zero(n))
+      Equal.sym(Nat, Nat.add(n, 0n), n, UL.nat_add_zero(n))
     case Con{x, +t}:
       bp.count.h(R.ring.full.test(o, i, u), t, o, i, u, {==}, a, x, n, h, i2 => a2 => n2 => h2 => bp.count(t, o, i2, u, a2, n2, h2))
 
@@ -515,14 +485,14 @@ def bp.valid(xs: List<&2, U32>, +o: Nat, +i: Nat, +u: Nat, a: Array<U32>, +n: Na
 
 # Batches: pop_list
 
-def bo.count.w(w: Bool, -k: Nat, +o: Nat, +i: Nat, +u: Nat, +ew: {Nat.is_eq(1n+u, R.ring.size(o)) == w : Bool}, a: Array<U32>, +x: U32, +acc: List<&2, U32>, +h: {R.ring.inv(o, i, u) == True{} : Bool}, +ne: {R.ring.empty.test(i, u) == False{} : Bool}, ih: @i2: Nat -> @u2: Nat -> @a2: Array<U32> -> @acc2: List<&2, U32> -> @h2: {R.ring.inv(o, i2, u2) == True{} : Bool} -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i2, u2, a2}, acc2)))) == Nat.add(List.length(&2, U32, acc2), Nat.min(k, Nat.sub(i2, u2))) : Nat}) -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, R.ring.pop_list.keep(R.ring.pop.wrap(w, o, i, 1n+u, a, x), acc)))) == Nat.add(List.length(&2, U32, acc), Nat.min(1n+k, Nat.sub(i, u))) : Nat}:
+def bo.count.w(w: Bool, +k: Nat, +o: Nat, +i: Nat, +u: Nat, +ew: {Nat.is_eq(1n+u, R.ring.size(o)) == w : Bool}, a: Array<U32>, +x: U32, +acc: List<&2, U32>, +h: {R.ring.inv(o, i, u) == True{} : Bool}, +ne: {R.ring.empty.test(i, u) == False{} : Bool}, ih: @i2: Nat -> @u2: Nat -> @a2: Array<U32> -> @acc2: List<&2, U32> -> @h2: {R.ring.inv(o, i2, u2) == True{} : Bool} -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i2, u2, a2}, acc2)))) == Nat.add(List.length(&2, U32, acc2), Nat.min(k, Nat.sub(i2, u2))) : Nat}) -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, R.ring.pop_list.keep(R.ring.pop.wrap(w, o, i, 1n+u, a, x), acc)))) == Nat.add(List.length(&2, U32, acc), Nat.min(1n+k, Nat.sub(i, u))) : Nat}:
   match w:
     case True{}:
       +la = List.length(&2, U32, acc)
       +acc2 = List.append(&2, U32, acc, Con{x, Nil{}})
       +l2 = Nat.sub(Nat.sub(i, R.ring.size(o)), 0n)
       %len.wrapT(o, i, u, h, ne, ew) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, Nat.sub(i, R.ring.size(o)), 0n, a}, acc2)))) == Nat.add(la, Nat.min(1n+k, _)) : Nat}
-      %Equal.sym(Nat, Nat.add(la, 1n+Nat.min(k, l2)), 1n+Nat.add(la, Nat.min(k, l2)), nat.add_succ(la, Nat.min(k, l2))) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, Nat.sub(i, R.ring.size(o)), 0n, a}, acc2)))) == _ : Nat}
+      %Equal.sym(Nat, Nat.add(la, 1n+Nat.min(k, l2)), 1n+Nat.add(la, Nat.min(k, l2)), UL.nat_add_succ(la, Nat.min(k, l2))) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, Nat.sub(i, R.ring.size(o)), 0n, a}, acc2)))) == _ : Nat}
       %list.len_snoc(acc, x) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, Nat.sub(i, R.ring.size(o)), 0n, a}, acc2)))) == Nat.add(_, Nat.min(k, l2)) : Nat}
       ih(Nat.sub(i, R.ring.size(o)), 0n, a, acc2, inv.pop_wrap(o, i, u, h, ew))
     case False{}:
@@ -530,11 +500,11 @@ def bo.count.w(w: Bool, -k: Nat, +o: Nat, +i: Nat, +u: Nat, +ew: {Nat.is_eq(1n+u
       +acc2 = List.append(&2, U32, acc, Con{x, Nil{}})
       +l2 = Nat.sub(i, 1n+u)
       %len.wrapF(o, i, u, h, ne) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i, 1n+u, a}, acc2)))) == Nat.add(la, Nat.min(1n+k, _)) : Nat}
-      %Equal.sym(Nat, Nat.add(la, 1n+Nat.min(k, l2)), 1n+Nat.add(la, Nat.min(k, l2)), nat.add_succ(la, Nat.min(k, l2))) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i, 1n+u, a}, acc2)))) == _ : Nat}
+      %Equal.sym(Nat, Nat.add(la, 1n+Nat.min(k, l2)), 1n+Nat.add(la, Nat.min(k, l2)), UL.nat_add_succ(la, Nat.min(k, l2))) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i, 1n+u, a}, acc2)))) == _ : Nat}
       %list.len_snoc(acc, x) : {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i, 1n+u, a}, acc2)))) == Nat.add(_, Nat.min(k, l2)) : Nat}
       ih(i, 1n+u, a, acc2, inv.pop_nowrap(o, i, u, h, ne, ew))
 
-def bo.count.r(-k: Nat, +o: Nat, +i: Nat, +u: Nat, ax: Array<U32> & U32, +acc: List<&2, U32>, +h: {R.ring.inv(o, i, u) == True{} : Bool}, +ne: {R.ring.empty.test(i, u) == False{} : Bool}, ih: @i2: Nat -> @u2: Nat -> @a2: Array<U32> -> @acc2: List<&2, U32> -> @h2: {R.ring.inv(o, i2, u2) == True{} : Bool} -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i2, u2, a2}, acc2)))) == Nat.add(List.length(&2, U32, acc2), Nat.min(k, Nat.sub(i2, u2))) : Nat}) -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, R.ring.pop_list.keep(R.ring.pop.read(o, i, u, ax), acc)))) == Nat.add(List.length(&2, U32, acc), Nat.min(1n+k, Nat.sub(i, u))) : Nat}:
+def bo.count.r(+k: Nat, +o: Nat, +i: Nat, +u: Nat, ax: Array<U32> & U32, +acc: List<&2, U32>, +h: {R.ring.inv(o, i, u) == True{} : Bool}, +ne: {R.ring.empty.test(i, u) == False{} : Bool}, ih: @i2: Nat -> @u2: Nat -> @a2: Array<U32> -> @acc2: List<&2, U32> -> @h2: {R.ring.inv(o, i2, u2) == True{} : Bool} -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, (R.RingBuf{o, i2, u2, a2}, acc2)))) == Nat.add(List.length(&2, U32, acc2), Nat.min(k, Nat.sub(i2, u2))) : Nat}) -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(k, R.ring.pop_list.keep(R.ring.pop.read(o, i, u, ax), acc)))) == Nat.add(List.length(&2, U32, acc), Nat.min(1n+k, Nat.sub(i, u))) : Nat}:
   match ax:
     case (a, x):
       bo.count.w(Nat.is_eq(1n+u, R.ring.size(o)), k, o, i, u, {==}, a, x, acc, h, ne, ih)
@@ -556,7 +526,7 @@ def bo.count.h(c: Bool, +k: Nat, +o: Nat, +i: Nat, +u: Nat, +ec: {R.ring.empty.t
 def bo.count(n: Nat, +o: Nat, +i: Nat, +u: Nat, a: Array<U32>, +acc: List<&2, U32>, +h: {R.ring.inv(o, i, u) == True{} : Bool}) -> {List.length(&2, U32, Pair.snd(R.RingBuf, List<&2, U32>, R.ring.pop_list.go(n, (R.RingBuf{o, i, u, a}, acc)))) == Nat.add(List.length(&2, U32, acc), Nat.min(n, Nat.sub(i, u))) : Nat}:
   match n:
     case 0n:
-      Equal.sym(Nat, Nat.add(List.length(&2, U32, acc), 0n), List.length(&2, U32, acc), nat.add_zero(List.length(&2, U32, acc)))
+      Equal.sym(Nat, Nat.add(List.length(&2, U32, acc), 0n), List.length(&2, U32, acc), UL.nat_add_zero(List.length(&2, U32, acc)))
     case 1n+ +k:
       bo.count.h(R.ring.empty.test(i, u), k, o, i, u, {==}, a, acc, h, i2 => u2 => a2 => acc2 => h2 => bo.count(k, o, i2, u2, a2, acc2, h2))
 
@@ -857,10 +827,10 @@ def list.length_drop_le(xs: List<&2, U32>, n: Nat) -> {Nat.is_le(List.length(&2,
     case Nil{} _:
       {==}
     case Con{h, +t} 0n:
-      nat.le_refl(List.length(&2, U32, t))
+      UL.nat_le_refl(List.length(&2, U32, t))
     case Con{h, +t} 1n+ +p:
       +lt = List.length(&2, U32, t)
-      nat.le_trans(List.length(&2, U32, List.drop(&2, U32, t, p)), lt, 1n+lt, list.length_drop_le(t, p), nat.le_succ(lt, lt, nat.le_refl(lt)))
+      UO.nat_le_trans(List.length(&2, U32, List.drop(&2, U32, t, p)), lt, 1n+lt, list.length_drop_le(t, p), nat.le_succ(lt, lt, UL.nat_le_refl(lt)))
 
 def list.length_append(a: List<&2, U32>, +b: List<&2, U32>) -> {List.length(&2, U32, List.append(&2, U32, a, b)) == Nat.add(List.length(&2, U32, a), List.length(&2, U32, b)) : Nat}:
   match a:
@@ -913,12 +883,12 @@ def mo.push_list_valid(m: M.RingModel, +xs: List<&2, U32>, h: {M.model.valid(m) 
     case M.RingModel{+cap, +items}:
       %Equal.sym(Nat, List.length(&2, U32, List.append(&2, U32, items, List.take(&2, U32, xs, Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items)))))), Nat.add(List.length(&2, U32, items), List.length(&2, U32, List.take(&2, U32, xs, Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items)))))), list.length_append(items, List.take(&2, U32, xs, Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items)))))) : {Nat.is_le(_, cap) == True{} : Bool}
       %Equal.sym(Nat, List.length(&2, U32, List.take(&2, U32, xs, Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))))), Nat.min(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), list.length_take(xs, Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))))) : {Nat.is_le(Nat.add(List.length(&2, U32, items), _), cap) == True{} : Bool}
-      nat.add_le_sub(List.length(&2, U32, items), Nat.min(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), cap, h, nat.le_trans(Nat.min(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), Nat.sub(cap, List.length(&2, U32, items)), nat.min_le_l(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), nat.min_le_r(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items)))))
+      nat.add_le_sub(List.length(&2, U32, items), Nat.min(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), cap, h, UO.nat_le_trans(Nat.min(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), Nat.sub(cap, List.length(&2, U32, items)), nat.min_le_l(Nat.min(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items))), List.length(&2, U32, xs)), nat.min_le_r(List.length(&2, U32, xs), Nat.sub(cap, List.length(&2, U32, items)))))
 
 def mo.pop_list_valid(m: M.RingModel, +n: Nat, h: {M.model.valid(m) == True{} : Bool}) -> {M.model.valid(Pair.fst(M.RingModel, List<&2, U32>, M.model.pop_list(m, n))) == True{} : Bool}:
   match m:
     case M.RingModel{+cap, +items}:
-      nat.le_trans(List.length(&2, U32, List.drop(&2, U32, items, n)), List.length(&2, U32, items), cap, list.length_drop_le(items, n), h)
+      UO.nat_le_trans(List.length(&2, U32, List.drop(&2, U32, items, n)), List.length(&2, U32, items), cap, list.length_drop_le(items, n), h)
 
 def mo.fifo(m: M.RingModel, +xs: List<&2, U32>, h: {M.model.valid(m) == True{} : Bool}, l: {Nat.is_le(List.length(&2, U32, xs), M.model.avail(m)) == True{} : Bool}) -> {Pair.snd(M.RingModel, List<&2, U32>, M.model.pop_list(Pair.fst(M.RingModel, Nat, M.model.push_list(m, xs)), Nat.add(M.model.len(m), List.length(&2, U32, xs)))) == List.append(&2, U32, M.model.items(m), xs) : List<&2, U32>}:
   match m:
@@ -1132,7 +1102,7 @@ def Laws.model_pop_valid(m, h):
         case Nil{}:
           h
         case Con{y, +t}:
-          nat.le_trans(List.length(&2, U32, t), 1n+List.length(&2, U32, t), cap, nat.le_succ(List.length(&2, U32, t), List.length(&2, U32, t), nat.le_refl(List.length(&2, U32, t))), h)
+          UO.nat_le_trans(List.length(&2, U32, t), 1n+List.length(&2, U32, t), cap, nat.le_succ(List.length(&2, U32, t), List.length(&2, U32, t), UL.nat_le_refl(List.length(&2, U32, t))), h)
 
 def Laws.model_peek_is_pop(m):
   match m:
