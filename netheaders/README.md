@@ -69,9 +69,10 @@ The checksum (`checksum.bend`): `inet_checksum(o)`, `inet_verify(o)` (the
 sum of data that includes its checksum is all ones), `inet_sum(o)`; in
 pieces `inet_start()`, `inet_update(acc, o)` (every piece but the last of
 even length, `inet_even(o)`), `inet_finish(acc)`; `inet_add(a, b)`, the one's
-complement sum of two 16-bit values (add, then fold the carry back in); and
-`inet_fill(pseudo, o, off)`, `o` with the checksum of `pseudo ++ o` written
-at offset `off`.
+complement sum of two 16-bit values (add, then fold the carry back in);
+`inet_put16(o, off, v)`, `o` with the 16-bit big-endian field at `off`
+replaced by `v`; and `inet_fill(pseudo, o, off)`, `o` with the checksum of
+`pseudo ++ o` written at offset `off`.
 
 `NetField.low(k, v)`, `NetField.get(v, p, k)` and `NetField.put(p, k, x, v)`
 read and write the `k`-bit field from bit `p` of a word, by bit slicing.
@@ -138,7 +139,7 @@ cases contradicting the law's hypotheses. `rest` is handled through bytes'
 interface law `octets_append_list`.
 
 `LAWS_sum.bend`, the one's complement arithmetic of RFC 1071 and what it
-gives the headers (21 laws, for every input but the last two):
+gives the headers (26 laws, for every input but the last two):
 
 * on 16-bit values (a `U32` of at most 65535): `inet_add` is the plain sum
   when that fits 16 bits (`inet_add_no_carry`) and otherwise the sum less
@@ -165,6 +166,12 @@ gives the headers (21 laws, for every input but the last two):
   read back is never 0), TCP over IPv4 and IPv6 (`tcp_ipv4_build_verifies`,
   `tcp_ipv6_build_verifies`); the verifier's pseudo-header carries the
   length the builder used, since writing the field keeps the length;
+* the checksum field written by `inet_put16` (as `inet_fill` and UDP write
+  it): the length is kept (`inet_put16_len`) and so are the bytes past the
+  field (`inet_put16_drop`); ICMP and UDP headers followed by any bytes,
+  with the field written, parse back with it (`icmp_put_parse`,
+  `udp_put_parse`); and with UDP's length field the datagram's length,
+  `UdpHeader.payload` reads the payload back (`udp_put_payload`);
 * a satisfiability law (`inet_sum_sat`) and a vector of the end-around carry
   and the complement (`inet_add_vector`).
 
@@ -230,8 +237,8 @@ natively; 0.7 s and 280 MB on the JavaScript lane).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (21 laws) and
+Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (26 laws) and
 `PROOF_ipv4.bend` (2 laws) ALL PROOFS CHECK, and `--verdict` ALL PROOFS
-CHECK for each (peaks 0.62 GB, 0.33 GB and 0.58 GB);
+CHECK for each (peaks 0.62 GB, 0.30 GB and 0.58 GB);
 `ref/gen_sum.py --check` up to date; `check.bend` passes, `ref/run.sh` 696
 cases match, `scripts/deps.sh` ok.

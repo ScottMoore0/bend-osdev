@@ -22,6 +22,7 @@
 # bend-osdev-u32's laws, not on the bit-level round trips of PROOF.bend.
 import Base
 import ../bytes/bytes.bend as B
+import ./netheaders.bend as N
 import ./checksum.bend as K
 import ./ipv6.bend as I6
 import ./icmp.bend as C
@@ -166,9 +167,59 @@ law tcp_ipv6_build_verifies:
   for +payload: B.Octets
   {T.TcpHeader.verify_ipv6(src, dst, T.TcpHeader.build_ipv6(src, dst, h, payload)) == True{} : Bool}
 
-# Satisfiability: the hypotheses hold for some inputs (0xffff + 2 carries)
+# The checksum field written (inet_put16, as inet_fill and UDP's fill write
+# it): the length is kept, the bytes past the field are kept, and ICMP and
+# UDP headers parse back with the field written
+
+law inet_put16_len:
+  for +o: B.Octets
+  for +off: Nat
+  for +v: U32
+  for h: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}
+  {B.Octets.len(K.inet_put16(o, off, v)) == B.Octets.len(o) : Nat}
+
+law inet_put16_drop:
+  for +o: B.Octets
+  for +off: Nat
+  for +v: U32
+  for +n: Nat
+  for +h1: {Nat.is_le(Nat.add(off, 2n), n) == True{} : Bool}
+  for h2: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}
+  {B.Octets.drop(n, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}
+
+law icmp_put_parse:
+  for +msg_type: U32
+  for +code: U32
+  for +checksum: U32
+  for +rest: U32
+  for +data: B.Octets
+  for +c: U32
+  {C.IcmpHeader.parse(K.inet_put16(B.Octets.append(C.IcmpHeader.build(C.IcmpHeader{msg_type, code, checksum, rest}), data), 2n, c)) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}
+
+law udp_put_parse:
+  for +src_port: U32
+  for +dst_port: U32
+  for +length: U32
+  for +checksum: U32
+  for +payload: B.Octets
+  for +c: U32
+  {U.UdpHeader.parse(K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Done{U.UdpHeader.norm(U.UdpHeader{src_port, dst_port, length, c})} : Result<&2, &2, N.NetError, U.UdpHeader>}
+
+# with the length field the datagram's length, the payload reads back
+law udp_put_payload:
+  for +src_port: U32
+  for +dst_port: U32
+  for +length: U32
+  for +checksum: U32
+  for +payload: B.Octets
+  for +c: U32
+  for hl: {U32.to_nat(N.NetField.low(16n, length)) == Nat.add(8n, B.Octets.len(payload)) : Nat}
+  {U.UdpHeader.payload(U.UdpHeader.norm(U.UdpHeader{src_port, dst_port, length, c}), K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+
+# Satisfiability: the hypotheses hold for some inputs (0xffff + 2 carries;
+# a 2-byte payload under a length field of 10)
 law inet_sum_sat:
-  {(U32.is_le(65535, 65535), U32.is_le(2, 65535), U32.is_le(U32.add(65535, 2), 65535), U32.is_le(U32.add(1, 2), 65535), K.inet_even(B.Octets.of_list([1, 2])), Nat.is_le(Nat.double(1n), B.Octets.len(B.Octets.of_list([1, 2])))) == (True{}, True{}, False{}, True{}, True{}, True{}) : Bool & Bool & Bool & Bool & Bool & Bool}
+  {(U32.is_le(65535, 65535), U32.is_le(2, 65535), U32.is_le(U32.add(65535, 2), 65535), U32.is_le(U32.add(1, 2), 65535), K.inet_even(B.Octets.of_list([1, 2])), Nat.is_le(Nat.double(1n), B.Octets.len(B.Octets.of_list([1, 2]))), Nat.is_eq(U32.to_nat(N.NetField.low(16n, 10)), Nat.add(8n, B.Octets.len(B.Octets.of_list([1, 2]))))) == (True{}, True{}, False{}, True{}, True{}, True{}, True{}) : Bool & Bool & Bool & Bool & Bool & Bool & Bool}
 
 # The end-around carry as a vector: 0xffff + 2 = 0x0001 + 1 = 2
 law inet_add_vector:

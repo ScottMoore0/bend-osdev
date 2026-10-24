@@ -1270,6 +1270,21 @@ def os.put16_list(+L: {LL}, +off: Nat, +v: U32, +h: {{Nat.is_le(Nat.add(off, 2n)
   {{==}}
 """)
 
+# ---- appending bytes to a list's bytes
+w(f"""
+# of_list(X) ++ y is the bytes of the list X ++ to_list(y)
+def os.app_of(+X: List<&2, U32>, +y: B.Octets) -> {{B.Octets.append(B.Octets.of_list(X), y) == B.Octets.of_list(B.append(X, B.Octets.to_list(y))) : B.Octets}}:
+  %BL.octets_of_to(y) : {{B.Octets.append(B.Octets.of_list(X), _) == B.Octets.of_list(B.append(X, B.Octets.to_list(y))) : B.Octets}}
+  Equal.sym(B.Octets, B.Octets.of_list(B.append(X, B.Octets.to_list(y))), B.Octets.append(B.Octets.of_list(X), B.Octets.of_list(B.Octets.to_list(y))), os.of_list_append(X, B.Octets.to_list(y)))
+
+def os.ge_zero(x: Nat) -> {{Cmp.is_ge(Nat.cmp(x, 0n)) == True{{}} : Bool}}:
+  match x:
+    case 0n:
+      {{==}}
+    case 1n+p:
+      {{==}}
+""")
+
 # define each lemma before its first use
 out = "".join(P)
 def cut(s, name):
@@ -1310,6 +1325,7 @@ import Base
 import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
+import ./netheaders.bend as N
 import ./checksum.bend as K
 import ./ipv4.bend as I4
 import ./ipv6.bend as I6
@@ -1523,6 +1539,106 @@ def Laws.udp_ipv4_build_verifies(src, dst, h, payload):
 PS6 = f"I6.ipv6_pseudo(src, dst, U32.from_nat({lnq(MU)}), 17)"
 CK6U = CKof(PS6, MU)
 B6 = "U.UdpHeader.build_ipv6(src, dst, h, payload)"
+
+# ---- the checksum field written by inet_put16 reads back
+def OLq(x): return "B.Octets.of_list(%s)" % x
+q(f"""
+# Writing a 16-bit field
+
+def Laws.inet_put16_len(o, off, v, h):
+  S.os.len_put16(o, off, v, h)
+
+def Laws.inet_put16_drop(o, off, v, n, h1, h2):
+  %S.os.add_sub(Nat.add(off, 2n), n, h1) : {{B.Octets.drop(_, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}}
+  %Equal.sym(Nat, Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), Nat.add(off, Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), S.os.add_assoc(off, 2n, Nat.sub(n, Nat.add(off, 2n)))) : {{B.Octets.drop(_, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}}
+  %BL.octets_len_take_le(off, o, S.os.le_trans(off, Nat.add(off, 2n), B.Octets.len(o), S.os.le_add_r(off, 2n), h2)) : {{B.Octets.drop(Nat.add(_, Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(B.Octets.take(off, o)), Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), B.Octets.append(B.Octets.take(off, o), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o)))), B.Octets.drop(Nat.add(2n, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))), BL.octets_drop_append_add(B.Octets.take(off, o), Nat.add(2n, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o)))) : {{_ == B.Octets.drop(n, o) : B.Octets}}
+  %BL.octets_len_be16(v) : {{B.Octets.drop(Nat.add(_, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))) == B.Octets.drop(n, o) : B.Octets}}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(B.Octets.be16(v)), Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))), B.Octets.drop(Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o)), BL.octets_drop_append_add(B.Octets.be16(v), Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o))) : {{_ == B.Octets.drop(n, o) : B.Octets}}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o)), B.Octets.drop(Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), o), BL.octets_drop_drop(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n)), o)) : {{_ == B.Octets.drop(n, o) : B.Octets}}
+  %Equal.sym(Nat, Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), n, S.os.add_sub(Nat.add(off, 2n), n, h1)) : {{B.Octets.drop(_, o) == B.Octets.drop(n, o) : B.Octets}}
+  {{==}}
+""")
+# ICMP and UDP headers with the checksum written parse back
+def putparse(law, ty, fields, deep, off, nbytes, data):
+    names = [f for f, _ in fields]
+    H0 = "%s{%s}" % (ty, ", ".join(names))
+    HC = "%s{%s}" % (ty, ", ".join("c" if f == "checksum" else f for f in names))
+    LP = f"B.append({ty}.build.list({H0}), B.Octets.to_list({data}))"
+    RF = f"B.append(B.mask(B.take({off}, {LP})), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add({off}, 2n), {LP}))))"
+    RES = f"Result<&2, &2, N.NetError, {ty}>"
+    sig_m = ", ".join("%s: U32" % f for f in names) + f", +{data}: B.Octets, c: U32"
+    sig = ", ".join("+%s: U32" % f for f in names) + f", +{data}: B.Octets, +c: U32"
+    pats = " ".join(pat(f + "_", k) if k else "U32{%s_}" % f for f, k in fields) + " " + pat("c_", 16)
+    args = ", ".join(names) + f", {data}, c"
+    q(f"""
+def h.{law}.m({sig_m}) -> {{{ty}.parse.list({RF}) == Done{{{ty}.norm({HC})}} : {RES}}}:
+  match {" ".join(names)} c:
+    case {pats}:
+      {{==}}
+
+def h.{law}.len.m({", ".join("%s: U32" % f for f in names)}, +{data}: B.Octets) -> {{Nat.is_le(Nat.add({off}, 2n), B.len({LP})) == True{{}} : Bool}}:
+  match {" ".join(names)}:
+    case {" ".join("U32{%s_}" % f for f in names)}:
+      S.os.le_zero({nbytes})
+
+def Laws.{law}({args}):
+  %Equal.sym(B.Octets, B.Octets.append({ty}.build({H0}), {data}), {OLq(LP)}, S.os.app_of({ty}.build.list({H0}), {data})) : {{{ty}.parse(K.inet_put16(_, {off}, c)) == Done{{{ty}.norm({HC})}} : {RES}}}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(K.inet_put16({OLq(LP)}, {off}, c)), {RF}, S.os.put16_list({LP}, {off}, c, h.{law}.len.m({", ".join(names)}, {data}))) : {{{ty}.parse.list(_) == Done{{{ty}.norm({HC})}} : {RES}}}
+  h.{law}.m({args})
+""")
+putparse("icmp_put_parse", "C.IcmpHeader", [("msg_type", 8), ("code", 8), ("checksum", 16), ("rest", 32)], None, "2n", "Nat.add(4n, B.len(B.Octets.to_list(data)))", "data")
+putparse("udp_put_parse", "U.UdpHeader", [("src_port", 16), ("dst_port", 16), ("length", 16), ("checksum", 0)], None, "6n", "B.len(B.Octets.to_list(payload))", "payload")
+
+# the UDP payload read back
+H0U = "U.UdpHeader{src_port, dst_port, length, checksum}"
+MUP = f"B.Octets.append(U.UdpHeader.build({H0U}), payload)"
+DGU = f"K.inet_put16({MUP}, 6n, c)"
+LPL = "B.Octets.len(payload)"
+N0 = "U32.to_nat(N.NetField.low(16n, N.NetField.low(16n, length)))"
+q(f"""
+def h.low_low16(l: U32) -> {{N.NetField.low(16n, N.NetField.low(16n, l)) == N.NetField.low(16n, l) : U32}}:
+  match l:
+    case {pat("l_", 16)}:
+      {{==}}
+
+def h.udp_blen(a: U32, b: U32, l: U32, k: U32) -> {{B.len(U.UdpHeader.build.list(U.UdpHeader{{a, b, l, k}})) == 8n : Nat}}:
+  match a b l k:
+    case U32{{a_}} U32{{b_}} U32{{l_}} U32{{k_}}:
+      {{==}}
+
+def h.udp_len_build(+a: U32, +b: U32, +l: U32, +k: U32) -> {{B.Octets.len(U.UdpHeader.build(U.UdpHeader{{a, b, l, k}})) == 8n : Nat}}:
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(U.UdpHeader.build.list(U.UdpHeader{{a, b, l, k}}))), B.len(U.UdpHeader.build.list(U.UdpHeader{{a, b, l, k}})), BL.octets_len_of_list(U.UdpHeader.build.list(U.UdpHeader{{a, b, l, k}}))) : {{_ == 8n : Nat}}
+  h.udp_blen(a, b, l, k)
+
+def h.udp_dg_len(+src_port: U32, +dst_port: U32, +length: U32, +checksum: U32, +payload: B.Octets, +c: U32) -> {{B.Octets.len({DGU}) == Nat.add(8n, {LPL}) : Nat}}:
+  %Equal.sym(Nat, B.Octets.len({DGU}), B.Octets.len({MUP}), S.os.len_put16({MUP}, 6n, c, h.udp_len({H0U}, payload))) : {{_ == Nat.add(8n, {LPL}) : Nat}}
+  %Equal.sym(Nat, B.Octets.len({MUP}), Nat.add(B.Octets.len(U.UdpHeader.build({H0U})), {LPL}), BL.octets_len_append(U.UdpHeader.build({H0U}), payload)) : {{_ == Nat.add(8n, {LPL}) : Nat}}
+  %Equal.sym(Nat, B.Octets.len(U.UdpHeader.build({H0U})), 8n, h.udp_len_build(src_port, dst_port, length, checksum)) : {{Nat.add(_, {LPL}) == Nat.add(8n, {LPL}) : Nat}}
+  {{==}}
+
+def h.udp_drop8(+src_port: U32, +dst_port: U32, +length: U32, +checksum: U32, +payload: B.Octets, +c: U32) -> {{B.Octets.drop(8n, {DGU}) == payload : B.Octets}}:
+  %Equal.sym(B.Octets, B.Octets.drop(8n, {DGU}), B.Octets.drop(8n, {MUP}), Laws.inet_put16_drop({MUP}, 6n, c, 8n, {{==}}, h.udp_len({H0U}, payload))) : {{_ == payload : B.Octets}}
+  %h.udp_len_build(src_port, dst_port, length, checksum) : {{B.Octets.drop(_, {MUP}) == payload : B.Octets}}
+  BL.octets_drop_append(U.UdpHeader.build({H0U}), payload)
+
+def h.sub8(x: Nat) -> {{Nat.sub(Nat.add(8n, x), 8n) == x : Nat}}:
+  S.os.sub_zero(x)
+
+def h.ge8(x: Nat) -> {{Nat.is_ge(Nat.add(8n, x), 8n) == True{{}} : Bool}}:
+  S.os.ge_zero(x)
+
+def Laws.udp_put_payload(src_port, dst_port, length, checksum, payload, c, hl):
+  %Equal.sym(Nat, {N0}, Nat.add(8n, {LPL}), Equal.trans(Nat, {N0}, U32.to_nat(N.NetField.low(16n, length)), Nat.add(8n, {LPL}), Equal.cong(U32, Nat, z => U32.to_nat(z), N.NetField.low(16n, N.NetField.low(16n, length)), N.NetField.low(16n, length), h.low_low16(length)), hl)) : {{U.UdpHeader.payload.go(Nat.is_ge(_, 8n), Nat.sub(_, 8n), {DGU}) == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(Bool, Nat.is_ge(Nat.add(8n, {LPL}), 8n), True{{}}, h.ge8({LPL})) : {{U.UdpHeader.payload.go(_, Nat.sub(Nat.add(8n, {LPL}), 8n), {DGU}) == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(Nat, Nat.sub(Nat.add(8n, {LPL}), 8n), {LPL}, h.sub8({LPL})) : {{U.UdpHeader.payload.go(True{{}}, _, {DGU}) == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(Nat, B.Octets.len({DGU}), Nat.add(8n, {LPL}), h.udp_dg_len(src_port, dst_port, length, checksum, payload, c)) : {{N.net.check(B.Octets, Nat.is_le(Nat.add(8n, {LPL}), _), N.NetTruncated{{}}, B.Octets.slice(8n, {LPL}, {DGU})) == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(Bool, Nat.is_le(Nat.add(8n, {LPL}), Nat.add(8n, {LPL})), True{{}}, S.os.le_refl(Nat.add(8n, {LPL}))) : {{N.net.check(B.Octets, _, N.NetTruncated{{}}, B.Octets.slice(8n, {LPL}, {DGU})) == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(B.Octets, B.Octets.drop(8n, {DGU}), payload, h.udp_drop8(src_port, dst_port, length, checksum, payload, c)) : {{Done{{B.Octets.take({LPL}, _)}} == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  %Equal.sym(B.Octets, B.Octets.take({LPL}, payload), payload, BL.octets_take_len(payload)) : {{Done{{_}} == Done{{payload}} : Result<&2, &2, N.NetError, B.Octets>}}
+  {{==}}
+""")
+
 q(f"""
 def h.udp6.zero({A6}, +h: U.UdpHeader, +payload: B.Octets) -> {{U.UdpHeader.zero_field(B.Octets.be16_at({B6}, 6n)) == False{{}} : Bool}}:
   Equal.trans(Bool, U.UdpHeader.zero_field(B.Octets.be16_at({B6}, 6n)), U32.is_eq(B.low16(U.UdpHeader.nonzero({CK6U})), 0), False{{}}, h.zf({MU}, U.UdpHeader.nonzero({CK6U}), h.udp_len(h, payload)), h.nz_low(U32.is_eq({CK6U}, 0), K.inet_finish({S0of(PS6, MU)}), S.os.finish_fits({D}, S.os.hD(), {S0of(PS6, MU)}), {{==}}))

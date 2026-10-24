@@ -1106,6 +1106,18 @@ def os.put16_list(+L: List<&2, U32>, +off: Nat, +v: U32, +h: {Nat.is_le(Nat.add(
   %Equal.sym(List<&2, U32>, B.drop(2n, B.drop(off, L)), B.drop(Nat.add(off, 2n), L), os.drop_drop(off, 2n, L)) : {B.append(B.mask(B.take(off, L)), B.append(B.mask(B.be16(v)), B.mask(_))) == B.append(B.mask(B.take(off, L)), B.append(B.mask(B.be16(v)), B.mask(B.drop(Nat.add(off, 2n), L)))) : List<&2, U32>}
   {==}
 
+# of_list(X) ++ y is the bytes of the list X ++ to_list(y)
+def os.app_of(+X: List<&2, U32>, +y: B.Octets) -> {B.Octets.append(B.Octets.of_list(X), y) == B.Octets.of_list(B.append(X, B.Octets.to_list(y))) : B.Octets}:
+  %BL.octets_of_to(y) : {B.Octets.append(B.Octets.of_list(X), _) == B.Octets.of_list(B.append(X, B.Octets.to_list(y))) : B.Octets}
+  Equal.sym(B.Octets, B.Octets.of_list(B.append(X, B.Octets.to_list(y))), B.Octets.append(B.Octets.of_list(X), B.Octets.of_list(B.Octets.to_list(y))), os.of_list_append(X, B.Octets.to_list(y)))
+
+def os.ge_zero(x: Nat) -> {Cmp.is_ge(Nat.cmp(x, 0n)) == True{} : Bool}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
 def os.g_add_assoc(+d: Nat, +hd: {Nat.is_le(1n, d) == True{} : Bool}, +hD: {1n+d == UN.U32Nat.dbl(16n, 1n) : Nat}, +hE: {U32.to_nat(65535) == d : Nat}, +a: U32, +b: U32, +c: U32, +ha: {U32.is_le(a, 65535) == True{} : Bool}, +hb: {U32.is_le(b, 65535) == True{} : Bool}, +hc: {U32.is_le(c, 65535) == True{} : Bool}) -> {K.inet_add(K.inet_add(a, b), c) == K.inet_add(a, K.inet_add(b, c)) : U32}:
   UL.u32_value_eq(K.inet_add(K.inet_add(a, b), c), K.inet_add(a, K.inet_add(b, c)), os.g_add_assoc.v(d, hd, hD, hE, a, b, c, os.fit_of(d, hE, a, ha), os.fit_of(d, hE, b, hb), os.fit_of(d, hE, c, hc)))
 

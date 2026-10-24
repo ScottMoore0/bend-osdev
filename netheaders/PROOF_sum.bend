@@ -10,6 +10,7 @@ import Base
 import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
+import ./netheaders.bend as N
 import ./checksum.bend as K
 import ./ipv4.bend as I4
 import ./ipv6.bend as I6
@@ -198,6 +199,93 @@ def h.udp6.sum(+src: I6.Ipv6Addr, +dst: I6.Ipv6Addr, +h: U.UdpHeader, +payload: 
 
 def Laws.udp_ipv4_build_verifies(src, dst, h, payload):
   h.go_true(U.UdpHeader.zero_field(B.Octets.be16_at(U.UdpHeader.build_ipv4(src, dst, h, payload), 6n)), K.inet_verify(B.Octets.append(I4.ipv4_pseudo(src, dst, 17, U32.from_nat(B.Octets.len(U.UdpHeader.build_ipv4(src, dst, h, payload)))), U.UdpHeader.build_ipv4(src, dst, h, payload))), h.udp4.sum(src, dst, h, payload))
+
+# Writing a 16-bit field
+
+def Laws.inet_put16_len(o, off, v, h):
+  S.os.len_put16(o, off, v, h)
+
+def Laws.inet_put16_drop(o, off, v, n, h1, h2):
+  %S.os.add_sub(Nat.add(off, 2n), n, h1) : {B.Octets.drop(_, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}
+  %Equal.sym(Nat, Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), Nat.add(off, Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), S.os.add_assoc(off, 2n, Nat.sub(n, Nat.add(off, 2n)))) : {B.Octets.drop(_, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}
+  %BL.octets_len_take_le(off, o, S.os.le_trans(off, Nat.add(off, 2n), B.Octets.len(o), S.os.le_add_r(off, 2n), h2)) : {B.Octets.drop(Nat.add(_, Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(B.Octets.take(off, o)), Nat.add(2n, Nat.sub(n, Nat.add(off, 2n)))), B.Octets.append(B.Octets.take(off, o), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o)))), B.Octets.drop(Nat.add(2n, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))), BL.octets_drop_append_add(B.Octets.take(off, o), Nat.add(2n, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o)))) : {_ == B.Octets.drop(n, o) : B.Octets}
+  %BL.octets_len_be16(v) : {B.Octets.drop(Nat.add(_, Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))) == B.Octets.drop(n, o) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(B.Octets.be16(v)), Nat.sub(n, Nat.add(off, 2n))), B.Octets.append(B.Octets.be16(v), B.Octets.drop(Nat.add(off, 2n), o))), B.Octets.drop(Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o)), BL.octets_drop_append_add(B.Octets.be16(v), Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o))) : {_ == B.Octets.drop(n, o) : B.Octets}
+  %Equal.sym(B.Octets, B.Octets.drop(Nat.sub(n, Nat.add(off, 2n)), B.Octets.drop(Nat.add(off, 2n), o)), B.Octets.drop(Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), o), BL.octets_drop_drop(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n)), o)) : {_ == B.Octets.drop(n, o) : B.Octets}
+  %Equal.sym(Nat, Nat.add(Nat.add(off, 2n), Nat.sub(n, Nat.add(off, 2n))), n, S.os.add_sub(Nat.add(off, 2n), n, h1)) : {B.Octets.drop(_, o) == B.Octets.drop(n, o) : B.Octets}
+  {==}
+
+def h.icmp_put_parse.m(msg_type: U32, code: U32, checksum: U32, rest: U32, +data: B.Octets, c: U32) -> {C.IcmpHeader.parse.list(B.append(B.mask(B.take(2n, B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add(2n, 2n), B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data))))))) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}:
+  match msg_type code checksum rest c:
+    case U32{WCon{msg_type_0, WCon{msg_type_1, WCon{msg_type_2, WCon{msg_type_3, WCon{msg_type_4, WCon{msg_type_5, WCon{msg_type_6, WCon{msg_type_7, msg_type_h}}}}}}}}} U32{WCon{code_0, WCon{code_1, WCon{code_2, WCon{code_3, WCon{code_4, WCon{code_5, WCon{code_6, WCon{code_7, code_h}}}}}}}}} U32{WCon{checksum_0, WCon{checksum_1, WCon{checksum_2, WCon{checksum_3, WCon{checksum_4, WCon{checksum_5, WCon{checksum_6, WCon{checksum_7, WCon{checksum_8, WCon{checksum_9, WCon{checksum_10, WCon{checksum_11, WCon{checksum_12, WCon{checksum_13, WCon{checksum_14, WCon{checksum_15, checksum_h}}}}}}}}}}}}}}}}} U32{WCon{rest_0, WCon{rest_1, WCon{rest_2, WCon{rest_3, WCon{rest_4, WCon{rest_5, WCon{rest_6, WCon{rest_7, WCon{rest_8, WCon{rest_9, WCon{rest_10, WCon{rest_11, WCon{rest_12, WCon{rest_13, WCon{rest_14, WCon{rest_15, WCon{rest_16, WCon{rest_17, WCon{rest_18, WCon{rest_19, WCon{rest_20, WCon{rest_21, WCon{rest_22, WCon{rest_23, WCon{rest_24, WCon{rest_25, WCon{rest_26, WCon{rest_27, WCon{rest_28, WCon{rest_29, WCon{rest_30, WCon{rest_31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} U32{WCon{c_0, WCon{c_1, WCon{c_2, WCon{c_3, WCon{c_4, WCon{c_5, WCon{c_6, WCon{c_7, WCon{c_8, WCon{c_9, WCon{c_10, WCon{c_11, WCon{c_12, WCon{c_13, WCon{c_14, WCon{c_15, c_h}}}}}}}}}}}}}}}}}:
+      {==}
+
+def h.icmp_put_parse.len.m(msg_type: U32, code: U32, checksum: U32, rest: U32, +data: B.Octets) -> {Nat.is_le(Nat.add(2n, 2n), B.len(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))) == True{} : Bool}:
+  match msg_type code checksum rest:
+    case U32{msg_type_} U32{code_} U32{checksum_} U32{rest_}:
+      S.os.le_zero(Nat.add(4n, B.len(B.Octets.to_list(data))))
+
+def Laws.icmp_put_parse(msg_type, code, checksum, rest, data, c):
+  %Equal.sym(B.Octets, B.Octets.append(C.IcmpHeader.build(C.IcmpHeader{msg_type, code, checksum, rest}), data), B.Octets.of_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data))), S.os.app_of(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), data)) : {C.IcmpHeader.parse(K.inet_put16(_, 2n, c)) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(K.inet_put16(B.Octets.of_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data))), 2n, c)), B.append(B.mask(B.take(2n, B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add(2n, 2n), B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))))), S.os.put16_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)), 2n, c, h.icmp_put_parse.len.m(msg_type, code, checksum, rest, data))) : {C.IcmpHeader.parse.list(_) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}
+  h.icmp_put_parse.m(msg_type, code, checksum, rest, data, c)
+
+def h.udp_put_parse.m(src_port: U32, dst_port: U32, length: U32, checksum: U32, +payload: B.Octets, c: U32) -> {U.UdpHeader.parse.list(B.append(B.mask(B.take(6n, B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload)))), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add(6n, 2n), B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload))))))) == Done{U.UdpHeader.norm(U.UdpHeader{src_port, dst_port, length, c})} : Result<&2, &2, N.NetError, U.UdpHeader>}:
+  match src_port dst_port length checksum c:
+    case U32{WCon{src_port_0, WCon{src_port_1, WCon{src_port_2, WCon{src_port_3, WCon{src_port_4, WCon{src_port_5, WCon{src_port_6, WCon{src_port_7, WCon{src_port_8, WCon{src_port_9, WCon{src_port_10, WCon{src_port_11, WCon{src_port_12, WCon{src_port_13, WCon{src_port_14, WCon{src_port_15, src_port_h}}}}}}}}}}}}}}}}} U32{WCon{dst_port_0, WCon{dst_port_1, WCon{dst_port_2, WCon{dst_port_3, WCon{dst_port_4, WCon{dst_port_5, WCon{dst_port_6, WCon{dst_port_7, WCon{dst_port_8, WCon{dst_port_9, WCon{dst_port_10, WCon{dst_port_11, WCon{dst_port_12, WCon{dst_port_13, WCon{dst_port_14, WCon{dst_port_15, dst_port_h}}}}}}}}}}}}}}}}} U32{WCon{length_0, WCon{length_1, WCon{length_2, WCon{length_3, WCon{length_4, WCon{length_5, WCon{length_6, WCon{length_7, WCon{length_8, WCon{length_9, WCon{length_10, WCon{length_11, WCon{length_12, WCon{length_13, WCon{length_14, WCon{length_15, length_h}}}}}}}}}}}}}}}}} U32{checksum_} U32{WCon{c_0, WCon{c_1, WCon{c_2, WCon{c_3, WCon{c_4, WCon{c_5, WCon{c_6, WCon{c_7, WCon{c_8, WCon{c_9, WCon{c_10, WCon{c_11, WCon{c_12, WCon{c_13, WCon{c_14, WCon{c_15, c_h}}}}}}}}}}}}}}}}}:
+      {==}
+
+def h.udp_put_parse.len.m(src_port: U32, dst_port: U32, length: U32, checksum: U32, +payload: B.Octets) -> {Nat.is_le(Nat.add(6n, 2n), B.len(B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload)))) == True{} : Bool}:
+  match src_port dst_port length checksum:
+    case U32{src_port_} U32{dst_port_} U32{length_} U32{checksum_}:
+      S.os.le_zero(B.len(B.Octets.to_list(payload)))
+
+def Laws.udp_put_parse(src_port, dst_port, length, checksum, payload, c):
+  %Equal.sym(B.Octets, B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), B.Octets.of_list(B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload))), S.os.app_of(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), payload)) : {U.UdpHeader.parse(K.inet_put16(_, 6n, c)) == Done{U.UdpHeader.norm(U.UdpHeader{src_port, dst_port, length, c})} : Result<&2, &2, N.NetError, U.UdpHeader>}
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(K.inet_put16(B.Octets.of_list(B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload))), 6n, c)), B.append(B.mask(B.take(6n, B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload)))), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add(6n, 2n), B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload)))))), S.os.put16_list(B.append(U.UdpHeader.build.list(U.UdpHeader{src_port, dst_port, length, checksum}), B.Octets.to_list(payload)), 6n, c, h.udp_put_parse.len.m(src_port, dst_port, length, checksum, payload))) : {U.UdpHeader.parse.list(_) == Done{U.UdpHeader.norm(U.UdpHeader{src_port, dst_port, length, c})} : Result<&2, &2, N.NetError, U.UdpHeader>}
+  h.udp_put_parse.m(src_port, dst_port, length, checksum, payload, c)
+
+def h.low_low16(l: U32) -> {N.NetField.low(16n, N.NetField.low(16n, l)) == N.NetField.low(16n, l) : U32}:
+  match l:
+    case U32{WCon{l_0, WCon{l_1, WCon{l_2, WCon{l_3, WCon{l_4, WCon{l_5, WCon{l_6, WCon{l_7, WCon{l_8, WCon{l_9, WCon{l_10, WCon{l_11, WCon{l_12, WCon{l_13, WCon{l_14, WCon{l_15, l_h}}}}}}}}}}}}}}}}}:
+      {==}
+
+def h.udp_blen(a: U32, b: U32, l: U32, k: U32) -> {B.len(U.UdpHeader.build.list(U.UdpHeader{a, b, l, k})) == 8n : Nat}:
+  match a b l k:
+    case U32{a_} U32{b_} U32{l_} U32{k_}:
+      {==}
+
+def h.udp_len_build(+a: U32, +b: U32, +l: U32, +k: U32) -> {B.Octets.len(U.UdpHeader.build(U.UdpHeader{a, b, l, k})) == 8n : Nat}:
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(U.UdpHeader.build.list(U.UdpHeader{a, b, l, k}))), B.len(U.UdpHeader.build.list(U.UdpHeader{a, b, l, k})), BL.octets_len_of_list(U.UdpHeader.build.list(U.UdpHeader{a, b, l, k}))) : {_ == 8n : Nat}
+  h.udp_blen(a, b, l, k)
+
+def h.udp_dg_len(+src_port: U32, +dst_port: U32, +length: U32, +checksum: U32, +payload: B.Octets, +c: U32) -> {B.Octets.len(K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Nat.add(8n, B.Octets.len(payload)) : Nat}:
+  %Equal.sym(Nat, B.Octets.len(K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)), B.Octets.len(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)), S.os.len_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c, h.udp_len(U.UdpHeader{src_port, dst_port, length, checksum}, payload))) : {_ == Nat.add(8n, B.Octets.len(payload)) : Nat}
+  %Equal.sym(Nat, B.Octets.len(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)), Nat.add(B.Octets.len(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum})), B.Octets.len(payload)), BL.octets_len_append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)) : {_ == Nat.add(8n, B.Octets.len(payload)) : Nat}
+  %Equal.sym(Nat, B.Octets.len(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum})), 8n, h.udp_len_build(src_port, dst_port, length, checksum)) : {Nat.add(_, B.Octets.len(payload)) == Nat.add(8n, B.Octets.len(payload)) : Nat}
+  {==}
+
+def h.udp_drop8(+src_port: U32, +dst_port: U32, +length: U32, +checksum: U32, +payload: B.Octets, +c: U32) -> {B.Octets.drop(8n, K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == payload : B.Octets}:
+  %Equal.sym(B.Octets, B.Octets.drop(8n, K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)), B.Octets.drop(8n, B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)), Laws.inet_put16_drop(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c, 8n, {==}, h.udp_len(U.UdpHeader{src_port, dst_port, length, checksum}, payload))) : {_ == payload : B.Octets}
+  %h.udp_len_build(src_port, dst_port, length, checksum) : {B.Octets.drop(_, B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)) == payload : B.Octets}
+  BL.octets_drop_append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload)
+
+def h.sub8(x: Nat) -> {Nat.sub(Nat.add(8n, x), 8n) == x : Nat}:
+  S.os.sub_zero(x)
+
+def h.ge8(x: Nat) -> {Nat.is_ge(Nat.add(8n, x), 8n) == True{} : Bool}:
+  S.os.ge_zero(x)
+
+def Laws.udp_put_payload(src_port, dst_port, length, checksum, payload, c, hl):
+  %Equal.sym(Nat, U32.to_nat(N.NetField.low(16n, N.NetField.low(16n, length))), Nat.add(8n, B.Octets.len(payload)), Equal.trans(Nat, U32.to_nat(N.NetField.low(16n, N.NetField.low(16n, length))), U32.to_nat(N.NetField.low(16n, length)), Nat.add(8n, B.Octets.len(payload)), Equal.cong(U32, Nat, z => U32.to_nat(z), N.NetField.low(16n, N.NetField.low(16n, length)), N.NetField.low(16n, length), h.low_low16(length)), hl)) : {U.UdpHeader.payload.go(Nat.is_ge(_, 8n), Nat.sub(_, 8n), K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(Bool, Nat.is_ge(Nat.add(8n, B.Octets.len(payload)), 8n), True{}, h.ge8(B.Octets.len(payload))) : {U.UdpHeader.payload.go(_, Nat.sub(Nat.add(8n, B.Octets.len(payload)), 8n), K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(Nat, Nat.sub(Nat.add(8n, B.Octets.len(payload)), 8n), B.Octets.len(payload), h.sub8(B.Octets.len(payload))) : {U.UdpHeader.payload.go(True{}, _, K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(Nat, B.Octets.len(K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)), Nat.add(8n, B.Octets.len(payload)), h.udp_dg_len(src_port, dst_port, length, checksum, payload, c)) : {N.net.check(B.Octets, Nat.is_le(Nat.add(8n, B.Octets.len(payload)), _), N.NetTruncated{}, B.Octets.slice(8n, B.Octets.len(payload), K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c))) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(Bool, Nat.is_le(Nat.add(8n, B.Octets.len(payload)), Nat.add(8n, B.Octets.len(payload))), True{}, S.os.le_refl(Nat.add(8n, B.Octets.len(payload)))) : {N.net.check(B.Octets, _, N.NetTruncated{}, B.Octets.slice(8n, B.Octets.len(payload), K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c))) == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(B.Octets, B.Octets.drop(8n, K.inet_put16(B.Octets.append(U.UdpHeader.build(U.UdpHeader{src_port, dst_port, length, checksum}), payload), 6n, c)), payload, h.udp_drop8(src_port, dst_port, length, checksum, payload, c)) : {Done{B.Octets.take(B.Octets.len(payload), _)} == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  %Equal.sym(B.Octets, B.Octets.take(B.Octets.len(payload), payload), payload, BL.octets_take_len(payload)) : {Done{_} == Done{payload} : Result<&2, &2, N.NetError, B.Octets>}
+  {==}
 
 def h.udp6.zero(+src: I6.Ipv6Addr, +dst: I6.Ipv6Addr, +h: U.UdpHeader, +payload: B.Octets) -> {U.UdpHeader.zero_field(B.Octets.be16_at(U.UdpHeader.build_ipv6(src, dst, h, payload), 6n)) == False{} : Bool}:
   Equal.trans(Bool, U.UdpHeader.zero_field(B.Octets.be16_at(U.UdpHeader.build_ipv6(src, dst, h, payload), 6n)), U32.is_eq(B.low16(U.UdpHeader.nonzero(K.inet_checksum(B.Octets.append(I6.ipv6_pseudo(src, dst, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload))), 17), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0))))), 0), False{}, h.zf(B.Octets.append(U.UdpHeader.build(h), payload), U.UdpHeader.nonzero(K.inet_checksum(B.Octets.append(I6.ipv6_pseudo(src, dst, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload))), 17), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0)))), h.udp_len(h, payload)), h.nz_low(U32.is_eq(K.inet_checksum(B.Octets.append(I6.ipv6_pseudo(src, dst, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload))), 17), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0))), 0), K.inet_finish(K.inet_sum(B.Octets.append(I6.ipv6_pseudo(src, dst, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload))), 17), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0)))), S.os.finish_fits(Word.to_nat(16n, Word.not(16n, Word.zero(16n))), S.os.hD(), K.inet_sum(B.Octets.append(I6.ipv6_pseudo(src, dst, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload))), 17), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0)))), {==}))
