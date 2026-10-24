@@ -2,11 +2,14 @@
 # Checks packages:  scripts/check.sh [package...]   (default: all of them)
 #
 # For each package x, in x/:
-#   1. bend PROOF.bend --check-only     must print ALL PROOFS CHECK
+#   1. bend PROOF.bend --check-only     must print ALL PROOFS CHECK; so must
+#                                       each further proof file
+#                                       PROOF_<part>.bend, if the package has
+#                                       any (CONVENTIONS.md, Laws)
 #   2. bend check.bend                  must print the file's #| lines
 #   3. ref/run.sh, if present           exit 0 passes, 77 skips (a tool is
 #                                       missing), anything else fails
-# VERDICT=1 also runs PROOF.bend --verdict (needs Lean 4.34.0).
+# VERDICT=1 also runs each proof file with --verdict (needs Lean 4.34.0).
 # BEND names the command to run (default: bend); it may be several words,
 # e.g. BEND="bun ~/bend/bend2/main.ts".
 #
@@ -36,15 +39,20 @@ for p in "$@"; do
   if [ ! -f "$dir/$p.bend" ]; then note FAIL "no $p/$p.bend"; failed+=("$p"); continue; fi
   ok=1
 
-  out=$(cd "$dir" && "${bend[@]}" PROOF.bend --check-only 2>&1)
-  if [ "$(printf '%s\n' "$out" | head -1)" = "ALL PROOFS CHECK" ]; then note ok "proofs"
-  else note FAIL "proofs"; printf '%s\n' "$out" | head -20 | sed 's/^/      /'; ok=0; fi
+  # PROOF.bend, then the package's further proof files (PROOF_<part>.bend),
+  # each checked in a process of its own
+  for pf in PROOF.bend $(cd "$dir" && ls PROOF_*.bend 2>/dev/null); do
+    what=""; [ "$pf" = PROOF.bend ] || what=" ${pf%.bend}"
+    out=$(cd "$dir" && "${bend[@]}" "$pf" --check-only 2>&1)
+    if [ "$(printf '%s\n' "$out" | head -1)" = "ALL PROOFS CHECK" ]; then note ok "proofs$what"
+    else note FAIL "proofs$what"; printf '%s\n' "$out" | head -20 | sed 's/^/      /'; ok=0; fi
 
-  if [ "${VERDICT:-0}" = 1 ]; then
-    out=$(cd "$dir" && "${bend[@]}" PROOF.bend --verdict 2>&1)
-    if [ "$(printf '%s\n' "$out" | head -1)" = "ALL PROOFS CHECK" ]; then note ok "verdict"
-    else note FAIL "verdict"; printf '%s\n' "$out" | head -20 | sed 's/^/      /'; ok=0; fi
-  fi
+    if [ "${VERDICT:-0}" = 1 ]; then
+      out=$(cd "$dir" && "${bend[@]}" "$pf" --verdict 2>&1)
+      if [ "$(printf '%s\n' "$out" | head -1)" = "ALL PROOFS CHECK" ]; then note ok "verdict$what"
+      else note FAIL "verdict$what"; printf '%s\n' "$out" | head -20 | sed 's/^/      /'; ok=0; fi
+    fi
+  done
 
   want=$(grep '^#|' "$dir/check.bend" | sed 's/^#|//')
   got=$(cd "$dir" && "${run[@]}" check.bend 2>&1)

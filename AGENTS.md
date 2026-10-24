@@ -25,7 +25,11 @@ package: copy its shape.
    - **vectors** from the specification's own examples, proved by `{==}`.
 4. Write `x/PROOF.bend`: `import ./LAWS.bend as Laws`, then one
    `def Laws.name(params):` per law. Helper lemmas are ordinary typed defs in
-   the same file.
+   the same file, or in a lemma file `proof_<name>.bend` that the proof files
+   using them import. Import only the proofs the laws rest on: a package
+   whose proofs would outgrow one check process splits its laws into pairs,
+   `LAWS_<part>.bend` with `PROOF_<part>.bend`, each checked on its own
+   (CONVENTIONS.md, Laws; crypto has six).
 5. Write `x/check.bend`: an `IO` main that prints results, followed by the
    expected output as `#|` lines.
 6. Write `x/ref/gen.py` and `x/ref/run.sh` if anything outside this
@@ -39,7 +43,7 @@ package: copy its shape.
    `VERDICT=1 scripts/check.sh x` should; record the results in the README's
    status line.
 9. State laws over the public interface only; keep lemmas about internals in
-   `PROOF.bend`.
+   the proof files.
 
 ## Bend rules that bite
 
@@ -121,7 +125,14 @@ package: copy its shape.
   (bendlang/bend#1322), so use `U32` for limits and sizes; and very long
   closed `Nat` computations run out of kernel fuel.
 - **Checker memory:** a check process is killed at about 3 GB; keep each
-  generated proof or case file to a few hundred KB.
+  generated proof or case file to a few hundred KB. A proof file's check
+  takes in the proofs of every package it imports, checked again in each
+  file that imports them, so under `--verdict` its peak is about the sum of
+  theirs (alone: cipher-modes' about 1.2 GB, crc's 0.7 GB, hashes' and
+  legacy-ciphers' 0.6 GB, bend-collections-laws-crypto's hash proofs 0.5 GB,
+  bytes' 0.25 GB). Import only the proofs a file's laws rest on, and split a
+  package's laws into pairs of files when one proof file nears 2 GB
+  (CONVENTIONS.md, Laws).
 
 ## Proof limits documented in package READMEs (Bend 2.0.37)
 
@@ -152,6 +163,8 @@ around it.
   computation on symbolic bits (AES rounds, GF(2^128) multiplication) is
   out of reach even when it would terminate (cipher-modes `README.md`,
   "AES and bend-collections"; gf `README.md`, Laws).
-- **`--verdict` memory:** crypto's `PROOF.bend` peaks at about 2.31 GB
-  under `--verdict`, near the 3 GB at which a check is killed; add to it
-  with care (crypto `README.md`, Status and Laws).
+- **`--verdict` memory:** crypto's laws are in six pairs of law and proof
+  files, each checked on its own (under `--verdict`, 0.3 to 1.3 GB peak;
+  in one file they peaked at 3.26 GB); a new law goes in the pair whose
+  proofs it rests on, or in a new pair (crypto `README.md`, Laws and
+  Status).

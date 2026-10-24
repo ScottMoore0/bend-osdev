@@ -13,6 +13,8 @@ A change to one of these rules is a change to every package.
     see below);
   - `LAWS.bend`: the claims (see Laws below);
   - `PROOF.bend`: imports `LAWS.bend` and proves each law;
+  - optionally further pairs `LAWS_<part>.bend` and `PROOF_<part>.bend`,
+    and lemma files `proof_<name>.bend` (see Laws below);
   - `check.bend`: a runnable `main` whose output is fixed by the `#|` lines at
     the end of the file;
   - `README.md`: what the package does, the specification it follows, and its
@@ -114,14 +116,30 @@ A change to one of these rules is a change to every package.
   carry no draft marker.
 - Laws state the behaviour of the **public interface** only, never of
   internal helpers, so internals can be restructured without changing a law.
-  Lemmas about internals live in `PROOF.bend`.
+  Lemmas about internals live in the proof files.
 - Laws come in two kinds:
   - **vectors**: the specification's own test values, as equalities proved by
     computation (`{==}`);
   - **properties**: claims for every input (a round trip, an invariant, a
     bound), proved by induction.
-- `bend x/PROOF.bend` must print `ALL PROOFS CHECK`. `--verdict` (the Lean
-  kernel) is run too, and a package's `README.md` records whether it passes.
+- `bend x/PROOF.bend` must print `ALL PROOFS CHECK`, and so must each
+  further proof file (below). `--verdict` (the Lean kernel) is run too, and
+  a package's `README.md` records whether it passes.
+- **Lemma files.** Lemmas a proof file needs may live in lemma files,
+  `proof_<name>.bend` (crc's and gf's `proof_*.bend`), which prove no law and
+  are imported by the proof files that use them.
+- **Several pairs of law and proof files.** A check of a proof file takes in
+  the proofs of every package it imports, so when one proof file would
+  outgrow what a check process can hold (AGENTS.md, Checker memory), the
+  package splits its laws into pairs: `LAWS.bend` with `PROOF.bend`, and
+  `LAWS_<part>.bend` with `PROOF_<part>.bend`, each proof file importing its
+  own law file as `Laws` and only the proofs its laws rest on, so that each
+  is checked in a process of its own. Laws are grouped by what their proofs
+  need (crypto: its generic laws in `LAWS.bend`, and one pair for each
+  package its instances come from). A proof elsewhere imports the pair that
+  holds the law it uses, so the README says which pair holds which laws,
+  and moving a law to another pair changes what its users import: like a
+  rename, it is a breaking change (Versions).
 
 ## Versions
 
@@ -152,8 +170,9 @@ A change to one of these rules is a change to every package.
 ## Testing
 
 - `scripts/check.sh x` runs, for package `x`: the proofs (`--check-only` on
-  `PROOF.bend`), `check.bend` against its `#|` lines, and `ref/run.sh` if the
-  tools it needs are installed.
+  `PROOF.bend` and on each `PROOF_<part>.bend`, one process each),
+  `check.bend` against its `#|` lines, and `ref/run.sh` if the tools it needs
+  are installed.
 - A differential test compares the package against an independent
   implementation on many inputs: a system tool (`readelf`, `sgdisk`,
   `debugfs`, `xz`) or a library outside this repository (Python's `zlib`,
