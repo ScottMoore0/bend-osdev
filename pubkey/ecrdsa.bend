@@ -34,8 +34,12 @@ def PkEcrdsa.err(e: G.EcrdsaError) -> Cr.CrError:
 def PkEcrdsa.secret(~prm: E.EcParams, o: B.Octets) -> Result<&2, &2, Cr.CrError, N.BnNat>:
   Cr.CrError.lift(~G.EcrdsaError, ~N.BnNat, ~PkEcrdsa.err, G.Ecrdsa.private_of(E.EcCurve.of(prm), o))
 
+# a public key from RFC 4491's form on the curve (ecrdsa's Ecrdsa.public_of)
+def PkEcrdsa.public_of(~prm: E.EcParams, o: B.Octets) -> Result<&2, &2, G.EcrdsaError, E.EcPoint>:
+  G.Ecrdsa.public_of(E.EcCurve.of(prm), o)
+
 def PkEcrdsa.pk_of(~prm: E.EcParams, o: B.Octets) -> Result<&2, &2, Cr.CrError, E.EcPoint>:
-  Cr.CrError.lift(~G.EcrdsaError, ~E.EcPoint, ~PkEcrdsa.err, G.Ecrdsa.public_of(E.EcCurve.of(prm), o))
+  Cr.CrError.lift(~G.EcrdsaError, ~E.EcPoint, ~PkEcrdsa.err, PkEcrdsa.public_of(~prm, o))
 
 def PkEcrdsa.pk_to(~prm: E.EcParams, p: E.EcPoint) -> B.Octets:
   G.Ecrdsa.public_to(E.EcCurve.of(prm), p)

@@ -9,13 +9,16 @@
 # and ecrdsa's toy_sign_verify), and are tested on the named instances by
 # check.bend and ref/run.sh (against Python's cryptography). A public key
 # that survives its bytes is a hypothesis of the sign and agree laws; for
-# ECDH's form (ECDSA, SM2, ECDH) and DH's, it follows from the packages'
-# own format laws (the pk_format_if laws below, from lift_pk_format).
+# ECDH's form (ECDSA, SM2, ECDH), GOST's (RFC 4491) and DH's, it follows
+# from the packages' own format laws (the pk_format_if laws below, from
+# lift_pk_format), and for RSA's from rsa's conditional one
+# (rsa_pk_format_if).
 import Base
 import ../bytes/bytes.bend as B
 import ../bignum/bignum.bend as NB
 import ../ecc/ecc.bend as EE
 import ../dh/dh.bend as DD
+import ../ecrdsa/ecrdsa.bend as GG
 import ../rsa/rsa.bend as RR
 import ../rsa/keys.bend as RK
 import ../crypto/crypto.bend as Cr
@@ -43,6 +46,18 @@ law lift_pk_format:
   for h: {Cr.CrError.lift(~E, ~PK, ~f, r) == Done{p} : Result<&2, &2, Cr.CrError, PK>}
   for hr: {Result.bind(&2, &2, E, PK, PK, r, q => d(t(q))) == r : Result<&2, &2, E, PK>}
   {Cr.CrError.lift(~E, ~PK, ~f, d(t(p))) == Done{p} : Result<&2, &2, Cr.CrError, PK>}
+
+# RSA's public keys (rsa's raw form, keys.bend): a checked key (hk: Rsa.public_of
+# accepts its integers) is read back from the bytes written for it, given
+# rsa's public_form_round_trip_if (rsa/LAWS.bend) at its integers (hr). Not
+# of lift_pk_format's shape: rsa's form reads back a key read from any bytes
+# only up to the representation of its integers (rsa README.md, Laws)
+law rsa_pk_format_if:
+  for +n: NB.BnNat
+  for +e: NB.BnNat
+  for hk: {RR.Rsa.public_of(n, e) == Done{RR.RsaPublic{n, e}} : Result<&2, &2, RR.RsaError, RR.RsaPublic>}
+  for hr: {RK.RsaKeys.public_of(RK.RsaKeys.public_to(RR.RsaPublic{n, e})) == RR.Rsa.public_of(n, e) : Result<&2, &2, RR.RsaError, RR.RsaPublic>}
+  {PR.PkRsa.pk_of(RK.RsaKeys.public_to(RR.RsaPublic{n, e})) == Done{RR.RsaPublic{n, e}} : Result<&2, &2, Cr.CrError, RR.RsaPublic>}
 
 # The instances
 
@@ -171,4 +186,15 @@ law dh_pk_format_if:
   for h: {PD.PkDh.pk_of(~grp, o) == Done{p} : Result<&2, &2, Cr.CrError, NB.BnNat>}
   for hr: {Result.bind(&2, &2, DD.DhError, NB.BnNat, NB.BnNat, PD.PkDh.public_of(~grp, o), q => PD.PkDh.public_of(~grp, PD.PkDh.pk_to(~grp, q))) == PD.PkDh.public_of(~grp, o) : Result<&2, &2, DD.DhError, NB.BnNat>}
   {PD.PkDh.pk_of(~grp, PD.PkDh.pk_to(~grp, p)) == Done{p} : Result<&2, &2, Cr.CrError, NB.BnNat>}
+
+# GOST R 34.10-2012's public keys (RFC 4491's form), for every curve: a public
+# key read from bytes o is read again from the bytes written for it, given
+# ecrdsa's public_round_trip (ecrdsa/LAWS.bend) at o (hr)
+law ecrdsa_pk_format_if:
+  for ~prm: EE.EcParams
+  for +o: B.Octets
+  for +p: EE.EcPoint
+  for h: {PG.PkEcrdsa.pk_of(~prm, o) == Done{p} : Result<&2, &2, Cr.CrError, EE.EcPoint>}
+  for hr: {Result.bind(&2, &2, GG.EcrdsaError, EE.EcPoint, EE.EcPoint, PG.PkEcrdsa.public_of(~prm, o), q => PG.PkEcrdsa.public_of(~prm, PG.PkEcrdsa.pk_to(~prm, q))) == PG.PkEcrdsa.public_of(~prm, o) : Result<&2, &2, GG.EcrdsaError, EE.EcPoint>}
+  {PG.PkEcrdsa.pk_of(~prm, PG.PkEcrdsa.pk_to(~prm, p)) == Done{p} : Result<&2, &2, Cr.CrError, EE.EcPoint>}
 # END GENERATED: laws

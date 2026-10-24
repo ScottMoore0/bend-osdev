@@ -52,7 +52,14 @@ DH_FMT = dict(name="dh", title="DH's public keys, for every group", tp=["~grp: D
               E="DD.DhError", err="PD.PkDh.err", raw_of="PD.PkDh.public_of(~grp)", raw_to="PD.PkDh.pk_to(~grp)",
               PK="NB.BnNat", pk_of="PD.PkDh.pk_of(~grp)", pk_to="PD.PkDh.pk_to(~grp)",
               law="dh's public_round_trip (dh/LAWS.bend)")
-FMT = [EC_FMT, DH_FMT]
+# GOST R 34.10-2012's public-key bytes (RFC 4491's form): ecrdsa's
+# Ecrdsa.public_of and public_to, whose round trip is ecrdsa's
+# public_round_trip
+ECRDSA_FMT = dict(name="ecrdsa", title="GOST R 34.10-2012's public keys (RFC 4491's form), for every curve", tp=[PRM],
+                  E="GG.EcrdsaError", err="PG.PkEcrdsa.err", raw_of="PG.PkEcrdsa.public_of(~prm)", raw_to="PG.PkEcrdsa.pk_to(~prm)",
+                  PK="EE.EcPoint", pk_of="PG.PkEcrdsa.pk_of(~prm)", pk_to="PG.PkEcrdsa.pk_to(~prm)",
+                  law="ecrdsa's public_round_trip (ecrdsa/LAWS.bend)")
+FMT = [EC_FMT, DH_FMT, ECRDSA_FMT]
 
 # signature schemes: SK and PK the key types, public the public key of a
 # secret key, pk_of and pk_to the public key's bytes, sign and verify
