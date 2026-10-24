@@ -326,3 +326,10 @@ def Jbd2Super.reseal(csum: Bool, +o: B.Octets) -> B.Octets:
 # recomputed when the journal has checksums
 def Jbd2Super.with_log(+o: B.Octets, +start: Nat, +seq: U32) -> B.Octets:
   Jbd2Super.reseal(Jbd2Super.has_csum(Jbd2Super.parse(o)), Jbd2.patch32(Jbd2.patch32(o, 24n, seq), 28n, U32.from_nat(start)))
+
+# a superblock's fields but the three with_log changes (s_sequence,
+# s_start and s_checksum, here zero): what the laws compare
+def Jbd2Super.fixed(s: Jbd2Super) -> Jbd2Super:
+  match s:
+    case Jbd2Super{t, bs, ml, f, sq, st, er, c, i, r, u, ct, ck}:
+      Jbd2Super{t, bs, ml, f, 0, 0n, er, c, i, r, u, ct, 0}

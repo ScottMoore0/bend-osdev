@@ -73,6 +73,33 @@ The same operations on `List<&2, U32>` directly. Packages written before
   * `octets_hex_list`, `octets_to_string_list`: `Octets.hex` and `to_string` are the
     list layer's on `to_list(o)`; `octets_concat_nil`, `octets_concat_cons`: `concat`
     joins its pieces in order;
+* **reading at an offset, for every input, for dependents' proofs** (what a
+  byte, a slice or a field read inside joined, cut or sliced bytes gives,
+  whatever the storage):
+  * lengths: `octets_len_append`, `octets_len_take` (`min(n, len o)`) and
+    `octets_len_take_le`, `octets_len_drop`, `octets_len_slice` and
+    `octets_len_slice_le` (a slice inside `o` has its length),
+    `octets_len_zeros`, `octets_len_of_list`, and each field writer's width
+    (`octets_len_le16` to `octets_len_be64`);
+  * joining: `octets_append_assoc`, `octets_append_empty_l`,
+    `octets_append_empty_r`, `octets_drop_zero`, `octets_take_len`;
+  * take and drop composed: `octets_drop_drop` (`drop(i, drop(j, o)) ==
+    drop(j + i, o)`), `octets_take_take` (`take(min(i, j), o)`),
+    `octets_take_drop_comm`, `octets_drop_take_comm`;
+  * at an offset inside joined bytes: `octets_take_append_le`,
+    `octets_take_append_add`, `octets_drop_append_le`,
+    `octets_drop_append_add`, `octets_slice_append_le` (a slice ending
+    inside `a` is `a`'s), `octets_slice_append_add` (a slice at
+    `len(a) + i` of `a ++ b` is `b`'s at `i`); inside cut bytes:
+    `octets_slice_drop`, `octets_slice_take`;
+  * a byte: `octets_at_list` (`Octets.at` is the list layer's `at` on
+    `to_list`), `octets_at_append_add`, `octets_at_append_lt`,
+    `octets_at_drop`, `octets_at_take`, and the list layer's `at_append_add`,
+    `at_append_lt`, `at_drop`, `at_take`;
+  * every field reader (`le16_at` to `be64_at`): `octets_F_at_append_add`,
+    `octets_F_at_append_le` (a field ending inside `a`), `octets_F_at_drop`,
+    `octets_F_at_take` (a field ending inside the cut);
+  * `low16_mask`: a value already masked to 16 bits is its own `low16`;
 * **the tail-recursive list layer, for every input:** `len_fast`, `take_fast`,
   `append_fast`, `zeros_fast`, `mask_fast`, `of_string_fast`, `to_string_fast`,
   `hex_fast`, `list_eq_fast` (each stated structural == fast, the direction a

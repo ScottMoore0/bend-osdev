@@ -197,9 +197,10 @@ JR.Ext4Journal.recover(~D.MemDev, ~D.MemDev.block_size, ~D.MemDev.read_block, ~D
 
 | Def | Meaning |
 |---|---|
-| `Jbd2Super{...}`, `.parse`, `.check(o, bs, blocks, opts)`, `.csum`, `.geom`, `.seed`, `.with_log(o, start, seq)`, feature bits | the superblock; `Ext4BadJournalMagic`, `Ext4BadJournalType`, `Ext4BadJournal`, `Ext4JournalUnsupported`, `Ext4BadJournalCsum` |
+| `Jbd2Super{...}`, `.parse`, `.check(o, bs, blocks, opts)`, `.csum`, `.geom`, `.seed`, `.with_log(o, start, seq)`, `.fixed(s)`, feature bits | the superblock (`fixed`: its fields but the three `with_log` sets, for the laws); `Ext4BadJournalMagic`, `Ext4BadJournalType`, `Ext4BadJournal`, `Ext4JournalUnsupported`, `Ext4BadJournalCsum` |
 | `Jbd2Geom{bs, wide, csum, seed, first, maxlen}`, `tag_size`, `tail`, `next` | the log's geometry |
 | `Jbd2Tag{block, flags, csum}`, `Jbd2Desc.decode`, `encode`, `capacity`, `Jbd2Revoke.decode`, `encode`, `capacity`, `Jbd2Commit.ok`, `encode`, `Jbd2Block.kind`, `Jbd2.escape`, `unescape`, `needs_escape`, `data_csum`, `data_ok`, `tag_csum` | the blocks |
+| `Jbd2.block_fits(wide, b)`, `Jbd2Tag.size`, `Jbd2Tag.storable`, `Jbd2Desc.fits(g, ts)`, `Jbd2Revoke.count`, `blocks_fit`, `Jbd2Revoke.fits(g, bs)` | what the codec's laws assume: a block number that survives its 32-bit halves, a tag's bytes, a tag that reads back as written, tags that fill a descriptor as its reader walks it, a revoke block's `r_count` and records that fit |
 | `Jbd2Put{block, src, flags, csum}`, `Jbd2Rec` (`Jbd2RDesc`, `Jbd2RRevoke`, `Jbd2RCommit`), `Jbd2Tx`, `Jbd2Rv`, `Jbd2Do` | records |
 | `Jbd2Log.scan(s, rs)`, `table(txs)`, `revoked`, `plan(txs)`, `recover(s, rs)` | the three passes; `revoked_in`, `none_revoked`, `no_commit`, `member`, `unrevoked` state the laws |
 | `Jbd2Scan.start(pos, seq)`, `feed(check, g, st, blk)`, `pos`, `seq`, `live`, `bad`, `records`, `Jbd2Scan.list(check, g, blocks, s)` | the streaming parser of log blocks |
@@ -241,7 +242,7 @@ set, so a crash during the checkpoint still leaves a recovery due.
 | `Ext4JTx.apply(wdev, fs, plan, k)` | the device after the plan's first `k` steps (a crash after them; `k` at least the length: all of it) |
 | `Ext4JTx.run(wdev, fs, jopts, mode, fresh, ws)` | planned and applied whole |
 | `Ext4JTx.steps`, `commit_at`, `seq`, `pre`, `log`, `commit`, `post`, `log_blocks`; `in_place`, `logged`, `marks`, `chunks`, `open_steps`, `close_steps`, `log_of` | a plan's parts, and the pieces `build` makes them from |
-| `Ext4JTx.records(s, xs)`, `committed(xs)`, `data_puts(xs)`, `replay_writes(xs)`, `homes(xs)`, `fresh_homes(fresh, xs)` | what steps hold: the log records a recovery reads, whether the commit is among them, the logged copies' tags, what replaying them writes, what is written in place (the laws are stated with these) |
+| `Ext4JTx.records(s, xs)`, `committed(xs)`, `data_puts(xs)`, `replay_writes(xs)`, `homes(xs)`, `fresh_homes(fresh, xs)`, `blocks_fit(wide, ws)` | what steps hold (and, `blocks_fit`, that every write's block number fits a tag): the log records a recovery reads, whether the commit is among them, the logged copies' tags, what replaying them writes, what is written in place (the laws are stated with these) |
 | `Ext4JExt2.writes(dev, ops, d, fs, wo)` | the writes ext2's operations make (`Ext2Op.run`, each checked as ext2's write options say), on an `Ext4Ov` of `d`: nothing written to `d` |
 | `Ext4JExt2.fresh(dev, d, fs, ws)` | the blocks of `ws` free in `d`'s block bitmaps (an uninit group's computed by ext2) |
 | `Ext4JExt2.plan(dev, ops, d, fs, wo, jopts, mode)`, `Ext4JExt2.run(wdev, ops, d, fs, wo, jopts, mode)`, `Ext4JExt2.op(wdev, op, d, fs, wo, jopts, mode)` | ext2's operations as one transaction: planned; run whole; one operation, its own transaction. A refused operation (ext2's `Ext2Error` as `Ext4Ext2{e}`) writes nothing |
@@ -362,32 +363,81 @@ the transaction's.
     So, at the level of records: a crash before the commit leaves the old
     filesystem (plus writes to blocks it does not use) and recovers nothing,
     and a crash after it recovers to what the complete transaction writes;
+* **for every input, the journal's codec** (the bytes under the records):
+  * `jsuper_log_fixed`, `jsuper_log_sequence`, `jsuper_log_start`,
+    `jsuper_log_csum`: the journal superblock pointed at a log
+    (`Jbd2Super.with_log`, which opens and closes a transaction) parses as
+    the old one with `s_sequence` and `s_start` set (`s_start` as its 32-bit
+    field holds it) and every other field kept (`Jbd2Super.fixed`), and with
+    checksums its checksum verifies;
+  * `jdesc_kind`, `jrevoke_kind`, `jcommit_kind`: every log block the writer
+    makes is read as its kind for its transaction;
+  * `jdesc_round_trip`: a descriptor block decodes to the tags it was
+    encoded from, checksum checked or not, whenever they fit it
+    (`Jbd2Desc.fits`) and the UUID is 16 bytes;
+  * `jrevoke_round_trip`: a revoke block decodes to its block numbers,
+    whenever they fit it (`Jbd2Revoke.fits`);
+  * `jcommit_ok`, `jcommit_sec`, `jcommit_nsec`: a commit block's checksum
+    verifies, and it holds its time;
+  * `jtx_log_scan`: so the plan's log, read block by block by the streaming
+    scanner as a log is read (each block fed when it is at the position the
+    scanner asks for, the data blocks passed over), gives back exactly the
+    plan's records (`Ext4JTx.records`, what the journalled-writes laws are
+    stated with), for every geometry whose descriptor holds a tag, a
+    16-byte UUID, writes whose block numbers fit a tag and a log the journal
+    holds (`Ext4JTx.plan`'s check);
+  * `super_with_len`, `super_with_incompat`, `super_with_head`,
+    `super_with_body`, `super_with_tail`: the needs_recovery mark and clear
+    (`Ext4Dev.super_with`, on a superblock's 1024 bytes): the incompat field
+    becomes `(old | set) & ~clear`, the bytes before it and after it up to
+    the checksum are kept, and the checksum field is the new superblock's
+    checksum or untouched; `jtx_mark_super`, `jtx_mark_before`,
+    `jtx_mark_after`, `jtx_mark_other`: the plan's copy of the superblock's
+    block is that block with its superblock so marked (needs_recovery set),
+    the bytes around it kept, and any other block is logged as it is;
 * **witnesses** that every hypothesis can hold;
 * **vectors:** 12 directory hashes debugfs computes (every version, signed
   and unsigned names, long names, a seed), a hash version's unsigned twin,
   a bad version refused, two attribute hashes e2fsprogs stored, model
   lookups, a transaction with a revoke.
 
-What the laws do not cover, and what stands in for it: the device lookup
-(`Ext4Htree.lookup_dev`) uses the model's `pick`, `continues` and `find`,
-but its walk over blocks is tied to the model by the differential test, not
-a law; the byte layout of the journal's blocks (the codec under the
-records, so the end-to-end claim that replaying a written transaction gives
-the device the writes give) is tested, not proved: the writer's blocks are
-byte-identical to an independent model's, and debugfs and e2fsck replay
-them to exactly the writes (see Tests). Proving the codec needs bytes' field
-readers at offsets inside appended strings, which bytes' interface laws do
-not cover yet. For journalled writes the same holds: the laws are about the
-plan's records and copies, and that its blocks encode those records is
-tested (`check.bend` feeds the plan's log to the streaming scanner and gets
-the plan's records back; the reference test has e2fsck replay every crash),
-as is the step from the plan to the device (`Ext4JTx.apply`, which maps
-journal positions to blocks through the journal's inode) and the
-superblock's needs_recovery mark and clear (the complete run's image is
-compared, outside the journal, with the direct run's). Whether ext2's
-writer does on the overlay what it does directly follows from `ov_reads`
-only informally (Bend has no parametricity theorem to state it with); the
-reference test compares the two runs on every case.
+What the laws do not cover, and what stands in for it:
+
+* The device lookup (`Ext4Htree.lookup_dev`) uses the model's `pick`,
+  `continues` and `find`, but its walk over blocks is tied to the model by
+  the differential test, not a law: a law needs a codec law for the index
+  and leaf blocks (now within reach of bytes' offset laws), and an account of
+  the device reads under it (ext2's file reads and blockdev's spans,
+  blockdev's `read_bytes`, which no law states yet) and of how the blocks
+  the walk reads represent the model's leaves.
+* The step from the plan to the device (`Ext4JTx.apply`, which maps journal
+  positions to blocks through the journal's inode: `Ext4Journal.home` looks
+  the position up in the inode's block map, which it reads from the device
+  the earlier steps have written) is tested, not proved: a law needs ext2's
+  map lookup stated over device reads, an invariant that the plan's writes
+  never touch the journal inode's map blocks, and blockdev's span laws. So
+  the end-to-end claim that replaying a written transaction gives the device
+  the writes is proved at the level of the log's bytes and records
+  (`jtx_log_scan`, `escape_round_trip`, `jtx_copies`) and tested on devices:
+  the writer's blocks are byte-identical to an independent model's, and
+  debugfs and e2fsck replay them to exactly the writes (see Tests).
+* The needs_recovery mark and clear are proved on the superblock's bytes
+  (`super_with_*`, `jtx_mark_*`); that setting the feature and clearing it
+  again gives back the superblock exactly is not: it needs the bit identity
+  `(x | r) & ~r == x` for a word without `r` on symbolic words (U32 bit
+  laws, batch B1), and the metadata_csum test on the patched block (ext2's
+  `Ext2Super.parse`) shown equal to the original's, which no ext2 law
+  states. The complete run's image is compared, outside the journal, with
+  the direct run's (see Tests).
+* Whether ext2's writer does on the overlay what it does directly follows
+  from `ov_reads` only informally (Bend has no parametricity theorem to state
+  it with); the reference test compares the two runs on every case.
+
+The codec's proofs read the blocks only through bytes' laws (fields read
+inside joined and patched bytes). `Jbd2.two32` is written as the successor
+of the literal `4294967295n` rather than `65536 × 65536`: the same value, but
+the checker compares it as a literal, where it would expand the product to
+unary when the proofs compare block numbers' halves (`Jbd2.lo`, `Jbd2.hi`).
 
 ## Tests
 
@@ -413,8 +463,8 @@ reference test compares the two runs on every case.
   package, give the old tree (outside the journal and the blocks written in
   place, the old image) or the new one (outside the journal, the complete
   run's image); the plan's log, fed to the streaming scanner, reads back as
-  the plan's records; a refused operation (rmdir of a directory that is not
-  empty) writes nothing.
+  the plan's records (for every plan, the law `jtx_log_scan`); a refused
+  operation (rmdir of a directory that is not empty) writes nothing.
 * `ref/run.sh` (`ref/gen.py`, `ref/model.py`, `ref/run.bend`): images made
   by mke2fs 1.47.0 with `-O dir_index,has_journal,inline_data,ea_inode,
   metadata_csum` from random trees (`mke2fs -d`: a directory of 3000 long
@@ -532,7 +582,8 @@ package extends: superblock, descriptors, inodes, block maps and extents,
 linear directories, ext2's checksums; and, for journalled writes, its
 writer's public interface: `Ext2Op.run`, `Ext2Op`, `Ext2WriteOptions`,
 `Ext2Meta.desc_read`, `desc`, `block_bitmap`, `Ext2Bitmap.test`, and
-`Ext2Fsck.full` in `check.bend`), and `crc` (only `check.bend`'s CRC-32 of
+`Ext2Fsck.full` in `check.bend`; in the laws, `Ext2Csum.super` and
+`Ext2Super.parse`'s metadata_csum test), and `crc` (only `check.bend`'s CRC-32 of
 contents; the package's crc32c comes through ext2's `Ext2Csum`). ext2 does
 not depend on this package, so the journalled writer lives here, beside
 the journal it writes.
