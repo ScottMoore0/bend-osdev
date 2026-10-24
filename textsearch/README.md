@@ -66,7 +66,7 @@ as an NFA simulation. No kernel source was read.
 | `LAWS.bend`, `PROOF.bend` | the laws for every automaton and the bounded ones, and their proofs |
 | `LAWS_kmp.bend`, `PROOF_kmp.bend` | KMP against the reference, and its proof (the theory of borders) |
 | `LAWS_fsm.bend`, `PROOF_fsm.bend` | the token automaton against its backtracking reference, and its proof |
-| `LAWS_bm.bend`, `PROOF_bm.bend` | Boyer-Moore against the reference, and its proof (every shift safe) |
+| `LAWS_bm.bend`, `PROOF_bm.bend` | Boyer-Moore against the reference, whole and in chunks, and its proof (every shift safe) |
 | `proof_lib.bend` | lemmas the proof files share (no law) |
 | `check.bend` | examples and large exhaustive comparisons, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -189,7 +189,10 @@ under way, which is the reference.
   `ts.bm.ends(icase, rule, p, xs) == ts.naive.ends(icase, p, xs)`, for
   both shift rules (`TsHorspool`, and `TsGoodSuffix`, the larger of
   Horspool's shift and the strong good-suffix shift), every pattern (the
-  empty one included), exactly or ignoring case, and every text.
+  empty one included), exactly or ignoring case, and every text;
+* `bm_split`: its chunking law, `ts.bm.search(icase, rule, p, cs) ==
+  ts.bm.ends(icase, rule, p, ts.concat(cs))`, for every chunking; and
+  `bm_search_ref`: so the chunked search finds what the reference finds.
 
 The proof shows every shift safe. Ignoring case is the exact search of the
 folded pattern in the folded text (`bp.conv`). Each window's report is
@@ -211,14 +214,15 @@ there (`bp.hit_ok`). No offset the step skips holds the pattern
 * the default rule's shift is the larger of Horspool's and the
   good-suffix shift, and an offset below it is below one of them.
 
-So the scan skips only offsets the reference rejects (`bp.main`).
+So the scan skips only offsets the reference rejects (`bp.main`). Between
+chunks the search keeps the last m - 1 bytes; the reference over a
+chunk's bytes followed by the rest of the text is its matches inside them,
+then those starting in the kept bytes or later (`bp.ns`), which is what
+the next chunks report (`bp.rg`).
 
-**Not proved, and why.** Boyer-Moore's chunking law in general (that
-feeding the text in chunks, keeping the last m - 1 bytes between them,
-finds what the whole text does). It follows from `bm_ref` once the
-reference's matches over a chunk and the rest are split at the kept
-bytes, which is not done here; it is held by the bounded laws above,
-`check.bend`'s exhaustive chunked comparisons, and `ref/`.
+All three algorithms are thus proved against their references for every
+input; the bounded laws in `LAWS.bend` stay as closed-computation checks
+of the same agreement.
 
 ## Tests
 
