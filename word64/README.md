@@ -122,8 +122,10 @@ dependent imports the pair that holds the law it uses):
 * **division** (`LAWS_div.bend`), for every input: for b not 0, `W64.div`
   and `W64.mod` are the `Nat` quotient and remainder, a = q b + r with r <
   b (`divmod_value`, `mod_lt`); by 0 the quotient is 0 and the remainder a
-  (`div_zero`, `mod_zero`). The 64 steps of shift and subtract keep (q b +
-  r) 2^64 + a = a0 2^j and r < b (j steps done), each step being
+  (`div_zero`, `mod_zero`). `W64.div.go` reads the bits of a's two halves,
+  most significant first (`W64.div.bits`, one `W64.div.step` a bit):
+  reading the m bits of w onto (q, r) with r < b gives (q', r') with q' b +
+  r' = (q b + r) 2^m + w and r' < b, by induction on w, each step being
   bend-osdev-u32's `divstep_value` and `divstep_lt` at n = 64.
 * **the bits** (`LAWS_bits.bend`), for every input: and, or and xor commute
   (`and_comm`, `or_comm`, `xor_comm`); and + or is the sum of the values,
@@ -142,22 +144,17 @@ dependent imports the pair that holds the law it uses):
 (`W64.show_hex`, a vector here), and `W64.from_nat` (a vector).
 `ref/run.sh` checks every operation against Python's exact integers.
 
-**`PROOF_div.bend` and the kernel.** `PROOF_div.bend` ALL PROOFS CHECK,
-but `--verdict` cannot finish it: the step from `W64.div` to its loop,
-`W64.divmod.pick(False, a, b)` = `W64.div.go(64n, a, b, 0, 0)`, is one
-unfolding for bend2's checker, but BendTT normalizes both sides of a
-conversion that is not syntactically equal, and `W64.div.go`'s 64 steps
-on unknown words normalize to a term that doubles at every step (the
-shifted remainder is used twice); the kernel ran out of memory (about 3.5
-GB, then swap) on that one conversion alone (a two-line file stating it
-by `{==}` does the same). The loop invariant itself (`wd.go`, for every n)
-passes `--verdict`; only the instance at the literal fuel 64 does not. A
-proof that avoids the conversion needs `W64.div.go` to recurse on the bits
-of the dividend, as Base's `U32.divmod.go` does (it is stuck on an unknown
-word), rather than on a `Nat` count; that is a change of the code, not
-made here. Packages whose laws rest on `divmod_value` (bend-osdev-kmath's
-64-bit division and reciprocal division, bend-osdev-kstr's decimal round
-trips) have the same status.
+**The division loop and the kernel.** `W64.div.go` recurses on the bits
+of the dividend's halves, as Base's `U32.divmod.go` does on a word, rather
+than on a count of 64: on an unknown dividend it is stuck at once. BendTT
+(`--verdict`) normalizes both sides of any conversion that is not
+syntactically equal, and a loop over a literal count unrolls all 64 steps
+on unknown words, using the shifted remainder twice per step, so its
+normal form doubles at every step; the kernel ran out of memory on it.
+Recursing on the bits computes the same quotient and remainder for every
+input (the same steps in the same order; `check.bend`'s division vectors
+and `ref/run.sh` hold it), and the kernel checks `PROOF_div.bend` in a few
+seconds.
 
 ## Tests
 
@@ -169,9 +166,6 @@ Python's integers on random words and on the edge values 0, 1, 2^32 - 1,
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (32 laws), `PROOF_mul.bend`
 (4), `PROOF_div.bend` (4), `PROOF_bits.bend` (8) and `PROOF_text.bend` (1)
-ALL PROOFS CHECK; `--verdict` ALL PROOFS CHECK on `PROOF.bend`,
-`PROOF_mul.bend`, `PROOF_bits.bend` and `PROOF_text.bend` (about 4 s each,
-peak 0.36 to 0.40 GB), and does not finish on `PROOF_div.bend` (the kernel
-runs out of memory: see "`PROOF_div.bend` and the kernel" above);
-`check.bend` passes and `ref/run.sh` 850 cases match, both as native
+ALL PROOFS CHECK, and `--verdict` ALL PROOFS CHECK on each (about 4 s
+each, peak 0.36 to 0.40 GB); `check.bend` passes and `ref/run.sh` 850 cases match, both as native
 binaries.

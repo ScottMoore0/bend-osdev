@@ -103,6 +103,8 @@ def show(t):
         return f"{t.args[0]}({', '.join(show(a) for a in t.args[1:])})"
     if op == "ctor":
         return f"{t.args[0]}{{{', '.join(show(a) for a in t.args[1:])}}}"
+    if op == "tuple":
+        return f"({', '.join(show(a) for a in t.args)})"
     raise ValueError(op)
 
 
@@ -217,7 +219,12 @@ def parse(s):
                     assert tt == ("p", ","), tt
             return atom(name)
         if t == ("p", "("):
-            e = expr()
+            e = expr_any()
+            if peek() == ("p", ","):
+                items = [e]
+                while nxt() == ("p", ","):
+                    items.append(expr_any())
+                return T("tuple", *items)
             assert nxt() == ("p", ")")
             return e
         raise ValueError(f"parse: {t} in {s}")
@@ -948,7 +955,7 @@ OUT = Out()
 
 
 def atoms_of(t, acc):
-    if t.op in ("atom", "call", "ctor"):
+    if t.op in ("atom", "call", "ctor", "tuple"):
         if t not in acc:
             acc.append(t)
         return
@@ -1030,7 +1037,7 @@ def ring_local(a, b):
         pre = pre[:k]
     while True:
         x, y = at(a, tuple(pre)), at(b, tuple(pre))
-        if x.op in ("add", "mul", "dbl", "succ", "double", "num", "atom", "call", "ctor") or not pre:
+        if x.op in ("add", "mul", "dbl", "succ", "double", "num", "atom", "call", "ctor", "tuple") or not pre:
             try:
                 pf = ring(x, y)
                 return cong_at(a, tuple(pre), pf)

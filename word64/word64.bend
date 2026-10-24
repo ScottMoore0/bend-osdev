@@ -247,21 +247,38 @@ def W64.is_zero(a: W64) -> Bool:
 # r stays below b; when doubling r overflows 64 bits (its top bit was set),
 # the true value is past b, and the wrapping subtraction is still exact.
 
-def W64.div.go(n: Nat, +a: W64, +b: W64, +q: W64, +r: W64) -> W64 & W64:
-  match n:
-    case 0n:
-      (q, r)
-    case 1n+p:
-      +r2 = W64.or(W64.shl(r, 1n), W64.from_u32(U32.shrn(W64.hi(a), 31n)))
-      +ge = Bool.or(U32.is_eq(U32.shrn(W64.hi(r), 31n), 1), W64.is_ge(r2, b))
-      W64.div.go(p, W64.shl(a, 1n), b, W64.or(W64.shl(q, 1n), W64.from_u32(W64.bit(ge))), W64.sel(ge, W64.sub(r2, b), r2))
+#
+# The loop runs over the bits of a's two halves (as Base's U32.divmod.go
+# does over a word), not over a count: on an unknown dividend it is stuck
+# at once, so a proof checker never unrolls its 64 steps.
+
+# one step: the bit x comes in below r
+def W64.div.step(x: Bool, +b: W64, qr: W64 & W64) -> W64 & W64:
+  (+q, +r) = qr
+  +r2 = W64.or(W64.shl(r, 1n), W64.from_u32(W64.bit(x)))
+  +ge = Bool.or(U32.is_eq(U32.shrn(W64.hi(r), 31n), 1), W64.is_ge(r2, b))
+  (W64.or(W64.shl(q, 1n), W64.from_u32(W64.bit(ge))), W64.sel(ge, W64.sub(r2, b), r2))
+
+# the m bits of w (least significant first) read onto qr, most significant
+# first
+def W64.div.bits(m: Nat, w: Word(m), +b: W64, qr: W64 & W64) -> W64 & W64:
+  match m w:
+    case 0n WNil{}:
+      qr
+    case 1n+p WCon{x, hi}:
+      W64.div.step(x, b, W64.div.bits(p, hi, b, qr))
+
+def W64.div.go(a: W64, +b: W64) -> W64 & W64:
+  match a:
+    case W64{U32{hw}, U32{lw}}:
+      W64.div.bits(32n, lw, b, W64.div.bits(32n, hw, b, (W64.zero(), W64.zero())))
 
 def W64.divmod.pick(z: Bool, +a: W64, +b: W64) -> W64 & W64:
   match z:
     case True{}:
       (W64.zero(), a)
     case False{}:
-      W64.div.go(64n, a, b, W64.zero(), W64.zero())
+      W64.div.go(a, b)
 
 # the quotient and the remainder; by zero, the quotient is 0 and the
 # remainder is a (as bend-kit-int's U64, used before, answered)

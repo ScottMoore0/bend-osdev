@@ -590,26 +590,14 @@ def Laws.mul_value(a, b, c, h):
 
 
 def division():
-    put("""# Division: W64.div.go, 64 steps of shift and subtract. With j steps done and
-# n = 64 - j left, the state keeps (q b + r) 2^64 + a = a0 2^j (a holds the
-# bits not yet read, shifted up) and r < b; each step doubles both sides.
+    put("""# Division: W64.div.go reads the bits of a's two halves, most significant
+# first (W64.div.bits), one W64.div.step a bit. Reading the m bits of w onto
+# (q, r) with r < b gives (q', r') with q' b + r' = (q b + r) 2^m + w and
+# r' < b (wd.bits, by induction on w), each step being bend-osdev-u32's
+# divstep_value and divstep_lt at n = 64; the bound
+# (q b + r) 2^m + w < 2^64 keeps q's shifts from wrapping.
 """)
-    put(f"""def wd.bt(x: Nat, h: {btrue(f'Nat.is_lt(x, {D("1n", "1n")})')}) -> {{U.U32Nat.bit(Nat.is_eq(x, 1n)) == x : Nat}}:
-  match x:
-    case 0n:
-      {{==}}
-    case 1n+ +p:
-      match p:
-        case 0n:
-          {{==}}
-        case 1n+ +q:
-          match q:
-            case 0n:
-              Empty.absurd({{U.U32Nat.bit(Nat.is_eq(2n, 1n)) == 2n : Nat}}, wn.ft(h))
-            case 1n+ +r:
-              Empty.absurd({{U.U32Nat.bit(Nat.is_eq(3n+r, 1n)) == 3n+r : Nat}}, wn.ft(h))
-
-def wd.lt2(x: Nat, h: {btrue(f'Nat.is_lt(x, {D("1n", "1n")})')}) -> {btrue('Nat.is_le(x, 1n)')}:
+    put(f"""def wd.lt2(x: Nat, h: {btrue(f'Nat.is_lt(x, {D("1n", "1n")})')}) -> {btrue('Nat.is_le(x, 1n)')}:
   match x:
     case 0n:
       {{==}}
@@ -623,6 +611,21 @@ def wd.lt2(x: Nat, h: {btrue(f'Nat.is_lt(x, {D("1n", "1n")})')}) -> {btrue('Nat.
               Empty.absurd({btrue('Nat.is_le(2n, 1n)')}, wn.ft(h))
             case 1n+ +r:
               Empty.absurd({btrue('Nat.is_le(3n+r, 1n)')}, wn.ft(h))
+
+def wd.bt(x: Nat, h: {btrue(f'Nat.is_lt(x, {D("1n", "1n")})')}) -> {{U.U32Nat.bit(Nat.is_eq(x, 1n)) == x : Nat}}:
+  match x:
+    case 0n:
+      {{==}}
+    case 1n+ +p:
+      match p:
+        case 0n:
+          {{==}}
+        case 1n+ +q:
+          match q:
+            case 0n:
+              Empty.absurd({{U.U32Nat.bit(Nat.is_eq(2n, 1n)) == 2n : Nat}}, wn.ft(h))
+            case 1n+ +r:
+              Empty.absurd({{U.U32Nat.bit(Nat.is_eq(3n+r, 1n)) == 3n+r : Nat}}, wn.ft(h))
 
 def wd.bv(g: Bool) -> {{U32.to_nat(W.W64.bit(g)) == U.U32Nat.bit(g) : Nat}}:
   match g:
@@ -648,35 +651,47 @@ def wd.nz(x: Nat, e: {{Nat.is_eq(x, 0n) == False{{}} : Bool}}) -> {btrue('Nat.is
       Empty.absurd({btrue('Nat.is_lt(0n, 0n)')}, wn.tf(e))
     case 1n+ +p:
       {{==}}
+
+# the value of a word one bit longer
+def wd.wv(p: Nat, x: Bool, t: Word(p)) -> {{Word.to_nat(1n+p, WCon{{x, t}}) == Nat.add(U.U32Nat.bit(x), Nat.double(Word.to_nat(p, t))) : Nat}}:
+  match x:
+    case True{{}}:
+      {{==}}
+    case False{{}}:
+      {{==}}
+
+# a pair is its two parts
+def wd.eta(p: W.W64 & W.W64) -> {{p == (W.W64.fst(p), W.W64.snd(p)) : W.W64 & W.W64}}:
+  (q, r) = p
+  {{==}}
+
+def wd.p1(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat.is_lt(c, d)')}) -> {{x == y : Nat}}:
+  (+u, +v) = pr
+  u
+
+def wd.p2(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat.is_lt(c, d)')}) -> {btrue('Nat.is_lt(c, d)')}:
+  (+u, +v) = pr
+  v
 """)
-    # the end: (q b + r) 2^N + a = a0 2^N with a < 2^N gives q b + r = a0
+    # the step, at a width N: Q1 B + R1 = 2 (Q B + R) + tx and R1 < B
     DN = D("N", "1n")
-    e1 = calc(f"Nat.add(A, {D('N', 'X')})", (f"Nat.add({D('N', 'X')}, A)", "ring"), (D("N", "A0"), hyp("e", f"Nat.add({D('N', 'X')}, A)", D("N", "A0"))))
-    h0 = btrans(f"Nat.is_lt(0n, {DN})", f"Nat.is_le(1n, {DN})", "True{}", f"Equal.sym(Bool, Nat.is_le(1n, {DN}), Nat.is_lt(0n, {DN}), P.wn.le_succ(0n, {DN}))", f"UL.nat_le_dbl(N, 1n)")
-    put(f"""def wd.fin(+N: Nat, +X: Nat, +A: Nat, +A0: Nat, +e: {{Nat.add({D('N', 'X')}, A) == {D('N', 'A0')} : Nat}}, +hA: {btrue(f'Nat.is_lt(A, {DN})')}) -> {{X == A0 : Nat}}:
-  Equal.trans(Nat, X, {high('N', D('N', 'A0'))}, A0, UL.high_unique(N, {D('N', 'A0')}, A, X, {e1.text}, hA), Equal.sym(Nat, A0, {high('N', D('N', 'A0'))}, UL.high_unique(N, {D('N', 'A0')}, 0n, A0, {{==}}, {h0})))
-""")
-    # the step, at a width N
     X = "Nat.add(Nat.mul(Q, B), R)"
     hyps = [
-        ("ej", "{Nat.add(1n+p, j) == N : Nat}"),
-        ("eS", f"{{Nat.add({D('N', X)}, A) == {D('j', 'A0')} : Nat}}"),
         ("hR", btrue("Nat.is_lt(R, B)")),
-        ("hA0", btrue(f"Nat.is_lt(A0, {DN})")),
         ("hB", btrue(f"Nat.is_lt(B, {DN})")),
-        ("fa", f"{{Nat.add(Aa, {D('N', 'ta')}) == Nat.double(A) : Nat}}"),
+        ("hX", btrue(f"Nat.is_lt(Nat.add(Nat.double({X}), tx), {DN})")),
         ("fr", f"{{Nat.add(Sr, {D('N', 'tr')}) == Nat.double(R) : Nat}}"),
         ("fq", f"{{Nat.add(Sq, {D('N', 'tq')}) == Nat.double(Q) : Nat}}"),
-        ("er2", "{R2 == Nat.add(Sr, ta) : Nat}"),
+        ("er2", "{R2 == Nat.add(Sr, tx) : Nat}"),
         ("eq1", "{Q1 == Nat.add(Sq, U.U32Nat.bit(g)) : Nat}"),
-        ("hta", btrue(f"Nat.is_lt(ta, {D('1n', '1n')})")),
+        ("htx", btrue(f"Nat.is_lt(tx, {D('1n', '1n')})")),
         ("htr", btrue(f"Nat.is_lt(tr, {D('1n', '1n')})")),
         ("eT", "{T == Nat.is_eq(tr, 1n) : Bool}"),
         ("eL", "{Nat.is_lt(R2, B) == L : Bool}"),
         ("eg", "{Bool.or(T, Bool.not(L)) == g : Bool}"),
         ("er1", f"{{Nat.add(R1, Nat.mul(U.U32Nat.bit(g), B)) == Nat.add(R2, {D('N', 'Nat.mul(U.U32Nat.bit(g), U.U32Nat.bit(L))')}) : Nat}}"),
     ]
-    OUTK = f"{{Nat.add({D('N', 'Nat.add(Nat.mul(Q1, B), R1)')}, Aa) == {D('1n+j', 'A0')} : Nat}} & {btrue('Nat.is_lt(R1, B)')}"
+    OUTK = f"{{Nat.add(Nat.mul(Q1, B), R1) == Nat.add(Nat.double({X}), tx) : Nat}} & {btrue('Nat.is_lt(R1, B)')}"
     lets = []
 
     def let(name, text):
@@ -685,39 +700,30 @@ def wd.nz(x: Nat, e: {{Nat.is_eq(x, 0n) == False{{}} : Bool}}) -> {btrue('Nat.is
 
     bT = let("bT", f"Equal.trans(Nat, U.U32Nat.bit(T), U.U32Nat.bit(Nat.is_eq(tr, 1n)), tr, Equal.cong(Bool, Nat, zz => U.U32Nat.bit(zz), T, Nat.is_eq(tr, 1n), eT), wd.bt(tr, htr))")
     eput = let("eput", calc(f"Nat.add(R2, {D('N', 'U.U32Nat.bit(T)')})",
-                            (f"Nat.add(Nat.add(Sr, ta), {D('N', 'U.U32Nat.bit(T)')})", hyp("er2", "R2", "Nat.add(Sr, ta)")),
-                            (f"Nat.add(Nat.add(Sr, ta), {D('N', 'tr')})", hyp(bT, "U.U32Nat.bit(T)", "tr")),
-                            (f"Nat.add(ta, Nat.add(Sr, {D('N', 'tr')}))", "ring"),
-                            ("Nat.add(ta, Nat.double(R))", hyp("fr", f"Nat.add(Sr, {D('N', 'tr')})", "Nat.double(R)"))).text)
-    ds = "N, R2, B, R, ta, R1, T, L, g, eput, eL, eg, er1, wd.lt2(ta, hta), hR, hB"
+                            (f"Nat.add(Nat.add(Sr, tx), {D('N', 'U.U32Nat.bit(T)')})", hyp("er2", "R2", "Nat.add(Sr, tx)")),
+                            (f"Nat.add(Nat.add(Sr, tx), {D('N', 'tr')})", hyp(bT, "U.U32Nat.bit(T)", "tr")),
+                            (f"Nat.add(tx, Nat.add(Sr, {D('N', 'tr')}))", "ring"),
+                            ("Nat.add(tx, Nat.double(R))", hyp("fr", f"Nat.add(Sr, {D('N', 'tr')})", "Nat.double(R)"))).text)
+    ds = "N, R2, B, R, tx, R1, T, L, g, eput, eL, eg, er1, wd.lt2(tx, htx), hR, hB"
     c1 = let("c1", f"UL.divstep_value({ds})")
     c2 = let("c2", f"UL.divstep_lt({ds})")
-    # q b + r < 2^j, so 2 q < 2^N
-    ha = btrans(f"Nat.is_lt({D('j', 'A0')}, {D('j', DN)})", f"Nat.is_lt(A0, {DN})", "True{}", f"UL.dbl_lt(j, A0, {DN})", "hA0")
-    hb = le_from(D("N", X), D("j", "A0"), "A", calc(f"Nat.add(A, {D('N', X)})", (f"Nat.add({D('N', X)}, A)", "ring"), (D("j", "A0"), hyp("eS", f"Nat.add({D('N', X)}, A)", D("j", "A0")))))
-    hc0 = f"P.wn.le_lt_trans({D('N', X)}, {D('j', 'A0')}, {D('j', DN)}, {hb}, {ha})"
-    hc1 = lt_rw(D("N", X), D("j", DN), D("N", X), D("N", D("j", "1n")), None, f"UL.dbl_comm(j, N, 1n)", hc0)
-    hX = let("hX", btrans(f"Nat.is_lt({X}, {D('j', '1n')})", f"Nat.is_lt({D('N', X)}, {D('N', D('j', '1n'))})", "True{}", f"Equal.sym(Bool, Nat.is_lt({D('N', X)}, {D('N', D('j', '1n'))}), Nat.is_lt({X}, {D('j', '1n')}), UL.dbl_lt(N, {X}, {D('j', '1n')}))", hc1))
+    # 2 Q <= 2 (Q B + R) <= 2 (Q B + R) + tx < 2^N
     wR, eR = wit_lt("R", "B", "hR")
     Wq = f"Nat.add(Nat.mul(Q, {wR}), Nat.add(Nat.mul(Q, R), R))"
-    qle = le_from("Q", X, Wq, calc(f"Nat.add({Wq}, Q)", (f"Nat.add(Nat.mul(Q, Nat.add({wR}, 1n+R)), R)", "ring"), (X, eR)))
-    hq0 = f"P.wn.le_lt_trans(Q, {X}, {D('j', '1n')}, {qle}, {hX})"
-    hq1 = btrans(f"Nat.is_lt(Nat.double(Q), {D('1n+j', '1n')})", f"Nat.is_lt(Q, {D('j', '1n')})", "True{}", f"P.ns.lt_dbl(Q, {D('j', '1n')})" if False else f"PS.ns.lt_dbl(Q, {D('j', '1n')})", hq0)
-    jle = le_from("1n+j", "N", "p", calc("Nat.add(p, 1n+j)", ("Nat.add(1n+p, j)", "ring"), ("N", hyp("ej", "Nat.add(1n+p, j)", "N"))))
-    hQ = let("hQ", f"P.wn.lt_le_trans(Nat.double(Q), {D('1n+j', '1n')}, {DN}, {hq1}, UL.dbl_le_exp(1n+j, N, 1n, {jle}))")
+    qle = let("qle", calc(f"Nat.add({Wq}, Q)", (f"Nat.add(Nat.mul(Q, Nat.add({wR}, 1n+R)), R)", "ring"), (X, eR)).text)
+    d1 = le_from("Nat.double(Q)", f"Nat.add(Nat.double({X}), tx)", f"Nat.add(Nat.double({Wq}), tx)",
+                 calc(f"Nat.add(Nat.add(Nat.double({Wq}), tx), Nat.double(Q))", (f"Nat.add(Nat.double(Nat.add({Wq}, Q)), tx)", "ring"),
+                      (f"Nat.add(Nat.double({X}), tx)", hyp(qle, f"Nat.add({Wq}, Q)", X))))
+    hQ = let("hQ", f"P.wn.le_lt_trans(Nat.double(Q), Nat.add(Nat.double({X}), tx), {DN}, {d1}, hX)")
     esq = let("esq", f"UL.dbl_nowrap(N, tq, Sq, Nat.double(Q), Nat.double(Q), fq, UL.nat_le_refl(Nat.double(Q)), {hQ})")
     bg = "U.U32Nat.bit(g)"
-    eS2 = calc(f"Nat.add({D('N', 'Nat.add(Nat.mul(Q1, B), R1)')}, Aa)",
-               (f"Nat.add({D('N', f'Nat.add(Nat.mul(Nat.add(Sq, {bg}), B), R1)')}, Aa)", hyp("eq1", "Q1", f"Nat.add(Sq, {bg})")),
-               (f"Nat.add({D('N', f'Nat.add(Nat.mul(Nat.add(Nat.double(Q), {bg}), B), R1)')}, Aa)", hyp(esq, "Sq", "Nat.double(Q)")),
-               (f"Nat.add(Nat.add({D('N', 'Nat.double(Nat.mul(Q, B))')}, {D('N', f'Nat.add(R1, Nat.mul({bg}, B))')}), Aa)", "ring"),
-               (f"Nat.add(Nat.add({D('N', 'Nat.double(Nat.mul(Q, B))')}, {D('N', 'Nat.add(ta, Nat.double(R))')}), Aa)", hyp(c1, f"Nat.add(R1, Nat.mul({bg}, B))", "Nat.add(ta, Nat.double(R))")),
-               (f"Nat.add(Nat.double({D('N', X)}), Nat.add(Aa, {D('N', 'ta')}))", "ring"),
-               (f"Nat.add(Nat.double({D('N', X)}), Nat.double(A))", hyp("fa", f"Nat.add(Aa, {D('N', 'ta')})", "Nat.double(A)")),
-               (f"Nat.double(Nat.add({D('N', X)}, A))", "ring"),
-               (f"Nat.double({D('j', 'A0')})", hyp("eS", f"Nat.add({D('N', X)}, A)", D("j", "A0"))),
-               (D("1n+j", "A0"), "="))
-    params = ", ".join(f"+{x}: Nat" for x in ["N", "p", "j", "A0", "Q", "B", "R", "A", "Aa", "ta", "Sr", "tr", "R2", "Sq", "tq", "Q1", "R1"])
+    eS2 = calc("Nat.add(Nat.mul(Q1, B), R1)",
+               (f"Nat.add(Nat.mul(Nat.add(Sq, {bg}), B), R1)", hyp("eq1", "Q1", f"Nat.add(Sq, {bg})")),
+               (f"Nat.add(Nat.mul(Nat.add(Nat.double(Q), {bg}), B), R1)", hyp(esq, "Sq", "Nat.double(Q)")),
+               (f"Nat.add(Nat.double(Nat.mul(Q, B)), Nat.add(R1, Nat.mul({bg}, B)))", "ring"),
+               ("Nat.add(Nat.double(Nat.mul(Q, B)), Nat.add(tx, Nat.double(R)))", hyp(c1, f"Nat.add(R1, Nat.mul({bg}, B))", "Nat.add(tx, Nat.double(R))")),
+               (f"Nat.add(Nat.double({X}), tx)", "ring"))
+    params = ", ".join(f"+{x}: Nat" for x in ["N", "Q", "B", "R", "tx", "Sr", "tr", "R2", "Sq", "tq", "Q1", "R1"])
     hps = ", ".join(f"+{k}: {v}" for k, v in hyps)
     body = "\n".join(lets)
     put(f"""def wd.k({params}, +T: Bool, +L: Bool, +g: Bool, {hps}) -> {OUTK}:
@@ -739,69 +745,134 @@ def wd.nz(x: Nat, e: {{Nat.is_eq(x, 0n) == False{{}} : Bool}}) -> {btrue('Nat.is
     case False{{}}:
       {sf.text}
 """)
-    # the loop
-    GO = "W.W64.div.go(n, a, b, q, r)"
-    OUTD = lambda go: f"{{Nat.add(Nat.mul({v64(f'W.W64.fst({go})')}, {vb}), {v64(f'W.W64.snd({go})')}) == A0 : Nat}} & {btrue(f'Nat.is_lt({v64(f'W.W64.snd({go})')}, {vb})')}"
+    # one step on the words
+    W64v = D("64n", "1n")
     XX = f"Nat.add(Nat.mul({v64('q')}, {vb}), {v64('r')})"
-    INV = lambda j: f"{{Nat.add({D('64n', XX)}, {v64('a')}) == {D(j, 'A0')} : Nat}} & {btrue(f'Nat.is_lt({v64(chr(114))}, {vb})')}"
-    R2w = "W.W64.or(W.W64.shl(r, 1n), W.W64.from_u32(U32.shrn(W.W64.hi(a), 31n)))"
+    R2w = "W.W64.or(W.W64.shl(r, 1n), W.W64.from_u32(W.W64.bit(x)))"
     T = "U32.is_eq(U32.shrn(W.W64.hi(r), 31n), 1)"
     GE = f"Bool.or({T}, W.W64.is_ge({R2w}, b))"
     Qw = f"W.W64.or(W.W64.shl(q, 1n), W.W64.from_u32(W.W64.bit({GE})))"
     Rw = f"W.W64.sel({GE}, W.W64.sub({R2w}, b), {R2w})"
     L = f"W.W64.is_lt({R2w}, b)"
     tr = v32("U32.shrn(W.W64.hi(r), 31n)")
-    ta = v32("U32.shrn(W.W64.hi(a), 31n)")
+    tx = v32("W.W64.bit(x)")
     eT = f"Equal.trans(Bool, {T}, Nat.is_eq({tr}, U32.to_nat(1)), Nat.is_eq({tr}, 1n), UL.u32_eq_value(U32.shrn(W.W64.hi(r), 31n), 1), {{==}})"
     eL = f"Equal.sym(Bool, {L}, Nat.is_lt({v64(R2w)}, {vb}), Laws.lt_value({R2w}, b))"
     eg = f"Equal.cong(Bool, Bool, zz => Bool.or({T}, zz), Bool.not({L}), W.W64.is_ge({R2w}, b), Equal.sym(Bool, W.W64.is_ge({R2w}, b), Bool.not({L}), wn.ge_lt(W.W64.cmp({R2w}, b))))"
     eq1 = (f"Equal.trans(Nat, {v64(Qw)}, Nat.add({v64('W.W64.shl(q, 1n)')}, U32.to_nat(W.W64.bit({GE}))), Nat.add({v64('W.W64.shl(q, 1n)')}, U.U32Nat.bit({GE})), "
            f"wb.or_bit(q, W.W64.bit({GE}), wd.bl({GE})), Equal.cong(Nat, Nat, zz => Nat.add({v64('W.W64.shl(q, 1n)')}, zz), U32.to_nat(W.W64.bit({GE})), U.U32Nat.bit({GE}), wd.bv({GE})))")
-    kargs = [
-        "64n", "p", "j", "A0", v64("q"), vb, v64("r"), v64("a"), v64("W.W64.shl(a, 1n)"), ta, v64("W.W64.shl(r, 1n)"), tr, v64(R2w),
-        v64("W.W64.shl(q, 1n)"), v32("U32.shrn(W.W64.hi(q), 31n)"), v64(Qw), v64(Rw), T, L, GE,
-        "UL.nat_add_succ(p, j)" if False else "ej", "eS", "hR", "hA0", "wv.lt64(b)",
-        "Laws.shl_one_wrap(a)", "Laws.shl_one_wrap(r)", "Laws.shl_one_wrap(q)",
-        f"wb.or_bit(r, U32.shrn(W.W64.hi(a), 31n), wd.top(a))", eq1, "wd.top(a)", "wd.top(r)", eT, eL, eg,
-        f"wd.sel({GE}, {R2w}, b)",
-    ]
-    put(f"""def wd.go(n: Nat, +a: W.W64, +b: W.W64, +q: W.W64, +r: W.W64, +j: Nat, +A0: Nat, +ej: {{Nat.add(n, j) == 64n : Nat}}, inv: {INV('j')}, +hA0: {btrue(f'Nat.is_lt(A0, {D("64n", "1n")})')}) -> {OUTD(GO)}:
-  match n:
-    case 0n:
-      (+eS, +hR) = inv
-      +eS2 = Equal.trans(Nat, Nat.add({D('64n', XX)}, {v64('a')}), {D('j', 'A0')}, {D('64n', 'A0')}, eS, Equal.cong(Nat, Nat, zz => {D('zz', 'A0')}, j, 64n, ej))
-      (wd.fin(64n, {XX}, {v64('a')}, A0, eS2, wv.lt64(a)), hR)
-    case 1n+ +p:
-      (+eS, +hR) = inv
-      wd.go(p, W.W64.shl(a, 1n), b, {Qw}, {Rw}, 1n+j, A0, Equal.trans(Nat, Nat.add(p, 1n+j), 1n+Nat.add(p, j), 64n, UL.nat_add_succ(p, j), ej), wd.k({', '.join(kargs)}), hA0)
+    hXk = lt_rw(f"Nat.add(Nat.double({XX}), U.U32Nat.bit(x))", W64v, f"Nat.add(Nat.double({XX}), {tx})", W64v,
+                f"Equal.cong(Nat, Nat, zz => Nat.add(Nat.double({XX}), zz), U.U32Nat.bit(x), {tx}, Equal.sym(Nat, {tx}, U.U32Nat.bit(x), wd.bv(x)))", None, "hX")
+    kargs = ["64n", v64("q"), vb, v64("r"), tx, v64("W.W64.shl(r, 1n)"), tr, v64(R2w),
+             v64("W.W64.shl(q, 1n)"), v32("U32.shrn(W.W64.hi(q), 31n)"), v64(Qw), v64(Rw), T, L, GE,
+             "hR", "hb", hXk, "Laws.shl_one_wrap(r)", "Laws.shl_one_wrap(q)",
+             "wb.or_bit(r, W.W64.bit(x), wd.bl(x))", eq1, "wd.bl(x)", "wd.top(r)", eT, eL, eg,
+             f"wd.sel({GE}, {R2w}, b)"]
+    K = f"wd.k({', '.join(kargs)})"
+    STEP = "W.W64.div.step(x, b, (q, r))"
+    FS, SS = v64(f"W.W64.fst({STEP})"), v64(f"W.W64.snd({STEP})")
+    OUTS = f"{{Nat.add(Nat.mul({FS}, {vb}), {SS}) == Nat.add(Nat.double({XX}), U.U32Nat.bit(x)) : Nat}} & {btrue(f'Nat.is_lt({SS}, {vb})')}"
+    pargs = f"Nat.add(Nat.mul({v64(Qw)}, {vb}), {v64(Rw)}), Nat.add(Nat.double({XX}), {tx}), {v64(Rw)}, {vb}"
+    put(f"""def wd.st(+x: Bool, +b: W.W64, +q: W.W64, +r: W.W64, +hR: {btrue(f'Nat.is_lt({v64("r")}, {vb})')}, +hb: {btrue(f'Nat.is_lt({vb}, {W64v})')}, +hX: {btrue(f'Nat.is_lt(Nat.add(Nat.double({XX}), U.U32Nat.bit(x)), {W64v})')}) -> {OUTS}:
+  (Equal.trans(Nat, Nat.add(Nat.mul({v64(Qw)}, {vb}), {v64(Rw)}), Nat.add(Nat.double({XX}), {tx}), Nat.add(Nat.double({XX}), U.U32Nat.bit(x)), wd.p1({pargs}, {K}), Equal.cong(Nat, Nat, zz => Nat.add(Nat.double({XX}), zz), {tx}, U.U32Nat.bit(x), wd.bv(x))), wd.p2({pargs}, {K}))
 """)
-    PK = "W.W64.divmod.pick(z, a, b)"
-    OUTP = (f"{{Nat.add(Nat.mul({v64(f'W.W64.fst({PK})')}, {vb}), {v64(f'W.W64.snd({PK})')}) == {v64('a')} : Nat}} & "
+    # the bits of a word
+    BITS = lambda m, w: f"W.W64.div.bits({m}, {w}, b, (q, r))"  # noqa: E731
+    OUTB = lambda m, w: (f"{{Nat.add(Nat.mul({v64(f'W.W64.fst({BITS(m, w)})')}, {vb}), {v64(f'W.W64.snd({BITS(m, w)})')}) == Nat.add({D(m, XX)}, Word.to_nat({m}, {w})) : Nat}} & "  # noqa: E731
+                         + btrue(f"Nat.is_lt({v64(f'W.W64.snd({BITS(m, w)})')}, {vb})"))
+    PP = BITS("p", "hi")
+    FP, SP = v64(f"W.W64.fst({PP})"), v64(f"W.W64.snd({PP})")
+    HV = "Word.to_nat(p, hi)"
+    Sp = f"Nat.add({D('p', XX)}, {HV})"
+    TOT = f"Nat.add({D('1n+p', XX)}, Word.to_nat(1n+p, WCon{{x, hi}}))"
+    WV = hyp("wd.wv(p, x, hi)", "Word.to_nat(1n+p, WCon{x, hi})", f"Nat.add(U.U32Nat.bit(x), Nat.double({HV}))")
+    E = hyp("e", f"Nat.add(Nat.mul({FP}, {vb}), {SP})", Sp)
+    tot = calc(f"Nat.add(Nat.double({Sp}), U.U32Nat.bit(x))",
+               (f"Nat.add(Nat.double({D('p', XX)}), Nat.add(U.U32Nat.bit(x), Nat.double({HV})))", "ring"),
+               (f"Nat.add(Nat.double({D('p', XX)}), Word.to_nat(1n+p, WCon{{x, hi}}))", sym(WV)),
+               (TOT, "="))
+    chain = calc(f"Nat.add(Nat.double(Nat.add(Nat.mul({FP}, {vb}), {SP})), U.U32Nat.bit(x))",
+                 (f"Nat.add(Nat.double({Sp}), U.U32Nat.bit(x))", E), (TOT, tot))
+    hXs = lt_rw(TOT, W64v, f"Nat.add(Nat.double(Nat.add(Nat.mul({FP}, {vb}), {SP})), U.U32Nat.bit(x))", W64v, sym(chain).text, None, "hX")
+    STP = f"W.W64.div.step(x, b, (W.W64.fst({PP}), W.W64.snd({PP})))"
+    FST, SST = v64(f"W.W64.fst({STP})"), v64(f"W.W64.snd({STP})")
+    ST = f"wd.st(x, b, W.W64.fst({PP}), W.W64.snd({PP}), l, hb, {hXs})"
+    sargs = f"Nat.add(Nat.mul({FST}, {vb}), {SST}), Nat.add(Nat.double(Nat.add(Nat.mul({FP}, {vb}), {SP})), U.U32Nat.bit(x)), {SST}, {vb}"
+    goalP = (f"{{Nat.add(Nat.mul({v64('W.W64.fst(W.W64.div.step(x, b, _))')}, {vb}), {v64('W.W64.snd(W.W64.div.step(x, b, _))')}) == {TOT} : Nat}} & "
+             + btrue(f"Nat.is_lt({v64('W.W64.snd(W.W64.div.step(x, b, _))')}, {vb})"))
+    # the bound for the bits below: (q b + r) 2^p + hi <= (q b + r) 2^(1+p) + w
+    le = le_from(Sp, TOT, f"Nat.add({Sp}, U.U32Nat.bit(x))",
+                 calc(f"Nat.add(Nat.add({Sp}, U.U32Nat.bit(x)), {Sp})", (f"Nat.add(Nat.double({Sp}), U.U32Nat.bit(x))", "ring"), (TOT, tot)))
+    hXi = f"P.wn.le_lt_trans({Sp}, {TOT}, {W64v}, {le}, hX)"
+    put(f"""def wd.bs(+p: Nat, +x: Bool, +hi: Word(p), +b: W.W64, +q: W.W64, +r: W.W64, +hb: {btrue(f'Nat.is_lt({vb}, {W64v})')}, +hX: {btrue(f'Nat.is_lt({TOT}, {W64v})')}, ih: {OUTB('p', 'hi')}) -> {OUTB('1n+p', 'WCon{x, hi}')}:
+  (+e, +l) = ih
+  %Equal.sym(W.W64 & W.W64, {PP}, (W.W64.fst({PP}), W.W64.snd({PP})), wd.eta({PP})) : {goalP}
+  (Equal.trans(Nat, Nat.add(Nat.mul({FST}, {vb}), {SST}), Nat.add(Nat.double(Nat.add(Nat.mul({FP}, {vb}), {SP})), U.U32Nat.bit(x)), {TOT}, wd.p1({sargs}, {ST}), {chain.text}), wd.p2({sargs}, {ST}))
+
+def wd.bits(m: Nat, w: Word(m), +b: W.W64, +q: W.W64, +r: W.W64, +hR: {btrue(f'Nat.is_lt({v64("r")}, {vb})')}, +hb: {btrue(f'Nat.is_lt({vb}, {W64v})')}, +hX: {btrue(f'Nat.is_lt(Nat.add({D("m", XX)}, Word.to_nat(m, w)), {W64v})')}) -> {OUTB('m', 'w')}:
+  match m w:
+    case 0n WNil{{}}:
+      (Equal.sym(Nat, Nat.add({XX}, 0n), {XX}, UL.nat_add_zero({XX})), hR)
+    case 1n+ +p WCon{{+x, +hi}}:
+      wd.bs(p, x, hi, b, q, r, hb, hX, wd.bits(p, hi, b, q, r, hR, hb, {hXi}))
+""")
+    # the two halves, high first
+    hw, lw = "Word.to_nat(32n, hw)", "Word.to_nat(32n, lw)"
+    Aw = "W.W64{U32{hw}, U32{lw}}"
+    Z = "W.W64.zero()"
+    XX0 = f"Nat.add(Nat.mul({v64(Z)}, {vb}), {v64(Z)})"
+    P1 = f"W.W64.div.bits(32n, hw, b, ({Z}, {Z}))"
+    F1, S1 = v64(f"W.W64.fst({P1})"), v64(f"W.W64.snd({P1})")
+    X1 = f"Nat.add(Nat.mul({F1}, {vb}), {S1})"
+    hR0 = btrans(f"Nat.is_lt({v64(Z)}, {vb})", f"Nat.is_lt(0n, {vb})", "True{}", "{==}",
+                 f"wd.nz({vb}, Equal.trans(Bool, Nat.is_eq({vb}, 0n), W.W64.is_zero(b), False{{}}, Equal.sym(Bool, W.W64.is_zero(b), Nat.is_eq({vb}, 0n), Laws.eq_value(b, {Z})), h))")
+    hwlt = f"P.wn.lt_le_trans({hw}, {D('32n', '1n')}, {W64v}, UL.word_value_lt(32n, hw), UL.dbl_le_exp(32n, 64n, 1n, {{==}}))"
+    hX0 = lt_rw(hw, W64v, f"Nat.add({D('32n', XX0)}, {hw})", W64v, "{==}", None, hwlt)
+    I1 = f"wd.bits(32n, hw, b, {Z}, {Z}, {hR0}, wv.lt64(b), {hX0})"
+    a1 = f"{X1}, Nat.add({D('32n', XX0)}, {hw}), {S1}, {vb}"
+    E1 = hyp(f"Equal.trans(Nat, {X1}, Nat.add({D('32n', XX0)}, {hw}), {hw}, e1, {{==}})", X1, hw)
+    EX = calc(v64(Aw),
+              (f"Nat.add(U32.to_nat(U32{{lw}}), {D('32n', 'U32.to_nat(U32{hw})')})", hyp("Laws.to_nat_parts(U32{hw}, U32{lw})", v64(Aw), f"Nat.add(U32.to_nat(U32{{lw}}), {D('32n', 'U32.to_nat(U32{hw})')})")),
+              (f"Nat.add({lw}, {D('32n', hw)})", "="),
+              (f"Nat.add({lw}, {D('32n', X1)})", sym(E1)),
+              (f"Nat.add({D('32n', X1)}, {lw})", "ring"))
+    hX1 = lt_rw(v64(Aw), W64v, f"Nat.add({D('32n', X1)}, {lw})", W64v, EX.text, None, f"wv.lt64({Aw})")
+    I2 = f"wd.bits(32n, lw, b, W.W64.fst({P1}), W.W64.snd({P1}), l1, wv.lt64(b), {hX1})"
+    P2 = f"W.W64.div.bits(32n, lw, b, (W.W64.fst({P1}), W.W64.snd({P1})))"
+    F2, S2 = v64(f"W.W64.fst({P2})"), v64(f"W.W64.snd({P2})")
+    a2 = f"Nat.add(Nat.mul({F2}, {vb}), {S2}), Nat.add({D('32n', X1)}, {lw}), {S2}, {vb}"
+    PK = f"W.W64.divmod.pick(z, {Aw}, b)"
+    OUTP = (f"{{Nat.add(Nat.mul({v64(f'W.W64.fst({PK})')}, {vb}), {v64(f'W.W64.snd({PK})')}) == {v64(Aw)} : Nat}} & "
             f"{btrue(f'Nat.is_lt({v64(f"W.W64.snd({PK})")}, {vb})')}")
-    hR0 = btrans(f"Nat.is_lt({v64('W.W64.zero()')}, {vb})", f"Nat.is_lt(0n, {vb})", "True{}", "{==}",
-                 f"wd.nz({vb}, Equal.trans(Bool, Nat.is_eq({vb}, 0n), W.W64.is_zero(b), False{{}}, Equal.sym(Bool, W.W64.is_zero(b), Nat.is_eq({vb}, 0n), Laws.eq_value(b, W.W64.zero())), h))")
-    put(f"""def wd.dz(+a: W.W64, +b: W.W64, z: Bool, ez: {{W.W64.is_zero(b) == z : Bool}}, h: {{W.W64.is_zero(b) == False{{}} : Bool}}) -> {OUTP}:
+    BL = f"W.W64.div.bits(32n, lw, b, _)"
+    goalQ = (f"{{Nat.add(Nat.mul({v64(f'W.W64.fst({BL})')}, {vb}), {v64(f'W.W64.snd({BL})')}) == {v64(Aw)} : Nat}} & "
+             + btrue(f"Nat.is_lt({v64(f'W.W64.snd({BL})')}, {vb})"))
+    put(f"""def wd.dz(+hw: Word(32n), +lw: Word(32n), +b: W.W64, z: Bool, ez: {{W.W64.is_zero(b) == z : Bool}}, +h: {{W.W64.is_zero(b) == False{{}} : Bool}}) -> {OUTP}:
   match z:
     case True{{}}:
       Empty.absurd({OUTP.replace('pick(z,', 'pick(True{},')}, wn.tf(Equal.trans(Bool, True{{}}, W.W64.is_zero(b), False{{}}, Equal.sym(Bool, W.W64.is_zero(b), True{{}}, ez), h)))
     case False{{}}:
-      wd.go(64n, a, b, W.W64.zero(), W.W64.zero(), 0n, {v64('a')}, {{==}}, ({{==}}, {hR0}), wv.lt64(a))
+      wd.dz2(hw, lw, b, h, {I1})
 
-def wd.p1(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat.is_lt(c, d)')}) -> {{x == y : Nat}}:
-  (+u, +v) = pr
-  u
-
-def wd.p2(-x: Nat, -y: Nat, -c: Nat, -d: Nat, pr: {{x == y : Nat}} & {btrue('Nat.is_lt(c, d)')}) -> {btrue('Nat.is_lt(c, d)')}:
-  (+u, +v) = pr
-  v
+def wd.dz2(+hw: Word(32n), +lw: Word(32n), +b: W.W64, +h: {{W.W64.is_zero(b) == False{{}} : Bool}}, i1: {{{X1} == Nat.add({D('32n', XX0)}, {hw}) : Nat}} & {btrue(f'Nat.is_lt({S1}, {vb})')}) -> {OUTP.replace('pick(z,', 'pick(False{},')}:
+  (+e1, +l1) = i1
+  %Equal.sym(W.W64 & W.W64, {P1}, (W.W64.fst({P1}), W.W64.snd({P1})), wd.eta({P1})) : {goalQ}
+  (Equal.trans(Nat, Nat.add(Nat.mul({F2}, {vb}), {S2}), Nat.add({D('32n', X1)}, {lw}), {v64(Aw)}, wd.p1({a2}, {I2}), Equal.sym(Nat, {v64(Aw)}, Nat.add({D('32n', X1)}, {lw}), {EX.text})), wd.p2({a2}, {I2}))
 """)
-    PZ = "W.W64.divmod.pick(W.W64.is_zero(b), a, b)"
+    # wd.dz calls wd.dz2: put dz2 first
+    i = out[-1].index("def wd.dz2(")
+    out[-1] = out[-1][i:] + "\n" + out[-1][:i]
+    PZ = f"W.W64.divmod.pick(W.W64.is_zero(b), {Aw}, b)"
     qv, rv = v64(f"W.W64.fst({PZ})"), v64(f"W.W64.snd({PZ})")
     put(f"""def Laws.divmod_value(a, b, h):
-  wd.p1(Nat.add(Nat.mul({qv}, {vb}), {rv}), {v64('a')}, {rv}, {vb}, wd.dz(a, b, W.W64.is_zero(b), {{==}}, h))
+  match a:
+    case W.W64{{U32{{+hw}}, U32{{+lw}}}}:
+      wd.p1(Nat.add(Nat.mul({qv}, {vb}), {rv}), {v64(Aw)}, {rv}, {vb}, wd.dz(hw, lw, b, W.W64.is_zero(b), {{==}}, h))
 
 def Laws.mod_lt(a, b, h):
-  wd.p2(Nat.add(Nat.mul({qv}, {vb}), {rv}), {v64('a')}, {rv}, {vb}, wd.dz(a, b, W.W64.is_zero(b), {{==}}, h))
+  match a:
+    case W.W64{{U32{{+hw}}, U32{{+lw}}}}:
+      wd.p2(Nat.add(Nat.mul({qv}, {vb}), {rv}), {v64(Aw)}, {rv}, {vb}, wd.dz(hw, lw, b, W.W64.is_zero(b), {{==}}, h))
 
 def Laws.div_zero(a):
   {{==}}
@@ -809,8 +880,6 @@ def Laws.div_zero(a):
 def Laws.mod_zero(a):
   {{==}}
 """)
-
-
 
 
 # ---------------------------------------------------------------- decimal text
