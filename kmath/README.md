@@ -23,6 +23,11 @@ GPL source was read.
 | `rational.bend` | `KRational`, `KMath.rational_best` |
 | `cordic.bend`, `cordic_table.bend` | `KCordic`, `KMath.cordic`, `KMath.angle_of_degrees`; the generated constants |
 | `prime.bend` | `KMath.is_prime`, `KMath.next_prime` |
+| `LAWS.bend`, `PROOF.bend` | the square root and gcd laws and the vectors, and their proofs |
+| `LAWS_div.bend`, `PROOF_div.bend` | 64-bit division for every input |
+| `LAWS_fls.bend`, `PROOF_fls.bend` | the number of bits (`KMath.fls`) for every input |
+| `LAWS_recip.bend`, `PROOF_recip.bend` | reciprocal division's exactness for every input |
+| `gen/proof.py` | writes the four proof files (`gen/proof_div64.py`, `gen/proof_recip.py`, `gen/proof_krecip.py`; ring identities by `scripts/natproof.py`) |
 
 ## API
 
@@ -73,17 +78,44 @@ Natively a `Nat` holds values below 2^48, which bounds the `Nat` functions.
   within 1000/1000 (355/113), CORDIC at 0 and 90 degrees, primes. The vector
   values are small, because a `Nat` is unary inside the checkers.
 
+The further pairs, each proof file checked in a process of its own:
+
+* **64-bit division** (`LAWS_div.bend`), for every input: for d not 0,
+  `div_u64_rem` and `div64_u64_rem` give the `Nat` quotient and remainder,
+  n = q d + r with r < d (`div_u64_rem_value`, `div_u64_rem_lt`,
+  `div64_u64_rem_value`, `div64_u64_rem_lt`); `div_u64` and `div64_u64`
+  are the quotient of the pair (`div_u64_q`, `div64_u64_q`); by 0 the
+  quotient is 0 and the remainder n (`div_u64_rem_zero`,
+  `div64_u64_rem_zero`); `div64_u64_round_up` gives the least multiple
+  count, n <= q' d < n + d (`div64_round_up_le`, `div64_round_up_lt`).
+  From word64's division laws (`LAWS_div.bend` there) and `add_value`.
+* **the number of bits** (`LAWS_fls.bend`), for every `U32` x: x < 2^fls(x)
+  (`fls_lt`), 2^fls(x) <= 2 x for x not 0 (`fls_le`), fls(x) <= 32
+  (`fls_bound`); by induction on `krecip.bits.go`'s 32 steps.
+* **reciprocal division is exact** (`LAWS_recip.bend`, Granlund and
+  Montgomery's Theorem 4.2): `KRecip.divide(a, KRecip.of(d)) == U32.div(a,
+  d)` for every a and every d not 0 (`recip_exact`). With l = fls(d - 1),
+  d <= 2^l < 2d, c = 2^l - d (the wrapping `U32.sub(U32.shln(1, l), d)`),
+  the precomputation's Q = floor(c 2^32 / d) and m = Q + 1 (which does not
+  wrap: Q + 1 < 2^32 since c < d), and the divide step's t = floor(a m /
+  2^32) <= a; the core (`km.k_core`, for 2^32 and 2^l as variables) is the
+  theorem: with a = q d + r, r < d, the quotient of a + t by 2^l is q. The
+  shifts compute that quotient ((t + ((a - t) >> 1)) >> (l - 1) = (a + t)
+  >> l for l >= 1, and a itself for l = 0, d = 1).
+
+**`--verdict` and word64's division.** `PROOF_div.bend` and
+`PROOF_recip.bend` ALL PROOFS CHECK but cannot pass `--verdict` while they
+import bend-osdev-word64's `PROOF_div.bend`, whose `divmod_value` the
+kernel cannot check (word64's README, "`PROOF_div.bend` and the kernel");
+the edge vectors, `check.bend`'s run-time check (every d from 1 to 2^16
+with three a each, and 262,144 values of a with d = 3, 7 and 641) and
+`ref/run.sh` hold them under the kernel too.
+
 Not proved for every input, and why:
 
-* **Reciprocal division's exactness** (Granlund and Montgomery's Theorem
-  4.2: `KRecip.divide(a, KRecip.of(d)) = a / d` for every a and d ≥ 1):
-  a proof needs floor-division inequalities over 64-bit products that the
-  Nat library here does not have yet. Held by the edge vectors, by
-  `check.bend`'s check at run time (every d from 1 to 2^16 with three a
-  each, and 262,144 values of a with d = 3, 7 and 641: no mismatch), and
-  by `ref/run.sh`.
-* **64-bit division:** word64's division is not proved for every input
-  either; vectors and `ref/run.sh`.
+* **Signed 64-bit division** (`div64_s64_rem`, `div_s64_rem`): the sign
+  handling around the unsigned laws above is not stated yet; vectors and
+  `ref/run.sh`.
 * **The best rational approximation's optimality**, **CORDIC's error
   bound** and **primality**: vectors and `ref/run.sh`. CORDIC's bound is
   documented in `cordic.bend`: at most 64 units of 2^-30 (2^-24); an exact
@@ -102,5 +134,9 @@ division for primes, on random and edge inputs.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 653 cases match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` (28 laws), `PROOF_div.bend` (10), `PROOF_fls.bend`
+(3) and `PROOF_recip.bend` (1) ALL PROOFS CHECK; `--verdict` ALL PROOFS
+CHECK on `PROOF.bend` (about 22 s, peak 0.21 GB) and `PROOF_fls.bend`
+(about 1 s, 0.26 GB), and does not finish on `PROOF_div.bend` and
+`PROOF_recip.bend` (word64's division, above); `check.bend` passes,
+`ref/run.sh` 653 cases match, `scripts/deps.sh` passes.
