@@ -1,7 +1,8 @@
 # Block arithmetic, for every block size, offset and length: a range's
 # span starts at its offset, covers it exactly (with skip bytes before and
-# slack bytes after, each less than a block), and an offset inside block n
-# lies in block n.
+# slack bytes after, each less than a block), an offset inside block n
+# lies in block n, and a range inside (or past) the first n blocks has its
+# span inside (or past) them.
 #
 # The adapters, for every pure device, continuation and range: the IO
 # helpers on a pure device (through IODev.of_pure_*) perform no effect,
@@ -65,6 +66,24 @@ law blocks_cover:
   for +bp: Nat
   for +size: Nat
   {Nat.mul(S.IOSpan.blocks(1n+bp, size), 1n+bp) == Nat.add(size, S.IOSpan.slack(S.IOSpan.of(1n+bp, 0n, size))) : Nat}
+
+# a range inside the first n blocks has its span inside them, and a range
+# that passes their end has a span that does too
+law span_within:
+  for +bp: Nat
+  for +off: Nat
+  for +len: Nat
+  for +n: Nat
+  for h: {Nat.is_le(Nat.add(off, len), Nat.mul(n, 1n+bp)) == True{} : Bool}
+  {Nat.is_le(Nat.add(S.IOSpan.first(S.IOSpan.of(1n+bp, off, len)), S.IOSpan.count(S.IOSpan.of(1n+bp, off, len))), n) == True{} : Bool}
+
+law span_past:
+  for +bp: Nat
+  for +off: Nat
+  for +len: Nat
+  for +n: Nat
+  for h: {Nat.is_lt(Nat.mul(n, 1n+bp), Nat.add(off, len)) == True{} : Bool}
+  {Nat.is_lt(n, Nat.add(S.IOSpan.first(S.IOSpan.of(1n+bp, off, len)), S.IOSpan.count(S.IOSpan.of(1n+bp, off, len)))) == True{} : Bool}
 
 # The adapters
 
