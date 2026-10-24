@@ -793,3 +793,762 @@ def p_octets_concat_cons(+h: B.Octets, +t: List<&2, B.Octets>) -> {B.Octets.conc
 
 def Laws.octets_concat_cons(h, t):
   p_octets_concat_cons(h, t)
+
+# Reading at offsets: lemmas
+
+def off.disc(b: Bool) -> Type:
+  match b:
+    case True{}:
+      Unit
+    case False{}:
+      Empty
+
+def off.clash(h: {False{} == True{} : Bool}) -> Empty:
+  %Equal.sym(Bool, False{}, True{}, h) : off.disc(_)
+  Unit{}
+
+def off.absurd(-A: Type, e: Empty) -> A:
+  match e:
+
+def off.no(-A: Type, h: {False{} == True{} : Bool}) -> A:
+  off.absurd(A, off.clash(h))
+
+# Natural numbers
+
+def off.le_zero(+m: Nat) -> {Nat.is_le(0n, m) == True{} : Bool}:
+  match m:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+# i + n <= m: i <= m
+def off.le_add_l(+i: Nat, +n: Nat, +m: Nat) -> {Nat.is_le(Nat.add(i, n), m) == True{} : Bool} -> {Nat.is_le(i, m) == True{} : Bool}:
+  match i m:
+    case 0n _:
+      h => off.le_zero(m)
+    case 1n+p 0n:
+      h => off.no({Nat.is_le(1n+p, 0n) == True{} : Bool}, h)
+    case 1n+p 1n+q:
+      h => off.le_add_l(p, n, q, h)
+
+# i + n <= m: n <= m - i
+def off.le_sub(+i: Nat, +n: Nat, +m: Nat) -> {Nat.is_le(Nat.add(i, n), m) == True{} : Bool} -> {Nat.is_le(n, Nat.sub(m, i)) == True{} : Bool}:
+  match i m:
+    case 0n 0n:
+      h => h
+    case 0n 1n+q:
+      h => h
+    case 1n+p 0n:
+      h => off.no({Nat.is_le(n, Nat.sub(0n, 1n+p)) == True{} : Bool}, h)
+    case 1n+p 1n+q:
+      h => off.le_sub(p, n, q, h)
+
+# n <= k: min(n, k) == n
+def off.min_le(+n: Nat, +k: Nat) -> {Nat.is_le(n, k) == True{} : Bool} -> {Nat.min(n, k) == n : Nat}:
+  match n k:
+    case 0n _:
+      h => {==}
+    case 1n+p 0n:
+      h => off.no({Nat.min(1n+p, 0n) == 1n+p : Nat}, h)
+    case 1n+p 1n+q:
+      h => Equal.cong(Nat, Nat, x => 1n+x, Nat.min(p, q), p, off.min_le(p, q, h))
+
+# Word lists
+
+def off.drop_nil(+i: Nat) -> {B.w8s.drop(i, Nil{}) == Nil{} : List<&2, B.OctByte>}:
+  match i:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+def off.take_nil(+i: Nat) -> {B.w8s.take(i, Nil{}) == Nil{} : List<&2, B.OctByte>}:
+  match i:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+def off.drop_app_add(xs: List<&2, B.OctByte>, +n: Nat, +ys: List<&2, B.OctByte>) -> {B.w8s.drop(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys)) == B.w8s.drop(n, ys) : List<&2, B.OctByte>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      off.drop_app_add(t, n, ys)
+
+def off.take_app_add(xs: List<&2, B.OctByte>, +n: Nat, +ys: List<&2, B.OctByte>) -> {B.w8s.take(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys)) == List.append(&2, B.OctByte, xs, B.w8s.take(n, ys)) : List<&2, B.OctByte>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{h, l}, B.w8s.take(Nat.add(List.length(&2, B.OctByte, t), n), List.append(&2, B.OctByte, t, ys)), List.append(&2, B.OctByte, t, B.w8s.take(n, ys)), off.take_app_add(t, n, ys))
+
+def off.take_app_le(+n: Nat, xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>) -> {Nat.is_le(n, List.length(&2, B.OctByte, xs)) == True{} : Bool} -> {B.w8s.take(n, List.append(&2, B.OctByte, xs, ys)) == B.w8s.take(n, xs) : List<&2, B.OctByte>}:
+  match n xs:
+    case 0n _:
+      h => {==}
+    case 1n+p Nil{}:
+      h => off.no({B.w8s.take(1n+p, ys) == Nil{} : List<&2, B.OctByte>}, h)
+    case 1n+p Con{x, t}:
+      h => Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{x, l}, B.w8s.take(p, List.append(&2, B.OctByte, t, ys)), B.w8s.take(p, t), off.take_app_le(p, t, ys, h))
+
+def off.drop_app_le(+n: Nat, xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>) -> {Nat.is_le(n, List.length(&2, B.OctByte, xs)) == True{} : Bool} -> {B.w8s.drop(n, List.append(&2, B.OctByte, xs, ys)) == List.append(&2, B.OctByte, B.w8s.drop(n, xs), ys) : List<&2, B.OctByte>}:
+  match n xs:
+    case 0n _:
+      h => {==}
+    case 1n+p Nil{}:
+      h => off.no({B.w8s.drop(1n+p, ys) == ys : List<&2, B.OctByte>}, h)
+    case 1n+p Con{x, t}:
+      h => off.drop_app_le(p, t, ys, h)
+
+def off.drop_drop(+j: Nat, +i: Nat, ws: List<&2, B.OctByte>) -> {B.w8s.drop(i, B.w8s.drop(j, ws)) == B.w8s.drop(Nat.add(j, i), ws) : List<&2, B.OctByte>}:
+  match j ws:
+    case 0n _:
+      {==}
+    case 1n+q Nil{}:
+      off.drop_nil(i)
+    case 1n+q Con{x, t}:
+      off.drop_drop(q, i, t)
+
+def off.take_take(+i: Nat, +j: Nat, ws: List<&2, B.OctByte>) -> {B.w8s.take(i, B.w8s.take(j, ws)) == B.w8s.take(Nat.min(i, j), ws) : List<&2, B.OctByte>}:
+  match i j ws:
+    case 0n _ _:
+      {==}
+    case 1n+p 0n _:
+      {==}
+    case 1n+p 1n+q Nil{}:
+      {==}
+    case 1n+p 1n+q Con{x, t}:
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{x, l}, B.w8s.take(p, B.w8s.take(q, t)), B.w8s.take(Nat.min(p, q), t), off.take_take(p, q, t))
+
+def off.take_drop(+i: Nat, +j: Nat, ws: List<&2, B.OctByte>) -> {B.w8s.take(i, B.w8s.drop(j, ws)) == B.w8s.drop(j, B.w8s.take(Nat.add(j, i), ws)) : List<&2, B.OctByte>}:
+  match j ws:
+    case 0n _:
+      {==}
+    case 1n+q Nil{}:
+      off.take_nil(i)
+    case 1n+q Con{x, t}:
+      off.take_drop(i, q, t)
+
+def off.drop_take(+i: Nat, +j: Nat, ws: List<&2, B.OctByte>) -> {B.w8s.drop(i, B.w8s.take(j, ws)) == B.w8s.take(Nat.sub(j, i), B.w8s.drop(i, ws)) : List<&2, B.OctByte>}:
+  match i j ws:
+    case 0n 0n _:
+      {==}
+    case 0n 1n+q _:
+      {==}
+    case 1n+p 0n _:
+      {==}
+    case 1n+p 1n+q Nil{}:
+      Equal.sym(List<&2, B.OctByte>, B.w8s.take(Nat.sub(q, p), Nil{}), Nil{}, off.take_nil(Nat.sub(q, p)))
+    case 1n+p 1n+q Con{x, t}:
+      off.drop_take(p, q, t)
+
+def off.len_take(+n: Nat, ws: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, B.w8s.take(n, ws)) == Nat.min(n, List.length(&2, B.OctByte, ws)) : Nat}:
+  match n ws:
+    case 0n _:
+      {==}
+    case 1n+p Nil{}:
+      {==}
+    case 1n+p Con{x, t}:
+      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, B.w8s.take(p, t)), Nat.min(p, List.length(&2, B.OctByte, t)), off.len_take(p, t))
+
+def off.len_drop(+n: Nat, ws: List<&2, B.OctByte>) -> {List.length(&2, B.OctByte, B.w8s.drop(n, ws)) == Nat.sub(List.length(&2, B.OctByte, ws), n) : Nat}:
+  match n ws:
+    case 0n Nil{}:
+      {==}
+    case 0n Con{x, t}:
+      {==}
+    case 1n+p Nil{}:
+      {==}
+    case 1n+p Con{x, t}:
+      off.len_drop(p, t)
+
+def off.len_zeros(+n: Nat) -> {List.length(&2, B.OctByte, B.w8s.zeros(n)) == n : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, B.w8s.zeros(p)), p, off.len_zeros(p))
+
+def off.len_of(xs: List<&2, U32>) -> {List.length(&2, B.OctByte, B.w8s.of_list(xs)) == B.len(xs) : Nat}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(Nat, Nat, k => 1n+k, List.length(&2, B.OctByte, B.w8s.of_list(t)), B.len(t), off.len_of(t))
+
+def off.app_assoc(xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>, +zs: List<&2, B.OctByte>) -> {List.append(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys), zs) == List.append(&2, B.OctByte, xs, List.append(&2, B.OctByte, ys, zs)) : List<&2, B.OctByte>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{h, l}, List.append(&2, B.OctByte, List.append(&2, B.OctByte, t, ys), zs), List.append(&2, B.OctByte, t, List.append(&2, B.OctByte, ys, zs)), off.app_assoc(t, ys, zs))
+
+# a byte: at the head of what is left after the offset
+
+def off.at_app_lt(+i: Nat, xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>) -> {Nat.is_lt(i, List.length(&2, B.OctByte, xs)) == True{} : Bool} -> {B.w8s.at(B.w8s.drop(i, List.append(&2, B.OctByte, xs, ys))) == B.w8s.at(B.w8s.drop(i, xs)) : Maybe<&2, U32>}:
+  match i xs:
+    case 0n Nil{}:
+      h => off.no({B.w8s.at(ys) == None{} : Maybe<&2, U32>}, h)
+    case 1n+p Nil{}:
+      h => off.no({B.w8s.at(B.w8s.drop(1n+p, ys)) == None{} : Maybe<&2, U32>}, h)
+    case 0n Con{x, t}:
+      h => {==}
+    case 1n+p Con{x, t}:
+      h => off.at_app_lt(p, t, ys, h)
+
+def off.at_take(+i: Nat, +n: Nat, ws: List<&2, B.OctByte>) -> {Nat.is_lt(i, n) == True{} : Bool} -> {B.w8s.at(B.w8s.drop(i, B.w8s.take(n, ws))) == B.w8s.at(B.w8s.drop(i, ws)) : Maybe<&2, U32>}:
+  match i n ws:
+    case 0n 0n _:
+      h => off.no({B.w8s.at(Nil{}) == B.w8s.at(ws) : Maybe<&2, U32>}, h)
+    case 1n+p 0n _:
+      h => off.no({B.w8s.at(B.w8s.drop(1n+p, Nil{})) == B.w8s.at(B.w8s.drop(1n+p, ws)) : Maybe<&2, U32>}, h)
+    case 0n 1n+q Nil{}:
+      h => {==}
+    case 0n 1n+q Con{x, t}:
+      h => {==}
+    case 1n+p 1n+q Nil{}:
+      h => {==}
+    case 1n+p 1n+q Con{x, t}:
+      h => off.at_take(p, q, t, h)
+
+def off.at_to(+i: Nat, ws: List<&2, B.OctByte>) -> {B.w8s.at(B.w8s.drop(i, ws)) == B.at(B.w8s.to_list(ws), i) : Maybe<&2, U32>}:
+  match i ws:
+    case 0n Nil{}:
+      {==}
+    case 1n+p Nil{}:
+      {==}
+    case 0n Con{B.OctByte{a0, a1, a2, a3, a4, a5, a6, a7}, t}:
+      {==}
+    case 1n+p Con{x, t}:
+      off.at_to(p, t)
+
+# The list layer
+
+def off.ldrop_app_add(a: List<&2, U32>, +n: Nat, +b: List<&2, U32>) -> {B.drop(Nat.add(B.len(a), n), B.append(a, b)) == B.drop(n, b) : List<&2, U32>}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      off.ldrop_app_add(t, n, b)
+
+def off.lat_app_lt(+i: Nat, a: List<&2, U32>, +b: List<&2, U32>) -> {Nat.is_lt(i, B.len(a)) == True{} : Bool} -> {B.at(B.append(a, b), i) == B.at(a, i) : Maybe<&2, U32>}:
+  match i a:
+    case 0n Nil{}:
+      h => off.no({B.at(b, 0n) == None{} : Maybe<&2, U32>}, h)
+    case 1n+p Nil{}:
+      h => off.no({B.at(b, 1n+p) == B.at(Nil{}, 1n+p) : Maybe<&2, U32>}, h)
+    case 0n Con{x, t}:
+      h => {==}
+    case 1n+p Con{x, t}:
+      h => off.lat_app_lt(p, t, b, h)
+
+def off.ldrop_nil(+i: Nat) -> {B.drop(i, Nil{}) == Nil{} : List<&2, U32>}:
+  match i:
+    case 0n:
+      {==}
+    case 1n+p:
+      {==}
+
+def off.ldrop_drop(+j: Nat, +i: Nat, xs: List<&2, U32>) -> {B.drop(i, B.drop(j, xs)) == B.drop(Nat.add(j, i), xs) : List<&2, U32>}:
+  match j xs:
+    case 0n _:
+      {==}
+    case 1n+q Nil{}:
+      off.ldrop_nil(i)
+    case 1n+q Con{x, t}:
+      off.ldrop_drop(q, i, t)
+
+def off.lat_take(+i: Nat, +n: Nat, xs: List<&2, U32>) -> {Nat.is_lt(i, n) == True{} : Bool} -> {B.at(B.take(n, xs), i) == B.at(xs, i) : Maybe<&2, U32>}:
+  match i n xs:
+    case 0n 0n _:
+      h => off.no({B.at(Nil{}, 0n) == B.at(xs, 0n) : Maybe<&2, U32>}, h)
+    case 1n+p 0n _:
+      h => off.no({B.at(Nil{}, 1n+p) == B.at(xs, 1n+p) : Maybe<&2, U32>}, h)
+    case 0n 1n+q Nil{}:
+      h => {==}
+    case 0n 1n+q Con{x, t}:
+      h => {==}
+    case 1n+p 1n+q Nil{}:
+      h => {==}
+    case 1n+p 1n+q Con{x, t}:
+      h => off.lat_take(p, q, t, h)
+
+def off.llen_app(a: List<&2, U32>, +b: List<&2, U32>) -> {B.len(B.append(a, b)) == Nat.add(B.len(a), B.len(b)) : Nat}:
+  match a:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(Nat, Nat, k => 1n+k, B.len(B.append(t, b)), Nat.add(B.len(t), B.len(b)), off.llen_app(t, b))
+
+def off.llen_le32(+v: U32) -> {B.len(B.le32(v)) == 4n : Nat}:
+  match v:
+    case U32{w}:
+      {==}
+
+def off.llen_be32(+v: U32) -> {B.len(B.be32(v)) == 4n : Nat}:
+  match v:
+    case U32{w}:
+      {==}
+
+def off.llen_le16(+v: U32) -> {B.len(B.le16(v)) == 2n : Nat}:
+  match v:
+    case U32{w}:
+      {==}
+
+def off.llen_be16(+v: U32) -> {B.len(B.be16(v)) == 2n : Nat}:
+  match v:
+    case U32{w}:
+      {==}
+
+def off.add_le32(+x: U32, +y: U32) -> {Nat.add(B.len(B.le32(x)), B.len(B.le32(y))) == 8n : Nat}:
+  match x y:
+    case U32{a} U32{b}:
+      {==}
+
+def off.add_be32(+x: U32, +y: U32) -> {Nat.add(B.len(B.be32(x)), B.len(B.be32(y))) == 8n : Nat}:
+  match x y:
+    case U32{a} U32{b}:
+      {==}
+
+def off.llen_le64(+v: W.W64) -> {B.len(B.le64(v)) == 8n : Nat}:
+  Equal.trans(Nat, B.len(B.le64(v)), Nat.add(B.len(B.le32(W.W64.lo(v))), B.len(B.le32(W.W64.hi(v)))), 8n, off.llen_app(B.le32(W.W64.lo(v)), B.le32(W.W64.hi(v))), off.add_le32(W.W64.lo(v), W.W64.hi(v)))
+
+def off.llen_be64(+v: W.W64) -> {B.len(B.be64(v)) == 8n : Nat}:
+  Equal.trans(Nat, B.len(B.be64(v)), Nat.add(B.len(B.be32(W.W64.hi(v))), B.len(B.be32(W.W64.lo(v)))), 8n, off.llen_app(B.be32(W.W64.hi(v)), B.be32(W.W64.lo(v))), off.add_be32(W.W64.hi(v), W.W64.lo(v)))
+
+# Octets: lengths
+
+def p_len_append(+a: B.Octets, +b: B.Octets) -> {B.Octets.len(B.Octets.append(a, b)) == Nat.add(B.Octets.len(a), B.Octets.len(b)) : Nat}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      %F_app(xs, ys) : {B.w8s.len.fast(_) == Nat.add(B.w8s.len.fast(xs), B.w8s.len.fast(ys)) : Nat}
+      %F_len(List.append(&2, B.OctByte, xs, ys)) : {_ == Nat.add(B.w8s.len.fast(xs), B.w8s.len.fast(ys)) : Nat}
+      %F_len(xs) : {List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys)) == Nat.add(_, B.w8s.len.fast(ys)) : Nat}
+      %F_len(ys) : {List.length(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys)) == Nat.add(List.length(&2, B.OctByte, xs), _) : Nat}
+      w8s_len_app(xs, ys)
+
+def p_len_take(+n: Nat, +o: B.Octets) -> {B.Octets.len(B.Octets.take(n, o)) == Nat.min(n, B.Octets.len(o)) : Nat}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(n, ws) : {B.w8s.len.fast(_) == Nat.min(n, B.w8s.len.fast(ws)) : Nat}
+      %F_len(B.w8s.take(n, ws)) : {_ == Nat.min(n, B.w8s.len.fast(ws)) : Nat}
+      %F_len(ws) : {List.length(&2, B.OctByte, B.w8s.take(n, ws)) == Nat.min(n, _) : Nat}
+      off.len_take(n, ws)
+
+def p_len_drop(+n: Nat, +o: B.Octets) -> {B.Octets.len(B.Octets.drop(n, o)) == Nat.sub(B.Octets.len(o), n) : Nat}:
+  match o:
+    case B.Octets{+ws}:
+      %F_len(B.w8s.drop(n, ws)) : {_ == Nat.sub(B.w8s.len.fast(ws), n) : Nat}
+      %F_len(ws) : {List.length(&2, B.OctByte, B.w8s.drop(n, ws)) == Nat.sub(_, n) : Nat}
+      off.len_drop(n, ws)
+
+def p_len_take_le(+n: Nat, +o: B.Octets, h: {Nat.is_le(n, B.Octets.len(o)) == True{} : Bool}) -> {B.Octets.len(B.Octets.take(n, o)) == n : Nat}:
+  Equal.trans(Nat, B.Octets.len(B.Octets.take(n, o)), Nat.min(n, B.Octets.len(o)), n, p_len_take(n, o), off.min_le(n, B.Octets.len(o), h))
+
+def p_len_slice(+i: Nat, +n: Nat, +o: B.Octets) -> {B.Octets.len(B.Octets.slice(i, n, o)) == Nat.min(n, Nat.sub(B.Octets.len(o), i)) : Nat}:
+  Equal.trans(Nat, B.Octets.len(B.Octets.take(n, B.Octets.drop(i, o))), Nat.min(n, B.Octets.len(B.Octets.drop(i, o))), Nat.min(n, Nat.sub(B.Octets.len(o), i)),
+    p_len_take(n, B.Octets.drop(i, o)),
+    Equal.cong(Nat, Nat, k => Nat.min(n, k), B.Octets.len(B.Octets.drop(i, o)), Nat.sub(B.Octets.len(o), i), p_len_drop(i, o)))
+
+def p_len_slice_le(+i: Nat, +n: Nat, +o: B.Octets, h: {Nat.is_le(Nat.add(i, n), B.Octets.len(o)) == True{} : Bool}) -> {B.Octets.len(B.Octets.slice(i, n, o)) == n : Nat}:
+  Equal.trans(Nat, B.Octets.len(B.Octets.slice(i, n, o)), Nat.min(n, Nat.sub(B.Octets.len(o), i)), n, p_len_slice(i, n, o), off.min_le(n, Nat.sub(B.Octets.len(o), i), off.le_sub(i, n, B.Octets.len(o), h)))
+
+def p_len_zeros(+n: Nat) -> {B.Octets.len(B.Octets.zeros(n)) == n : Nat}:
+  %F_zeros(n) : {B.w8s.len.fast(_) == n : Nat}
+  %F_len(B.w8s.zeros(n)) : {_ == n : Nat}
+  off.len_zeros(n)
+
+def p_len_of_list(+xs: List<&2, U32>) -> {B.Octets.len(B.Octets.of_list(xs)) == B.len(xs) : Nat}:
+  %F_of(xs) : {B.w8s.len.fast(_) == B.len(xs) : Nat}
+  %F_len(B.w8s.of_list(xs)) : {_ == B.len(xs) : Nat}
+  off.len_of(xs)
+
+def p_append_assoc(+a: B.Octets, +b: B.Octets, +c: B.Octets) -> {B.Octets.append(B.Octets.append(a, b), c) == B.Octets.append(a, B.Octets.append(b, c)) : B.Octets}:
+  match a b c:
+    case B.Octets{+xs} B.Octets{+ys} B.Octets{+zs}:
+      %F_app(xs, ys) : {B.Octets{B.w8s.append.fast(_, zs)} == B.Octets{B.w8s.append.fast(xs, B.w8s.append.fast(ys, zs))} : B.Octets}
+      %F_app(ys, zs) : {B.Octets{B.w8s.append.fast(List.append(&2, B.OctByte, xs, ys), zs)} == B.Octets{B.w8s.append.fast(xs, _)} : B.Octets}
+      %F_app(List.append(&2, B.OctByte, xs, ys), zs) : {B.Octets{_} == B.Octets{B.w8s.append.fast(xs, List.append(&2, B.OctByte, ys, zs))} : B.Octets}
+      %F_app(xs, List.append(&2, B.OctByte, ys, zs)) : {B.Octets{List.append(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys), zs)} == B.Octets{_} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, List.append(&2, B.OctByte, List.append(&2, B.OctByte, xs, ys), zs), List.append(&2, B.OctByte, xs, List.append(&2, B.OctByte, ys, zs)), off.app_assoc(xs, ys, zs))
+
+# Octets: take and drop composed
+
+def p_drop_drop(+j: Nat, +i: Nat, +o: B.Octets) -> {B.Octets.drop(i, B.Octets.drop(j, o)) == B.Octets.drop(Nat.add(j, i), o) : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.drop(i, B.w8s.drop(j, ws)), B.w8s.drop(Nat.add(j, i), ws), off.drop_drop(j, i, ws))
+
+def p_take_take(+i: Nat, +j: Nat, +o: B.Octets) -> {B.Octets.take(i, B.Octets.take(j, o)) == B.Octets.take(Nat.min(i, j), o) : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(j, ws) : {B.Octets{B.w8s.take.fast(i, _)} == B.Octets{B.w8s.take.fast(Nat.min(i, j), ws)} : B.Octets}
+      %F_take(i, B.w8s.take(j, ws)) : {B.Octets{_} == B.Octets{B.w8s.take.fast(Nat.min(i, j), ws)} : B.Octets}
+      %F_take(Nat.min(i, j), ws) : {B.Octets{B.w8s.take(i, B.w8s.take(j, ws))} == B.Octets{_} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(i, B.w8s.take(j, ws)), B.w8s.take(Nat.min(i, j), ws), off.take_take(i, j, ws))
+
+def p_take_drop(+i: Nat, +j: Nat, +o: B.Octets) -> {B.Octets.take(i, B.Octets.drop(j, o)) == B.Octets.drop(j, B.Octets.take(Nat.add(j, i), o)) : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(i, B.w8s.drop(j, ws)) : {B.Octets{_} == B.Octets{B.w8s.drop(j, B.w8s.take.fast(Nat.add(j, i), ws))} : B.Octets}
+      %F_take(Nat.add(j, i), ws) : {B.Octets{B.w8s.take(i, B.w8s.drop(j, ws))} == B.Octets{B.w8s.drop(j, _)} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(i, B.w8s.drop(j, ws)), B.w8s.drop(j, B.w8s.take(Nat.add(j, i), ws)), off.take_drop(i, j, ws))
+
+def p_drop_take(+i: Nat, +j: Nat, +o: B.Octets) -> {B.Octets.drop(i, B.Octets.take(j, o)) == B.Octets.take(Nat.sub(j, i), B.Octets.drop(i, o)) : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(j, ws) : {B.Octets{B.w8s.drop(i, _)} == B.Octets{B.w8s.take.fast(Nat.sub(j, i), B.w8s.drop(i, ws))} : B.Octets}
+      %F_take(Nat.sub(j, i), B.w8s.drop(i, ws)) : {B.Octets{B.w8s.drop(i, B.w8s.take(j, ws))} == B.Octets{_} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.drop(i, B.w8s.take(j, ws)), B.w8s.take(Nat.sub(j, i), B.w8s.drop(i, ws)), off.drop_take(i, j, ws))
+
+# Octets: take and drop inside joined bytes
+
+def off.len_fast_le(+n: Nat, +xs: List<&2, B.OctByte>, h: {Nat.is_le(n, B.w8s.len.fast(xs)) == True{} : Bool}) -> {Nat.is_le(n, List.length(&2, B.OctByte, xs)) == True{} : Bool}:
+  Equal.trans(Bool, Nat.is_le(n, List.length(&2, B.OctByte, xs)), Nat.is_le(n, B.w8s.len.fast(xs)), True{}, Equal.cong(Nat, Bool, k => Nat.is_le(n, k), List.length(&2, B.OctByte, xs), B.w8s.len.fast(xs), F_len(xs)), h)
+
+def off.len_fast_lt(+n: Nat, +xs: List<&2, B.OctByte>, h: {Nat.is_lt(n, B.w8s.len.fast(xs)) == True{} : Bool}) -> {Nat.is_lt(n, List.length(&2, B.OctByte, xs)) == True{} : Bool}:
+  Equal.trans(Bool, Nat.is_lt(n, List.length(&2, B.OctByte, xs)), Nat.is_lt(n, B.w8s.len.fast(xs)), True{}, Equal.cong(Nat, Bool, k => Nat.is_lt(n, k), List.length(&2, B.OctByte, xs), B.w8s.len.fast(xs), F_len(xs)), h)
+
+def q_take_app_le(+n: Nat, +xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>, h: {Nat.is_le(n, List.length(&2, B.OctByte, xs)) == True{} : Bool}) -> {B.Octets{B.w8s.take.fast(n, B.w8s.append.fast(xs, ys))} == B.Octets{B.w8s.take.fast(n, xs)} : B.Octets}:
+  %F_app(xs, ys) : {B.Octets{B.w8s.take.fast(n, _)} == B.Octets{B.w8s.take.fast(n, xs)} : B.Octets}
+  %F_take(n, List.append(&2, B.OctByte, xs, ys)) : {B.Octets{_} == B.Octets{B.w8s.take.fast(n, xs)} : B.Octets}
+  %F_take(n, xs) : {B.Octets{B.w8s.take(n, List.append(&2, B.OctByte, xs, ys))} == B.Octets{_} : B.Octets}
+  Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(n, List.append(&2, B.OctByte, xs, ys)), B.w8s.take(n, xs), off.take_app_le(n, xs, ys, h))
+
+def p_take_append_le(+n: Nat, +a: B.Octets, +b: B.Octets) -> {Nat.is_le(n, B.Octets.len(a)) == True{} : Bool} -> {B.Octets.take(n, B.Octets.append(a, b)) == B.Octets.take(n, a) : B.Octets}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      h => q_take_app_le(n, xs, ys, off.len_fast_le(n, xs, h))
+
+def p_take_append_add(+a: B.Octets, +n: Nat, +b: B.Octets) -> {B.Octets.take(Nat.add(B.Octets.len(a), n), B.Octets.append(a, b)) == B.Octets.append(a, B.Octets.take(n, b)) : B.Octets}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      %F_app(xs, ys) : {B.Octets{B.w8s.take.fast(Nat.add(B.w8s.len.fast(xs), n), _)} == B.Octets{B.w8s.append.fast(xs, B.w8s.take.fast(n, ys))} : B.Octets}
+      %F_len(xs) : {B.Octets{B.w8s.take.fast(Nat.add(_, n), List.append(&2, B.OctByte, xs, ys))} == B.Octets{B.w8s.append.fast(xs, B.w8s.take.fast(n, ys))} : B.Octets}
+      %F_take(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys)) : {B.Octets{_} == B.Octets{B.w8s.append.fast(xs, B.w8s.take.fast(n, ys))} : B.Octets}
+      %F_take(n, ys) : {B.Octets{B.w8s.take(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys))} == B.Octets{B.w8s.append.fast(xs, _)} : B.Octets}
+      %F_app(xs, B.w8s.take(n, ys)) : {B.Octets{B.w8s.take(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys))} == B.Octets{_} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys)), List.append(&2, B.OctByte, xs, B.w8s.take(n, ys)), off.take_app_add(xs, n, ys))
+
+def q_drop_app_le(+n: Nat, +xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>, h: {Nat.is_le(n, List.length(&2, B.OctByte, xs)) == True{} : Bool}) -> {B.Octets{B.w8s.drop(n, B.w8s.append.fast(xs, ys))} == B.Octets{B.w8s.append.fast(B.w8s.drop(n, xs), ys)} : B.Octets}:
+  %F_app(xs, ys) : {B.Octets{B.w8s.drop(n, _)} == B.Octets{B.w8s.append.fast(B.w8s.drop(n, xs), ys)} : B.Octets}
+  %F_app(B.w8s.drop(n, xs), ys) : {B.Octets{B.w8s.drop(n, List.append(&2, B.OctByte, xs, ys))} == B.Octets{_} : B.Octets}
+  Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.drop(n, List.append(&2, B.OctByte, xs, ys)), List.append(&2, B.OctByte, B.w8s.drop(n, xs), ys), off.drop_app_le(n, xs, ys, h))
+
+def p_drop_append_le(+n: Nat, +a: B.Octets, +b: B.Octets) -> {Nat.is_le(n, B.Octets.len(a)) == True{} : Bool} -> {B.Octets.drop(n, B.Octets.append(a, b)) == B.Octets.append(B.Octets.drop(n, a), b) : B.Octets}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      h => q_drop_app_le(n, xs, ys, off.len_fast_le(n, xs, h))
+
+def p_drop_append_add(+a: B.Octets, +n: Nat, +b: B.Octets) -> {B.Octets.drop(Nat.add(B.Octets.len(a), n), B.Octets.append(a, b)) == B.Octets.drop(n, b) : B.Octets}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      %F_app(xs, ys) : {B.Octets{B.w8s.drop(Nat.add(B.w8s.len.fast(xs), n), _)} == B.Octets{B.w8s.drop(n, ys)} : B.Octets}
+      %F_len(xs) : {B.Octets{B.w8s.drop(Nat.add(_, n), List.append(&2, B.OctByte, xs, ys))} == B.Octets{B.w8s.drop(n, ys)} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.drop(Nat.add(List.length(&2, B.OctByte, xs), n), List.append(&2, B.OctByte, xs, ys)), B.w8s.drop(n, ys), off.drop_app_add(xs, n, ys))
+
+# Octets: slices
+
+def p_slice_append_add(+a: B.Octets, +i: Nat, +n: Nat, +b: B.Octets) -> {B.Octets.slice(Nat.add(B.Octets.len(a), i), n, B.Octets.append(a, b)) == B.Octets.slice(i, n, b) : B.Octets}:
+  Equal.cong(B.Octets, B.Octets, x => B.Octets.take(n, x), B.Octets.drop(Nat.add(B.Octets.len(a), i), B.Octets.append(a, b)), B.Octets.drop(i, b), p_drop_append_add(a, i, b))
+
+def p_slice_append_le(+i: Nat, +n: Nat, +a: B.Octets, +b: B.Octets, +h: {Nat.is_le(Nat.add(i, n), B.Octets.len(a)) == True{} : Bool}) -> {B.Octets.slice(i, n, B.Octets.append(a, b)) == B.Octets.slice(i, n, a) : B.Octets}:
+  Equal.trans(B.Octets, B.Octets.take(n, B.Octets.drop(i, B.Octets.append(a, b))), B.Octets.take(n, B.Octets.append(B.Octets.drop(i, a), b)), B.Octets.take(n, B.Octets.drop(i, a)),
+    Equal.cong(B.Octets, B.Octets, x => B.Octets.take(n, x), B.Octets.drop(i, B.Octets.append(a, b)), B.Octets.append(B.Octets.drop(i, a), b), p_drop_append_le(i, a, b, off.le_add_l(i, n, B.Octets.len(a), h))),
+    p_take_append_le(n, B.Octets.drop(i, a), b,
+      Equal.trans(Bool, Nat.is_le(n, B.Octets.len(B.Octets.drop(i, a))), Nat.is_le(n, Nat.sub(B.Octets.len(a), i)), True{},
+        Equal.cong(Nat, Bool, k => Nat.is_le(n, k), B.Octets.len(B.Octets.drop(i, a)), Nat.sub(B.Octets.len(a), i), p_len_drop(i, a)),
+        off.le_sub(i, n, B.Octets.len(a), h))))
+
+def p_slice_drop(+j: Nat, +i: Nat, +n: Nat, +o: B.Octets) -> {B.Octets.slice(i, n, B.Octets.drop(j, o)) == B.Octets.slice(Nat.add(j, i), n, o) : B.Octets}:
+  Equal.cong(B.Octets, B.Octets, x => B.Octets.take(n, x), B.Octets.drop(i, B.Octets.drop(j, o)), B.Octets.drop(Nat.add(j, i), o), p_drop_drop(j, i, o))
+
+def p_slice_take(+m: Nat, +i: Nat, +n: Nat, +o: B.Octets, +h: {Nat.is_le(Nat.add(i, n), m) == True{} : Bool}) -> {B.Octets.slice(i, n, B.Octets.take(m, o)) == B.Octets.slice(i, n, o) : B.Octets}:
+  Equal.trans(B.Octets, B.Octets.take(n, B.Octets.drop(i, B.Octets.take(m, o))), B.Octets.take(n, B.Octets.take(Nat.sub(m, i), B.Octets.drop(i, o))), B.Octets.take(n, B.Octets.drop(i, o)),
+    Equal.cong(B.Octets, B.Octets, x => B.Octets.take(n, x), B.Octets.drop(i, B.Octets.take(m, o)), B.Octets.take(Nat.sub(m, i), B.Octets.drop(i, o)), p_drop_take(i, m, o)),
+    Equal.trans(B.Octets, B.Octets.take(n, B.Octets.take(Nat.sub(m, i), B.Octets.drop(i, o))), B.Octets.take(Nat.min(n, Nat.sub(m, i)), B.Octets.drop(i, o)), B.Octets.take(n, B.Octets.drop(i, o)),
+      p_take_take(n, Nat.sub(m, i), B.Octets.drop(i, o)),
+      Equal.cong(Nat, B.Octets, k => B.Octets.take(k, B.Octets.drop(i, o)), Nat.min(n, Nat.sub(m, i)), n, off.min_le(n, Nat.sub(m, i), off.le_sub(i, n, m, h)))))
+
+# Octets: a byte at an offset
+
+def p_at_list(+o: B.Octets, +i: Nat) -> {B.Octets.at(o, i) == B.at(B.Octets.to_list(o), i) : Maybe<&2, U32>}:
+  match o:
+    case B.Octets{+ws}:
+      %F_to(ws) : {B.w8s.at(B.w8s.drop(i, ws)) == B.at(_, i) : Maybe<&2, U32>}
+      off.at_to(i, ws)
+
+def p_at_append_add(+a: B.Octets, +b: B.Octets, +i: Nat) -> {B.Octets.at(B.Octets.append(a, b), Nat.add(B.Octets.len(a), i)) == B.Octets.at(b, i) : Maybe<&2, U32>}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      %F_app(xs, ys) : {B.w8s.at(B.w8s.drop(Nat.add(B.w8s.len.fast(xs), i), _)) == B.w8s.at(B.w8s.drop(i, ys)) : Maybe<&2, U32>}
+      %F_len(xs) : {B.w8s.at(B.w8s.drop(Nat.add(_, i), List.append(&2, B.OctByte, xs, ys))) == B.w8s.at(B.w8s.drop(i, ys)) : Maybe<&2, U32>}
+      Equal.cong(List<&2, B.OctByte>, Maybe<&2, U32>, l => B.w8s.at(l), B.w8s.drop(Nat.add(List.length(&2, B.OctByte, xs), i), List.append(&2, B.OctByte, xs, ys)), B.w8s.drop(i, ys), off.drop_app_add(xs, i, ys))
+
+def q_at_app_lt(+i: Nat, +xs: List<&2, B.OctByte>, +ys: List<&2, B.OctByte>, h: {Nat.is_lt(i, List.length(&2, B.OctByte, xs)) == True{} : Bool}) -> {B.w8s.at(B.w8s.drop(i, B.w8s.append.fast(xs, ys))) == B.w8s.at(B.w8s.drop(i, xs)) : Maybe<&2, U32>}:
+  %F_app(xs, ys) : {B.w8s.at(B.w8s.drop(i, _)) == B.w8s.at(B.w8s.drop(i, xs)) : Maybe<&2, U32>}
+  off.at_app_lt(i, xs, ys, h)
+
+def p_at_append_lt(+a: B.Octets, +b: B.Octets, +i: Nat) -> {Nat.is_lt(i, B.Octets.len(a)) == True{} : Bool} -> {B.Octets.at(B.Octets.append(a, b), i) == B.Octets.at(a, i) : Maybe<&2, U32>}:
+  match a b:
+    case B.Octets{+xs} B.Octets{+ys}:
+      h => q_at_app_lt(i, xs, ys, off.len_fast_lt(i, xs, h))
+
+def p_at_drop(+j: Nat, +o: B.Octets, +i: Nat) -> {B.Octets.at(B.Octets.drop(j, o), i) == B.Octets.at(o, Nat.add(j, i)) : Maybe<&2, U32>}:
+  match o:
+    case B.Octets{+ws}:
+      Equal.cong(List<&2, B.OctByte>, Maybe<&2, U32>, l => B.w8s.at(l), B.w8s.drop(i, B.w8s.drop(j, ws)), B.w8s.drop(Nat.add(j, i), ws), off.drop_drop(j, i, ws))
+
+def p_at_take(+n: Nat, +o: B.Octets, +i: Nat, h: {Nat.is_lt(i, n) == True{} : Bool}) -> {B.Octets.at(B.Octets.take(n, o), i) == B.Octets.at(o, i) : Maybe<&2, U32>}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(n, ws) : {B.w8s.at(B.w8s.drop(i, _)) == B.w8s.at(B.w8s.drop(i, ws)) : Maybe<&2, U32>}
+      off.at_take(i, n, ws, h)
+
+# Every word ANDed with zero is zero (for low16_mask)
+
+def off.band_f(+b: Bool) -> {Bool.and(b, False{}) == False{} : Bool}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def off.wand_zero(+n: Nat, w: Word(n)) -> {Word.and(n, w, Word.zero(n)) == Word.zero(n) : Word(n)}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, t}:
+          %Equal.sym(Bool, Bool.and(b, False{}), False{}, off.band_f(b)) : {WCon{_, Word.and(p, t, Word.zero(p))} == Word.zero(1n+p) : Word(1n+p)}
+          Equal.cong(Word(p), Word(1n+p), z => WCon{False{}, z}, Word.and(p, t, Word.zero(p)), Word.zero(p), off.wand_zero(p, t))
+
+# The laws
+
+def Laws.octets_len_append(a, b):
+  p_len_append(a, b)
+
+def Laws.octets_len_take(n, o):
+  p_len_take(n, o)
+
+def Laws.octets_len_take_le(n, o, h):
+  p_len_take_le(n, o, h)
+
+def Laws.octets_len_drop(n, o):
+  p_len_drop(n, o)
+
+def Laws.octets_len_slice(i, n, o):
+  p_len_slice(i, n, o)
+
+def Laws.octets_len_slice_le(i, n, o, h):
+  p_len_slice_le(i, n, o, h)
+
+def Laws.octets_len_zeros(n):
+  p_len_zeros(n)
+
+def Laws.octets_len_of_list(xs):
+  p_len_of_list(xs)
+
+def Laws.octets_append_assoc(a, b, c):
+  p_append_assoc(a, b, c)
+
+def p_append_empty_l(+o: B.Octets) -> {B.Octets.append(B.Octets.empty(), o) == o : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_app(Nil{}, ws) : {B.Octets{_} == B.Octets{ws} : B.Octets}
+      {==}
+
+def p_append_empty_r(+o: B.Octets) -> {B.Octets.append(o, B.Octets.empty()) == o : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_app(ws, Nil{}) : {B.Octets{_} == B.Octets{ws} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, List.append(&2, B.OctByte, ws, Nil{}), ws, app_nil8(ws))
+
+def off.take_len(ws: List<&2, B.OctByte>) -> {B.w8s.take(List.length(&2, B.OctByte, ws), ws) == ws : List<&2, B.OctByte>}:
+  match ws:
+    case Nil{}:
+      {==}
+    case Con{h, t}:
+      Equal.cong(List<&2, B.OctByte>, List<&2, B.OctByte>, l => Con{h, l}, B.w8s.take(List.length(&2, B.OctByte, t), t), t, off.take_len(t))
+
+def p_take_len(+o: B.Octets) -> {B.Octets.take(B.Octets.len(o), o) == o : B.Octets}:
+  match o:
+    case B.Octets{+ws}:
+      %F_take(B.w8s.len.fast(ws), ws) : {B.Octets{_} == B.Octets{ws} : B.Octets}
+      %F_len(ws) : {B.Octets{B.w8s.take(_, ws)} == B.Octets{ws} : B.Octets}
+      Equal.cong(List<&2, B.OctByte>, B.Octets, l => B.Octets{l}, B.w8s.take(List.length(&2, B.OctByte, ws), ws), ws, off.take_len(ws))
+
+def Laws.octets_drop_zero(o):
+  match o:
+    case B.Octets{ws}:
+      {==}
+
+def Laws.octets_take_len(o):
+  p_take_len(o)
+
+def Laws.octets_append_empty_l(o):
+  p_append_empty_l(o)
+
+def Laws.octets_append_empty_r(o):
+  p_append_empty_r(o)
+
+def Laws.octets_drop_drop(j, i, o):
+  p_drop_drop(j, i, o)
+
+def Laws.octets_take_take(i, j, o):
+  p_take_take(i, j, o)
+
+def Laws.octets_take_drop_comm(i, j, o):
+  p_take_drop(i, j, o)
+
+def Laws.octets_drop_take_comm(i, j, o):
+  p_drop_take(i, j, o)
+
+def Laws.octets_take_append_le(n, a, b, h):
+  p_take_append_le(n, a, b, h)
+
+def Laws.octets_take_append_add(a, n, b):
+  p_take_append_add(a, n, b)
+
+def Laws.octets_drop_append_le(n, a, b, h):
+  p_drop_append_le(n, a, b, h)
+
+def Laws.octets_drop_append_add(a, n, b):
+  p_drop_append_add(a, n, b)
+
+def Laws.octets_slice_append_add(a, i, n, b):
+  p_slice_append_add(a, i, n, b)
+
+def Laws.octets_slice_append_le(i, n, a, b, h):
+  p_slice_append_le(i, n, a, b, h)
+
+def Laws.octets_slice_drop(j, i, n, o):
+  p_slice_drop(j, i, n, o)
+
+def Laws.octets_slice_take(m, i, n, o, h):
+  p_slice_take(m, i, n, o, h)
+
+def Laws.octets_at_list(o, i):
+  p_at_list(o, i)
+
+def Laws.octets_at_append_add(a, b, i):
+  p_at_append_add(a, b, i)
+
+def Laws.octets_at_append_lt(a, b, i, h):
+  p_at_append_lt(a, b, i, h)
+
+def Laws.octets_at_drop(j, o, i):
+  p_at_drop(j, o, i)
+
+def Laws.octets_at_take(n, o, i, h):
+  p_at_take(n, o, i, h)
+
+def Laws.at_append_add(a, b, i):
+  Equal.cong(List<&2, U32>, Maybe<&2, U32>, l => B.at.head(l), B.drop(Nat.add(B.len(a), i), B.append(a, b)), B.drop(i, b), off.ldrop_app_add(a, i, b))
+
+def Laws.at_append_lt(a, b, i, h):
+  off.lat_app_lt(i, a, b, h)
+
+def Laws.at_drop(j, xs, i):
+  Equal.cong(List<&2, U32>, Maybe<&2, U32>, l => B.at.head(l), B.drop(i, B.drop(j, xs)), B.drop(Nat.add(j, i), xs), off.ldrop_drop(j, i, xs))
+
+def Laws.at_take(n, xs, i, h):
+  off.lat_take(i, n, xs, h)
+
+def Laws.octets_len_le16(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.le16(v))), B.len(B.le16(v)), 2n, p_len_of_list(B.le16(v)), off.llen_le16(v))
+
+def Laws.octets_len_be16(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.be16(v))), B.len(B.be16(v)), 2n, p_len_of_list(B.be16(v)), off.llen_be16(v))
+
+def Laws.octets_len_le32(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.le32(v))), B.len(B.le32(v)), 4n, p_len_of_list(B.le32(v)), off.llen_le32(v))
+
+def Laws.octets_len_be32(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.be32(v))), B.len(B.be32(v)), 4n, p_len_of_list(B.be32(v)), off.llen_be32(v))
+
+def Laws.octets_len_le64(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.le64(v))), B.len(B.le64(v)), 8n, p_len_of_list(B.le64(v)), off.llen_le64(v))
+
+def Laws.octets_len_be64(v):
+  Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.be64(v))), B.len(B.be64(v)), 8n, p_len_of_list(B.be64(v)), off.llen_be64(v))
+
+def Laws.octets_le16_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le16.head(B.Octets.to_list(s)), B.Octets.slice(Nat.add(B.Octets.len(a), i), 2n, B.Octets.append(a, b)), B.Octets.slice(i, 2n, b), p_slice_append_add(a, i, 2n, b))
+
+def Laws.octets_le16_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.append(a, b)), B.Octets.slice(i, 2n, a), p_slice_append_le(i, 2n, a, b, h))
+
+def Laws.octets_le16_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 2n, o), p_slice_drop(j, i, 2n, o))
+
+def Laws.octets_le16_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.take(n, o)), B.Octets.slice(i, 2n, o), p_slice_take(n, i, 2n, o, h))
+
+def Laws.octets_be16_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be16.head(B.Octets.to_list(s)), B.Octets.slice(Nat.add(B.Octets.len(a), i), 2n, B.Octets.append(a, b)), B.Octets.slice(i, 2n, b), p_slice_append_add(a, i, 2n, b))
+
+def Laws.octets_be16_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.append(a, b)), B.Octets.slice(i, 2n, a), p_slice_append_le(i, 2n, a, b, h))
+
+def Laws.octets_be16_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 2n, o), p_slice_drop(j, i, 2n, o))
+
+def Laws.octets_be16_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be16.head(B.Octets.to_list(s)), B.Octets.slice(i, 2n, B.Octets.take(n, o)), B.Octets.slice(i, 2n, o), p_slice_take(n, i, 2n, o, h))
+
+def Laws.octets_le32_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le32.head(B.Octets.to_list(s)), B.Octets.slice(Nat.add(B.Octets.len(a), i), 4n, B.Octets.append(a, b)), B.Octets.slice(i, 4n, b), p_slice_append_add(a, i, 4n, b))
+
+def Laws.octets_le32_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.append(a, b)), B.Octets.slice(i, 4n, a), p_slice_append_le(i, 4n, a, b, h))
+
+def Laws.octets_le32_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 4n, o), p_slice_drop(j, i, 4n, o))
+
+def Laws.octets_le32_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.le32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.take(n, o)), B.Octets.slice(i, 4n, o), p_slice_take(n, i, 4n, o, h))
+
+def Laws.octets_be32_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be32.head(B.Octets.to_list(s)), B.Octets.slice(Nat.add(B.Octets.len(a), i), 4n, B.Octets.append(a, b)), B.Octets.slice(i, 4n, b), p_slice_append_add(a, i, 4n, b))
+
+def Laws.octets_be32_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.append(a, b)), B.Octets.slice(i, 4n, a), p_slice_append_le(i, 4n, a, b, h))
+
+def Laws.octets_be32_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 4n, o), p_slice_drop(j, i, 4n, o))
+
+def Laws.octets_be32_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, U32>, s => B.be32.head(B.Octets.to_list(s)), B.Octets.slice(i, 4n, B.Octets.take(n, o)), B.Octets.slice(i, 4n, o), p_slice_take(n, i, 4n, o, h))
+
+def Laws.octets_le64_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.le64_at(B.Octets.to_list(s), 0n), B.Octets.slice(Nat.add(B.Octets.len(a), i), 8n, B.Octets.append(a, b)), B.Octets.slice(i, 8n, b), p_slice_append_add(a, i, 8n, b))
+
+def Laws.octets_le64_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.le64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.append(a, b)), B.Octets.slice(i, 8n, a), p_slice_append_le(i, 8n, a, b, h))
+
+def Laws.octets_le64_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.le64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 8n, o), p_slice_drop(j, i, 8n, o))
+
+def Laws.octets_le64_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.le64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.take(n, o)), B.Octets.slice(i, 8n, o), p_slice_take(n, i, 8n, o, h))
+
+def Laws.octets_be64_at_append_add(a, b, i):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.be64_at(B.Octets.to_list(s), 0n), B.Octets.slice(Nat.add(B.Octets.len(a), i), 8n, B.Octets.append(a, b)), B.Octets.slice(i, 8n, b), p_slice_append_add(a, i, 8n, b))
+
+def Laws.octets_be64_at_append_le(a, b, i, h):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.be64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.append(a, b)), B.Octets.slice(i, 8n, a), p_slice_append_le(i, 8n, a, b, h))
+
+def Laws.octets_be64_at_drop(j, o, i):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.be64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.drop(j, o)), B.Octets.slice(Nat.add(j, i), 8n, o), p_slice_drop(j, i, 8n, o))
+
+def Laws.octets_be64_at_take(n, o, i, h):
+  Equal.cong(B.Octets, Maybe<&2, W.W64>, s => B.be64_at(B.Octets.to_list(s), 0n), B.Octets.slice(i, 8n, B.Octets.take(n, o)), B.Octets.slice(i, 8n, o), p_slice_take(n, i, 8n, o, h))
+
+def Laws.low16_mask(v):
+  match v:
+    case U32{WCon{x0, WCon{x1, WCon{x2, WCon{x3, WCon{x4, WCon{x5, WCon{x6, WCon{x7, WCon{x8, WCon{x9, WCon{x10, WCon{x11, WCon{x12, WCon{x13, WCon{x14, WCon{x15, t}}}}}}}}}}}}}}}}}:
+      Equal.cong(Word(16n), U32, z => U32{WCon{Bool.and(x0, True{}), WCon{Bool.and(x1, True{}), WCon{Bool.and(x2, True{}), WCon{Bool.and(x3, True{}), WCon{Bool.and(x4, True{}), WCon{Bool.and(x5, True{}), WCon{Bool.and(x6, True{}), WCon{Bool.and(x7, True{}), WCon{Bool.and(x8, True{}), WCon{Bool.and(x9, True{}), WCon{Bool.and(x10, True{}), WCon{Bool.and(x11, True{}), WCon{Bool.and(x12, True{}), WCon{Bool.and(x13, True{}), WCon{Bool.and(x14, True{}), WCon{Bool.and(x15, True{}), z}}}}}}}}}}}}}}}}}, Word.zero(16n), Word.and(16n, t, Word.zero(16n)), Equal.sym(Word(16n), Word.and(16n, t, Word.zero(16n)), Word.zero(16n), off.wand_zero(16n, t)))

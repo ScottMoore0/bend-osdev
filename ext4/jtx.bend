@@ -175,6 +175,15 @@ def Ext4JTx.fresh_homes(+fresh: List<&2, Nat>, xs: List<&2, Ext4JStep>) -> Bool:
     case Con{x, t}:
       Ext4JTx.fresh_homes(fresh, t)
 
+# whether every write's block number fits a descriptor tag (with 64bit
+# below 2^48, else below 2^32: the laws' hypothesis on the writes)
+def Ext4JTx.blocks_fit(+wide: Bool, ws: List<&2, JW.Jbd2Write>) -> Bool:
+  match ws:
+    case Nil{}:
+      True{}
+    case Con{JW.Jbd2Write{b, d}, t}:
+      Bool.and(JB.Jbd2.block_fits(wide, b), Ext4JTx.blocks_fit(wide, t))
+
 # Building a plan
 
 def Ext4JTx.keep(hit: Bool, +w: JW.Jbd2Write, rest: List<&2, JW.Jbd2Write>) -> List<&2, JW.Jbd2Write>:
