@@ -5,10 +5,13 @@
 # with any options; every proper prefix of a valid stream is refused as
 # truncated, and a valid stream with anything after it as trailing; and a
 # stream that opens with a match (whose distance is not the end marker's) is
-# refused, since there is nothing before it to copy; the streaming reader,
-# fed any pieces, answers what the one-shot decoder answers for the pieces
-# joined; and Adler-32 in pieces is Adler-32 of the whole. Each law with a
-# hypothesis has a witness that the hypothesis can hold.
+# refused, since there is nothing before it to copy, and so is every M2, M3
+# and M4 that reaches before the start of the output after any output, at
+# every distance (M1, whose meaning depends on the run before it, is left
+# out); the streaming reader, fed any pieces, answers what the one-shot
+# decoder answers for the pieces joined; and Adler-32 in pieces is Adler-32
+# of the whole. Each law with a hypothesis has a witness that the
+# hypothesis can hold.
 #
 # Vectors: hand-built streams, each derived from the kernel documentation's
 # description of one encoding (the first-byte literal runs, the long literal
@@ -24,6 +27,7 @@ import ./encode.bend as C
 import ./lzo.bend as L
 import ./adler32.bend as A
 import ./lzop.bend as P
+import ../u32/u32.bend as U
 
 # Properties, for every input
 
@@ -86,6 +90,166 @@ law first_match_rejected:
 law first_match_rejected_witness:
   exs lo: U32
   {U32.is_lt(B.byte(lo), 4) == False{} : Bool}
+
+# A match whose distance reaches before the start of the output is refused
+# (LzoBadDistance), at every distance and after any output, whatever
+# follows. a is any stream prefix, not empty, after which an instruction may
+# start: the end marker written with a length byte (end_marker) would end
+# the stream there, a ++ end_marker decoding to o, the bytes a writes. The
+# distances are the kernel document's, from the instruction's bytes: M2's
+# (H << 3) + D + 1, M3's D + 1, M4's 16384 + (H << 14) + D.
+
+# M4 (0001 0000: H = 0, L = 0), length byte 1, distance bytes 0 and 0: the
+# end marker, written with a length byte
+def LzoLaws.end_marker() -> B.Octets:
+  B.Octets.of_list([16, 1, 0, 0])
+
+# a byte's value
+def LzoLaws.v(b: U32) -> Nat:
+  U32.to_nat(B.byte(b))
+
+# M3 and M4: D, the top 14 bits of the little-endian 16-bit field lo, hi
+def LzoLaws.d14(lo: U32, hi: U32) -> Nat:
+  Nat.div(Nat.add(LzoLaws.v(lo), Nat.mul(LzoLaws.v(hi), 256n)), 4n)
+
+# M2: 01LDDDSS or 1LLDDDSS (x >= 64), then H; D is x's bits 2 to 4
+def LzoLaws.m2_distance(x: U32, h: U32) -> Nat:
+  Nat.add(Nat.mul(LzoLaws.v(h), 8n), Nat.add(Nat.mod(Nat.div(LzoLaws.v(x), 4n), 8n), 1n))
+
+law m2_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +x: U32
+  for +h: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hx: {U32.is_lt(B.byte(x), 64) == False{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), LzoLaws.m2_distance(x, h)) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(x, B.Octets.cons(h, rest))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+# M3 with a length field: 001LLLLL with L > 0 (33 <= x < 64), then lo, hi:
+# distance D + 1
+law m3_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +x: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hx1: {U32.is_lt(B.byte(x), 33) == False{} : Bool}
+  for +hx2: {U32.is_lt(B.byte(x), 64) == True{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), 1n)) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(x, B.Octets.cons(lo, B.Octets.cons(hi, rest)))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+# M4 with H = 0 and a length field: 0001 0LLL with L > 0 (17 <= x < 24),
+# then lo, hi, with D > 0 (D = 0 is the end marker): distance D + 2^14. The
+# powers of two are written U32Nat.dbl(n, 1n), as bend-osdev-u32 does: a
+# closed 2^14 is a Nat too deep for the checkers to expand.
+law m4_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +x: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hx1: {U32.is_lt(B.byte(x), 17) == False{} : Bool}
+  for +hx2: {U32.is_lt(B.byte(x), 24) == True{} : Bool}
+  for +hz: {Nat.is_lt(0n, LzoLaws.d14(lo, hi)) == True{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), U.U32Nat.dbl(14n, 1n))) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(x, B.Octets.cons(lo, B.Octets.cons(hi, rest)))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+# M4 with H = 1 and a length field: 0001 1LLL with L > 0 (25 <= x < 32),
+# then lo, hi: distance D + 2^15
+law m4_far_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +x: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hx1: {U32.is_lt(B.byte(x), 25) == False{} : Bool}
+  for +hx2: {U32.is_lt(B.byte(x), 32) == True{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), U.U32Nat.dbl(15n, 1n))) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(x, B.Octets.cons(lo, B.Octets.cons(hi, rest)))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+# With length bytes: L = 0 (x = 32 for M3, 16 and 24 for M4), then any
+# number z of zero bytes (each adding 255 to the length), then a byte v
+# other than 0, then lo and hi. The length plays no part: the copy is
+# refused before it starts.
+law m3_ext_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +z: Nat
+  for +v: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hv: {U32.is_eq(B.byte(v), 0) == False{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), 1n)) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(32, B.Octets.append(B.Octets.zeros(z), B.Octets.cons(v, B.Octets.cons(lo, B.Octets.cons(hi, rest)))))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+law m4_ext_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +z: Nat
+  for +v: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hv: {U32.is_eq(B.byte(v), 0) == False{} : Bool}
+  for +hz: {Nat.is_lt(0n, LzoLaws.d14(lo, hi)) == True{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), U.U32Nat.dbl(14n, 1n))) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(16, B.Octets.append(B.Octets.zeros(z), B.Octets.cons(v, B.Octets.cons(lo, B.Octets.cons(hi, rest)))))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+law m4_far_ext_beyond_rejected:
+  for +a: B.Octets
+  for +o: B.Octets
+  for +max: Nat
+  for +z: Nat
+  for +v: U32
+  for +lo: U32
+  for +hi: U32
+  for +rest: B.Octets
+  for +e: {D.lzo1x_decompress(B.Octets.append(a, LzoLaws.end_marker()), max) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  for +ha: {Nat.is_lt(0n, B.Octets.len(a)) == True{} : Bool}
+  for +hv: {U32.is_eq(B.byte(v), 0) == False{} : Bool}
+  for +hd: {Nat.is_lt(B.Octets.len(o), Nat.add(LzoLaws.d14(lo, hi), U.U32Nat.dbl(15n, 1n))) == True{} : Bool}
+  {D.lzo1x_decompress(B.Octets.append(a, B.Octets.cons(24, B.Octets.append(B.Octets.zeros(z), B.Octets.cons(v, B.Octets.cons(lo, B.Octets.cons(hi, rest)))))), max) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
+
+# The hypotheses can hold: a = [18, 97], one literal "a", is a prefix the end
+# marker may follow; after it, an M2 at distance 2 (x = 68: D = 1, H = 0) and
+# an M3 at distance 2 (x = 33, D = 1) reach before the start
+law beyond_rejected_vectors:
+  {(D.lzo1x_decompress(B.Octets.append(B.Octets.of_list([18, 97]), LzoLaws.end_marker()), 1n), LzoLaws.m2_distance(68, 0), LzoLaws.d14(4, 0), D.lzo1x_decompress(B.Octets.of_list([18, 97, 68, 0]), 1n), D.lzo1x_decompress(B.Octets.of_list([18, 97, 33, 4, 0]), 1n)) == (Done{B.Octets.of_list([97])}, 2n, 1n, Fail{E.LzoBadDistance{}}, Fail{E.LzoBadDistance{}}) : Result<&2, &2, E.LzoError, B.Octets> & Nat & Nat & Result<&2, &2, E.LzoError, B.Octets> & Result<&2, &2, E.LzoError, B.Octets>}
+
+# and so can the M4 laws': after [18, 97], x = 17 (H = 0, L = 1) and x = 25
+# (H = 1, L = 1), with D = 1 (lo = 4, hi = 0): distances 1 + 2^14 and
+# 1 + 2^15, more than the 1 byte written
+law m4_beyond_rejected_witness:
+  {(U32.is_lt(B.byte(17), 17), U32.is_lt(B.byte(17), 24), U32.is_lt(B.byte(25), 25), U32.is_lt(B.byte(25), 32), Nat.is_lt(0n, LzoLaws.d14(4, 0)), Nat.is_lt(1n, Nat.add(LzoLaws.d14(4, 0), U.U32Nat.dbl(14n, 1n))), Nat.is_lt(1n, Nat.add(LzoLaws.d14(4, 0), U.U32Nat.dbl(15n, 1n)))) == (False{}, True{}, False{}, True{}, True{}, True{}, True{}) : Bool & Bool & Bool & Bool & Bool & Bool & Bool}
+
+# and so can the length-byte laws': v = 1 is not 0, and after [18, 97] an
+# M3 with L = 0, one zero byte, v = 1 and D = 1 (lo = 4, hi = 0) reaches
+# before the start
+law ext_beyond_rejected_vectors:
+  {(U32.is_eq(B.byte(1), 0), D.lzo1x_decompress(B.Octets.of_list([18, 97, 32, 0, 1, 4, 0]), 1n)) == (False{}, Fail{E.LzoBadDistance{}}) : Bool & Result<&2, &2, E.LzoError, B.Octets>}
 
 # Streaming: a stream fed to the reader in pieces gives what the one-shot
 # decoder gives for the pieces joined, whatever the pieces
