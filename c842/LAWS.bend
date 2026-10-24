@@ -7,18 +7,25 @@
 # * the decoder never answers more than its maximum, ignores whatever
 #   follows a valid stream, and answers the same fed in any pieces;
 # * a stream that opens with code 26 or 31, with RPT (no 8 bytes to repeat)
-#   or with short data of count 0 is refused, whatever follows.
+#   or with short data of count 0 is refused, whatever follows;
+# * the pointer rule, for every output length and every index of the kind's
+#   width: an index names the latest position congruent to index * size
+#   modulo the history below the length rounded down to 8, or none (and the
+#   stream is refused); the bytes it reads are written and inside the
+#   window; every index the parser reads has its kind's width; and a stream
+#   that opens with a pointer is refused, whatever its index.
 #
 # Vectors: the paper's example (Z8, RPT(63): 512 zero bytes in 16 bits),
 # Linux's streams for chosen inputs (ref/OBSERVATIONS.md), each template of
 # the patent's Figure 3 as Linux decodes it, each failure, the CRC's check
-# value, the worst case.
+# value, the worst case, the pointer rule's answers.
 import Base
 import ../bytes/bytes.bend as B
 import ./error.bend as E
 import ./format.bend as F
 import ./crc.bend as K
 import ./decode.bend as D
+import ./pointer.bend as P
 import ./match.bend as M
 import ./encode.bend as C
 import ./c842.bend as L
@@ -124,6 +131,117 @@ law output_within_max:
   for +src: B.Octets
   for +max: Nat
   {Nat.is_le(B.Octets.len(Result.default(&2, &2, E.C842Error, B.Octets, D.c842.decompress(src, max), B.Octets.empty())), max) == True{} : Bool}
+
+# The pointer rule (pointer.bend), for every output length n and every
+# index i of the kind's width. An index i of an s-byte sub-phrase (s =
+# C842Kind.size(k)) in a history of H bytes (H = C842Kind.history(k)) reads
+# s bytes at the latest position p congruent to i * s modulo H below t8,
+# the output's length rounded down to 8; there must be one
+# (ref/OBSERVATIONS.md, E3 to E6). The index is 8 bits for P2 and P8 and 9
+# for P4, which is i * s < H, the hypothesis below; a literal has no
+# history (H = 0), so no index satisfies it.
+
+def C842Laws.t8(n: U32) -> Nat:
+  Nat.mul(Nat.div(U32.to_nat(n), 8n), 8n)
+
+def C842Laws.is(i: U32, k: F.C842Kind) -> Nat:
+  Nat.mul(U32.to_nat(i), U32.to_nat(F.C842Kind.size(k)))
+
+# a position exists exactly when i * s < t8 (it is the least position
+# congruent to i * s); otherwise the decoder refuses the stream
+law pointer_found:
+  for +n: U32
+  for +k: F.C842Kind
+  for +i: U32
+  for +h: {Nat.is_lt(C842Laws.is(i, k), U32.to_nat(F.C842Kind.history(k))) == True{} : Bool}
+  {Maybe.is_some(&2, U32, P.c842.pointer(n, k, i)) == Nat.is_lt(C842Laws.is(i, k), C842Laws.t8(n)) : Bool}
+
+# the position p: congruent to i * s modulo H; p + s <= t8, so p and the s
+# bytes from it are below t8; and t8 <= p + H, so the next position
+# congruent to i * s is not: p is the latest
+law pointer_rule:
+  for +n: U32
+  for +k: F.C842Kind
+  for +i: U32
+  for +p: U32
+  for +h: {Nat.is_lt(C842Laws.is(i, k), U32.to_nat(F.C842Kind.history(k))) == True{} : Bool}
+  for +e: {P.c842.pointer(n, k, i) == Some{p} : Maybe<&2, U32>}
+  {(Nat.mod(U32.to_nat(p), U32.to_nat(F.C842Kind.history(k))), Nat.is_le(Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.size(k))), C842Laws.t8(n)), Nat.is_le(C842Laws.t8(n), Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.history(k))))) == (C842Laws.is(i, k), True{}, True{}) : Nat & Bool & Bool}
+
+# so the s bytes a pointer reads are all written, and at most H + 7 bytes
+# back (2055 at most: inside the decoder's window of the last 4096 bytes)
+law pointer_in_window:
+  for +n: U32
+  for +k: F.C842Kind
+  for +i: U32
+  for +p: U32
+  for +h: {Nat.is_lt(C842Laws.is(i, k), U32.to_nat(F.C842Kind.history(k))) == True{} : Bool}
+  for +e: {P.c842.pointer(n, k, i) == Some{p} : Maybe<&2, U32>}
+  {(Nat.is_le(Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.size(k))), U32.to_nat(n)), Nat.is_le(U32.to_nat(n), Nat.add(Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.history(k))), 7n))) == (True{}, True{}) : Bool & Bool}
+
+# the rule's answers, both kinds (the hypothesis of pointer_rule can hold):
+# 7 bytes, no whole chunk: no position; after 16, P8 index 1 reads at 8;
+# after 2050, P4 index 3 at 2048 + 12 - 2048 = 12; after 600, P2 index 255
+# at 510 (1022 - 512, as 1022 is not below 600)
+law pointer_vectors:
+  {(P.c842.pointer(7, F.C842P8{}, 0), P.c842.pointer(16, F.C842P8{}, 1), P.c842.pointer(2050, F.C842P4{}, 3), P.c842.pointer(600, F.C842P2{}, 255)) == (None{}, Some{8}, Some{12}, Some{510}) : Maybe<&2, U32> & Maybe<&2, U32> & Maybe<&2, U32> & Maybe<&2, U32>}
+
+# Every index the parser reads fits its kind (i * s < H, the hypothesis
+# above), along any bits from the start. The decoder resolves each pointer
+# event the parser announces with the pointer rule at its output's length
+# (decode.bend), so the rule's laws cover every pointer of every stream.
+
+def C842Laws.fits(+ev: F.C842Event) -> Bool:
+  match ev:
+    case F.C842EPtr{k, i}:
+      Nat.is_lt(C842Laws.is(i, k), U32.to_nat(F.C842Kind.history(k)))
+    case _:
+      True{}
+
+# the event of the step s fits, and so does every event along the bits bs
+# after it
+def C842Laws.all_fit(bs: List<&2, Bool>, s: F.C842Step) -> Bool:
+  match bs:
+    case Nil{}:
+      match s:
+        case F.C842Step{p, ev}:
+          C842Laws.fits(ev)
+    case Con{b, t}:
+      match s:
+        case F.C842Step{p, ev}:
+          Bool.and(C842Laws.fits(ev), C842Laws.all_fit(t, F.C842Parser.step(p, b)))
+
+law parser_indices_fit:
+  for +bs: List<&2, Bool>
+  {C842Laws.all_fit(bs, F.C842Step{F.C842Parser.start(), F.C842ENone{}}) == True{} : Bool}
+
+# A stream that opens with a pointer is refused (C842BadPointer), whatever
+# its index and whatever follows: nothing is written yet, so t8 = 0. Each
+# law takes a template whose first sub-phrase is the pointer: 25 ([P8]),
+# 20 ([P4, LL, LL]) and 10 ([P2, LL, LL, LL]). The code is the first byte's
+# top 5 bits; the index takes lo's low 3 bits and the second byte's top 5
+# (P8, P2) or 6 (P4).
+
+law first_p8_rejected:
+  for +lo: U32
+  for +b: U32
+  for +rest: B.Octets
+  for +max: Nat
+  {D.c842.decompress(B.Octets.cons(U32.or(200, U32.and(7, lo)), B.Octets.cons(b, rest)), max) == Fail{E.C842BadPointer{}} : Result<&2, &2, E.C842Error, B.Octets>}
+
+law first_p4_rejected:
+  for +lo: U32
+  for +b: U32
+  for +rest: B.Octets
+  for +max: Nat
+  {D.c842.decompress(B.Octets.cons(U32.or(160, U32.and(7, lo)), B.Octets.cons(b, rest)), max) == Fail{E.C842BadPointer{}} : Result<&2, &2, E.C842Error, B.Octets>}
+
+law first_p2_rejected:
+  for +lo: U32
+  for +b: U32
+  for +rest: B.Octets
+  for +max: Nat
+  {D.c842.decompress(B.Octets.cons(U32.or(80, U32.and(7, lo)), B.Octets.cons(b, rest)), max) == Fail{E.C842BadPointer{}} : Result<&2, &2, E.C842Error, B.Octets>}
 
 # Vectors (generated by gen/vectors.py)
 

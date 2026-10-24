@@ -9,7 +9,8 @@
 #                   latest p congruent to index * s modulo the history
 #                   (512 bytes for P2, 2048 for P4 and P8, as the paper's
 #                   ring histories) with p below the output's length rounded
-#                   down to 8 (E3, E6). No such p: C842BadPointer
+#                   down to 8 (E3, E6; pointer.bend). No such p:
+#                   C842BadPointer
 #   RPT, field f    f + 1 copies of the last 8 bytes (E1). Fewer than 8
 #                   bytes of output: C842BadRepeat (Linux refuses an empty
 #                   output and reads before its buffer otherwise: E7, E8)
@@ -26,6 +27,7 @@ import ../bytes/bytes.bend as B
 import ./error.bend as E
 import ./format.bend as F
 import ./window.bend as W
+import ./pointer.bend as P
 import ./crc.bend as K
 
 # the output so far (reversed), its length, the window over it, and the room
@@ -61,29 +63,7 @@ def c842.dec.pushes(xs: List<&2, U32>, r: C842Run) -> C842Run:
     case Con{x, t}:
       c842.dec.pushes(t, c842.dec.push(r, x))
 
-# Pointers
-
-def c842.dec.pos.wrap(lt: Bool, +p0: U32, h: U32) -> Maybe<&2, U32>:
-  match lt:
-    case True{}:
-      None{}
-    case False{}:
-      Some{U32.sub(p0, h)}
-
-def c842.dec.pos.at(below: Bool, +p0: U32, +h: U32) -> Maybe<&2, U32>:
-  match below:
-    case True{}:
-      Some{p0}
-    case False{}:
-      c842.dec.pos.wrap(U32.is_lt(p0, h), p0, h)
-
-# the position a pointer reads: base + index * size, where base is the
-# output's length rounded down to 8 (t8) and then to the history h; less h if
-# that is t8 or more; none if that would be below 0
-def c842.dec.pos(+n: U32, idx: U32, size: U32, +h: U32) -> Maybe<&2, U32>:
-  +t8 = U32.and(n, 4294967288)
-  +p0 = U32.add(U32.and(t8, U32.sub(0, h)), U32.mul(idx, size))
-  c842.dec.pos.at(U32.is_lt(p0, t8), p0, h)
+# Pointers: the position comes from the pointer rule (pointer.bend)
 
 def c842.dec.byte_at(r: C842Run, p: U32) -> U32:
   match r:
@@ -110,7 +90,7 @@ def c842.dec.ptr.at(m: Maybe<&2, U32>, +k: F.C842Kind, +r: C842Run) -> C842Run:
 def c842.dec.ptr(+k: F.C842Kind, idx: U32, +r: C842Run) -> C842Run:
   match r:
     case C842Going{acc, +n, win, room}:
-      c842.dec.ptr.at(c842.dec.pos(n, idx, F.C842Kind.size(k), F.C842Kind.history(k)), k, C842Going{acc, n, win, room})
+      c842.dec.ptr.at(P.c842.pointer(n, k, idx), k, C842Going{acc, n, win, room})
     case _:
       r
 
