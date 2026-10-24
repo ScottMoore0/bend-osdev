@@ -17,6 +17,9 @@ C99 7.19.6.1 for the printf conversions. No GPL source was read.
 | `format.bend` | `KFmt`, `KConv`; `KStr.format`, `KStr.format32`, `KStr.sprintf`, `KStr.hex32`, `KStr.hex_digit`, `KStr.nib` |
 | `hexdump.bend` | `KDump`, `KDumpPrefix`; `KStr.hex_dump_line`, `KStr.hex_dump` |
 | `options.bend` | `KStrPattern`, `KStrMatch`; `KStr.match_one`, `KStr.match_token`, `KStr.match_int`, `KStr.match_uint`, `KStr.match_octal`, `KStr.match_hex`, `KStr.split_options` |
+| `LAWS.bend`, `PROOF.bend` | the hex round trip and the vectors, and their proofs |
+| `LAWS_dec.bend`, `PROOF_dec.bend` | the decimal round trips |
+| `gen/proof.py` | writes both proof files (`gen/proof_dec.py`; ring identities by `scripts/natproof.py`) |
 
 ## API
 
@@ -83,8 +86,29 @@ themselves.
   kernel documentation's hex dump example, groups of 4, a short line and
   offsets; match_token, `%d` and `%x` arguments, and splitting options.
 
-Not proved for every input: decimal round trips (the digits come from
-64-bit division) and the other formats; `ref/run.sh` checks them.
+`LAWS_dec.bend`, **for every input:** parse after format in decimal: for
+every `W64` v, `to_u64(format(KFmt.plain(KConvU{}), v), 10) = Done{v}`
+(`dec64_round_trip`), and for every `U32` v, `to_u32(format32(KFmt.plain(
+KConvU{}), v), 10) = Done{v}` (`dec32_round_trip`). `kfmt.digits` puts
+down the remainders of v by 10 (word64's division laws, or the `U32` ones
+when v fits) in front of the digits already down, so the tokens of the
+digits are the token list of v's quotient followed by `KTDigit{r}`; each
+masked digit byte reads as its token (the ten cases of r); and the parse
+of the quotient's digits leaves the quotient, one more step, acc 10 + r,
+giving v back without overflow (in 64 bits since v < 2^64, in 32 bits
+since v < 2^32). `PROOF_dec.bend` ALL PROOFS CHECK, and cannot pass
+`--verdict` while it imports bend-osdev-word64's `PROOF_div.bend` (word64's
+README, "`PROOF_div.bend` and the kernel").
+
+**A bug, found by the proof and fixed:** `KStr.format32` sign-extended
+every value, so `%u`, `%x`, `%X` and `%o` of a `U32` with its top bit set
+printed the 64-bit two's complement (`%u` of 4294967295 gave
+18446744073709551615, `%x` of 2^31 gave ffffffff80000000); only `%d`
+reads a 32-bit value as signed. It now extends with zeros for the other
+conversions (`kfmt.hi32`), and `check.bend` tests the four cases.
+
+Not proved for every input: the other formats (widths, flags, `%d`, `%x`
+and `%o` text) and the signed parsers; `ref/run.sh` checks them.
 
 ## Tests
 
@@ -98,5 +122,8 @@ sizes and orders against a model of the documented layout.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` (20 laws) and `PROOF_dec.bend` (2) ALL PROOFS
+CHECK; `--verdict` ALL PROOFS CHECK on `PROOF.bend` (about 8 s, peak 0.43
+GB), and does not finish on `PROOF_dec.bend` (word64's division, above);
+`check.bend` passes, `ref/run.sh` 1430 cases match, `scripts/deps.sh`
+passes.

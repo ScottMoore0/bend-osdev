@@ -78,6 +78,11 @@ def main() -> IO(Unit):
     IO.print(r32(K.KStr.to_u32(s("ffffffff"), 16)))
     IO.print(r32(K.KStr.to_u32(s("100000000"), 16)))
     IO.print(B.Octets.to_string(F.KStr.hex32(3735928559)))
+    IO.print(B.Octets.to_string(F.KStr.format32(F.KFmt.plain(F.KConvU{}), 4294967295)))
+    IO.print(B.Octets.to_string(F.KStr.format32(F.KFmt.plain(F.KConvX{}), 2147483648)))
+    IO.print(B.Octets.to_string(F.KStr.format32(F.KFmt.plain(F.KConvO{}), 4294967295)))
+    IO.print(B.Octets.to_string(F.KStr.format32(F.KFmt{F.KConvD{}, 4n, False{}, False{}, False{}, False{}}, 4294967295)))
+    IO.print(r32(K.KStr.to_u32(F.KStr.format32(F.KFmt.plain(F.KConvU{}), 4294967295), 10)))
     IO.print(B.Octets.to_string(F.KStr.format(F.KFmt{F.KConvD{}, 5n, False{}, False{}, False{}, False{}}, W.W64.sub(W.W64.zero(), W.W64.from_u32(42)))))
     IO.print(B.Octets.to_string(F.KStr.format(F.KFmt{F.KConvD{}, 5n, True{}, False{}, False{}, False{}}, W.W64.sub(W.W64.zero(), W.W64.from_u32(42)))))
     IO.print(sres(F.KStr.sprintf(s("[%5d|%-5u|%05x|%+d|% d|%o|%X|%%|%08x]"), [W.W64.sub(W.W64.zero(), W.W64.from_u32(42)), W.W64.from_u32(7), W.W64.from_u32(255), W.W64.from_u32(3), W.W64.from_u32(4), W.W64.from_u32(8), W.W64.from_u32(48879), W.W64.from_u32(3735928559)])))
@@ -109,6 +114,11 @@ def main() -> IO(Unit):
 #|4294967295
 #|range
 #|deadbeef
+#|4294967295
+#|80000000
+#|37777777777
+#|  -1
+#|4294967295
 #|  -42
 #|-0042
 #|[  -42|7    |000ff|+3| 4|10|BEEF|%|deadbeef]
