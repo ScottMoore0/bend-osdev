@@ -12,53 +12,10 @@ import ../u32/u32.bend as U
 import ../u32/LAWS.bend as UL
 import ../u32/PROOF.bend as UP
 import ./LAWS.bend as Laws
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Nat arithmetic
-
-def add_zero_r(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, 0n), p, add_zero_r(p))
-
-def add_succ_r(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, 1n+b), 1n+Nat.add(p, b), add_succ_r(p, b))
-
-def add_comm(+a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      Equal.sym(Nat, Nat.add(b, 0n), b, add_zero_r(b))
-    case 1n+p:
-      Equal.trans(Nat, 1n+Nat.add(p, b), 1n+Nat.add(b, p), Nat.add(b, 1n+p), Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, b), Nat.add(b, p), add_comm(p, b)), Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), add_succ_r(b, p)))
-
-def add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), add_assoc(p, b, c))
-
-def mul_add_l(+x: Nat, +y: Nat, +g: Nat) -> {Nat.mul(Nat.add(x, y), g) == Nat.add(Nat.mul(x, g), Nat.mul(y, g)) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.trans(Nat, Nat.add(g, Nat.mul(Nat.add(p, y), g)), Nat.add(g, Nat.add(Nat.mul(p, g), Nat.mul(y, g))), Nat.add(Nat.add(g, Nat.mul(p, g)), Nat.mul(y, g)), Equal.cong(Nat, Nat, z => Nat.add(g, z), Nat.mul(Nat.add(p, y), g), Nat.add(Nat.mul(p, g), Nat.mul(y, g)), mul_add_l(p, y, g)), Equal.sym(Nat, Nat.add(Nat.add(g, Nat.mul(p, g)), Nat.mul(y, g)), Nat.add(g, Nat.add(Nat.mul(p, g), Nat.mul(y, g))), add_assoc(g, Nat.mul(p, g), Nat.mul(y, g))))
-
-def mul_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.mul(Nat.mul(a, b), c) == Nat.mul(a, Nat.mul(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.trans(Nat, Nat.mul(Nat.add(b, Nat.mul(p, b)), c), Nat.add(Nat.mul(b, c), Nat.mul(Nat.mul(p, b), c)), Nat.add(Nat.mul(b, c), Nat.mul(p, Nat.mul(b, c))), mul_add_l(b, Nat.mul(p, b), c), Equal.cong(Nat, Nat, z => Nat.add(Nat.mul(b, c), z), Nat.mul(Nat.mul(p, b), c), Nat.mul(p, Nat.mul(b, c)), mul_assoc(p, b, c)))
-
-def mul_one_l(+a: Nat) -> {Nat.mul(1n, a) == a : Nat}:
-  add_zero_r(a)
 
 def npred(n: Nat) -> Nat:
   match n:
@@ -92,11 +49,11 @@ def add_eq_zero(+w: Nat, +b: Nat, e: {Nat.add(w, b) == 0n : Nat}) -> {b == 0n : 
 
 def ds.m0(+np: Nat, +d: Nat, +r: Nat, +bp: Nat, +inv: {r == bp : Nat}, ih: {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))) == Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+bp), 0n)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))) == bp : Nat}>) -> {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(1n+np, 0n, d, r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(1n+np, 0n, d, r))) == Nat.add(1n+np, Nat.add(Nat.mul(d, 1n+bp), r)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(1n+np, 0n, d, r))) == bp : Nat}>:
   (e1, le) = ih
-  (Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))), Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+bp), 0n)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), e1, Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+bp), 0n)), Nat.add(np, Nat.mul(1n+d, 1n+bp)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(1n+d, 1n+bp), 0n), Nat.mul(1n+d, 1n+bp), add_zero_r(Nat.mul(1n+d, 1n+bp))), Equal.trans(Nat, Nat.add(np, Nat.mul(1n+d, 1n+bp)), 1n+Nat.add(np, Nat.add(bp, Nat.mul(d, 1n+bp))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), add_succ_r(np, Nat.add(bp, Nat.mul(d, 1n+bp))), Equal.trans(Nat, 1n+Nat.add(np, Nat.add(bp, Nat.mul(d, 1n+bp))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), bp)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, z), Nat.add(bp, Nat.mul(d, 1n+bp)), Nat.add(Nat.mul(d, 1n+bp), bp), add_comm(bp, Nat.mul(d, 1n+bp))), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), z)), bp, r, Equal.sym(Nat, r, bp, inv)))))), le)
+  (Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))), Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+bp), 0n)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), e1, Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+bp), 0n)), Nat.add(np, Nat.mul(1n+d, 1n+bp)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(1n+d, 1n+bp), 0n), Nat.mul(1n+d, 1n+bp), UL.nat_add_zero(Nat.mul(1n+d, 1n+bp))), Equal.trans(Nat, Nat.add(np, Nat.mul(1n+d, 1n+bp)), 1n+Nat.add(np, Nat.add(bp, Nat.mul(d, 1n+bp))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), UL.nat_add_succ(np, Nat.add(bp, Nat.mul(d, 1n+bp))), Equal.trans(Nat, 1n+Nat.add(np, Nat.add(bp, Nat.mul(d, 1n+bp))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), bp)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, z), Nat.add(bp, Nat.mul(d, 1n+bp)), Nat.add(Nat.mul(d, 1n+bp), bp), UL.nat_add_comm(bp, Nat.mul(d, 1n+bp))), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), z)), bp, r, Equal.sym(Nat, r, bp, inv)))))), le)
 
 def ds.m1(+np: Nat, +mp: Nat, +d: Nat, +r: Nat, +bp: Nat, ih: {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))) == Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), 1n+r)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))) == bp : Nat}>) -> {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(1n+np, 1n+mp, d, r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(1n+np, 1n+mp, d, r))) == Nat.add(1n+np, Nat.add(Nat.mul(d, 1n+bp), r)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(1n+np, 1n+mp, d, r))) == bp : Nat}>:
   (e1, le) = ih
-  (Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))), Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), 1n+r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), e1, Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), 1n+r)), Nat.add(np, 1n+Nat.add(Nat.mul(d, 1n+bp), r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(d, 1n+bp), 1n+r), 1n+Nat.add(Nat.mul(d, 1n+bp), r), add_succ_r(Nat.mul(d, 1n+bp), r)), add_succ_r(np, Nat.add(Nat.mul(d, 1n+bp), r)))), le)
+  (Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))), Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), 1n+r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), e1, Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), 1n+r)), Nat.add(np, 1n+Nat.add(Nat.mul(d, 1n+bp), r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+bp), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(d, 1n+bp), 1n+r), 1n+Nat.add(Nat.mul(d, 1n+bp), r), UL.nat_add_succ(Nat.mul(d, 1n+bp), r)), UL.nat_add_succ(np, Nat.add(Nat.mul(d, 1n+bp), r)))), le)
 
 def ds(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat, +inv: {Nat.add(m, r) == bp : Nat}) -> {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+bp), Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r))) == Nat.add(n, Nat.add(Nat.mul(d, 1n+bp), r)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r))) == bp : Nat}>:
   match n:
@@ -105,35 +62,28 @@ def ds(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +bp: Nat, +inv: {Nat.add(m, r) == bp 
     case 1n+np:
       match m:
         case 0n:
-          ds.m0(np, d, r, bp, inv, ds(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, add_zero_r(r), inv)))
+          ds.m0(np, d, r, bp, inv, ds(np, r, 1n+d, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, UL.nat_add_zero(r), inv)))
         case 1n+mp:
-          ds.m1(np, mp, d, r, bp, ds(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, add_succ_r(mp, r), inv)))
-
-def dm.eq(+a: Nat, +q: Nat, p: {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n))) == Nat.add(a, Nat.add(Nat.mul(0n, 1n+q), 0n)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n))) == q : Nat}>) -> {Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)) == a : Nat}:
-  (e1, le) = p
-  Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), Nat.add(a, 0n), a, e1, add_zero_r(a))
+          ds.m1(np, mp, d, r, bp, ds(np, mp, d, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, UL.nat_add_succ(mp, r), inv)))
 
 def dm.le(+a: Nat, +q: Nat, p: {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n))) == Nat.add(a, Nat.add(Nat.mul(0n, 1n+q), 0n)) : Nat} & Sigma<&1, &1, Nat, w => {Nat.add(w, Pair.snd(Nat, Nat, Nat.divmod.go(a, q, 0n, 0n))) == q : Nat}>) -> Sigma<&1, &1, Nat, w => {Nat.add(w, Nat.mod(a, 1n+q)) == q : Nat}>:
   (e1, le) = p
   le
 
-def dm_eq(+a: Nat, +q: Nat) -> {Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)) == a : Nat}:
-  dm.eq(a, q, ds(a, q, 0n, 0n, q, add_zero_r(q)))
-
 def dm_le(+a: Nat, +q: Nat) -> Sigma<&1, &1, Nat, w => {Nat.add(w, Nat.mod(a, 1n+q)) == q : Nat}>:
-  dm.le(a, q, ds(a, q, 0n, 0n, q, add_zero_r(q)))
+  dm.le(a, q, ds(a, q, 0n, 0n, q, UL.nat_add_zero(q)))
 
 # gcd divides both, by induction on Euclid's fuel (kept at least b)
 
 def gd.le(+a: Nat, +q: Nat, +k: Nat, h: Sigma<&1, &1, Nat, w => {Nat.add(w, 1n+q) == 1n+k : Nat}>, m: Sigma<&1, &1, Nat, w => {Nat.add(w, Nat.mod(a, 1n+q)) == q : Nat}>) -> Sigma<&1, &1, Nat, w => {Nat.add(w, Nat.mod(a, 1n+q)) == k : Nat}>:
   (+w, e) = h
   (+mm, em) = m
-  (Nat.add(w, mm), Equal.trans(Nat, Nat.add(Nat.add(w, mm), Nat.mod(a, 1n+q)), Nat.add(w, Nat.add(mm, Nat.mod(a, 1n+q))), k, add_assoc(w, mm, Nat.mod(a, 1n+q)), Equal.trans(Nat, Nat.add(w, Nat.add(mm, Nat.mod(a, 1n+q))), Nat.add(w, q), k, Equal.cong(Nat, Nat, z => Nat.add(w, z), Nat.add(mm, Nat.mod(a, 1n+q)), q, em), succ_inj(Nat.add(w, q), k, Equal.trans(Nat, 1n+Nat.add(w, q), Nat.add(w, 1n+q), 1n+k, Equal.sym(Nat, Nat.add(w, 1n+q), 1n+Nat.add(w, q), add_succ_r(w, q)), e)))))
+  (Nat.add(w, mm), Equal.trans(Nat, Nat.add(Nat.add(w, mm), Nat.mod(a, 1n+q)), Nat.add(w, Nat.add(mm, Nat.mod(a, 1n+q))), k, UL.nat_add_assoc(w, mm, Nat.mod(a, 1n+q)), Equal.trans(Nat, Nat.add(w, Nat.add(mm, Nat.mod(a, 1n+q))), Nat.add(w, q), k, Equal.cong(Nat, Nat, z => Nat.add(w, z), Nat.add(mm, Nat.mod(a, 1n+q)), q, em), succ_inj(Nat.add(w, q), k, Equal.trans(Nat, 1n+Nat.add(w, q), Nat.add(w, 1n+q), 1n+k, Equal.sym(Nat, Nat.add(w, 1n+q), 1n+Nat.add(w, q), UL.nat_add_succ(w, q)), e)))))
 
 def gd.fin(+a: Nat, +q: Nat, +k: Nat, l: Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == 1n+q : Nat}>, r: Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == Nat.mod(a, 1n+q) : Nat}>) -> Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == a : Nat}> & Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == 1n+q : Nat}>:
   (+k1, +e1) = l
   (+k2, e2) = r
-  ((Nat.add(Nat.mul(Nat.div(a, 1n+q), k1), k2), Equal.trans(Nat, Nat.mul(Nat.add(Nat.mul(Nat.div(a, 1n+q), k1), k2), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.add(Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, mul_add_l(Nat.mul(Nat.div(a, 1n+q), k1), k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, Equal.cong(Nat, Nat, z => Nat.add(z, Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), mul_assoc(Nat.div(a, 1n+q), k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, Equal.cong(Nat, Nat, z => Nat.add(Nat.mul(Nat.div(a, 1n+q), z), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), 1n+q, e1), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, Equal.cong(Nat, Nat, z => Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), z), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mod(a, 1n+q), e2), dm_eq(a, q)))))), (k1, e1))
+  ((Nat.add(Nat.mul(Nat.div(a, 1n+q), k1), k2), Equal.trans(Nat, Nat.mul(Nat.add(Nat.mul(Nat.div(a, 1n+q), k1), k2), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.add(Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, UL.nat_add_mul(Nat.mul(Nat.div(a, 1n+q), k1), k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, Equal.cong(Nat, Nat, z => Nat.add(z, Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(Nat.mul(Nat.div(a, 1n+q), k1), K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), UL.nat_mul_assoc(Nat.div(a, 1n+q), k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), a, Equal.cong(Nat, Nat, z => Nat.add(Nat.mul(Nat.div(a, 1n+q), z), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.mul(k1, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), 1n+q, e1), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q)))), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, Equal.cong(Nat, Nat, z => Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), z), Nat.mul(k2, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))), Nat.mod(a, 1n+q), e2), UD.nat_div_mod(a, q)))))), (k1, e1))
 
 def gd.step(+a: Nat, +q: Nat, +k: Nat, ih: Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == 1n+q : Nat}> & Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == Nat.mod(a, 1n+q) : Nat}>) -> Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == a : Nat}> & Sigma<&1, &1, Nat, u => {Nat.mul(u, K.kmath.gcd.go(k, 1n+q, Nat.mod(a, 1n+q))) == 1n+q : Nat}>:
   (l, r) = ih
@@ -143,9 +93,9 @@ def gd(+fuel: Nat, +a: Nat, +b: Nat, h: Sigma<&1, &1, Nat, w => {Nat.add(w, b) =
   match fuel b:
     case 0n _:
       (+w, e) = h
-      ((1n, mul_one_l(a)), (0n, Equal.sym(Nat, b, 0n, add_eq_zero(w, b, e))))
+      ((1n, UL.nat_one_mul(a)), (0n, Equal.sym(Nat, b, 0n, add_eq_zero(w, b, e))))
     case 1n+k 0n:
-      ((1n, mul_one_l(a)), (0n, {==}))
+      ((1n, UL.nat_one_mul(a)), (0n, {==}))
     case 1n+k 1n+q:
       gd.step(a, q, k, gd(k, 1n+q, Nat.mod(a, 1n+q), gd.le(a, q, k, h, dm_le(a, q))))
 
@@ -179,11 +129,11 @@ def km.r0(+x0: Nat, +x1: Nat, +x2: Nat) -> {Nat.add(x0, Nat.add(x1, Nat.mul(x2, 
 def gm.sub(+y: Nat, +x: Nat, +d: Nat, +R: Nat, e: {Nat.add(R, Nat.mul(y, d)) == Nat.mul(x, d) : Nat}) -> {Nat.mul(Nat.sub(x, y), d) == R : Nat}:
   match y x:
     case 0n 0n:
-      Equal.sym(Nat, R, 0n, Equal.trans(Nat, R, Nat.add(R, 0n), 0n, Equal.sym(Nat, Nat.add(R, 0n), R, add_zero_r(R)), e))
+      Equal.sym(Nat, R, 0n, Equal.trans(Nat, R, Nat.add(R, 0n), 0n, Equal.sym(Nat, Nat.add(R, 0n), R, UL.nat_add_zero(R)), e))
     case 0n 1n+xp:
-      Equal.sym(Nat, R, Nat.mul(1n+xp, d), Equal.trans(Nat, R, Nat.add(R, 0n), Nat.mul(1n+xp, d), Equal.sym(Nat, Nat.add(R, 0n), R, add_zero_r(R)), e))
+      Equal.sym(Nat, R, Nat.mul(1n+xp, d), Equal.trans(Nat, R, Nat.add(R, 0n), Nat.mul(1n+xp, d), Equal.sym(Nat, Nat.add(R, 0n), R, UL.nat_add_zero(R)), e))
     case 1n+yp 0n:
-      Equal.sym(Nat, R, 0n, add_eq_zero(Nat.mul(1n+yp, d), R, Equal.trans(Nat, Nat.add(Nat.mul(1n+yp, d), R), Nat.add(R, Nat.mul(1n+yp, d)), 0n, add_comm(Nat.mul(1n+yp, d), R), e)))
+      Equal.sym(Nat, R, 0n, add_eq_zero(Nat.mul(1n+yp, d), R, Equal.trans(Nat, Nat.add(Nat.mul(1n+yp, d), R), Nat.add(R, Nat.mul(1n+yp, d)), 0n, UL.nat_add_comm(Nat.mul(1n+yp, d), R), e)))
     case 1n+yp 1n+xp:
       gm.sub(yp, xp, d, R, UL.nat_add_cancel(d, Nat.add(R, Nat.mul(yp, d)), Nat.mul(xp, d), Equal.trans(Nat, Nat.add(d, Nat.add(R, Nat.mul(yp, d))), Nat.mul(1n+xp, d), Nat.add(d, Nat.mul(xp, d)), Equal.trans(Nat, Nat.add(d, Nat.add(R, Nat.mul(yp, d))), Nat.add(R, Nat.mul(1n+yp, d)), Nat.mul(1n+xp, d), km.r0(d, R, yp), e), {==})))
 
@@ -193,7 +143,7 @@ def km.r1(+x0: Nat, +x1: Nat, +x2: Nat, +x3: Nat) -> {Nat.add(x0, Nat.mul(Nat.mu
   {==}
 
 def gm.mod(+a: Nat, +q: Nat, +d: Nat, +u: Nat, +v: Nat, eu: {Nat.mul(u, d) == a : Nat}, ev: {Nat.mul(v, d) == 1n+q : Nat}) -> Sigma<&1, &1, Nat, u => {Nat.mul(u, d) == Nat.mod(a, 1n+q) : Nat}>:
-  (Nat.sub(u, Nat.mul(Nat.div(a, 1n+q), v)), gm.sub(Nat.mul(Nat.div(a, 1n+q), v), u, d, Nat.mod(a, 1n+q), Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), a, Nat.mul(u, d), Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(v, d)), Nat.mod(a, 1n+q)), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), km.r1(Nat.mod(a, 1n+q), Nat.div(a, 1n+q), v, d), Equal.cong(Nat, Nat, zz => Nat.add(Nat.mul(Nat.div(a, 1n+q), zz), Nat.mod(a, 1n+q)), Nat.mul(v, d), 1n+q, ev)), dm_eq(a, q)), Equal.sym(Nat, Nat.mul(u, d), a, eu))))
+  (Nat.sub(u, Nat.mul(Nat.div(a, 1n+q), v)), gm.sub(Nat.mul(Nat.div(a, 1n+q), v), u, d, Nat.mod(a, 1n+q), Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), a, Nat.mul(u, d), Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, Equal.trans(Nat, Nat.add(Nat.mod(a, 1n+q), Nat.mul(Nat.mul(Nat.div(a, 1n+q), v), d)), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(v, d)), Nat.mod(a, 1n+q)), Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), km.r1(Nat.mod(a, 1n+q), Nat.div(a, 1n+q), v, d), Equal.cong(Nat, Nat, zz => Nat.add(Nat.mul(Nat.div(a, 1n+q), zz), Nat.mod(a, 1n+q)), Nat.mul(v, d), 1n+q, ev)), UD.nat_div_mod(a, q)), Equal.sym(Nat, Nat.mul(u, d), a, eu))))
 
 def gm.gg(+fuel: Nat, +a: Nat, +b: Nat, +d: Nat, h: Sigma<&1, &1, Nat, w => {Nat.add(w, b) == fuel : Nat}>, pa: Sigma<&1, &1, Nat, u => {Nat.mul(u, d) == a : Nat}>, pb: Sigma<&1, &1, Nat, u => {Nat.mul(u, d) == b : Nat}>) -> Sigma<&1, &1, Nat, u => {Nat.mul(u, d) == K.kmath.gcd.go(fuel, a, b) : Nat}>:
   match fuel b:
@@ -313,7 +263,7 @@ def km.r4(+x0: Nat, +x1: Nat, +x2: Nat, +x3: Nat) -> {Nat.mul(1n+x0, Nat.add(Nat
   {==}
 
 def gm.mh(+a: Nat, +q: Nat, +p: Nat) -> {Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)) == Nat.mul(1n+p, Nat.mod(a, 1n+q)) : Nat}:
-  UL.nat_mod_unique(Nat.mul(1n+p, 1n+q), Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.div(a, 1n+q), Nat.mul(1n+p, Nat.mod(a, 1n+q)), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q))), Nat.mul(1n+p, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q))), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, Nat.mod(a, 1n+q))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q))), Nat.mul(1n+p, a), Nat.mul(1n+p, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q))), dm_eq(Nat.mul(1n+p, a), Nat.add(q, Nat.mul(p, 1n+q))), Equal.cong(Nat, Nat, zz => Nat.mul(1n+p, zz), a, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), Equal.sym(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, dm_eq(a, q)))), km.r4(p, Nat.div(a, 1n+q), q, Nat.mod(a, 1n+q))), gm.slt(Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.add(q, Nat.mul(p, 1n+q)), dm_le(Nat.mul(1n+p, a), Nat.add(q, Nat.mul(p, 1n+q)))), gm.mlt(p, Nat.mod(a, 1n+q), q, dm_le(a, q)))
+  UL.nat_mod_unique(Nat.mul(1n+p, 1n+q), Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.div(a, 1n+q), Nat.mul(1n+p, Nat.mod(a, 1n+q)), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q))), Nat.mul(1n+p, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q))), Nat.add(Nat.mul(Nat.div(a, 1n+q), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, Nat.mod(a, 1n+q))), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.mul(1n+p, 1n+q)), Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q))), Nat.mul(1n+p, a), Nat.mul(1n+p, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q))), UD.nat_div_mod(Nat.mul(1n+p, a), Nat.add(q, Nat.mul(p, 1n+q))), Equal.cong(Nat, Nat, zz => Nat.mul(1n+p, zz), a, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), Equal.sym(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+q), 1n+q), Nat.mod(a, 1n+q)), a, UD.nat_div_mod(a, q)))), km.r4(p, Nat.div(a, 1n+q), q, Nat.mod(a, 1n+q))), gm.slt(Nat.mod(Nat.mul(1n+p, a), Nat.mul(1n+p, 1n+q)), Nat.add(q, Nat.mul(p, 1n+q)), dm_le(Nat.mul(1n+p, a), Nat.add(q, Nat.mul(p, 1n+q)))), gm.mlt(p, Nat.mod(a, 1n+q), q, dm_le(a, q)))
 
 def km.r5(+x0: Nat, +x1: Nat, +x2: Nat, +x3: Nat) -> {1n+Nat.add(Nat.add(Nat.add(x0, x1), Nat.mul(1n+x1, x2)), Nat.mul(1n+x1, x3)) == Nat.add(x0, Nat.mul(1n+x1, 1n+Nat.add(x2, x3))) : Nat}:
   %Equal.sym(Nat, Nat.mul(Nat.add(1n, x1), x2), Nat.add(Nat.mul(1n, x2), Nat.mul(x1, x2)), UL.nat_add_mul(1n, x1, x2)) : {Nat.add(1n, Nat.add(Nat.add(Nat.add(x0, x1), _), Nat.mul(1n+x1, x3))) == Nat.add(x0, Nat.mul(1n+x1, 1n+Nat.add(x2, x3))) : Nat}
@@ -414,7 +364,7 @@ def gm.k1(+a: Nat, +bq: Nat, +g: Nat, +k1: Nat, +k2: Nat, e1: {Nat.mul(k1, g) ==
     case 0n:
       Empty.absurd({Nat.div(a, 0n) == k1 : Nat} & {Nat.is_lt(0n, 0n) == True{} : Bool}, succ_ne_zero(bq, Equal.trans(Nat, 1n+bq, Nat.mul(k2, 0n), 0n, Equal.sym(Nat, Nat.mul(k2, 0n), 1n+bq, e2), UL.nat_mul_zero(k2))))
     case 1n+gp:
-      (UL.nat_div_unique(1n+gp, Nat.div(a, 1n+gp), Nat.mod(a, 1n+gp), k1, 0n, Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+gp), 1n+gp), Nat.mod(a, 1n+gp)), Nat.mul(k1, 1n+gp), Nat.add(Nat.mul(k1, 1n+gp), 0n), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+gp), 1n+gp), Nat.mod(a, 1n+gp)), a, Nat.mul(k1, 1n+gp), dm_eq(a, gp), Equal.sym(Nat, Nat.mul(k1, 1n+gp), a, e1)), km.r6(k1, gp)), gm.slt(Nat.mod(a, 1n+gp), gp, dm_le(a, gp)), {==}), {==})
+      (UL.nat_div_unique(1n+gp, Nat.div(a, 1n+gp), Nat.mod(a, 1n+gp), k1, 0n, Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+gp), 1n+gp), Nat.mod(a, 1n+gp)), Nat.mul(k1, 1n+gp), Nat.add(Nat.mul(k1, 1n+gp), 0n), Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(a, 1n+gp), 1n+gp), Nat.mod(a, 1n+gp)), a, Nat.mul(k1, 1n+gp), UD.nat_div_mod(a, gp), Equal.sym(Nat, Nat.mul(k1, 1n+gp), a, e1)), km.r6(k1, gp)), gm.slt(Nat.mod(a, 1n+gp), gp, dm_le(a, gp)), {==}), {==})
 
 def km.r7(+x0: Nat, +x1: Nat, +x2: Nat) -> {Nat.mul(x0, Nat.mul(x1, x2)) == Nat.mul(x1, Nat.mul(x0, x2)) : Nat}:
   %Equal.sym(Nat, Nat.mul(x0, Nat.mul(x1, x2)), Nat.mul(x1, Nat.mul(x0, x2)), Equal.sym(Nat, Nat.mul(x1, Nat.mul(x0, x2)), Nat.mul(x0, Nat.mul(x1, x2)), UL.nat_mul_left_comm(x1, x0, x2))) : {_ == Nat.mul(x1, Nat.mul(x0, x2)) : Nat}
@@ -572,15 +522,8 @@ def not_le_lt(+x: Nat, +y: Nat, e: {Nat.is_le(x, y) == False{} : Bool}) -> {Nat.
     case 1n+p 1n+q:
       not_le_lt(p, q, e)
 
-def double_add(+p: Nat) -> {Nat.double(p) == Nat.add(p, p) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      Equal.trans(Nat, 2n+Nat.double(q), 2n+Nat.add(q, q), 1n+Nat.add(q, 1n+q), Equal.cong(Nat, Nat, z => 2n+z, Nat.double(q), Nat.add(q, q), double_add(q)), Equal.cong(Nat, Nat, z => 1n+z, 1n+Nat.add(q, q), Nat.add(q, 1n+q), Equal.sym(Nat, Nat.add(q, 1n+q), 1n+Nat.add(q, q), add_succ_r(q, q))))
-
 def add_double(+r: Nat, +p: Nat) -> {Nat.add(Nat.add(r, p), p) == Nat.add(r, Nat.double(p)) : Nat}:
-  Equal.trans(Nat, Nat.add(Nat.add(r, p), p), Nat.add(r, Nat.add(p, p)), Nat.add(r, Nat.double(p)), add_assoc(r, p, p), Equal.cong(Nat, Nat, z => Nat.add(r, z), Nat.add(p, p), Nat.double(p), Equal.sym(Nat, Nat.double(p), Nat.add(p, p), double_add(p))))
+  Equal.trans(Nat, Nat.add(Nat.add(r, p), p), Nat.add(r, Nat.add(p, p)), Nat.add(r, Nat.double(p)), UL.nat_add_assoc(r, p, p), Equal.cong(Nat, Nat, z => Nat.add(r, z), Nat.add(p, p), Nat.double(p), Equal.sym(Nat, Nat.double(p), Nat.add(p, p), UL.nat_double(p))))
 
 def lt_tr(+n: Nat, -x: Nat, -y: Nat, e: {x == y : Nat}, h: {Nat.is_lt(n, Nat.mul(y, y)) == True{} : Bool}) -> {Nat.is_lt(n, Nat.mul(x, x)) == True{} : Bool}:
   Equal.trans(Bool, Nat.is_lt(n, Nat.mul(x, x)), Nat.is_lt(n, Nat.mul(y, y)), True{}, Equal.cong(Nat, Bool, +z => Nat.is_lt(n, Nat.mul(z, z)), x, y, e), h)
@@ -664,9 +607,9 @@ def tn_lt(+k: Nat, +w: Word(k)) -> {Nat.is_lt(Word.to_nat(k, w), S.KMath.pow2(k)
 def pow2_add(+a: Nat, +b: Nat) -> {S.KMath.pow2(Nat.add(a, b)) == Nat.mul(S.KMath.pow2(a), S.KMath.pow2(b)) : Nat}:
   match a:
     case 0n:
-      Equal.sym(Nat, Nat.mul(1n, S.KMath.pow2(b)), S.KMath.pow2(b), mul_one_l(S.KMath.pow2(b)))
+      Equal.sym(Nat, Nat.mul(1n, S.KMath.pow2(b)), S.KMath.pow2(b), UL.nat_one_mul(S.KMath.pow2(b)))
     case 1n+p:
-      Equal.trans(Nat, Nat.double(S.KMath.pow2(Nat.add(p, b))), Nat.double(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), Equal.cong(Nat, Nat, z => Nat.double(z), S.KMath.pow2(Nat.add(p, b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), pow2_add(p, b)), Equal.trans(Nat, Nat.double(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), double_add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Equal.trans(Nat, Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), S.KMath.pow2(b)), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), Equal.sym(Nat, Nat.mul(Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), S.KMath.pow2(b)), Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), mul_add_l(S.KMath.pow2(p), S.KMath.pow2(p), S.KMath.pow2(b))), Equal.cong(Nat, Nat, z => Nat.mul(z, S.KMath.pow2(b)), Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), Nat.double(S.KMath.pow2(p)), Equal.sym(Nat, Nat.double(S.KMath.pow2(p)), Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), double_add(S.KMath.pow2(p)))))))
+      Equal.trans(Nat, Nat.double(S.KMath.pow2(Nat.add(p, b))), Nat.double(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), Equal.cong(Nat, Nat, z => Nat.double(z), S.KMath.pow2(Nat.add(p, b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), pow2_add(p, b)), Equal.trans(Nat, Nat.double(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), UL.nat_double(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Equal.trans(Nat, Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), Nat.mul(Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), S.KMath.pow2(b)), Nat.mul(Nat.double(S.KMath.pow2(p)), S.KMath.pow2(b)), Equal.sym(Nat, Nat.mul(Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), S.KMath.pow2(b)), Nat.add(Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b)), Nat.mul(S.KMath.pow2(p), S.KMath.pow2(b))), UL.nat_add_mul(S.KMath.pow2(p), S.KMath.pow2(p), S.KMath.pow2(b))), Equal.cong(Nat, Nat, z => Nat.mul(z, S.KMath.pow2(b)), Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), Nat.double(S.KMath.pow2(p)), Equal.sym(Nat, Nat.double(S.KMath.pow2(p)), Nat.add(S.KMath.pow2(p), S.KMath.pow2(p)), UL.nat_double(S.KMath.pow2(p)))))))
 
 def u32_bound(+n: U32) -> {Nat.is_lt(U32.to_nat(n), Nat.mul(S.KMath.pow2(16n), S.KMath.pow2(16n))) == True{} : Bool}:
   match n:

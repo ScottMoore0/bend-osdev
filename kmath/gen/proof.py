@@ -94,58 +94,6 @@ def DV(x, g):
 def nat_lemmas():
     emit("# Nat arithmetic")
     emit()
-    emit(f"def add_zero_r(+a: Nat) -> {eq(add('a', '0n'), 'a')}:")
-    emit("  match a:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+p:")
-    emit(f"      {cong('z', S('z'), add('p', '0n'), 'p', 'add_zero_r(p)')}")
-    emit()
-    emit(f"def add_succ_r(+a: Nat, +b: Nat) -> {eq(add('a', S('b')), S(add('a', 'b')))}:")
-    emit("  match a:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+p:")
-    emit(f"      {cong('z', S('z'), add('p', S('b')), S(add('p', 'b')), 'add_succ_r(p, b)')}")
-    emit()
-    emit(f"def add_comm(+a: Nat, +b: Nat) -> {eq(add('a', 'b'), add('b', 'a'))}:")
-    emit("  match a:")
-    emit("    case 0n:")
-    emit(f"      {sym(add('b', '0n'), 'b', 'add_zero_r(b)')}")
-    emit("    case 1n+p:")
-    t = [S(add("p", "b")), S(add("b", "p")), add("b", S("p"))]
-    e = [cong("z", S("z"), add("p", "b"), add("b", "p"), "add_comm(p, b)"), sym(add("b", S("p")), S(add("b", "p")), "add_succ_r(b, p)")]
-    emit(f"      {chain(t, e)}")
-    emit()
-    emit(f"def add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {eq(add(add('a', 'b'), 'c'), add('a', add('b', 'c')))}:")
-    emit("  match a:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+p:")
-    emit(f"      {cong('z', S('z'), add(add('p', 'b'), 'c'), add('p', add('b', 'c')), 'add_assoc(p, b, c)')}")
-    emit()
-    emit(f"def mul_add_l(+x: Nat, +y: Nat, +g: Nat) -> {eq(mul(add('x', 'y'), 'g'), add(mul('x', 'g'), mul('y', 'g')))}:")
-    emit("  match x:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+p:")
-    t = [add("g", mul(add("p", "y"), "g")), add("g", add(mul("p", "g"), mul("y", "g"))), add(add("g", mul("p", "g")), mul("y", "g"))]
-    e = [cong("z", add("g", "z"), mul(add("p", "y"), "g"), add(mul("p", "g"), mul("y", "g")), "mul_add_l(p, y, g)"),
-         sym(t[2], t[1], f"add_assoc(g, {mul('p', 'g')}, {mul('y', 'g')})")]
-    emit(f"      {chain(t, e)}")
-    emit()
-    emit(f"def mul_assoc(+a: Nat, +b: Nat, +c: Nat) -> {eq(mul(mul('a', 'b'), 'c'), mul('a', mul('b', 'c')))}:")
-    emit("  match a:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+p:")
-    t = [mul(add("b", mul("p", "b")), "c"), add(mul("b", "c"), mul(mul("p", "b"), "c")), add(mul("b", "c"), mul("p", mul("b", "c")))]
-    e = [f"mul_add_l(b, {mul('p', 'b')}, c)", cong("z", add(mul("b", "c"), "z"), mul(mul("p", "b"), "c"), mul("p", mul("b", "c")), "mul_assoc(p, b, c)")]
-    emit(f"      {chain(t, e)}")
-    emit()
-    emit(f"def mul_one_l(+a: Nat) -> {eq(mul('1n', 'a'), 'a')}:")
-    emit("  add_zero_r(a)")
-    emit()
     emit("def npred(n: Nat) -> Nat:")
     emit("  match n:")
     emit("    case 0n:")
@@ -200,9 +148,9 @@ def divmod_lemmas():
     q, rr = f"Pair.fst(Nat, Nat, {gi})", f"Pair.snd(Nat, Nat, {gi})"
     M = mul("d", b)
     t = [add("np", add(mul(S("d"), b), "0n")), add("np", mul(S("d"), b)), S(add("np", add("bp", M))), S(add("np", add(M, "bp"))), S(add("np", add(M, "r")))]
-    e = [cong("z", add("np", "z"), add(mul(S("d"), b), "0n"), mul(S("d"), b), f"add_zero_r({mul(S('d'), b)})"),
-         f"add_succ_r(np, {add('bp', M)})",
-         cong("z", S(add("np", "z")), add("bp", M), add(M, "bp"), f"add_comm(bp, {M})"),
+    e = [cong("z", add("np", "z"), add(mul(S("d"), b), "0n"), mul(S("d"), b), f"UL.nat_add_zero({mul(S('d'), b)})"),
+         f"UL.nat_add_succ(np, {add('bp', M)})",
+         cong("z", S(add("np", "z")), add("bp", M), add(M, "bp"), f"UL.nat_add_comm(bp, {M})"),
          cong("z", S(add("np", add(M, "z"))), "bp", "r", sym("r", "bp", "inv"))]
     emit(f"def ds.m0(+np: Nat, +d: Nat, +r: Nat, +bp: Nat, +inv: {eq('r', 'bp')}, ih: {spec('np', 'r', S('d'), '0n')}) -> {spec(S('np'), '0n', 'd', 'r')}:")
     emit("  (e1, le) = ih")
@@ -211,7 +159,7 @@ def divmod_lemmas():
     gi = "Nat.divmod.go(np, mp, d, 1n+r)"
     q, rr = f"Pair.fst(Nat, Nat, {gi})", f"Pair.snd(Nat, Nat, {gi})"
     t = [add("np", add(M, S("r"))), add("np", S(add(M, "r"))), S(add("np", add(M, "r")))]
-    e = [cong("z", add("np", "z"), add(M, S("r")), S(add(M, "r")), f"add_succ_r({M}, r)"), f"add_succ_r(np, {add(M, 'r')})"]
+    e = [cong("z", add("np", "z"), add(M, S("r")), S(add(M, "r")), f"UL.nat_add_succ({M}, r)"), f"UL.nat_add_succ(np, {add(M, 'r')})"]
     emit(f"def ds.m1(+np: Nat, +mp: Nat, +d: Nat, +r: Nat, +bp: Nat, ih: {spec('np', 'mp', 'd', S('r'))}) -> {spec(S('np'), S('mp'), 'd', 'r')}:")
     emit("  (e1, le) = ih")
     emit(f"  ({trans(add(mul(q, b), rr), t[0], t[-1], 'e1', chain(t, e))}, le)")
@@ -223,25 +171,18 @@ def divmod_lemmas():
     emit("    case 1n+np:")
     emit("      match m:")
     emit("        case 0n:")
-    emit(f"          ds.m0(np, d, r, bp, inv, ds(np, r, 1n+d, 0n, bp, {trans(add('r', '0n'), 'r', 'bp', 'add_zero_r(r)', 'inv')}))")
+    emit(f"          ds.m0(np, d, r, bp, inv, ds(np, r, 1n+d, 0n, bp, {trans(add('r', '0n'), 'r', 'bp', 'UL.nat_add_zero(r)', 'inv')}))")
     emit("        case 1n+mp:")
-    emit(f"          ds.m1(np, mp, d, r, bp, ds(np, mp, d, 1n+r, bp, {trans(add('mp', S('r')), S(add('mp', 'r')), 'bp', 'add_succ_r(mp, r)', 'inv')}))")
+    emit(f"          ds.m1(np, mp, d, r, bp, ds(np, mp, d, 1n+r, bp, {trans(add('mp', S('r')), S(add('mp', 'r')), 'bp', 'UL.nat_add_succ(mp, r)', 'inv')}))")
     emit()
     # divmod(a, 1 + q)
     D_, R_ = "Nat.div(a, 1n+q)", "Nat.mod(a, 1n+q)"
-    emit(f"def dm.eq(+a: Nat, +q: Nat, p: {spec('a', 'q', '0n', '0n').replace('bp', 'q')}) -> {eq(add(mul(D_, S('q')), R_), 'a')}:")
-    emit("  (e1, le) = p")
-    emit(f"  {trans(add(mul(D_, S('q')), R_), add('a', '0n'), 'a', 'e1', 'add_zero_r(a)')}")
-    emit()
     emit(f"def dm.le(+a: Nat, +q: Nat, p: {spec('a', 'q', '0n', '0n').replace('bp', 'q')}) -> {LE(R_, 'q')}:")
     emit("  (e1, le) = p")
     emit("  le")
     emit()
-    emit(f"def dm_eq(+a: Nat, +q: Nat) -> {eq(add(mul(D_, S('q')), R_), 'a')}:")
-    emit("  dm.eq(a, q, ds(a, q, 0n, 0n, q, add_zero_r(q)))")
-    emit()
     emit(f"def dm_le(+a: Nat, +q: Nat) -> {LE(R_, 'q')}:")
-    emit("  dm.le(a, q, ds(a, q, 0n, 0n, q, add_zero_r(q)))")
+    emit("  dm.le(a, q, ds(a, q, 0n, 0n, q, UL.nat_add_zero(q)))")
     emit()
 
 
@@ -255,9 +196,9 @@ def gcd_lemmas():
     emit(f"def gd.le(+a: Nat, +q: Nat, +k: Nat, h: {LE(S('q'), S('k'))}, m: {LE(R_, 'q')}) -> {LE(R_, 'k')}:")
     emit("  (+w, e) = h")
     emit("  (+mm, em) = m")
-    ewq = f"succ_inj({add('w', 'q')}, k, {trans(S(add('w', 'q')), add('w', S('q')), S('k'), sym(add('w', S('q')), S(add('w', 'q')), 'add_succ_r(w, q)'), 'e')})"
+    ewq = f"succ_inj({add('w', 'q')}, k, {trans(S(add('w', 'q')), add('w', S('q')), S('k'), sym(add('w', S('q')), S(add('w', 'q')), 'UL.nat_add_succ(w, q)'), 'e')})"
     t = [add(add("w", "mm"), R_), add("w", add("mm", R_)), add("w", "q"), "k"]
-    e = [f"add_assoc(w, mm, {R_})", cong("z", add("w", "z"), add("mm", R_), "q", "em"), ewq]
+    e = [f"UL.nat_add_assoc(w, mm, {R_})", cong("z", add("w", "z"), add("mm", R_), "q", "em"), ewq]
     emit(f"  ({add('w', 'mm')}, {chain(t, e)})")
     emit()
     G = g("k", "1n+q", R_)
@@ -267,11 +208,11 @@ def gcd_lemmas():
     fin.append("  (+k2, e2) = r")
     t = [mul(add(mul(D_, "k1"), "k2"), G), add(mul(mul(D_, "k1"), G), mul("k2", G)), add(mul(D_, mul("k1", G)), mul("k2", G)),
          add(mul(D_, S("q")), mul("k2", G)), add(mul(D_, S("q")), R_), "a"]
-    e = [f"mul_add_l({mul(D_, 'k1')}, k2, {G})",
-         cong("z", add("z", mul("k2", G)), mul(mul(D_, "k1"), G), mul(D_, mul("k1", G)), f"mul_assoc({D_}, k1, {G})"),
+    e = [f"UL.nat_add_mul({mul(D_, 'k1')}, k2, {G})",
+         cong("z", add("z", mul("k2", G)), mul(mul(D_, "k1"), G), mul(D_, mul("k1", G)), f"UL.nat_mul_assoc({D_}, k1, {G})"),
          cong("z", add(mul(D_, "z"), mul("k2", G)), mul("k1", G), S("q"), "e1"),
          cong("z", add(mul(D_, S("q")), "z"), mul("k2", G), R_, "e2"),
-         "dm_eq(a, q)"]
+         "UD.nat_div_mod(a, q)"]
     fin.append(f"  (({add(mul(D_, 'k1'), 'k2')}, {chain(t, e)}), (k1, e1))")
     for l in fin:
         emit(l)
@@ -285,9 +226,9 @@ def gcd_lemmas():
     emit("  match fuel b:")
     emit("    case 0n _:")
     emit("      (+w, e) = h")
-    emit(f"      ((1n, mul_one_l(a)), (0n, {sym('b', '0n', 'add_eq_zero(w, b, e)')}))")
+    emit(f"      ((1n, UL.nat_one_mul(a)), (0n, {sym('b', '0n', 'add_eq_zero(w, b, e)')}))")
     emit("    case 1n+k 0n:")
-    emit("      ((1n, mul_one_l(a)), (0n, {==}))")
+    emit("      ((1n, UL.nat_one_mul(a)), (0n, {==}))")
     emit("    case 1n+k 1n+q:")
     emit(f"      gd.step(a, q, k, gd(k, 1n+q, {R_}, gd.le(a, q, k, h, dm_le(a, q))))")
     emit()
@@ -342,19 +283,9 @@ def isqrt_lemmas():
     emit("    case 1n+p 1n+q:")
     emit("      not_le_lt(p, q, e)")
     emit()
-    emit(f"def double_add(+p: Nat) -> {eq('Nat.double(p)', add('p', 'p'))}:")
-    emit("  match p:")
-    emit("    case 0n:")
-    emit("      {==}")
-    emit("    case 1n+q:")
-    t = ["2n+Nat.double(q)", "2n+" + add("q", "q"), S(add("q", S("q")))]
-    e = [cong("z", "2n+z", "Nat.double(q)", add("q", "q"), "double_add(q)"),
-         cong("z", S("z"), S(add("q", "q")), add("q", S("q")), sym(add("q", S("q")), S(add("q", "q")), "add_succ_r(q, q)"))]
-    emit(f"      {chain(t, e)}")
-    emit()
     emit(f"def add_double(+r: Nat, +p: Nat) -> {eq(add(add('r', 'p'), 'p'), add('r', 'Nat.double(p)'))}:")
     t = [add(add("r", "p"), "p"), add("r", add("p", "p")), add("r", "Nat.double(p)")]
-    e = ["add_assoc(r, p, p)", cong("z", add("r", "z"), add("p", "p"), "Nat.double(p)", sym("Nat.double(p)", add("p", "p"), "double_add(p)"))]
+    e = ["UL.nat_add_assoc(r, p, p)", cong("z", add("r", "z"), add("p", "p"), "Nat.double(p)", sym("Nat.double(p)", add("p", "p"), "UL.nat_double(p)"))]
     emit(f"  {chain(t, e)}")
     emit()
     lt = lambda n, x: eq(f"Nat.is_lt({n}, {mul(x, x)})", T, "Bool")
@@ -452,14 +383,14 @@ def isqrt_lemmas():
     emit(f"def pow2_add(+a: Nat, +b: Nat) -> {eq(p2(add('a', 'b')), mul(p2('a'), p2('b')))}:")
     emit("  match a:")
     emit("    case 0n:")
-    emit(f"      {sym(mul('1n', p2('b')), p2('b'), f'mul_one_l({p2(chr(98))})')}")
+    emit(f"      {sym(mul('1n', p2('b')), p2('b'), f'UL.nat_one_mul({p2(chr(98))})')}")
     emit("    case 1n+p:")
     P_, B_ = p2("p"), p2("b")
     t = [f"Nat.double({p2(add('p', 'b'))})", f"Nat.double({mul(P_, B_)})", add(mul(P_, B_), mul(P_, B_)), mul(add(P_, P_), B_), mul(f"Nat.double({P_})", B_)]
     e = [cong("z", "Nat.double(z)", p2(add("p", "b")), mul(P_, B_), "pow2_add(p, b)"),
-         f"double_add({mul(P_, B_)})",
-         sym(t[3], t[2], f"mul_add_l({P_}, {P_}, {B_})"),
-         cong("z", mul("z", B_), add(P_, P_), f"Nat.double({P_})", sym(f"Nat.double({P_})", add(P_, P_), f"double_add({P_})"))]
+         f"UL.nat_double({mul(P_, B_)})",
+         sym(t[3], t[2], f"UL.nat_add_mul({P_}, {P_}, {B_})"),
+         cong("z", mul("z", B_), add(P_, P_), f"Nat.double({P_})", sym(f"Nat.double({P_})", add(P_, P_), f"UL.nat_double({P_})"))]
     emit(f"      {chain(t, e)}")
     emit()
     p16 = p2("16n")
@@ -550,6 +481,8 @@ def main():
     emit("import ../u32/LAWS.bend as UL")
     emit("import ../u32/PROOF.bend as UP")
     emit("import ./LAWS.bend as Laws")
+    emit("import ../u32/LAWS_div.bend as UD")
+    emit("import ../u32/PROOF_div.bend as UDP")
     emit()
     nat_lemmas()
     divmod_lemmas()
