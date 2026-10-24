@@ -559,9 +559,6 @@ def kp.hits(+h: Bool, +e: Nat, +xs: List<&2, Nat>) -> {V.ts.naive.hit(h, e, xs) 
     case False{}:
       {==}
 
-def kp.add_one(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
-  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, L.tsl.add_succ(a, 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(a, 0n), a, L.tsl.add_zero(a)))
-
 # the matches of the prefixes in the set still to be completed, in order:
 # q is the pattern after the byte the set's first entry stands for, and
 # the prefix whose rest is r ends a match |r| bytes on, if r follows
@@ -591,7 +588,7 @@ def kp.pshift(r: List<&2, U32>, +b: U32, +s: List<&2, Bool>, +c: U32, +t: List<&
   match r:
     case Nil{}:
       %Equal.sym(Bool, Bool.and(U32.is_eq(b, c), True{}), U32.is_eq(b, c), L.tsl.and_true_r(U32.is_eq(b, c))) : {V.ts.naive.hit(Bool.and(bd.hd(s), _), Nat.add(pos, 1n), Nil{}) == V.ts.naive.hit(Bool.and(bd.hd(s), U32.is_eq(b, c)), 1n+pos, Nil{}) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(pos, 1n), 1n+pos, kp.add_one(pos)) : {V.ts.naive.hit(Bool.and(bd.hd(s), U32.is_eq(b, c)), _, Nil{}) == V.ts.naive.hit(Bool.and(bd.hd(s), U32.is_eq(b, c)), 1n+pos, Nil{}) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 1n), 1n+pos, L.tsl.add_one(pos)) : {V.ts.naive.hit(Bool.and(bd.hd(s), U32.is_eq(b, c)), _, Nil{}) == V.ts.naive.hit(Bool.and(bd.hd(s), U32.is_eq(b, c)), 1n+pos, Nil{}) : List<&2, Nat>}
       {==}
     case Con{+b2, +r2}:
       +LZ = kp.lastz(Con{b2, r2}, bd.tl(s), c)
@@ -612,7 +609,7 @@ def kp.gstep(+a0: U32, p1: List<&2, U32>, +s: List<&2, Bool>, +c: U32, +t: List<
       +N = V.ts.naive.go(False{}, Con{a0, Nil{}}, 1n, t, 1n+pos)
       %Equal.sym(Bool, bd.hd(s), True{}, hs) : {V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), True{}), Nat.add(pos, 1n), N) == A.ts.auto.hit(Bool.and(_, U32.is_eq(a0, c)), 1n+pos, N) : List<&2, Nat>}
       %Equal.sym(Bool, Bool.and(U32.is_eq(a0, c), True{}), U32.is_eq(a0, c), L.tsl.and_true_r(U32.is_eq(a0, c))) : {V.ts.naive.hit(_, Nat.add(pos, 1n), N) == A.ts.auto.hit(U32.is_eq(a0, c), 1n+pos, N) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(pos, 1n), 1n+pos, kp.add_one(pos)) : {V.ts.naive.hit(U32.is_eq(a0, c), _, N) == A.ts.auto.hit(U32.is_eq(a0, c), 1n+pos, N) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 1n), 1n+pos, L.tsl.add_one(pos)) : {V.ts.naive.hit(U32.is_eq(a0, c), _, N) == A.ts.auto.hit(U32.is_eq(a0, c), 1n+pos, N) : List<&2, Nat>}
       kp.hits(U32.is_eq(a0, c), 1n+pos, N)
     case Con{+b1, +p2}:
       +AT = V.ts.naive.at(False{}, Con{b1, p2}, t)

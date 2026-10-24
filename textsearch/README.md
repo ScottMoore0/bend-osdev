@@ -65,6 +65,7 @@ as an NFA simulation. No kernel source was read.
 | `spec.bend` | bounded exhaustive agreement with the references, for the laws |
 | `LAWS.bend`, `PROOF.bend` | the laws for every automaton and the bounded ones, and their proofs |
 | `LAWS_kmp.bend`, `PROOF_kmp.bend` | KMP against the reference, and its proof (the theory of borders) |
+| `LAWS_fsm.bend`, `PROOF_fsm.bend` | the token automaton against its backtracking reference, and its proof |
 | `proof_lib.bend` | lemmas the proof files share (no law) |
 | `check.bend` | examples and large exhaustive comparisons, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists the files it generates) |
@@ -155,14 +156,36 @@ bytes, is the set of borders of those bytes. Then:
   B(0) nothing is pending: KMP reports what the reference reports. Ignoring
   case is the same search on the folded pattern and text.
 
-**Not proved, and why.** That Boyer-Moore and the token automaton find
-exactly what the references find **in general**, and Boyer-Moore's
-chunking law in general. Boyer-Moore's correctness rests on each shift
-being safe; the token automaton's on the NFA simulation matching the
-backtracking reference. Each is a substantial development not done here.
-They are held instead by the bounded laws above (proved by computation,
-kept small because the checker bounds the work of one law), by
-`check.bend`'s much larger exhaustive comparisons, and by `ref/`.
+`LAWS_fsm.bend`, **for every input**, proved in `PROOF_fsm.bend`:
+
+* `fsm_ref`: the token automaton finds exactly what its backtracking
+  reference finds, `ts.fsm.ends(tks, xs) == ts.fsm.naive(tks, xs)`, for
+  every token pattern (every class and count, `TsPlus` included) and every
+  text; `fsm_search_ref`: so does `ts.fsm.search` for every chunking.
+
+The proof transfers apparmor's `glob_run` method. The reference's
+backtracking matcher is taken without its fuel (`fs.full`; the fuel
+`ts.fsm.naive` gives, two per token and one per byte, is always enough,
+`fs.fuel_ok`), and `TsPlus` written as `TsOne` then `TsStar`, as the
+automaton keeps it, matches the same (`fs.exp_ok`). A set of positions
+means what it accepts: some active position whose remaining tokens match
+the rest exactly (`fs.sem`). Each pass of the step takes one meaning to the
+next: closing over optional tokens adds nothing (`fs.CL`), reading a byte
+moves a closed set's meaning on by that byte (`fs.AL`, `fs.CA`), starting a
+match adds the whole pattern (`fs.ST`); so after byte c the positions
+accept w exactly when, before it, they accepted c then w or the pattern
+matches c then w (`fs.STEP`), and the report, the last position, is the
+set accepting no more bytes (`fs.HIT`). From a set, the automaton reports
+at each later end whether a match begun before is accepted or some
+non-empty run within the rest matches (`fs.run`); from the start nothing is
+under way, which is the reference.
+
+**Not proved, and why.** That Boyer-Moore finds exactly what the reference
+finds **in general**, and its chunking law in general. Its correctness
+rests on each shift being safe, a substantial development not done here.
+It is held instead by the bounded laws above (proved by computation, kept
+small because the checker bounds the work of one law), by `check.bend`'s
+much larger exhaustive comparisons, and by `ref/`.
 
 ## Tests
 
@@ -200,6 +223,7 @@ kept small because the checker bounds the work of one law), by
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` and `PROOF_kmp.bend` ALL PROOFS CHECK, and
-under `--verdict` (each in its own process, under 0.3 GB), `check.bend`
-passes, `ref/run.sh` 200 cases match, `scripts/deps.sh textsearch` ok.
+Bend 2.0.37: `PROOF.bend`, `PROOF_kmp.bend` and `PROOF_fsm.bend` ALL
+PROOFS CHECK, and under `--verdict` (each in its own process, under 0.3
+GB), `check.bend` passes, `ref/run.sh` 200 cases match, `scripts/deps.sh
+textsearch` ok.

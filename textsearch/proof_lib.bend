@@ -168,6 +168,9 @@ def tsl.add_succ(+x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Na
       %tsl.add_succ(p, y) : {1n+Nat.add(p, 1n+y) == 1n+_ : Nat}
       {==}
 
+def tsl.add_one(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
+  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, tsl.add_succ(a, 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(a, 0n), a, tsl.add_zero(a)))
+
 def tsl.lt_succ(+a: Nat) -> {Nat.is_lt(a, 1n+a) == True{} : Bool}:
   match a:
     case 0n:
@@ -298,6 +301,13 @@ def tsl.app_assoc(xs: List<&2, Nat>, +ys: List<&2, Nat>, +zs: List<&2, Nat>) -> 
       {==}
     case Con{+h, +t}:
       %tsl.app_assoc(t, ys, zs) : {Con{h, List.append(&2, Nat, List.append(&2, Nat, t, ys), zs)} == Con{h, _} : List<&2, Nat>}
+      {==}
+
+def tsl.take0(xs: List<&2, U32>) -> {List.take(&2, U32, xs, 0n) == Nil{} : List<&2, U32>}:
+  match xs:
+    case Nil{}:
+      {==}
+    case Con{+x, +t}:
       {==}
 
 # a hit, then more ends
