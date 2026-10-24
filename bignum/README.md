@@ -55,6 +55,16 @@ two limbs plus two more limbs fits in a `U32`.
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
 | `LAWS_limbs.bend`, `PROOF_limbs.bend` | the limb laws (the value of a number, add, sub, cmp), and their proofs |
 | `gen/proof_limbs.py` | writes `PROOF_limbs.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_mul.bend`, `PROOF_mul.bend` | the multiplication laws (`mul` is the product of the values), and their proofs |
+| `LAWS_div.bend`, `PROOF_div.bend` | the division laws (`divmod`, `div` and `mod` are long division of the values), and their proofs |
+| `gen/proof_mul.py`, `gen/proof_div.py` | write `PROOF_mul.bend` and `PROOF_div.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_mod.bend`, `PROOF_mod.bend` | the modular laws (`BnMod.add`, `sub`, `mul`, and `exp_plain` is x^e mod m), and their proofs |
+| `LAWS_mont.bend`, `PROOF_mont.bend` | the Montgomery laws (REDC, the conversions, `modexp`), `BnMod.exp` is x^e mod m, and the two orders of a double exponentiation agree; and their proofs |
+| `gen/proof_mod.py`, `gen/proof_mont.py` | write `PROOF_mod.bend` and `PROOF_mont.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_gcd.bend`, `PROOF_gcd.bend` | the gcd and lcm laws (`BnMod.gcd` and `BnMod.lcm` are kmath's gcd and lcm of the values), and their proofs |
+| `LAWS_inv.bend`, `PROOF_inv.bend` | the modular inverse laws (`BnMod.inv` gives an inverse exactly when m > 1 and gcd(a, m) = 1), and their proofs |
+| `LAWS_fermat.bend`, `PROOF_fermat.bend` | Fermat's little theorem on `Nat` (a^p = a mod p for a prime p), and its proof |
+| `gen/proof_gcd.py`, `gen/proof_inv.py`, `gen/proof_fermat.py` | write `PROOF_gcd.bend`, `PROOF_inv.bend` and `PROOF_fermat.bend` (ring identities by `scripts/natproof.py`) |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -126,12 +136,141 @@ x + 2^16 - y - w, borrows 1 - high16(t) (0 or 1), and the borrow is the
 one the rest needs. The `Nat` reasoning about 2^16 is done for a width that
 is a variable and used at 16 (u32's README, "Stating the bounds").
 
-**Not proved, and tested:** that `mul`, `divmod`, the shifts and the rest
-compute the product, quotient and shifts of the numbers their limbs stand
-for, for every input (the next laws on the ones above: schoolbook product,
-long division, Montgomery's REDC). The exhaustive laws cover small values;
-`ref/run.sh` compares every def with Python's integers on numbers of up to
-2048 bits.
+### Multiplication and division
+
+`LAWS_mul.bend`, **for every input**: for valid a and b, the value of
+`BnNat.mul(a, b)` is the product of the values (`mul_value`), and the
+product is valid for every a and b (`mul_valid`). A row of the schoolbook
+product (`bn.mac`) adds x times the number b and a carry to an
+accumulator; one step takes t = z + x y + c, at most (2^16 - 1)^2 +
+2 (2^16 - 1) = 2^32 - 1, so it does not wrap, and puts down low16(t) with
+the carry high16(t). By induction a row is acc + x b + c, and the rows add
+up to a b.
+
+`LAWS_div.bend`, **for every input**: `BnNat.divmod(a, b)` is `None`
+exactly when the value of b is 0 (`divmod_none`), and otherwise its
+quotient and remainder are `BnNat.div(a, b)` and `BnNat.mod(a, b)`
+(`divmod_q`, `divmod_r`, through `BnDivMod.q` and `.r`). For valid a and
+b with b above 0, a = q b + r with r < b (`divmod_value`, `mod_lt`); so,
+for valid a and b, `mod` and `div` are Base's `Nat.mod` and `Nat.div` of
+the values (`mod_value`, `div_value`; by 0 too, where both give a and 0).
+The quotient is valid for every input (`div_valid`), the remainder for a
+valid a (`mod_valid`: a remainder of a smaller a is a itself). The
+division is shift and subtract: with la and lb the bit lengths, la < lb
+gives a < b (2^lb <= 2 b, from `bn.wbits` on the top limb of the
+normalised number), and otherwise the loop runs from d = la - lb down to
+0 with s = b 2^i, keeping q b 2^(i+1) + r = a and r < b 2^(i+1); at the
+start a < 2^la <= b 2^(d+1). On the way the proofs show that `bn.shl(x,
+n)` is x 2^n (n = 16 (n / 16) + n mod 16, by Base's `Nat.divmod`), that
+`bn.shr1` halves and `bn.shl1` doubles and adds a bit, and the bounds of
+the bit length; these are lemmas in `PROOF_div.bend`, not laws.
+
+### Modular arithmetic, Montgomery multiplication and exponentiation
+
+`LAWS_mod.bend`, **for every input** (valid a, b and m): `BnMod.add` is
+(a + b) mod m and `BnMod.mul` is (a b) mod m (`mod_add_value`,
+`mod_mul_value`); `BnMod.sub` is ((a mod m) + m - (b mod m)) mod m, as the
+code computes it (`mod_sub_value`), which for m > 0 is a - b modulo m:
+(sub(a, b) + b) mod m = a mod m (`mod_sub_add`); the three are valid
+(`mod_add_valid`, `mod_sub_valid`, `mod_mul_valid`). `BnMod.exp_plain(x, e,
+m)` is x^value(e) mod m (Base's `Nat.pow`) for valid x, e and m with m > 0
+(`exp_plain_value`), and valid for every input (`exp_plain_valid`): before
+bit p the accumulator is x^(e >> (p + 1)) mod m, `BnNat.bit(e, p)` is bit p
+of the value (limb p / 16, bit p mod 16), and e >> bit_len(e) = 0.
+
+`LAWS_mont.bend`, **for every input**, with R = 2^(16 k) for the k limbs of
+an odd valid m > 1 (`BnMont.limbs`): `BnMont.ctx(m)` is the context of
+`BnMont.of_odd(m)` (`ctx_of_odd`); for valid a, b below m, Montgomery
+multiplication satisfies (mul(a, b) R) mod m = (a b) mod m and is below m
+(`mont_mul_value`, `mont_mul_lt`; R^-1 is not named), and is valid for
+every input (`mont_mul_valid`); `to(x)` is x R mod m for every valid x
+(`mont_to_value`), the form of 1 is R mod m (`mont_one_value`), (of(y) R)
+mod m = y mod m for a valid y below m (`mont_of_value`) and of(to(x)) = x
+mod m (`mont_of_to`); `BnMont.modexp(c, x, e)` is x^e mod m
+(`modexp_value`). `BnMod.exp` is x^e mod m for valid x, e and m with m > 0
+(`exp_value`), so it has exp_plain's value (`exp_eq_plain`; for every odd
+m > 1 by Montgomery's method, for any other m by exp_plain itself), and is
+valid for every input (`exp_valid`); (x^a mod m)^b mod m = x^(a b) mod m
+(`exp_exp_value`), and for an odd valid m > 1 the two orders give the same
+number, exp(exp(x, a, m), b, m) = exp(exp(x, b, m), a, m) (`exp_exp_comm`:
+the Montgomery result is normalised, and valid limbs without zeros on top
+are determined by their value). This is dh's agreement (dh's
+`LAWS_agree.bend`).
+
+On the way (lemmas in `PROOF_mont.bend`, not laws): `bn.np(n0)` gives
+n0 np + 1 = 0 mod 2^16 for every odd n0 (n0 n0 = 1 mod 8, and each Newton
+step i (2 - x i) turns x i = 1 + 2^J h into x i (2 - x i) + 2^(2J) h^2 = 1
+mod 2^16, the 32-bit wrap vanishing modulo 2^16: 3, 6, 12, 16 bits); one
+REDC step puts t1 + m n with a zero low limb (t1_0 (1 + np n0) = 0 mod
+2^16), so 2^16 t' = t + a_i b + m n, t stays below 2 n, after k steps
+2^(16 k) t = a b mod n, and the conditional subtraction and the trim to k
+limbs give the result below n; R is cancelled modulo the odd n (n = 1 + 2 H,
+a = 2 a (1 + H) mod n); R^2 mod n is 1 doubled 32 k times, each step
+reduced. Montgomery exponentiation squares and multiplies over each limb's
+16 bits and the limbs most significant first. The Nat lemmas on `Nat.mod`
+and `Nat.pow` are in `PROOF_mod.bend`.
+
+### Greatest common divisor, inverse and Fermat's little theorem
+
+`LAWS_gcd.bend`, **for every input** (valid a and b): `BnMod.gcd(a, b)`
+is bend-osdev-kmath's `KMath.gcd` of the values and valid (`gcd_value`,
+`gcd_valid`), so it divides a and b and every common divisor divides it
+(`gcd_divides_l`, `gcd_divides_r`, `gcd_greatest`, with witnesses k gcd =
+a), and gcd(a, 0) = a, gcd(0, b) = b (`gcd_zero_r`, `gcd_zero_l`; so
+gcd(0, 0) = 0, as the code defines it); `BnMod.lcm(a, b)` = (a / gcd) b is
+`KMath.lcm` of the values (`lcm_value`), valid for every input
+(`lcm_valid`), a multiple of a and of b that divides every common multiple
+(`lcm_multiple_l`, `lcm_multiple_r`, `lcm_least`), and 0 when a or b is
+(`lcm_zero_r`, `lcm_zero_l`). Euclid's step (a, b) to (b, a mod b) keeps
+kmath's gcd: a common divisor of a and b divides a mod b (d | x + y and
+d | y give d | x), one of b and a mod b divides a = q b + r, and numbers
+dividing each other are equal (kmath's `gcd_divides_l`, `gcd_divides_r`,
+`gcd_greatest`). The fuel, 2 (bits(a) + bits(b)) + 4, suffices: the
+measure bits(a) + bits(b) + [a < b] falls with every step, since for b <= a
+the remainder r has 2 r < a < 2^bits(a), and for a < b, r = a (the bit
+length bounds of `PROOF_div.bend`). The lcm laws are then kmath's.
+
+`LAWS_inv.bend`, **for every input** (valid a and m): `BnMod.inv(a, m)` is
+`Some` exactly when m > 1 and gcd(a, m) = 1 (`inv_some`, through
+`bnlaw.is_some`; so `None` for m = 0 and m = 1, and for a = 0), and the t
+it gives has a t mod m = 1, t < m and t valid (`inv_value`, `inv_lt`,
+`inv_valid`). The extended Euclidean loop on (m, a mod m) keeps the Bezout
+invariant r_i = t_i a (mod m), t_i < m: with q = r0 / r1, r = r0 mod r1 and
+t = t0 - q t1 mod m (`BnMod.sub`, `BnMod.mul`), r + q t1 a = r0 = t0 a =
+(t + q t1) a (mod m), and q t1 a cancels modulo m; it also keeps kmath's
+gcd of (r0, r1), which is r0 when r1 = 0. Its fuel is the gcd's measure.
+
+`LAWS_fermat.bend`, **for every input**, on `Nat`: for a prime p and every
+a, a^p mod p = a mod p (`fermat`), with primality stated plainly:
+`bnlaw.prime(p)` is p >= 2 and no d with 2 <= d < p divides p
+(`bnlaw.nodiv`; `prime_vector` checks it on 0, 1, 2, 7 and 9). The proof is
+the binomial one: Euclid's lemma (a prime dividing x y with 0 < x < p
+divides y, by kmath's `gcd_mul`: gcd(y p, y x) = y gcd(p, x) = y), so p
+divides C(p, k) for 0 < k < p (k C(p, k) = p C(p - 1, k - 1), Pascal's rule
+by induction); the binomial theorem gives (1 + a)^p = 1 + a^p (mod p), and
+induction on a gives a^p = a.
+
+**Not proved, and tested:** that the public shifts (`shl`, `shr`), the
+Montgomery operations on forms other than `mul` (`sqr`, `add`, `sub`,
+`neg`, `BnMont.exp` on its own), `BnNat.mod_u16`, `BnNat.trailing_zeros`,
+the Jacobi symbol and Miller-Rabin compute what they stand for on the
+numbers, for every input; and `exp_exp_comm` for an even m or m = 1, where
+`exp_plain`'s result may keep zero limbs on top (the values agree there,
+`exp_exp_value`). Miller-Rabin's "composite" answer being right (that a
+prime passes every round) rests on Fermat's theorem, which is proved, and
+still needs: a^(p - 1) = 1 for p not dividing a and x^2 = 1 giving x = 1
+or p - 1 modulo a prime (Nat lemmas within reach of Euclid's lemma above);
+the value laws of `BnNat.shr` and `BnNat.trailing_zeros` (so that n - 1 =
+2^s d); `BnMont.sqr` and `BnMont.exp` on forms (y = x R mod n), with form
+equality as equality modulo n; and the round's logic. Trial division's
+rejection needs the value law of `mod_u16` (U32 Horner steps over the
+reversed limbs). Euler's criterion (dh's footnote 22) needs, beyond Fermat,
+that a non-residue y has y^((p - 1) / 2) = -1 (Lagrange's bound on the
+roots of a polynomial modulo p, or Wilson's theorem), and the Jacobi
+symbol's value for a prime n needs quadratic reciprocity, since the
+algorithm's moduli after the first step are composite: both are out of
+this stage's scope. The exhaustive laws cover small values; `ref/run.sh`
+compares every def with Python's integers on numbers of up to 2048 bits.
 
 ## Tests
 
@@ -170,12 +309,21 @@ no defence against timing side channels.
 ## Dependencies
 
 `DEPS`: `bytes` (`Octets` for OS2IP and I2OSP, and its laws in the proof of
-`octets_round_trip`), `u32` (`U32Nat.dbl` in the limb laws, and its laws in
-their proofs).
+`octets_round_trip`), `kmath` (`KMath.gcd` and `KMath.lcm` in the gcd and
+inverse laws, and its gcd laws in their proofs and in Fermat's), `u32`
+(`U32Nat.dbl` in the limb laws, and its laws in their proofs). The library
+code imports only `bytes`; `kmath` and `u32` are for the laws.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (12 laws) and `PROOF_limbs.bend` (6) ALL PROOFS
-CHECK, `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 48 s, peak
-0.50 GB; `PROOF_limbs.bend` about 7 s, peak 0.34 GB), `check.bend` passes,
+Bend 2.0.37: `PROOF.bend` (12 laws), `PROOF_limbs.bend` (6),
+`PROOF_mul.bend` (2), `PROOF_div.bend` (9), `PROOF_mod.bend` (9),
+`PROOF_mont.bend` (14), `PROOF_gcd.bend` (14), `PROOF_inv.bend` (4) and
+`PROOF_fermat.bend` (2) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK on
+all nine (`PROOF.bend` about 44 s, peak 0.44 GB; `PROOF_limbs.bend` about
+6 s, peak 0.34 GB; `PROOF_mul.bend` about 9 s, peak 0.36 GB;
+`PROOF_div.bend` about 7 s, peak 0.42 GB; `PROOF_mod.bend` about 7 s, peak
+0.50 GB; `PROOF_mont.bend` about 9 s, peak 0.56 GB; `PROOF_gcd.bend` about
+20 s, peak 0.55 GB; `PROOF_inv.bend` about 22 s, peak 0.54 GB;
+`PROOF_fermat.bend` about 20 s, peak 0.58 GB), `check.bend` passes,
 `ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
