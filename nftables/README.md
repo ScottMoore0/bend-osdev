@@ -134,6 +134,7 @@ These are stated choices; where the choice is a real one it is an option
 | `chains.bend` | `NftChain`, `NftBaseSpec`, `NftTable`, `NftRuleset`, the base chains at a hook (`NftRuleset.base_chains`), building rule sets (`add_*`, `NftEdit`), `without_rules` |
 | `eval.bend` | `NftOptions` and its default, a chain's evaluation (`Nft.run_chain`, `NftRun`), a base chain's (`Nft.run_base`), a hook's (`Nft.run_hook`, `NftOut`) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_map.bend`, `PROOF_map.bend` | the key order and map lookup: laws and proofs |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -304,9 +305,42 @@ the outcomes of the key comparisons the insertion makes, so no lemma about
 the order of keys was needed. `PROOF.bend` uses bytes and netheaders only
 through their public defs (no laws of theirs were needed).
 
-Not proved: that map lookup agrees with a list model of maps (it would need
-transitivity of the key order, to show the first containing element is the
-only one); the expressions' semantics (payload loads, comparisons, limits)
+`LAWS_map.bend`, on the public interface only: 9 laws for every input, 1
+vector and 1 witness.
+
+* **the key order:** `key_le_refl`, `key_le_trans`, `key_lt_trans`,
+  `key_lt_le_trans`, `key_le_lt_trans` (`NftKey.le` is reflexive and
+  transitive, `NftKey.lt` transitive, and the two chain either way), and
+  `key_lt_not_le` (a key below another is not at or above it);
+* **maps:** `map_lookup_unique` (on a set with the invariant, if
+  `elements(s)` is `pre ++ [e] ++ post` and `e` holds `x`, then
+  `lookup(s, x)` is `Some{data(e)}`: the element holding a key is the only
+  one), `map_lookup_insert` (after inserting `e`, `lookup` gives `e`'s data
+  for the keys `e` holds and what it gave before for the others; no
+  hypothesis on the set is needed: insertion only puts `e` after elements
+  it lies above), `map_lookup_of_list` (the map built from a list answers
+  as the list does: the data of the first element of the list holding the
+  key, the list model `list_lookup`).
+
+The vector builds a map of two intervals and looks it up inside one and
+between them; the witness is a one-element set with the invariant holding
+the key it is looked up with.
+
+The proofs (`PROOF_map.bend`) state the key order's transitivity as one
+fact about three comparisons (`cm.ck`), prove it for `Nat.cmp` by
+induction, carry it to `U32.cmp` by bend-osdev-u32's `u32_cmp_value` (the
+only law of another package used), and through the lexicographic step by
+induction on the byte lists; comparing the other way round flips the
+result, the same way. Uniqueness: on a list with the invariant every
+element before one lies below its low end and every element after it above
+its high end. Insertion: the element goes in before the first it lies below
+(so lookup reads it first) or after one it lies above (which holds none of
+its keys, so the two lookups commute), and it succeeds only when no element
+holds a key of the new one. The list model follows by induction over the
+insertions, with the set's lookup the first answer of the elements inserted
+so far.
+
+Not proved: the expressions' semantics (payload loads, comparisons, limits)
 are covered by the differential test and `check.bend`.
 
 ## Tests
@@ -380,6 +414,8 @@ and checking and building it takes about 1 GB.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes (native), `ref/run.sh` 80 cases (152 packets) match
-(nft syntax check skipped: nft not installed), `scripts/deps.sh` ok.
+Bend 2.0.37: `PROOF.bend` and `PROOF_map.bend` ALL PROOFS CHECK, `--verdict`
+ALL PROOFS CHECK (`PROOF_map.bend` peaks at 0.22 GB), `check.bend` passes
+(native), `ref/run.sh` 80 cases (152 packets) match, and where nft was
+installed, `nft --check` accepted all 32 rule sets written in nft syntax;
+`scripts/deps.sh` ok.
