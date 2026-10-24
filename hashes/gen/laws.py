@@ -289,10 +289,14 @@ def michael_laws():
     PROOFS.append("def Laws.michael_short_key():\n  {==}\n")
     for i, (k, m, v) in enumerate(model.MICHAEL_V, 1):
         res = "Result<&2, &2, Hs.HsError, B.Octets>"
-        law("michael_vector_%d" % i, "%s: test vector %d as recalled from IEEE 802.11i's Annex H.2 (each key the previous tag), not checked against a published copy (README.md)" % (t, i), [],
+        law("michael_vector_%d" % i, "%s: test vector %d of IEEE Std 802.11-2024, Annex J.2.1.3, Table J-2 (each key the previous output)" % (t, i), [],
             "{Result.map(&2, &2, Hs.HsError, %s, B.Octets, k => %s, MI.HsMichael.key(%s)) == Done{%s} : %s}"
             % (K, D(octets(m)), digest_lit(k), digest_lit(v), res))
         PROOFS.append("def Laws.michael_vector_%d():\n  {==}\n" % i)
+    for i, ((l, r), n, (l2, r2)) in enumerate([b for b in model.MICHAEL_B if b[1] == 1], 1):
+        law("michael_block_%d" % i, "%s: the block function b once, IEEE Std 802.11-2024, Annex J.2.1.2, Table J-1, (%08x, %08x) as (l, r)" % (t, l, r), [],
+            "{MI.hs.michael.b(Hs.HsW2{%d, %d}) == Hs.HsW2{%d, %d} : Hs.HsW2}" % (l, r, l2, r2))
+        PROOFS.append("def Laws.michael_block_%d():\n  {==}\n" % i)
     law("michael_tkip_m63", "%s: IEEE Std 802.11-2012, M.6.3 (the TKIP test vector, as hostap's BSD-licensed wlantest/test_vectors.c reproduces it): the MIC of its MSDU (DA, SA, priority 0 and three zero bytes, then the data) under TK bytes 16 to 23" % t, [],
         "{Result.map(&2, &2, Hs.HsError, %s, B.Octets, k => %s, MI.HsMichael.key(%s)) == Done{%s} : Result<&2, &2, Hs.HsError, B.Octets>}"
         % (K, D(octets(model.TKIP_M63_INPUT)), digest_lit(model.TKIP_M63_KEY.hex()), digest_lit(model.TKIP_M63_MIC)))

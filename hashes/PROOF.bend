@@ -364,5 +364,17 @@ def Laws.michael_vector_5():
 def Laws.michael_vector_6():
   {==}
 
+def Laws.michael_block_1():
+  {==}
+
+def Laws.michael_block_2():
+  {==}
+
+def Laws.michael_block_3():
+  {==}
+
+def Laws.michael_block_4():
+  {==}
+
 def Laws.michael_tkip_m63():
   {==}
