@@ -89,7 +89,8 @@ The other public defs: `PkHmac.raw(~bsize, ~digest, k, m)`;
 `PkRsa.err`, `PkRsa.err_pk`, `PkRsa.pss_salt`; `PkDh.err`, `PkDh.public_of`
 (the raw reader, dh's error); `PkEcc.err`, `PkEcdh.point_of` (the raw
 reader, ecc's error), `PkEcdsa.sig`; `PkSm2.err`, `PkSm2.sig`,
-`PkSm2.check`; `PkEcrdsa.err`, `PkEcrdsa.sig`. Errors are crypto's
+`PkSm2.check`; `PkEcrdsa.err`, `PkEcrdsa.public_of` (the raw reader,
+ecrdsa's error), `PkEcrdsa.sig`. Errors are crypto's
 `CrError`: a bad private key `CrBadKey`, a bad public key
 `CrBadPublicKey`.
 
@@ -102,13 +103,13 @@ reader, ecc's error), `PkEcdsa.sig`; `PkSm2.err`, `PkSm2.sig`,
 * **A new public-key algorithm** plugs in as these do: a file of adapters
   mapping its errors onto `CrError`, and a row in `gen/instances.py`'s SIGN
   or KEX table (and FMT, if its package proves a public-key format round
-  trip).
+  trip of the shape of ecc's `point_round_trip`).
 * **Random signing** (a caller's k or salt) is not the interface's shape;
   use the algorithm packages directly for it.
 
 ## Laws
 
-`LAWS.bend` has 10 laws, all proved (`PROOF.bend`) and all accepted by
+`LAWS.bend` has 12 laws, all proved (`PROOF.bend`) and all accepted by
 `--verdict`. They hold for every value of the instances' parameters (every
 hash, curve, group, salt length...), so the named instances are special
 cases, and the checker never computes with a concrete curve or group.
@@ -129,12 +130,21 @@ cases, and the checker never computes with a concrete curve or group.
   for every pair of keys, when the keys parse, the public keys survive
   their bytes and the shared secrets agree.
 * **The pk_format law**: `ecdh_pk_format_if` (ECDH's public keys, which
-  ECDSA and SM2 share, for every curve) and `dh_pk_format_if` (every
-  group): a public key read from bytes is read again from the bytes written
-  for it, given ecc's `point_round_trip` or dh's `public_round_trip` at
-  those bytes (`hr`). Those package laws hold for every input; they are
-  hypotheses here only because importing the packages' `PROOF.bend` files
-  would bring their exhaustive cases into this check.
+  ECDSA and SM2 share, for every curve), `ecrdsa_pk_format_if` (GOST R
+  34.10-2012's, RFC 4491's form, for every curve) and `dh_pk_format_if`
+  (every group): a public key read from bytes is read again from the bytes
+  written for it, given ecc's `point_round_trip`, ecrdsa's
+  `public_round_trip` or dh's `public_round_trip` at those bytes (`hr`).
+  Those package laws hold for every input; they are hypotheses here only
+  because importing the packages' `PROOF.bend` files would bring their
+  exhaustive cases into this check. `rsa_pk_format_if` (by hand): an RSA
+  public key that `Rsa.public_of` accepts (`hk`) is read back from the
+  bytes written for it, given rsa's `public_form_round_trip_if` at its
+  integers (`hr`); it is not of the others' shape, because rsa's form reads
+  a key read from any bytes back only up to the representation of its
+  integers (rsa's README, Laws), and rsa's law itself has hypotheses (that
+  each integer reads back from its shortest bytes, and that their byte
+  counts fit 32 bits).
 
 **Not proved, and tested:** the hypotheses `ha` and `h` (that a scheme
 accepts its own signatures, and that both parties' shared secrets agree,
@@ -143,9 +153,9 @@ the integers the limbs stand for, which bend-osdev does not formalise
 (bignum's README). They hold exhaustively for the packages' toy
 parameters (rsa's `toy_round_trip`, ecc's `toy_ecdsa` and `toy_ecdh`,
 dh's `toy_agree`, sm2's and ecrdsa's `toy_sign_verify`), and are tested on
-the named instances by `check.bend` and `ref/run.sh`. GOST's RFC 4491 key
-form and rsa's raw form have no proved round trip (their packages' READMEs
-say why), so their instances have no pk_format law.
+the named instances by `check.bend` and `ref/run.sh`. The hypotheses of
+rsa's `public_form_round_trip_if` (rsa's README says why they are not
+proved there).
 
 ## Tests
 

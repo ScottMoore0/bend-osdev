@@ -3,6 +3,7 @@ import ../bytes/bytes.bend as B
 import ../bignum/bignum.bend as NB
 import ../ecc/ecc.bend as EE
 import ../dh/dh.bend as DD
+import ../ecrdsa/ecrdsa.bend as GG
 import ../rsa/rsa.bend as RR
 import ../rsa/keys.bend as RK
 import ../crypto/crypto.bend as Cr
@@ -39,6 +40,11 @@ def Laws.lift_pk_format(E, PK, f, d, t, r, p, h, hr):
       %pk_done_inj(PK, q, p, h) : {Cr.CrError.lift(~E, ~PK, ~f, d(t(_))) == Done{_} : Result<&2, &2, Cr.CrError, PK>}
       %Equal.sym(Result<&2, &2, E, PK>, d(t(q)), Done{q}, hr) : {Cr.CrError.lift(~E, ~PK, ~f, _) == Done{q} : Result<&2, &2, Cr.CrError, PK>}
       {==}
+
+def Laws.rsa_pk_format_if(n, e, hk, hr):
+  %Equal.sym(Result<&2, &2, RR.RsaError, RR.RsaPublic>, RK.RsaKeys.public_of(RK.RsaKeys.public_to(RR.RsaPublic{n, e})), RR.Rsa.public_of(n, e), hr) : {Cr.CrError.lift(~RR.RsaError, ~RR.RsaPublic, ~PR.PkRsa.err_pk, _) == Done{RR.RsaPublic{n, e}} : Result<&2, &2, Cr.CrError, RR.RsaPublic>}
+  %Equal.sym(Result<&2, &2, RR.RsaError, RR.RsaPublic>, RR.Rsa.public_of(n, e), Done{RR.RsaPublic{n, e}}, hk) : {Cr.CrError.lift(~RR.RsaError, ~RR.RsaPublic, ~PR.PkRsa.err_pk, _) == Done{RR.RsaPublic{n, e}} : Result<&2, &2, Cr.CrError, RR.RsaPublic>}
+  {==}
 
 # The instances
 
@@ -82,4 +88,7 @@ def Laws.ecdh_pk_format_if(prm, o, p, h, hr):
 
 def Laws.dh_pk_format_if(grp, o, p, h, hr):
   Laws.lift_pk_format(~DD.DhError, ~NB.BnNat, ~PD.PkDh.err, x => PD.PkDh.public_of(~grp, x), q => PD.PkDh.pk_to(~grp, q), PD.PkDh.public_of(~grp, o), p, h, hr)
+
+def Laws.ecrdsa_pk_format_if(prm, o, p, h, hr):
+  Laws.lift_pk_format(~GG.EcrdsaError, ~EE.EcPoint, ~PG.PkEcrdsa.err, x => PG.PkEcrdsa.public_of(~prm, x), q => PG.PkEcrdsa.pk_to(~prm, q), PG.PkEcrdsa.public_of(~prm, o), p, h, hr)
 # END GENERATED: proofs
