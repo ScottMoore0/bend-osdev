@@ -18,6 +18,8 @@ import ../u32/LAWS.bend as UL
 import ../u32/PROOF.bend as UP
 import ./format.bend as F
 import ./pointer.bend as P
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Logic
 
@@ -58,35 +60,6 @@ def cp.succ_cong(-a: Nat, -b: Nat, +e: {a == b : Nat}) -> {1n+a == 1n+b : Nat}:
   %e : {1n+a == 1n+_ : Nat}
   {==}
 
-def cp.add_zero(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      cp.succ_cong(Nat.add(p, 0n), p, cp.add_zero(p))
-
-def cp.add_succ(+x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      cp.succ_cong(Nat.add(p, 1n+y), 1n+Nat.add(p, y), cp.add_succ(p, y))
-
-def cp.add_comm(+x: Nat, +y: Nat) -> {Nat.add(x, y) == Nat.add(y, x) : Nat}:
-  match x:
-    case 0n:
-      Equal.sym(Nat, Nat.add(y, 0n), y, cp.add_zero(y))
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(y, 1n+p), 1n+Nat.add(y, p), cp.add_succ(y, p)) : {1n+Nat.add(p, y) == _ : Nat}
-      cp.succ_cong(Nat.add(p, y), Nat.add(y, p), cp.add_comm(p, y))
-
-def cp.add_assoc(+x: Nat, -y: Nat, -z: Nat) -> {Nat.add(Nat.add(x, y), z) == Nat.add(x, Nat.add(y, z)) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      cp.succ_cong(Nat.add(Nat.add(p, y), z), Nat.add(p, Nat.add(y, z)), cp.add_assoc(p, y, z))
-
 def cp.double_add(+x: Nat, -y: Nat) -> {Nat.double(Nat.add(x, y)) == Nat.add(Nat.double(x), Nat.double(y)) : Nat}:
   match x:
     case 0n:
@@ -111,24 +84,6 @@ def cp.sub_add_l(+h: Nat, +z: Nat) -> {Nat.sub(Nat.add(h, z), h) == z : Nat}:
       cp.sub_add_l(p, z)
 
 # Nat: products
-
-# (a + b) c = a c + b c
-def cp.mul_add_r(+a: Nat, +b: Nat, +c: Nat) -> {Nat.mul(Nat.add(a, b), c) == Nat.add(Nat.mul(a, c), Nat.mul(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.mul(Nat.add(p, b), c), Nat.add(Nat.mul(p, c), Nat.mul(b, c)), cp.mul_add_r(p, b, c)) : {Nat.add(c, _) == Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)) : Nat}
-      Equal.sym(Nat, Nat.add(Nat.add(c, Nat.mul(p, c)), Nat.mul(b, c)), Nat.add(c, Nat.add(Nat.mul(p, c), Nat.mul(b, c))), cp.add_assoc(c, Nat.mul(p, c), Nat.mul(b, c)))
-
-# (a b) c = a (b c)
-def cp.mul_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.mul(Nat.mul(a, b), c) == Nat.mul(a, Nat.mul(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %cp.mul_assoc(p, b, c) : {Nat.mul(Nat.add(b, Nat.mul(p, b)), c) == Nat.add(Nat.mul(b, c), _) : Nat}
-      cp.mul_add_r(b, Nat.mul(p, b), c)
 
 # x 2^k = x * (2^k)
 def cp.dbl_mul(+k: Nat, +x: Nat) -> {U.U32Nat.dbl(k, x) == Nat.mul(x, U.U32Nat.dbl(k, 1n)) : Nat}:
@@ -165,28 +120,6 @@ def cp.not_lt_add(+a: Nat, +b: Nat) -> {Nat.is_lt(Nat.add(a, b), a) == False{} :
           {==}
     case 1n+p:
       cp.not_lt_add(p, b)
-
-def cp.le_add(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      match b:
-        case 0n:
-          {==}
-        case 1n+q:
-          {==}
-    case 1n+p:
-      cp.le_add(p, b)
-
-def cp.le_add_r(+a: Nat, +b: Nat) -> {Nat.is_le(b, Nat.add(a, b)) == True{} : Bool}:
-  %cp.add_comm(b, a) : {Nat.is_le(b, _) == True{} : Bool}
-  cp.le_add(b, a)
-
-def cp.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      cp.le_refl(p)
 
 def cp.lt_le(+x: Nat, +y: Nat, +h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_le(x, y) == True{} : Bool}:
   match x:
@@ -246,48 +179,6 @@ def cp.lt_succ(+x: Nat, +y: Nat, +h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat
         case 1n+q:
           cp.lt_succ(p, q, h)
 
-def cp.le_trans(+x: Nat, +y: Nat, +z: Nat, +h1: {Nat.is_le(x, y) == True{} : Bool}, +h2: {Nat.is_le(y, z) == True{} : Bool}) -> {Nat.is_le(x, z) == True{} : Bool}:
-  match x:
-    case 0n:
-      match z:
-        case 0n:
-          {==}
-        case 1n+r:
-          {==}
-    case 1n+p:
-      match y:
-        case 0n:
-          cp.absurd({Nat.is_le(1n+p, z) == True{} : Bool}, cp.ft(h1))
-        case 1n+q:
-          match z:
-            case 0n:
-              cp.absurd({Nat.is_le(1n+p, 0n) == True{} : Bool}, cp.ft(h2))
-            case 1n+r:
-              cp.le_trans(p, q, r, h1, h2)
-
-def cp.lt_le_trans(+x: Nat, +y: Nat, +z: Nat, +h1: {Nat.is_lt(x, y) == True{} : Bool}, +h2: {Nat.is_le(y, z) == True{} : Bool}) -> {Nat.is_lt(x, z) == True{} : Bool}:
-  match x:
-    case 0n:
-      match y:
-        case 0n:
-          cp.absurd({Nat.is_lt(0n, z) == True{} : Bool}, cp.ft(h1))
-        case 1n+q:
-          match z:
-            case 0n:
-              cp.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, cp.ft(h2))
-            case 1n+r:
-              {==}
-    case 1n+p:
-      match y:
-        case 0n:
-          cp.absurd({Nat.is_lt(1n+p, z) == True{} : Bool}, cp.ft(h1))
-        case 1n+q:
-          match z:
-            case 0n:
-              cp.absurd({Nat.is_lt(1n+p, 0n) == True{} : Bool}, cp.ft(h2))
-            case 1n+r:
-              cp.lt_le_trans(p, q, r, h1, h2)
-
 # not x < y: y <= x
 def cp.le_of_not_lt(+x: Nat, +y: Nat, +e: {Nat.is_lt(x, y) == False{} : Bool}) -> {Nat.is_le(y, x) == True{} : Bool}:
   match x:
@@ -332,7 +223,7 @@ def cp.step_s(+a: Nat, +x: Nat, +sp: Nat, +h: {Nat.is_lt(Nat.mul(a, 1n+sp), Nat.
         case 0n:
           cp.absurd({Nat.is_le(Nat.add(0n, 1n+sp), 0n) == True{} : Bool}, cp.ft(h))
         case 1n+q:
-          cp.le_add(1n+sp, Nat.mul(q, 1n+sp))
+          UO.nat_le_add_r(1n+sp, Nat.mul(q, 1n+sp))
     case 1n+p:
       match x:
         case 0n:
@@ -340,7 +231,7 @@ def cp.step_s(+a: Nat, +x: Nat, +sp: Nat, +h: {Nat.is_lt(Nat.mul(a, 1n+sp), Nat.
         case 1n+q:
           +mp = Nat.mul(p, 1n+sp)
           +mq = Nat.mul(q, 1n+sp)
-          %Equal.sym(Nat, Nat.add(Nat.add(1n+sp, mp), 1n+sp), Nat.add(1n+sp, Nat.add(mp, 1n+sp)), cp.add_assoc(1n+sp, mp, 1n+sp)) : {Nat.is_le(_, Nat.add(1n+sp, mq)) == True{} : Bool}
+          %Equal.sym(Nat, Nat.add(Nat.add(1n+sp, mp), 1n+sp), Nat.add(1n+sp, Nat.add(mp, 1n+sp)), UL.nat_add_assoc(1n+sp, mp, 1n+sp)) : {Nat.is_le(_, Nat.add(1n+sp, mq)) == True{} : Bool}
           %Equal.sym(Bool, Nat.is_le(Nat.add(1n+sp, Nat.add(mp, 1n+sp)), Nat.add(1n+sp, mq)), Nat.is_le(Nat.add(mp, 1n+sp), mq), cp.le_add_l(1n+sp, Nat.add(mp, 1n+sp), mq)) : {_ == True{} : Bool}
           cp.step_s(p, q, sp, Equal.trans(Bool, Nat.is_lt(mp, mq), Nat.is_lt(Nat.add(1n+sp, mp), Nat.add(1n+sp, mq)), True{}, Equal.sym(Bool, Nat.is_lt(Nat.add(1n+sp, mp), Nat.add(1n+sp, mq)), Nat.is_lt(mp, mq), cp.lt_add_l(1n+sp, mp, mq)), h))
 
@@ -368,7 +259,7 @@ def cp.dm_small(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +h: {Nat.is_lt(n, 1n+m) == T
         case 0n:
           cp.absurd({Nat.divmod.go(1n+np, 0n, d, r) == (d, Nat.add(1n+np, r)) : Nat & Nat}, cp.not_lt_one(np, h))
         case 1n+mp:
-          %cp.add_succ(np, r) : {Nat.divmod.go(1n+np, 1n+mp, d, r) == (d, _) : Nat & Nat}
+          %UL.nat_add_succ(np, r) : {Nat.divmod.go(1n+np, 1n+mp, d, r) == (d, _) : Nat & Nat}
           cp.dm_small(np, mp, d, 1n+r, h)
 
 def cp.dm_round(+m: Nat, +n: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(Nat.add(m, 1n+n), m, d, r) == Nat.divmod.go(n, Nat.add(m, r), 1n+d, 0n) : Nat & Nat}:
@@ -376,28 +267,28 @@ def cp.dm_round(+m: Nat, +n: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(Nat.add(m,
     case 0n:
       {==}
     case 1n+mp:
-      %cp.add_succ(mp, r) : {Nat.divmod.go(Nat.add(1n+mp, 1n+n), 1n+mp, d, r) == Nat.divmod.go(n, _, 1n+d, 0n) : Nat & Nat}
+      %UL.nat_add_succ(mp, r) : {Nat.divmod.go(Nat.add(1n+mp, 1n+n), 1n+mp, d, r) == Nat.divmod.go(n, _, 1n+d, 0n) : Nat & Nat}
       cp.dm_round(mp, n, d, 1n+r)
 
 def cp.dm_rounds(+g: Nat, +i: Nat, +d: Nat, +bp: Nat, +h: {Nat.is_lt(i, 1n+bp) == True{} : Bool}) -> {Nat.divmod.go(Nat.add(Nat.mul(g, 1n+bp), i), bp, d, 0n) == (Nat.add(g, d), i) : Nat & Nat}:
   match g:
     case 0n:
-      %cp.add_zero(i) : {Nat.divmod.go(i, bp, d, 0n) == (d, _) : Nat & Nat}
+      %UL.nat_add_zero(i) : {Nat.divmod.go(i, bp, d, 0n) == (d, _) : Nat & Nat}
       cp.dm_small(i, bp, d, 0n, h)
     case 1n+gp:
       +gg = Nat.mul(gp, 1n+bp)
       +y = Nat.add(gg, i)
-      %Equal.sym(Nat, Nat.add(Nat.add(bp, gg), i), Nat.add(bp, y), cp.add_assoc(bp, gg, i)) : {Nat.divmod.go(1n+_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-      %cp.add_succ(bp, y) : {Nat.divmod.go(_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
+      %Equal.sym(Nat, Nat.add(Nat.add(bp, gg), i), Nat.add(bp, y), UL.nat_add_assoc(bp, gg, i)) : {Nat.divmod.go(1n+_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
+      %UL.nat_add_succ(bp, y) : {Nat.divmod.go(_, bp, d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(bp, 1n+y), bp, d, 0n), Nat.divmod.go(y, Nat.add(bp, 0n), 1n+d, 0n), cp.dm_round(bp, y, d, 0n)) : {_ == (1n+Nat.add(gp, d), i) : Nat & Nat}
-      %Equal.sym(Nat, Nat.add(bp, 0n), bp, cp.add_zero(bp)) : {Nat.divmod.go(y, _, 1n+d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
-      %cp.add_succ(gp, d) : {Nat.divmod.go(y, bp, 1n+d, 0n) == (_, i) : Nat & Nat}
+      %Equal.sym(Nat, Nat.add(bp, 0n), bp, UL.nat_add_zero(bp)) : {Nat.divmod.go(y, _, 1n+d, 0n) == (1n+Nat.add(gp, d), i) : Nat & Nat}
+      %UL.nat_add_succ(gp, d) : {Nat.divmod.go(y, bp, 1n+d, 0n) == (_, i) : Nat & Nat}
       cp.dm_rounds(gp, i, 1n+d, bp, h)
 
 # g (1 + bp) + i, i <= bp: quotient g, remainder i
 def cp.div_of(+g: Nat, +i: Nat, +bp: Nat, +h: {Nat.is_lt(i, 1n+bp) == True{} : Bool}) -> {Nat.div(Nat.add(Nat.mul(g, 1n+bp), i), 1n+bp) == g : Nat}:
   %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(Nat.mul(g, 1n+bp), i), bp, 0n, 0n), (Nat.add(g, 0n), i), cp.dm_rounds(g, i, 0n, bp, h)) : {Pair.fst(Nat, Nat, _) == g : Nat}
-  cp.add_zero(g)
+  UL.nat_add_zero(g)
 
 def cp.mod_of(+g: Nat, +i: Nat, +bp: Nat, +h: {Nat.is_lt(i, 1n+bp) == True{} : Bool}) -> {Nat.mod(Nat.add(Nat.mul(g, 1n+bp), i), 1n+bp) == i : Nat}:
   %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.add(Nat.mul(g, 1n+bp), i), bp, 0n, 0n), (Nat.add(g, 0n), i), cp.dm_rounds(g, i, 0n, bp, h)) : {Pair.snd(Nat, Nat, _) == i : Nat}
@@ -560,7 +451,7 @@ def cp.ult(+a: U32, +b: U32, -x: Nat, -y: Nat, +ex: {U32.to_nat(a) == x : Nat}, 
   UL.u32_lt_value(a, b)
 
 def cp.lt_cancel(+z: Nat, +r: Nat, +rr: Nat) -> {Nat.is_lt(Nat.add(z, r), Nat.add(rr, z)) == Nat.is_lt(r, rr) : Bool}:
-  %cp.add_comm(z, rr) : {Nat.is_lt(Nat.add(z, r), _) == Nat.is_lt(r, rr) : Bool}
+  %UL.nat_add_comm(z, rr) : {Nat.is_lt(Nat.add(z, r), _) == Nat.is_lt(r, rr) : Bool}
   cp.lt_add_l(z, r, rr)
 
 def cp.lt_pt(+p0: U32, +t8: U32, +B: Nat, +rr: Nat, +R: Nat, +H: Nat, +ht: {U32.to_nat(t8) == Nat.add(rr, Nat.mul(B, H)) : Nat}, +hp: {U32.to_nat(p0) == Nat.add(Nat.mul(B, H), R) : Nat}) -> {U32.is_lt(p0, t8) == Nat.is_lt(R, rr) : Bool}:
@@ -568,12 +459,12 @@ def cp.lt_pt(+p0: U32, +t8: U32, +B: Nat, +rr: Nat, +R: Nat, +H: Nat, +ht: {U32.
 
 # p0 = (H + Y) + R is not below h = H
 def cp.ge_h(+p0: U32, +h: U32, +hp: Nat, +y: Nat, +r: Nat, +hp0: {U32.to_nat(p0) == Nat.add(Nat.add(1n+hp, y), r) : Nat}, +hh: {U32.to_nat(h) == 1n+hp : Nat}) -> {U32.is_lt(p0, h) == False{} : Bool}:
-  Equal.trans(Bool, U32.is_lt(p0, h), Nat.is_lt(Nat.add(Nat.add(1n+hp, y), r), 1n+hp), False{}, cp.ult(p0, h, Nat.add(Nat.add(1n+hp, y), r), 1n+hp, hp0, hh), Equal.trans(Bool, Nat.is_lt(Nat.add(Nat.add(1n+hp, y), r), 1n+hp), Nat.is_lt(Nat.add(1n+hp, Nat.add(y, r)), 1n+hp), False{}, Equal.cong(Nat, Bool, x => Nat.is_lt(x, 1n+hp), Nat.add(Nat.add(1n+hp, y), r), Nat.add(1n+hp, Nat.add(y, r)), cp.add_assoc(1n+hp, y, r)), cp.not_lt_add(1n+hp, Nat.add(y, r))))
+  Equal.trans(Bool, U32.is_lt(p0, h), Nat.is_lt(Nat.add(Nat.add(1n+hp, y), r), 1n+hp), False{}, cp.ult(p0, h, Nat.add(Nat.add(1n+hp, y), r), 1n+hp, hp0, hh), Equal.trans(Bool, Nat.is_lt(Nat.add(Nat.add(1n+hp, y), r), 1n+hp), Nat.is_lt(Nat.add(1n+hp, Nat.add(y, r)), 1n+hp), False{}, Equal.cong(Nat, Bool, x => Nat.is_lt(x, 1n+hp), Nat.add(Nat.add(1n+hp, y), r), Nat.add(1n+hp, Nat.add(y, r)), UL.nat_add_assoc(1n+hp, y, r)), cp.not_lt_add(1n+hp, Nat.add(y, r))))
 
 # and p0 - h = Y + R
 def cp.vsub(+p0: U32, +h: U32, +hp: Nat, +y: Nat, +r: Nat, +hp0: {U32.to_nat(p0) == Nat.add(Nat.add(1n+hp, y), r) : Nat}, +hh: {U32.to_nat(h) == 1n+hp : Nat}) -> {U32.to_nat(U32.sub(p0, h)) == Nat.add(y, r) : Nat}:
-  +e3 = Equal.trans(Nat, Nat.add(1n+hp, Nat.add(y, r)), Nat.add(Nat.add(1n+hp, y), r), U32.to_nat(p0), Equal.sym(Nat, Nat.add(Nat.add(1n+hp, y), r), Nat.add(1n+hp, Nat.add(y, r)), cp.add_assoc(1n+hp, y, r)), Equal.sym(Nat, U32.to_nat(p0), Nat.add(Nat.add(1n+hp, y), r), hp0))
-  +hle = cp.le_rw(1n+hp, U32.to_nat(h), Nat.add(1n+hp, Nat.add(y, r)), U32.to_nat(p0), Equal.sym(Nat, U32.to_nat(h), 1n+hp, hh), e3, cp.le_add(1n+hp, Nat.add(y, r)))
+  +e3 = Equal.trans(Nat, Nat.add(1n+hp, Nat.add(y, r)), Nat.add(Nat.add(1n+hp, y), r), U32.to_nat(p0), Equal.sym(Nat, Nat.add(Nat.add(1n+hp, y), r), Nat.add(1n+hp, Nat.add(y, r)), UL.nat_add_assoc(1n+hp, y, r)), Equal.sym(Nat, U32.to_nat(p0), Nat.add(Nat.add(1n+hp, y), r), hp0))
+  +hle = cp.le_rw(1n+hp, U32.to_nat(h), Nat.add(1n+hp, Nat.add(y, r)), U32.to_nat(p0), Equal.sym(Nat, U32.to_nat(h), 1n+hp, hh), e3, UO.nat_le_add_r(1n+hp, Nat.add(y, r)))
   %Equal.sym(Nat, U32.to_nat(U32.sub(p0, h)), Nat.sub(U32.to_nat(p0), U32.to_nat(h)), UL.u32_sub_value(p0, h, hle)) : {_ == Nat.add(y, r) : Nat}
   %e3 : {Nat.sub(_, U32.to_nat(h)) == Nat.add(y, r) : Nat}
   %Equal.sym(Nat, U32.to_nat(h), 1n+hp, hh) : {Nat.sub(Nat.add(1n+hp, Nat.add(y, r)), _) == Nat.add(y, r) : Nat}
@@ -584,17 +475,17 @@ def cp.vsub(+p0: U32, +h: U32, +hp: Nat, +y: Nat, +r: Nat, +hp0: {U32.to_nat(p0)
 def cp.g_found_c(+p0: U32, +h: U32, +rr: Nat, +R: Nat, +hp: Nat, +c: Bool, +B: Nat, +ec: {Nat.is_lt(R, rr) == c : Bool}, +hp0: {U32.to_nat(p0) == Nat.add(Nat.mul(B, 1n+hp), R) : Nat}, +hh: {U32.to_nat(h) == 1n+hp : Nat}, +hR: {Nat.is_lt(R, 1n+hp) == True{} : Bool}) -> {Maybe.is_some(&2, U32, P.c842.pointer.at(c, p0, h)) == Nat.is_lt(R, Nat.add(rr, Nat.mul(B, 1n+hp))) : Bool}:
   match c:
     case True{}:
-      Equal.sym(Bool, Nat.is_lt(R, Nat.add(rr, Nat.mul(B, 1n+hp))), True{}, cp.lt_le_trans(R, rr, Nat.add(rr, Nat.mul(B, 1n+hp)), ec, cp.le_add(rr, Nat.mul(B, 1n+hp))))
+      Equal.sym(Bool, Nat.is_lt(R, Nat.add(rr, Nat.mul(B, 1n+hp))), True{}, UO.nat_lt_le_trans(R, rr, Nat.add(rr, Nat.mul(B, 1n+hp)), ec, UO.nat_le_add_r(rr, Nat.mul(B, 1n+hp))))
     case False{}:
       match B:
         case 0n:
           %Equal.sym(Bool, U32.is_lt(p0, h), True{}, Equal.trans(Bool, U32.is_lt(p0, h), Nat.is_lt(R, 1n+hp), True{}, cp.ult(p0, h, R, 1n+hp, hp0, hh), hR)) : {Maybe.is_some(&2, U32, P.c842.pointer.wrap(_, p0, h)) == Nat.is_lt(R, Nat.add(rr, 0n)) : Bool}
-          %Equal.sym(Nat, Nat.add(rr, 0n), rr, cp.add_zero(rr)) : {False{} == Nat.is_lt(R, _) : Bool}
+          %Equal.sym(Nat, Nat.add(rr, 0n), rr, UL.nat_add_zero(rr)) : {False{} == Nat.is_lt(R, _) : Bool}
           Equal.sym(Bool, Nat.is_lt(R, rr), False{}, ec)
         case 1n+bq:
           +y = Nat.mul(bq, 1n+hp)
           %Equal.sym(Bool, U32.is_lt(p0, h), False{}, cp.ge_h(p0, h, hp, y, R, hp0, hh)) : {Maybe.is_some(&2, U32, P.c842.pointer.wrap(_, p0, h)) == Nat.is_lt(R, Nat.add(rr, Nat.add(1n+hp, y))) : Bool}
-          Equal.sym(Bool, Nat.is_lt(R, Nat.add(rr, Nat.add(1n+hp, y))), True{}, cp.lt_le_trans(R, 1n+hp, Nat.add(rr, Nat.add(1n+hp, y)), hR, cp.le_trans(1n+hp, Nat.add(1n+hp, y), Nat.add(rr, Nat.add(1n+hp, y)), cp.le_add(1n+hp, y), cp.le_add_r(rr, Nat.add(1n+hp, y)))))
+          Equal.sym(Bool, Nat.is_lt(R, Nat.add(rr, Nat.add(1n+hp, y))), True{}, UO.nat_lt_le_trans(R, 1n+hp, Nat.add(rr, Nat.add(1n+hp, y)), hR, UO.nat_le_trans(1n+hp, Nat.add(1n+hp, y), Nat.add(rr, Nat.add(1n+hp, y)), UO.nat_le_add_r(1n+hp, y), UL.nat_le_add(Nat.add(1n+hp, y), rr))))
 
 def cp.g_found(+p0: U32, +t8: U32, +h: U32, +B: Nat, +rr: Nat, +R: Nat, +hp: Nat, +ht: {U32.to_nat(t8) == Nat.add(rr, Nat.mul(B, 1n+hp)) : Nat}, +hp0: {U32.to_nat(p0) == Nat.add(Nat.mul(B, 1n+hp), R) : Nat}, +hh: {U32.to_nat(h) == 1n+hp : Nat}, +hR: {Nat.is_lt(R, 1n+hp) == True{} : Bool}) -> {Maybe.is_some(&2, U32, P.c842.pointer.at(U32.is_lt(p0, t8), p0, h)) == Nat.is_lt(R, U32.to_nat(t8)) : Bool}:
   %Equal.sym(Bool, U32.is_lt(p0, t8), Nat.is_lt(R, rr), cp.lt_pt(p0, t8, B, rr, R, 1n+hp, ht, hp0)) : {Maybe.is_some(&2, U32, P.c842.pointer.at(_, p0, h)) == Nat.is_lt(R, U32.to_nat(t8)) : Bool}
@@ -618,22 +509,22 @@ def cp.below(-p: Nat, -t: Nat, +a: Nat, +x: Nat, +sp: Nat, +ep: {p == Nat.mul(a,
 def cp.mult(+b: Nat, +q: Nat, +i: Nat, +hp: Nat, +sp: Nat, -r: Nat, +hs: {1n+hp == Nat.mul(q, 1n+sp) : Nat}, +hi: {r == Nat.mul(i, 1n+sp) : Nat}) -> {Nat.add(Nat.mul(b, 1n+hp), r) == Nat.mul(Nat.add(Nat.mul(b, q), i), 1n+sp) : Nat}:
   %Equal.sym(Nat, 1n+hp, Nat.mul(q, 1n+sp), hs) : {Nat.add(Nat.mul(b, _), r) == Nat.mul(Nat.add(Nat.mul(b, q), i), 1n+sp) : Nat}
   %Equal.sym(Nat, r, Nat.mul(i, 1n+sp), hi) : {Nat.add(Nat.mul(b, Nat.mul(q, 1n+sp)), _) == Nat.mul(Nat.add(Nat.mul(b, q), i), 1n+sp) : Nat}
-  %Equal.sym(Nat, Nat.mul(Nat.add(Nat.mul(b, q), i), 1n+sp), Nat.add(Nat.mul(Nat.mul(b, q), 1n+sp), Nat.mul(i, 1n+sp)), cp.mul_add_r(Nat.mul(b, q), i, 1n+sp)) : {Nat.add(Nat.mul(b, Nat.mul(q, 1n+sp)), Nat.mul(i, 1n+sp)) == _ : Nat}
-  %cp.mul_assoc(b, q, 1n+sp) : {Nat.add(_, Nat.mul(i, 1n+sp)) == Nat.add(Nat.mul(Nat.mul(b, q), 1n+sp), Nat.mul(i, 1n+sp)) : Nat}
+  %Equal.sym(Nat, Nat.mul(Nat.add(Nat.mul(b, q), i), 1n+sp), Nat.add(Nat.mul(Nat.mul(b, q), 1n+sp), Nat.mul(i, 1n+sp)), UL.nat_add_mul(Nat.mul(b, q), i, 1n+sp)) : {Nat.add(Nat.mul(b, Nat.mul(q, 1n+sp)), Nat.mul(i, 1n+sp)) == _ : Nat}
+  %UL.nat_mul_assoc(b, q, 1n+sp) : {Nat.add(_, Nat.mul(i, 1n+sp)) == Nat.add(Nat.mul(Nat.mul(b, q), 1n+sp), Nat.mul(i, 1n+sp)) : Nat}
   {==}
 
 # rr < H: rr + Z <= (Z + R) + H
 def cp.latest1(+rr: Nat, +z: Nat, +r: Nat, +hp: Nat, +hrr: {Nat.is_lt(rr, 1n+hp) == True{} : Bool}) -> {Nat.is_le(Nat.add(rr, z), Nat.add(Nat.add(z, r), 1n+hp)) == True{} : Bool}:
-  cp.le_rw(Nat.add(z, rr), Nat.add(rr, z), Nat.add(z, Nat.add(r, 1n+hp)), Nat.add(Nat.add(z, r), 1n+hp), cp.add_comm(z, rr), Equal.sym(Nat, Nat.add(Nat.add(z, r), 1n+hp), Nat.add(z, Nat.add(r, 1n+hp)), cp.add_assoc(z, r, 1n+hp)), cp.le_add_mono(z, rr, Nat.add(r, 1n+hp), cp.le_trans(rr, 1n+hp, Nat.add(r, 1n+hp), cp.lt_le(rr, 1n+hp, hrr), cp.le_add_r(r, 1n+hp))))
+  cp.le_rw(Nat.add(z, rr), Nat.add(rr, z), Nat.add(z, Nat.add(r, 1n+hp)), Nat.add(Nat.add(z, r), 1n+hp), UL.nat_add_comm(z, rr), Equal.sym(Nat, Nat.add(Nat.add(z, r), 1n+hp), Nat.add(z, Nat.add(r, 1n+hp)), UL.nat_add_assoc(z, r, 1n+hp)), cp.le_add_mono(z, rr, Nat.add(r, 1n+hp), UO.nat_le_trans(rr, 1n+hp, Nat.add(r, 1n+hp), cp.lt_le(rr, 1n+hp, hrr), UL.nat_le_add(1n+hp, r))))
 
 # rr <= R: rr + (H + Y) <= (Y + R) + H
 def cp.latest2(+rr: Nat, +hp: Nat, +y: Nat, +r: Nat, +hle: {Nat.is_le(rr, r) == True{} : Bool}) -> {Nat.is_le(Nat.add(rr, Nat.add(1n+hp, y)), Nat.add(Nat.add(y, r), 1n+hp)) == True{} : Bool}:
   +w = Nat.add(1n+hp, y)
-  cp.le_rw(Nat.add(w, rr), Nat.add(rr, w), Nat.add(w, r), Nat.add(Nat.add(y, r), 1n+hp), cp.add_comm(w, rr), Equal.trans(Nat, Nat.add(w, r), Nat.add(1n+hp, Nat.add(y, r)), Nat.add(Nat.add(y, r), 1n+hp), cp.add_assoc(1n+hp, y, r), cp.add_comm(1n+hp, Nat.add(y, r))), cp.le_add_mono(w, rr, r, hle))
+  cp.le_rw(Nat.add(w, rr), Nat.add(rr, w), Nat.add(w, r), Nat.add(Nat.add(y, r), 1n+hp), UL.nat_add_comm(w, rr), Equal.trans(Nat, Nat.add(w, r), Nat.add(1n+hp, Nat.add(y, r)), Nat.add(Nat.add(y, r), 1n+hp), UL.nat_add_assoc(1n+hp, y, r), UL.nat_add_comm(1n+hp, Nat.add(y, r))), cp.le_add_mono(w, rr, r, hle))
 
 # R < H: Y + R < rr + (H + Y)
 def cp.hlt2(+y: Nat, +r: Nat, +rr: Nat, +hp: Nat, +hR: {Nat.is_lt(r, 1n+hp) == True{} : Bool}) -> {Nat.is_lt(Nat.add(y, r), Nat.add(rr, Nat.add(1n+hp, y))) == True{} : Bool}:
-  cp.lt_le_trans(Nat.add(y, r), Nat.add(1n+hp, y), Nat.add(rr, Nat.add(1n+hp, y)), cp.lt_rw(Nat.add(y, r), Nat.add(y, r), Nat.add(y, 1n+hp), Nat.add(1n+hp, y), {==}, cp.add_comm(y, 1n+hp), Equal.trans(Bool, Nat.is_lt(Nat.add(y, r), Nat.add(y, 1n+hp)), Nat.is_lt(r, 1n+hp), True{}, cp.lt_add_l(y, r, 1n+hp), hR)), cp.le_add_r(rr, Nat.add(1n+hp, y)))
+  UO.nat_lt_le_trans(Nat.add(y, r), Nat.add(1n+hp, y), Nat.add(rr, Nat.add(1n+hp, y)), cp.lt_rw(Nat.add(y, r), Nat.add(y, r), Nat.add(y, 1n+hp), Nat.add(1n+hp, y), {==}, UL.nat_add_comm(y, 1n+hp), Equal.trans(Bool, Nat.is_lt(Nat.add(y, r), Nat.add(y, 1n+hp)), Nat.is_lt(r, 1n+hp), True{}, cp.lt_add_l(y, r, 1n+hp), hR)), UL.nat_le_add(Nat.add(1n+hp, y), rr))
 
 def cp.g_some_c(+p0: U32, +h: U32, +p: U32, +rr: Nat, +R: Nat, +hp: Nat, +sp: Nat, +q: Nat, +x: Nat, +i: Nat, +c: Bool, +B: Nat, +ec: {Nat.is_lt(R, rr) == c : Bool}, +hp0: {U32.to_nat(p0) == Nat.add(Nat.mul(B, 1n+hp), R) : Nat}, +hh: {U32.to_nat(h) == 1n+hp : Nat}, +hrr: {Nat.is_lt(rr, 1n+hp) == True{} : Bool}, +hR: {Nat.is_lt(R, 1n+hp) == True{} : Bool}, +hs: {1n+hp == Nat.mul(q, 1n+sp) : Nat}, +hx: {Nat.add(rr, Nat.mul(B, 1n+hp)) == Nat.mul(x, 1n+sp) : Nat}, +hi: {R == Nat.mul(i, 1n+sp) : Nat}, +e: {P.c842.pointer.at(c, p0, h) == Some{p} : Maybe<&2, U32>}) -> {(Nat.mod(U32.to_nat(p), 1n+hp), Nat.is_le(Nat.add(U32.to_nat(p), 1n+sp), Nat.add(rr, Nat.mul(B, 1n+hp))), Nat.is_le(Nat.add(rr, Nat.mul(B, 1n+hp)), Nat.add(U32.to_nat(p), 1n+hp))) == (R, True{}, True{}) : Nat & Bool & Bool}:
   match c:
@@ -695,7 +586,7 @@ def cp.ln(+w: Word(32n)) -> {Nat.is_lt(cp.lv(w), 8n) == True{} : Bool}:
   UL.word_value_lt(3n, cp.take(3n, 29n, w))
 
 def cp.en(+w: Word(32n)) -> {Word.to_nat(32n, w) == Nat.add(Nat.mul(cp.dv(w), 8n), cp.lv(w)) : Nat}:
-  Equal.trans(Nat, Word.to_nat(32n, w), Nat.add(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Nat.add(Nat.mul(cp.dv(w), 8n), cp.lv(w)), cp.split_val(3n, 29n, w), Equal.trans(Nat, Nat.add(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Nat.add(U.U32Nat.dbl(3n, cp.dv(w)), cp.lv(w)), Nat.add(Nat.mul(cp.dv(w), 8n), cp.lv(w)), cp.add_comm(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Equal.cong(Nat, Nat, z => Nat.add(z, cp.lv(w)), U.U32Nat.dbl(3n, cp.dv(w)), Nat.mul(cp.dv(w), 8n), cp.dbl_mul(3n, cp.dv(w)))))
+  Equal.trans(Nat, Word.to_nat(32n, w), Nat.add(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Nat.add(Nat.mul(cp.dv(w), 8n), cp.lv(w)), cp.split_val(3n, 29n, w), Equal.trans(Nat, Nat.add(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Nat.add(U.U32Nat.dbl(3n, cp.dv(w)), cp.lv(w)), Nat.add(Nat.mul(cp.dv(w), 8n), cp.lv(w)), UL.nat_add_comm(cp.lv(w), U.U32Nat.dbl(3n, cp.dv(w))), Equal.cong(Nat, Nat, z => Nat.add(z, cp.lv(w)), U.U32Nat.dbl(3n, cp.dv(w)), Nat.mul(cp.dv(w), 8n), cp.dbl_mul(3n, cp.dv(w)))))
 
 # the law's t8 (n rounded down to 8, by Nat.div) is the word t8's value
 def cp.et(+w: Word(32n)) -> {U32.to_nat(cp.t8(w)) == Nat.mul(Nat.div(Word.to_nat(32n, w), 8n), 8n) : Nat}:
@@ -751,7 +642,7 @@ def cp.hp11(+w: Word(32n), +s: U32, +i: U32, +r: Nat, +vr: {U32.to_nat(U32.mul(s
   +vb = cp.and_hi_val(11n, 21n, cp.wd(cp.t8(w)))
   +vc = cp.cat_val(11n, 21n, cp.ones(11n), cp.drop(11n, 21n, cp.wd(cp.t8(w))))
   +d = U.U32Nat.dbl(11n, cp.b11(w))
-  +hc = cp.le_rw(Nat.add(d, r), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, 2047n), U32.to_nat(c), Equal.sym(Nat, Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, r), cp.add_cong(U32.to_nat(base), d, U32.to_nat(U32.mul(s, i)), r, vb, vr)), Equal.trans(Nat, Nat.add(d, 2047n), Nat.add(2047n, d), U32.to_nat(c), cp.add_comm(d, 2047n), Equal.sym(Nat, U32.to_nat(c), Nat.add(2047n, d), vc)), cp.le_add_mono(d, r, 2047n, cp.lt_succ_le(r, 2047n, hR)))
+  +hc = cp.le_rw(Nat.add(d, r), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, 2047n), U32.to_nat(c), Equal.sym(Nat, Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, r), cp.add_cong(U32.to_nat(base), d, U32.to_nat(U32.mul(s, i)), r, vb, vr)), Equal.trans(Nat, Nat.add(d, 2047n), Nat.add(2047n, d), U32.to_nat(c), UL.nat_add_comm(d, 2047n), Equal.sym(Nat, U32.to_nat(c), Nat.add(2047n, d), vc)), cp.le_add_mono(d, r, 2047n, cp.lt_succ_le(r, 2047n, hR)))
   Equal.trans(Nat, U32.to_nat(cp.p0(w, 2048, s, i)), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(Nat.mul(cp.b11(w), 2048n), r), UL.u32_add_value(base, U32.mul(s, i), c, hc), cp.add_cong(U32.to_nat(base), Nat.mul(cp.b11(w), 2048n), U32.to_nat(U32.mul(s, i)), r, Equal.trans(Nat, U32.to_nat(base), d, Nat.mul(cp.b11(w), 2048n), vb, cp.dbl_mul(11n, cp.b11(w))), vr))
 
 def cp.hp9(+w: Word(32n), +s: U32, +i: U32, +r: Nat, +vr: {U32.to_nat(U32.mul(s, i)) == r : Nat}, +hR: {Nat.is_lt(r, 512n) == True{} : Bool}) -> {U32.to_nat(cp.p0(w, 512, s, i)) == Nat.add(Nat.mul(cp.b9(w), 512n), r) : Nat}:
@@ -760,7 +651,7 @@ def cp.hp9(+w: Word(32n), +s: U32, +i: U32, +r: Nat, +vr: {U32.to_nat(U32.mul(s,
   +vb = cp.and_hi_val(9n, 23n, cp.wd(cp.t8(w)))
   +vc = cp.cat_val(9n, 23n, cp.ones(9n), cp.drop(9n, 23n, cp.wd(cp.t8(w))))
   +d = U.U32Nat.dbl(9n, cp.b9(w))
-  +hc = cp.le_rw(Nat.add(d, r), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, 511n), U32.to_nat(c), Equal.sym(Nat, Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, r), cp.add_cong(U32.to_nat(base), d, U32.to_nat(U32.mul(s, i)), r, vb, vr)), Equal.trans(Nat, Nat.add(d, 511n), Nat.add(511n, d), U32.to_nat(c), cp.add_comm(d, 511n), Equal.sym(Nat, U32.to_nat(c), Nat.add(511n, d), vc)), cp.le_add_mono(d, r, 511n, cp.lt_succ_le(r, 511n, hR)))
+  +hc = cp.le_rw(Nat.add(d, r), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, 511n), U32.to_nat(c), Equal.sym(Nat, Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(d, r), cp.add_cong(U32.to_nat(base), d, U32.to_nat(U32.mul(s, i)), r, vb, vr)), Equal.trans(Nat, Nat.add(d, 511n), Nat.add(511n, d), U32.to_nat(c), UL.nat_add_comm(d, 511n), Equal.sym(Nat, U32.to_nat(c), Nat.add(511n, d), vc)), cp.le_add_mono(d, r, 511n, cp.lt_succ_le(r, 511n, hR)))
   Equal.trans(Nat, U32.to_nat(cp.p0(w, 512, s, i)), Nat.add(U32.to_nat(base), U32.to_nat(U32.mul(s, i))), Nat.add(Nat.mul(cp.b9(w), 512n), r), UL.u32_add_value(base, U32.mul(s, i), c, hc), cp.add_cong(U32.to_nat(base), Nat.mul(cp.b9(w), 512n), U32.to_nat(U32.mul(s, i)), r, Equal.trans(Nat, U32.to_nat(base), d, Nat.mul(cp.b9(w), 512n), vb, cp.dbl_mul(9n, cp.b9(w))), vr))
 
 # The index the parser reads: a field of w bits has a value below 2^w (for
@@ -823,7 +714,7 @@ def cp.le_double(+x: Nat) -> {Nat.is_le(x, Nat.double(x)) == True{} : Bool}:
     case 0n:
       {==}
     case 1n+p:
-      cp.le_trans(p, Nat.double(p), 1n+Nat.double(p), cp.le_double(p), cp.le_succ_self(Nat.double(p)))
+      UO.nat_le_trans(p, Nat.double(p), 1n+Nat.double(p), cp.le_double(p), cp.le_succ_self(Nat.double(p)))
 
 # 1 <= 2^k
 def cp.one_le(+k: Nat) -> {Nat.is_le(1n, U.U32Nat.dbl(k, 1n)) == True{} : Bool}:
@@ -831,7 +722,7 @@ def cp.one_le(+k: Nat) -> {Nat.is_le(1n, U.U32Nat.dbl(k, 1n)) == True{} : Bool}:
     case 0n:
       {==}
     case 1n+j:
-      cp.le_trans(1n, U.U32Nat.dbl(j, 1n), Nat.double(U.U32Nat.dbl(j, 1n)), cp.one_le(j), cp.le_double(U.U32Nat.dbl(j, 1n)))
+      UO.nat_le_trans(1n, U.U32Nat.dbl(j, 1n), Nat.double(U.U32Nat.dbl(j, 1n)), cp.one_le(j), cp.le_double(U.U32Nat.dbl(j, 1n)))
 
 # 2^j <= 2^k for j <= k
 def cp.d_le(+j: Nat, +k: Nat, +h: {Nat.is_le(j, k) == True{} : Bool}) -> {Nat.is_le(U.U32Nat.dbl(j, 1n), U.U32Nat.dbl(k, 1n)) == True{} : Bool}:
@@ -887,9 +778,9 @@ def cp.vb(+bs: List<&2, Bool>, +hl: {Nat.is_le(List.length(&2, Bool, bs), 9n) ==
     case Con{b, t}:
       +v = U32.to_nat(F.c842.fmt.value(t))
       +d = U.U32Nat.dbl(List.length(&2, Bool, t), 1n)
-      +ih = cp.vb(t, cp.le_trans(List.length(&2, Bool, t), 8n, 9n, hl, {==}))
-      +h255 = cp.lt_succ_le(v, 255n, cp.lt_le_trans(v, d, 256n, ih, cp.d_le(List.length(&2, Bool, t), 8n, hl)))
-      +hb = cp.le_trans(Nat.double(v), 510n, 1023n, Equal.trans(Bool, Nat.is_le(Nat.double(v), Nat.double(255n)), Nat.is_le(v, 255n), True{}, cp.le_dbl(v, 255n), h255), {==})
+      +ih = cp.vb(t, UO.nat_le_trans(List.length(&2, Bool, t), 8n, 9n, hl, {==}))
+      +h255 = cp.lt_succ_le(v, 255n, UO.nat_lt_le_trans(v, d, 256n, ih, cp.d_le(List.length(&2, Bool, t), 8n, hl)))
+      +hb = UO.nat_le_trans(Nat.double(v), 510n, 1023n, Equal.trans(Bool, Nat.is_le(Nat.double(v), Nat.double(255n)), Nat.is_le(v, 255n), True{}, cp.le_dbl(v, 255n), h255), {==})
       +ev = Equal.trans(Nat, U32.to_nat(F.c842.fmt.value(Con{b, t})), Nat.add(U.U32Nat.bit(b), U32.to_nat(U32.shl(F.c842.fmt.value(t)))), Nat.add(U.U32Nat.bit(b), Nat.double(v)), cp.orb(F.c842.fmt.value(t), b), Equal.cong(Nat, Nat, z => Nat.add(U.U32Nat.bit(b), z), U32.to_nat(U32.shl(F.c842.fmt.value(t))), Nat.double(v), UL.u32_shl_value(F.c842.fmt.value(t), 1023, hb)))
       cp.lt_rw(Nat.add(U.U32Nat.bit(b), Nat.double(v)), U32.to_nat(F.c842.fmt.value(Con{b, t})), Nat.double(d), U.U32Nat.dbl(List.length(&2, Bool, Con{b, t}), 1n), Equal.sym(Nat, U32.to_nat(F.c842.fmt.value(Con{b, t})), Nat.add(U.U32Nat.bit(b), Nat.double(v)), ev), {==}, cp.bit_lt(b, v, d, ih))
 
@@ -906,14 +797,14 @@ def cp.none_of(+m: Maybe<&2, U32>, +e: {Maybe.is_some(&2, U32, m) == False{} : B
 
 # the window: p + s <= t8 <= n and n < t8 + 8 <= p + H + 8
 def cp.le_add2(+a: Nat, +b: Nat, +c: Nat, +d: Nat, +h1: {Nat.is_le(a, b) == True{} : Bool}, +h2: {Nat.is_le(c, d) == True{} : Bool}) -> {Nat.is_le(Nat.add(a, c), Nat.add(b, d)) == True{} : Bool}:
-  cp.le_trans(Nat.add(a, c), Nat.add(a, d), Nat.add(b, d), cp.le_add_mono(a, c, d, h2), cp.le_rw(Nat.add(d, a), Nat.add(a, d), Nat.add(d, b), Nat.add(b, d), cp.add_comm(d, a), cp.add_comm(d, b), cp.le_add_mono(d, a, b, h1)))
+  UO.nat_le_trans(Nat.add(a, c), Nat.add(a, d), Nat.add(b, d), cp.le_add_mono(a, c, d, h2), cp.le_rw(Nat.add(d, a), Nat.add(a, d), Nat.add(d, b), Nat.add(b, d), UL.nat_add_comm(d, a), UL.nat_add_comm(d, b), cp.le_add_mono(d, a, b, h1)))
 
 def cp.window(+p: Nat, +s: Nat, +hh: Nat, +w: Word(32n), +b1: {Nat.is_le(Nat.add(p, s), Nat.mul(Nat.div(Word.to_nat(32n, w), 8n), 8n)) == True{} : Bool}, +b2: {Nat.is_le(Nat.mul(Nat.div(Word.to_nat(32n, w), 8n), 8n), Nat.add(p, hh)) == True{} : Bool}) -> {(Nat.is_le(Nat.add(p, s), Word.to_nat(32n, w)), Nat.is_le(Word.to_nat(32n, w), Nat.add(Nat.add(p, hh), 7n))) == (True{}, True{}) : Bool & Bool}:
   +t = Nat.mul(Nat.div(Word.to_nat(32n, w), 8n), 8n)
   +m8 = Nat.mul(cp.dv(w), 8n)
   +etm = Equal.trans(Nat, m8, U32.to_nat(cp.t8(w)), t, Equal.sym(Nat, U32.to_nat(cp.t8(w)), m8, cp.vt8(w)), cp.et(w))
   +en = Equal.sym(Nat, Word.to_nat(32n, w), Nat.add(m8, cp.lv(w)), cp.en(w))
-  +c1 = cp.le_trans(Nat.add(p, s), t, Word.to_nat(32n, w), b1, cp.le_rw(m8, t, Nat.add(m8, cp.lv(w)), Word.to_nat(32n, w), etm, en, cp.le_add(m8, cp.lv(w))))
+  +c1 = UO.nat_le_trans(Nat.add(p, s), t, Word.to_nat(32n, w), b1, cp.le_rw(m8, t, Nat.add(m8, cp.lv(w)), Word.to_nat(32n, w), etm, en, UO.nat_le_add_r(m8, cp.lv(w))))
   +c2 = cp.le_rw(Nat.add(m8, cp.lv(w)), Word.to_nat(32n, w), Nat.add(Nat.add(p, hh), 7n), Nat.add(Nat.add(p, hh), 7n), en, {==}, cp.le_add2(m8, Nat.add(p, hh), cp.lv(w), 7n, cp.le_rw(t, m8, Nat.add(p, hh), Nat.add(p, hh), Equal.sym(Nat, m8, t, etm), {==}, b2), cp.lt_succ_le(cp.lv(w), 7n, cp.ln(w))))
   %Equal.sym(Bool, Nat.is_le(Nat.add(p, s), Word.to_nat(32n, w)), True{}, c1) : {(_, Nat.is_le(Word.to_nat(32n, w), Nat.add(Nat.add(p, hh), 7n))) == (True{}, True{}) : Bool & Bool}
   %Equal.sym(Bool, Nat.is_le(Word.to_nat(32n, w), Nat.add(Nat.add(p, hh), 7n)), True{}, c2) : {(True{}, _) == (True{}, True{}) : Bool & Bool}

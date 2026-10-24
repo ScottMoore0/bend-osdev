@@ -137,25 +137,9 @@ def cn.u32_refl(+a: U32) -> {Q.eq.u32(a, a) == True{} : Bool}:
 
 # Nat
 
-def cn.add_zero(+n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      %cn.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def cn.add_succ(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      %cn.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
 def cn.add1(+j: Nat) -> {Nat.add(j, 1n) == 1n+j : Nat}:
-  %cn.add_zero(j) : {Nat.add(j, 1n) == 1n+_ : Nat}
-  cn.add_succ(j, 0n)
+  %UL.nat_add_zero(j) : {Nat.add(j, 1n) == 1n+_ : Nat}
+  UL.nat_add_succ(j, 0n)
 
 def cn.sub0(+n: Nat) -> {Nat.sub(n, 0n) == n : Nat}:
   match n:
@@ -238,7 +222,7 @@ def cn.le_lt_succ(+a: Nat, +b: Nat, +h: {Nat.is_le(a, b) == True{} : Bool}) -> {
 
 # 1 + (m + j) <= b, as m + (1 + j) <= b
 def cn.shift(+m: Nat, +j: Nat, +b: Nat, +h: {Nat.is_le(1n+Nat.add(m, j), b) == True{} : Bool}) -> {Nat.is_le(Nat.add(m, 1n+j), b) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(m, 1n+j), 1n+Nat.add(m, j), cn.add_succ(m, j)) : {Nat.is_le(_, b) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(m, 1n+j), 1n+Nat.add(m, j), UL.nat_add_succ(m, j)) : {Nat.is_le(_, b) == True{} : Bool}
   h
 
 # Symbol numbers: counted in U32, below a word's value they are the
@@ -603,7 +587,7 @@ def cn.at(+xs: List<&2, U32>, +k: Nat, +sym: U32, +j: Nat, +e: {U32.to_nat(sym) 
       +a2 = H.hf.put.len(U32.to_nat(h), a, sym)
       +lt = cn.rw2(sym, j, e, s, 1n+Nat.add(kp, j), es, cn.lt_add_succ(kp, j))
       +hn2 = Equal.trans(Maybe<&2, List<&2, Bool>>, H.huff_path(H.hf.acc.tree(a2), s), H.huff_path(H.hf.acc.tree(a), s), None{}, cn.put_other(U32.to_nat(h), a, sym, s, cn.eq_false_lt(sym, s, lt)), hn)
-      +es2 = Equal.trans(Nat, U32.to_nat(s), 1n+Nat.add(kp, j), Nat.add(kp, 1n+j), es, Equal.sym(Nat, Nat.add(kp, 1n+j), 1n+Nat.add(kp, j), cn.add_succ(kp, j)))
+      +es2 = Equal.trans(Nat, U32.to_nat(s), 1n+Nat.add(kp, j), Nat.add(kp, 1n+j), es, Equal.sym(Nat, Nat.add(kp, 1n+j), 1n+Nat.add(kp, j), UL.nat_add_succ(kp, j)))
       ih = cn.at(t, kp, U32.add(sym, 1), 1n+j, e2, a2, s, es2, c, hb2, hn2, L, hL, cn.hlen2(L, U32.to_nat(h), a, sym, hlen), p, hp)
       cn.stepfix(L, U32.to_nat(h), a, sym, List.take(&2, U32, t, kp), p, hlen, ih)
 
@@ -781,7 +765,7 @@ def cn.code_path(+t: H.DflTree, +s: U32, +p: List<&2, Bool>, +h: {H.hf.code.of(t
       Empty.absurd({H.huff_path(H.DflHLeaf{x}, s) == Some{p} : Maybe<&2, List<&2, Bool>>}, cn.ns(p, h))
 
 def cn.hb0(+ls: List<&2, U32>, +c: U32, +hc: {Nat.is_le(List.length(&2, U32, ls), U32.to_nat(c)) == True{} : Bool}) -> {Nat.is_le(Nat.add(List.length(&2, U32, ls), 0n), U32.to_nat(c)) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(List.length(&2, U32, ls), 0n), List.length(&2, U32, ls), cn.add_zero(List.length(&2, U32, ls))) : {Nat.is_le(_, U32.to_nat(c)) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(List.length(&2, U32, ls), 0n), List.length(&2, U32, ls), UL.nat_add_zero(List.length(&2, U32, ls))) : {Nat.is_le(_, U32.to_nat(c)) == True{} : Bool}
   hc
 
 def cn.final(+L: Nat, +ls: List<&2, U32>, +i: Nat, +p: List<&2, Bool>, +hl: {Nat.is_le(L, 15n) == True{} : Bool}, r: cn.atty(L, p, Laws.canon_count.go(List.take(&2, U32, ls, i), L, H.hf.get(H.hf.next(H.hf.counts(ls)), L)))) -> {Laws.canon_code.of(L, ls, i) == Some{p} : Maybe<&2, List<&2, Bool>>}:
@@ -796,5 +780,5 @@ def Laws.huff_code_canonical(ls, s, p, c, hc, hl, h):
   +i = U32.to_nat(s)
   +a0 = {H.DflHufAcc{H.hf.next(H.hf.counts(ls)), H.DflHNil{}} : H.DflHufAcc}
   +L = U32.to_nat(Laws.canon_len(ls, i))
-  +es = Equal.sym(Nat, Nat.add(i, 0n), i, cn.add_zero(i))
+  +es = Equal.sym(Nat, Nat.add(i, 0n), i, UL.nat_add_zero(i))
   cn.final(L, ls, i, p, hl, cn.at(ls, i, 0, 0n, {==}, a0, s, es, c, cn.hb0(ls, c, hc), {==}, L, {==}, cn.hlen0(ls, L, hl), p, cn.code_path(H.huff_tree(ls), s, p, h)))

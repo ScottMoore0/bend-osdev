@@ -219,7 +219,7 @@ def pointer_laws():
         else:
             f = {"P4": 2, "P2": 4}[name]
             hx = ("Equal.trans(Nat, U32.to_nat(PP.cp.t8(w)), Nat.mul(PP.cp.dv(w), 8n), Nat.mul(Nat.mul(PP.cp.dv(w), %dn), %dn), PP.cp.vt8(w), "
-                  "Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), %dn), %dn), Nat.mul(PP.cp.dv(w), Nat.mul(%dn, %dn)), PP.cp.mul_assoc(PP.cp.dv(w), %dn, %dn)))") % (f, size, f, size, f, size, f, size)
+                  "Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), %dn), %dn), Nat.mul(PP.cp.dv(w), Nat.mul(%dn, %dn)), UL.nat_mul_assoc(PP.cp.dv(w), %dn, %dn)))") % (f, size, f, size, f, size, f, size)
         out.append("        case %s:" % ctor)
         out.append("          %%PP.cp.et(w) : {(Nat.mod(U32.to_nat(p), %dn), Nat.is_le(Nat.add(U32.to_nat(p), %dn), _), Nat.is_le(_, Nat.add(U32.to_nat(p), %dn))) == (%s, True{}, True{}) : Nat & Bool & Bool}" % (hist, size, hist, R))
         out.append("          PP.cp.g_some(PP.cp.p0(w, %d, %d, i), PP.cp.t8(w), %d, p, PP.cp.b%s(w), PP.cp.r%s(w), %s, %s, %s, %s, %s, U32.to_nat(i), PP.cp.ht%s(w), %s, {==}, PP.cp.hrr%s(w), h, {==}, %s, {==}, e)" % (hist, size, hist, kh, kh, R, hp, sp, q, xexpr[name], kh, hp0, kh, hx))

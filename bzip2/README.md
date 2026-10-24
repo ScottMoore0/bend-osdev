@@ -184,6 +184,9 @@ open: their constructors are part of the interface. `Bzip2Writer`,
 `bytes` (Octets) and `crc` (the CRC model and its table-driven path), from
 bend-osdev.
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Laws
 
 `LAWS.bend` has 27 laws.

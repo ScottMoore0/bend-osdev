@@ -20,6 +20,10 @@ import ./zlib.bend as Z
 import ./adler32.bend as A
 import ./eq.bend as Q
 import ./LAWS_stream.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Logic and lists
 
@@ -33,33 +37,6 @@ def st.bt(+b: Bool) -> Type:
 def st.ft(e: {False{} == True{} : Bool}) -> Empty:
   %Equal.sym(Bool, False{}, True{}, e) : st.bt(_)
   Unit{}
-
-def st.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      %st.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def st.add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      %st.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def st.le_add(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      match b:
-        case 0n:
-          {==}
-        case 1n+q:
-          {==}
-    case 1n+ +p:
-      st.le_add(p, b)
 
 def st.app_assoc(+a: List<&2, U32>, +b: List<&2, U32>, +c: List<&2, U32>) -> {B.append(B.append(a, b), c) == B.append(a, B.append(b, c)) : List<&2, U32>}:
   match a:
@@ -112,7 +89,7 @@ def st.len_onto(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {B.len(B.rev_onto(xs
       {==}
     case Con{+h, +t}:
       %Equal.sym(Nat, B.len(B.rev_onto(t, Con{h, acc})), Nat.add(B.len(t), B.len(Con{h, acc})), st.len_onto(t, Con{h, acc})) : {_ == 1n+Nat.add(B.len(t), B.len(acc)) : Nat}
-      st.add_succ(B.len(t), B.len(acc))
+      UL.nat_add_succ(B.len(t), B.len(acc))
 
 # Octets from lists
 
@@ -244,7 +221,7 @@ def st.con_inv(+b: U32, r: I.DflApp, +m: Nat, i: st.appinv(r, m)) -> st.appinv(I
         case 0n:
           Unit{}
         case 1n+ +qq:
-          Equal.trans(Nat, 1n+Nat.add(B.len(x), qq), Nat.add(B.len(x), 1n+qq), m, Equal.sym(Nat, Nat.add(B.len(x), 1n+qq), 1n+Nat.add(B.len(x), qq), st.add_succ(B.len(x), qq)), i)
+          Equal.trans(Nat, 1n+Nat.add(B.len(x), qq), Nat.add(B.len(x), 1n+qq), m, Equal.sym(Nat, Nat.add(B.len(x), 1n+qq), 1n+Nat.add(B.len(x), qq), UL.nat_add_succ(B.len(x), qq)), i)
 
 def st.app_inv(em: List<&2, U32>, +a: List<&2, U32>, +r: Nat, +m: Nat, +h: {Nat.add(B.len(a), r) == m : Nat}) -> st.appinv(I.drv.app(em, a, r), m):
   match em:
@@ -295,8 +272,8 @@ def st.within(+a: List<&2, U32>, +r: Nat, +max: U32, +i: {Nat.add(B.len(a), r) =
   %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(B.rev(a))), B.len(B.rev(a)), BL.octets_len_of_list(B.rev(a))) : {Nat.is_le(_, U32.to_nat(max)) == True{} : Bool}
   %Equal.sym(Nat, B.len(B.rev(a)), Nat.add(B.len(a), 0n), st.len_onto(a, Nil{})) : {Nat.is_le(_, U32.to_nat(max)) == True{} : Bool}
   %i : {Nat.is_le(Nat.add(B.len(a), 0n), _) == True{} : Bool}
-  %Equal.sym(Nat, Nat.add(B.len(a), 0n), B.len(a), st.add_zero(B.len(a))) : {Nat.is_le(_, Nat.add(B.len(a), r)) == True{} : Bool}
-  st.le_add(B.len(a), r)
+  %Equal.sym(Nat, Nat.add(B.len(a), 0n), B.len(a), UL.nat_add_zero(B.len(a))) : {Nat.is_le(_, Nat.add(B.len(a), r)) == True{} : Bool}
+  UO.nat_le_add_r(B.len(a), r)
 
 def st.fin_st(+s: I.DflSt, +a: List<&2, U32>, +max: U32, +ok: {Nat.is_le(B.Octets.len(B.Octets.of_list(B.rev(a))), U32.to_nat(max)) == True{} : Bool}) -> {Laws.stream_last(I.inf.finish.of(I.drv.end(s, a)), B.Octets.empty()) == I.inf.split.of(I.inf.out(I.drv.end(s, a)), max) : Result<&2, &2, E.DeflateError, I.DflInflated>}:
   match s:

@@ -8,24 +8,10 @@ import ./auto.bend as A
 import ./kmp.bend as K
 import ./fsm.bend as F
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Nat and lists
-
-def pr.add_zero(+m: Nat) -> {Nat.add(m, 0n) == m : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pr.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def pr.add_succ(+x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pr.add_succ(p, y) : {1n+Nat.add(p, 1n+y) == 1n+_ : Nat}
-      {==}
 
 def pr.app_nil(xs: List<&2, Nat>) -> {List.append(&2, Nat, xs, Nil{}) == xs : List<&2, Nat>}:
   match xs:
@@ -88,23 +74,23 @@ def pr.go_app(~S: Data, ~step: S -> U32 -> S & Bool, xs: List<&2, U32>, +ys: Lis
     case Nil{}:
       match r:
         case (+s, +h):
-          %Equal.sym(Nat, Nat.add(pos, 0n), pos, pr.add_zero(pos)) : {A.ts.auto.go(~S, ~step, ys, pos, (s, h)) == A.ts.auto.then(~S, ~step, (s, A.ts.auto.hit(h, pos, Nil{})), _, ys) : S & List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(pos, 0n), pos, UL.nat_add_zero(pos)) : {A.ts.auto.go(~S, ~step, ys, pos, (s, h)) == A.ts.auto.then(~S, ~step, (s, A.ts.auto.hit(h, pos, Nil{})), _, ys) : S & List<&2, Nat>}
           pr.go_nil(~S, ~step, ys, pos, s, h)
     case Con{+c, +t}:
       match r:
         case (+s, +h):
           %Equal.sym(S & List<&2, Nat>, A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)), A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), Nat.add(1n+pos, List.length(&2, U32, t)), ys), pr.go_app(~S, ~step, t, ys, 1n+pos, step(s, c))) : {A.ts.auto.cons(~S, h, pos, _) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), Nat.add(pos, 1n+List.length(&2, U32, t)), ys) : S & List<&2, Nat>}
-          %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), pr.add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.cons(~S, h, pos, A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), _, ys) : S & List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), UL.nat_add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.cons(~S, h, pos, A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), _, ys) : S & List<&2, Nat>}
           pr.cons_then(~S, ~step, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)
 
 # feeding xs ++ ys: xs, then ys from where xs ended
 def pr.feed_app(~S: Data, ~step: S -> U32 -> S & Bool, +s: S, +pos: Nat, xs: List<&2, U32>, +ys: List<&2, U32>) -> {A.ts.auto.feed(~S, ~step, s, pos, List.append(&2, U32, xs, ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.feed(~S, ~step, s, pos, xs), Nat.add(pos, List.length(&2, U32, xs)), ys) : S & List<&2, Nat>}:
   match xs:
     case Nil{}:
-      %Equal.sym(Nat, Nat.add(pos, 0n), pos, pr.add_zero(pos)) : {A.ts.auto.feed(~S, ~step, s, pos, ys) == A.ts.auto.then(~S, ~step, (s, Nil{}), _, ys) : S & List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 0n), pos, UL.nat_add_zero(pos)) : {A.ts.auto.feed(~S, ~step, s, pos, ys) == A.ts.auto.then(~S, ~step, (s, Nil{}), _, ys) : S & List<&2, Nat>}
       Equal.sym(S & List<&2, Nat>, A.ts.auto.pre(~S, Nil{}, A.ts.auto.feed(~S, ~step, s, pos, ys)), A.ts.auto.feed(~S, ~step, s, pos, ys), pr.pre_nil(~S, A.ts.auto.feed(~S, ~step, s, pos, ys)))
     case Con{+c, +t}:
-      %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), pr.add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)) == A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), _, ys) : S & List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), UL.nat_add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)) == A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), _, ys) : S & List<&2, Nat>}
       pr.go_app(~S, ~step, t, ys, 1n+pos, step(s, c))
 
 def Laws.auto_append(S, step, s, pos, xs, ys):

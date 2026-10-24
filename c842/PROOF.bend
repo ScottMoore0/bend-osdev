@@ -15,6 +15,10 @@ import ./match.bend as M
 import ./encode.bend as C
 import ./c842.bend as L
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # The properties follow the decoder bit by bit. Each lemma below is about
 # the package's internals, never stated as a law. Octets enter only through
@@ -400,16 +404,8 @@ def ok_sound(+r: Result<&2, &2, E.C842Error, B.Octets>, +o: B.Octets, e: {C.c842
       %Equal.sym(B.Octets, B.Octets.of_list(B.Octets.to_list(o)), o, BL.octets_of_to(o)) : {Done{_} == Done{o} : Result<&2, &2, E.C842Error, B.Octets>}
       {==}
 
-def add_zero(+p: Nat) -> {Nat.add(p, 0n) == p : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_zero(q) : {1n+Nat.add(q, 0n) == 1n+_ : Nat}
-      {==}
-
 def lit_round0(+o: B.Octets) -> {D.c842.decompress(C.c842.literals(o), B.Octets.len(o)) == Done{o} : Result<&2, &2, E.C842Error, B.Octets>}:
-  %add_zero(B.Octets.len(o)) : {D.c842.decompress(C.c842.literals(o), _) == Done{o} : Result<&2, &2, E.C842Error, B.Octets>}
+  %UL.nat_add_zero(B.Octets.len(o)) : {D.c842.decompress(C.c842.literals(o), _) == Done{o} : Result<&2, &2, E.C842Error, B.Octets>}
   Laws.literals_round_trip(o, 0n)
 
 # the check's answer b: the encoder's bits if b, else the literal stream's
@@ -467,20 +463,13 @@ def Laws.literal_bits_worst(o):
   %Equal.sym(Nat, B.Octets.len(o), B.len(B.Octets.to_list(o)), BL.octets_len_list(o)) : {List.length(&2, Bool, C.c842.literal_bits(o)) == F.c842.worst_bits(_) : Nat}
   lit_len(B.Octets.to_list(o), K.c842.crc(o))
 
-def le_refl(+c: Nat) -> {Nat.is_le(c, c) == True{} : Bool}:
-  match c:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_refl(p)
-
 def within_ok(+b: Bool, +m: List<&2, Bool>, +o: B.Octets, +okv: Bool, e: {Bool.and(Nat.is_le(List.length(&2, Bool, m), F.c842.worst_bits(B.Octets.len(o))), okv) == b : Bool}) -> {Nat.is_le(List.length(&2, Bool, C.c842.enc.pick(b, m, o)), F.c842.worst_bits(B.Octets.len(o))) == True{} : Bool}:
   match b:
     case True{}:
       and_l(Nat.is_le(List.length(&2, Bool, m), F.c842.worst_bits(B.Octets.len(o))), okv, e)
     case False{}:
       %Laws.literal_bits_worst(o) : {Nat.is_le(List.length(&2, Bool, C.c842.literal_bits(o)), _) == True{} : Bool}
-      le_refl(List.length(&2, Bool, C.c842.literal_bits(o)))
+      UL.nat_le_refl(List.length(&2, Bool, C.c842.literal_bits(o)))
 
 def Laws.compress_within_worst(opts, o):
   within_ok(Bool.and(Nat.is_le(List.length(&2, Bool, C.c842.compress_bits_unchecked(opts, o)), F.c842.worst_bits(B.Octets.len(o))), C.c842.enc.ok(D.c842.decompress(F.c842.pack(C.c842.compress_bits_unchecked(opts, o)), B.Octets.len(o)), o)), C.c842.compress_bits_unchecked(opts, o), o, C.c842.enc.ok(D.c842.decompress(F.c842.pack(C.c842.compress_bits_unchecked(opts, o)), B.Octets.len(o)), o), {==})
@@ -602,14 +591,6 @@ def inv(+r: D.C842Run, +max: Nat) -> Type:
     case D.C842Failed{e}:
       Unit
 
-def add_succ(+p: Nat, +x: Nat) -> {Nat.add(p, 1n+x) == 1n+Nat.add(p, x) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_succ(q, x) : {1n+Nat.add(q, 1n+x) == 1n+_ : Nat}
-      {==}
-
 def push_inv(+r: D.C842Run, +b: U32, +max: Nat, h: inv(r, max)) -> inv(D.c842.dec.push(r, b), max):
   match r:
     case D.C842Going{acc, n, w, room}:
@@ -617,7 +598,7 @@ def push_inv(+r: D.C842Run, +b: U32, +max: Nat, h: inv(r, max)) -> inv(D.c842.de
         case 0n:
           Unit{}
         case 1n+q:
-          %add_succ(List.length(&2, U32, acc), q) : {_ == max : Nat}
+          %UL.nat_add_succ(List.length(&2, U32, acc), q) : {_ == max : Nat}
           h
     case D.C842Finished{o}:
       h
@@ -691,7 +672,7 @@ def len_rev(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {List.length(&2, U32, B.
       {==}
     case Con{x, t}:
       %Equal.sym(Nat, List.length(&2, U32, B.rev_onto(t, Con{x, acc})), Nat.add(List.length(&2, U32, t), 1n+List.length(&2, U32, acc)), len_rev(t, Con{x, acc})) : {_ == 1n+Nat.add(List.length(&2, U32, t), List.length(&2, U32, acc)) : Nat}
-      add_succ(List.length(&2, U32, t), List.length(&2, U32, acc))
+      UL.nat_add_succ(List.length(&2, U32, t), List.length(&2, U32, acc))
 
 def le_zero(+c: Nat) -> {Nat.is_le(0n, c) == True{} : Bool}:
   match c:
@@ -700,25 +681,18 @@ def le_zero(+c: Nat) -> {Nat.is_le(0n, c) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def le_add(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      le_zero(b)
-    case 1n+p:
-      le_add(p, b)
-
 # the output at the end is as long as the bytes pushed
 def len_out(+acc: List<&2, U32>) -> {B.Octets.len(B.Octets.of_list(B.rev(acc))) == List.length(&2, U32, acc) : Nat}:
   %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(B.rev(acc))), B.len(B.Octets.to_list(B.Octets.of_list(B.rev(acc)))), BL.octets_len_list(B.Octets.of_list(B.rev(acc)))) : {_ == List.length(&2, U32, acc) : Nat}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.rev(acc))), B.mask(B.rev(acc)), BL.octets_to_of(B.rev(acc))) : {B.len(_) == List.length(&2, U32, acc) : Nat}
   %Equal.sym(Nat, List.length(&2, U32, B.mask(B.rev(acc))), List.length(&2, U32, B.rev(acc)), len_mask(B.rev(acc))) : {_ == List.length(&2, U32, acc) : Nat}
   %Equal.sym(Nat, List.length(&2, U32, B.rev_onto(acc, Nil{})), Nat.add(List.length(&2, U32, acc), 0n), len_rev(acc, Nil{})) : {_ == List.length(&2, U32, acc) : Nat}
-  add_zero(List.length(&2, U32, acc))
+  UL.nat_add_zero(List.length(&2, U32, acc))
 
 def end_le(+acc: List<&2, U32>, +room: Nat, +max: Nat, h: {Nat.add(List.length(&2, U32, acc), room) == max : Nat}) -> {Nat.is_le(B.Octets.len(B.Octets.of_list(B.rev(acc))), max) == True{} : Bool}:
   %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(B.rev(acc))), List.length(&2, U32, acc), len_out(acc)) : {Nat.is_le(_, max) == True{} : Bool}
   %h : {Nat.is_le(List.length(&2, U32, acc), _) == True{} : Bool}
-  le_add(List.length(&2, U32, acc), room)
+  UO.nat_le_add_r(List.length(&2, U32, acc), room)
 
 def end_at_inv(+ok: Bool, +out: B.Octets, +max: Nat, h: {Nat.is_le(B.Octets.len(out), max) == True{} : Bool}) -> inv(D.c842.dec.end.at(ok, out), max):
   match ok:
@@ -989,10 +963,10 @@ def Laws.pointer_rule(n, k, i, p, h, e):
           PP.cp.absurd({(Nat.mod(U32.to_nat(p), U32.to_nat(F.C842Kind.history(F.C842LL{}))), Nat.is_le(Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.size(F.C842LL{}))), Laws.C842Laws.t8(U32{w})), Nat.is_le(Laws.C842Laws.t8(U32{w}), Nat.add(U32.to_nat(p), U32.to_nat(F.C842Kind.history(F.C842LL{}))))) == (Laws.C842Laws.is(i, F.C842LL{}), True{}, True{}) : Nat & Bool & Bool}, ll_absurd(i, h))
         case F.C842P2{}:
           %PP.cp.et(w) : {(Nat.mod(U32.to_nat(p), 512n), Nat.is_le(Nat.add(U32.to_nat(p), 2n), _), Nat.is_le(_, Nat.add(U32.to_nat(p), 512n))) == (Nat.mul(U32.to_nat(i), 2n), True{}, True{}) : Nat & Bool & Bool}
-          PP.cp.g_some(PP.cp.p0(w, 512, 2, i), PP.cp.t8(w), 512, p, PP.cp.b9(w), PP.cp.r9(w), Nat.mul(U32.to_nat(i), 2n), 511n, 1n, 256n, Nat.mul(PP.cp.dv(w), 4n), U32.to_nat(i), PP.cp.ht9(w), PP.cp.hp9(w, 2, i, Nat.mul(U32.to_nat(i), 2n), PP.cp.vr(i, 2, 1n, 512, PP.cp.mul2(i), h), h), {==}, PP.cp.hrr9(w), h, {==}, Equal.trans(Nat, U32.to_nat(PP.cp.t8(w)), Nat.mul(PP.cp.dv(w), 8n), Nat.mul(Nat.mul(PP.cp.dv(w), 4n), 2n), PP.cp.vt8(w), Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), 4n), 2n), Nat.mul(PP.cp.dv(w), Nat.mul(4n, 2n)), PP.cp.mul_assoc(PP.cp.dv(w), 4n, 2n))), {==}, e)
+          PP.cp.g_some(PP.cp.p0(w, 512, 2, i), PP.cp.t8(w), 512, p, PP.cp.b9(w), PP.cp.r9(w), Nat.mul(U32.to_nat(i), 2n), 511n, 1n, 256n, Nat.mul(PP.cp.dv(w), 4n), U32.to_nat(i), PP.cp.ht9(w), PP.cp.hp9(w, 2, i, Nat.mul(U32.to_nat(i), 2n), PP.cp.vr(i, 2, 1n, 512, PP.cp.mul2(i), h), h), {==}, PP.cp.hrr9(w), h, {==}, Equal.trans(Nat, U32.to_nat(PP.cp.t8(w)), Nat.mul(PP.cp.dv(w), 8n), Nat.mul(Nat.mul(PP.cp.dv(w), 4n), 2n), PP.cp.vt8(w), Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), 4n), 2n), Nat.mul(PP.cp.dv(w), Nat.mul(4n, 2n)), UL.nat_mul_assoc(PP.cp.dv(w), 4n, 2n))), {==}, e)
         case F.C842P4{}:
           %PP.cp.et(w) : {(Nat.mod(U32.to_nat(p), 2048n), Nat.is_le(Nat.add(U32.to_nat(p), 4n), _), Nat.is_le(_, Nat.add(U32.to_nat(p), 2048n))) == (Nat.mul(U32.to_nat(i), 4n), True{}, True{}) : Nat & Bool & Bool}
-          PP.cp.g_some(PP.cp.p0(w, 2048, 4, i), PP.cp.t8(w), 2048, p, PP.cp.b11(w), PP.cp.r11(w), Nat.mul(U32.to_nat(i), 4n), 2047n, 3n, 512n, Nat.mul(PP.cp.dv(w), 2n), U32.to_nat(i), PP.cp.ht11(w), PP.cp.hp11(w, 4, i, Nat.mul(U32.to_nat(i), 4n), PP.cp.vr(i, 4, 2n, 2048, PP.cp.mul4(i), h), h), {==}, PP.cp.hrr11(w), h, {==}, Equal.trans(Nat, U32.to_nat(PP.cp.t8(w)), Nat.mul(PP.cp.dv(w), 8n), Nat.mul(Nat.mul(PP.cp.dv(w), 2n), 4n), PP.cp.vt8(w), Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), 2n), 4n), Nat.mul(PP.cp.dv(w), Nat.mul(2n, 4n)), PP.cp.mul_assoc(PP.cp.dv(w), 2n, 4n))), {==}, e)
+          PP.cp.g_some(PP.cp.p0(w, 2048, 4, i), PP.cp.t8(w), 2048, p, PP.cp.b11(w), PP.cp.r11(w), Nat.mul(U32.to_nat(i), 4n), 2047n, 3n, 512n, Nat.mul(PP.cp.dv(w), 2n), U32.to_nat(i), PP.cp.ht11(w), PP.cp.hp11(w, 4, i, Nat.mul(U32.to_nat(i), 4n), PP.cp.vr(i, 4, 2n, 2048, PP.cp.mul4(i), h), h), {==}, PP.cp.hrr11(w), h, {==}, Equal.trans(Nat, U32.to_nat(PP.cp.t8(w)), Nat.mul(PP.cp.dv(w), 8n), Nat.mul(Nat.mul(PP.cp.dv(w), 2n), 4n), PP.cp.vt8(w), Equal.sym(Nat, Nat.mul(Nat.mul(PP.cp.dv(w), 2n), 4n), Nat.mul(PP.cp.dv(w), Nat.mul(2n, 4n)), UL.nat_mul_assoc(PP.cp.dv(w), 2n, 4n))), {==}, e)
         case F.C842P8{}:
           %PP.cp.et(w) : {(Nat.mod(U32.to_nat(p), 2048n), Nat.is_le(Nat.add(U32.to_nat(p), 8n), _), Nat.is_le(_, Nat.add(U32.to_nat(p), 2048n))) == (Nat.mul(U32.to_nat(i), 8n), True{}, True{}) : Nat & Bool & Bool}
           PP.cp.g_some(PP.cp.p0(w, 2048, 8, i), PP.cp.t8(w), 2048, p, PP.cp.b11(w), PP.cp.r11(w), Nat.mul(U32.to_nat(i), 8n), 2047n, 7n, 256n, PP.cp.dv(w), U32.to_nat(i), PP.cp.ht11(w), PP.cp.hp11(w, 8, i, Nat.mul(U32.to_nat(i), 8n), PP.cp.vr(i, 8, 3n, 2048, PP.cp.mul8(i), h), h), {==}, PP.cp.hrr11(w), h, {==}, PP.cp.vt8(w), {==}, e)
@@ -1234,7 +1208,7 @@ def pi_field(+k: F.C842Kind, +bs: List<&2, Bool>, +e: {List.length(&2, Bool, bs)
       PP.cp.mulb(U32.to_nat(F.c842.fmt.value(bs)), 3n, 8n, PP.cp.lt_rw(U32.to_nat(F.c842.fmt.value(bs)), U32.to_nat(F.c842.fmt.value(bs)), U.U32Nat.dbl(List.length(&2, Bool, bs), 1n), U.U32Nat.dbl(8n, 1n), {==}, Equal.cong(Nat, Nat, z => U.U32Nat.dbl(z, 1n), List.length(&2, Bool, bs), 8n, e), PP.cp.vb(bs, PP.cp.le_rw(8n, List.length(&2, Bool, bs), 9n, 9n, Equal.sym(Nat, List.length(&2, Bool, bs), 8n, e), {==}, {==}))))
 
 def pi_len1(+got: List<&2, Bool>, -b: Bool, -n: Nat, +h: {Nat.add(List.length(&2, Bool, got), 1n) == n : Nat}) -> {List.length(&2, Bool, Con{b, got}) == n : Nat}:
-  Equal.trans(Nat, 1n+List.length(&2, Bool, got), Nat.add(List.length(&2, Bool, got), 1n), n, Equal.sym(Nat, Nat.add(List.length(&2, Bool, got), 1n), 1n+List.length(&2, Bool, got), Equal.trans(Nat, Nat.add(List.length(&2, Bool, got), 1n), 1n+Nat.add(List.length(&2, Bool, got), 0n), 1n+List.length(&2, Bool, got), PP.cp.add_succ(List.length(&2, Bool, got), 0n), PP.cp.succ_cong(Nat.add(List.length(&2, Bool, got), 0n), List.length(&2, Bool, got), PP.cp.add_zero(List.length(&2, Bool, got))))), h)
+  Equal.trans(Nat, 1n+List.length(&2, Bool, got), Nat.add(List.length(&2, Bool, got), 1n), n, Equal.sym(Nat, Nat.add(List.length(&2, Bool, got), 1n), 1n+List.length(&2, Bool, got), Equal.trans(Nat, Nat.add(List.length(&2, Bool, got), 1n), 1n+Nat.add(List.length(&2, Bool, got), 0n), 1n+List.length(&2, Bool, got), UL.nat_add_succ(List.length(&2, Bool, got), 0n), PP.cp.succ_cong(Nat.add(List.length(&2, Bool, got), 0n), List.length(&2, Bool, got), UL.nat_add_zero(List.length(&2, Bool, got))))), h)
 
 def pi_at(+w: F.C842Want, +got: List<&2, Bool>, +left: Nat, +b: Bool, h: pinv(F.C842Parser{w, got, left})) -> pinvs(F.c842.parse.at(left, w, Con{b, got})):
   match w:
@@ -1257,7 +1231,7 @@ def pi_at(+w: F.C842Want, +got: List<&2, Bool>, +left: Nat, +b: Bool, h: pinv(F.
             case 0n:
               (pi_field(k, Con{b, got}, pi_len1(got, b, F.C842Kind.width(k), h)), pi_nf(more))
             case 1n+s:
-              ({==}, Equal.trans(Nat, 1n+Nat.add(List.length(&2, Bool, got), 1n+s), Nat.add(List.length(&2, Bool, got), 2n+s), F.C842Kind.width(k), Equal.sym(Nat, Nat.add(List.length(&2, Bool, got), 2n+s), 1n+Nat.add(List.length(&2, Bool, got), 1n+s), PP.cp.add_succ(List.length(&2, Bool, got), 1n+s)), h))
+              ({==}, Equal.trans(Nat, 1n+Nat.add(List.length(&2, Bool, got), 1n+s), Nat.add(List.length(&2, Bool, got), 2n+s), F.C842Kind.width(k), Equal.sym(Nat, Nat.add(List.length(&2, Bool, got), 2n+s), 1n+Nat.add(List.length(&2, Bool, got), 1n+s), UL.nat_add_succ(List.length(&2, Bool, got), 1n+s)), h))
     case F.C842WRepeat{}:
       match left:
         case 0n:

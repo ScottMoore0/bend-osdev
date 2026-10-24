@@ -23,6 +23,8 @@ import ./auto.bend as A
 import ./fsm.bend as F
 import ./proof_lib.bend as L
 import ./LAWS_fsm.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Sets of positions
 
@@ -1442,7 +1444,7 @@ def fs.mu_con(tks: List<&2, F.TsToken>, +c: U32, +t: List<&2, U32>) -> {fs.mu(tk
       {==}
 
 def fs.mul2(+n: Nat) -> {Nat.mul(2n, 1n+n) == 2n+Nat.mul(2n, n) : Nat}:
-  Equal.cong(Nat, Nat, k => 1n+k, Nat.add(n, 1n+Nat.add(n, 0n)), 1n+Nat.add(n, Nat.add(n, 0n)), L.tsl.add_succ(n, Nat.add(n, 0n)))
+  Equal.cong(Nat, Nat, k => 1n+k, Nat.add(n, 1n+Nat.add(n, 0n)), 1n+Nat.add(n, Nat.add(n, 0n)), UL.nat_add_succ(n, Nat.add(n, 0n)))
 
 def fs.mu_eq(tks: List<&2, F.TsToken>, +xs: List<&2, U32>) -> {Nat.add(Nat.mul(2n, List.length(&2, F.TsToken, tks)), List.length(&2, U32, xs)) == fs.mu(tks, xs) : Nat}:
   match tks:
@@ -1562,7 +1564,7 @@ def fs.R_shift(k: Nat, +tks: List<&2, F.TsToken>, +act: List<&2, Bool>, +c: U32,
       +a2 = fs.a2(E, act, c)
       +w = List.take(&2, U32, t, i)
       %Equal.sym(List<&2, Nat>, fs.R(r, tks, act, Con{c, t}, 2n+i, pos), fs.R(r, tks, a2, t, 1n+i, 1n+pos), fs.R_shift(r, tks, act, c, t, 1n+i, pos, h)) : {F.ts.fsm.hit(Bool.or(fs.sem(E, act, Con{c, w}), F.ts.fsm.any_suffix(tks, Con{c, w})), Nat.add(pos, 1n+i), _) == fs.R(1n+r, tks, a2, t, i, 1n+pos) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(pos, 1n+i), 1n+Nat.add(pos, i), L.tsl.add_succ(pos, i)) : {F.ts.fsm.hit(Bool.or(fs.sem(E, act, Con{c, w}), F.ts.fsm.any_suffix(tks, Con{c, w})), _, fs.R(r, tks, a2, t, 1n+i, 1n+pos)) == fs.R(1n+r, tks, a2, t, i, 1n+pos) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 1n+i), 1n+Nat.add(pos, i), UL.nat_add_succ(pos, i)) : {F.ts.fsm.hit(Bool.or(fs.sem(E, act, Con{c, w}), F.ts.fsm.any_suffix(tks, Con{c, w})), _, fs.R(r, tks, a2, t, 1n+i, 1n+pos)) == fs.R(1n+r, tks, a2, t, i, 1n+pos) : List<&2, Nat>}
       %Equal.sym(Bool, Bool.or(fs.sem(E, act, Con{c, w}), F.ts.fsm.any_suffix(tks, Con{c, w})), Bool.or(fs.sem(E, a2, w), F.ts.fsm.any_suffix(tks, w)), fs.bit(tks, act, c, w, h)) : {F.ts.fsm.hit(_, Nat.add(1n+pos, i), fs.R(r, tks, a2, t, 1n+i, 1n+pos)) == fs.R(1n+r, tks, a2, t, i, 1n+pos) : List<&2, Nat>}
       {==}
 

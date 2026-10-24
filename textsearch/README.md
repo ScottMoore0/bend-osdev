@@ -258,6 +258,9 @@ of the same agreement.
 
 `bend-osdev-bytes` (`Octets` chunks).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend`, `PROOF_kmp.bend`, `PROOF_fsm.bend` and

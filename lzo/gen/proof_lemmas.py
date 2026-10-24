@@ -811,7 +811,7 @@ w('''
 # M2: the byte H gives the distance; it is more than the bytes written, so
 # the copy is refused
 def bd_m2c(+c: D.LzoCls, +acc: List<&2, U32>, +win: W.LzoWin, +room: Nat, +x: U32, +h: U32, +R: List<&2, U32>, +hnf: {bd_nf(c) == True{} : Bool}, +hc: {%(CNT)s == %(LEN)s : Nat}, +hx: {U32.is_lt(x, 64) == False{} : Bool}, +hh: {Nat.is_lt(U32.to_nat(h), 256n) == True{} : Bool}, +hd: {Nat.is_lt(%(LEN)s, %(DIST2)s) == True{} : Bool}) -> %(G)s:
-  +hb = PD.ld.le_rw(1n+%(M8)s, Nat.add(%(M8)s, 1n), 1n+%(M8)s, 1n+%(M8)s, Equal.sym(Nat, Nat.add(%(M8)s, 1n), 1n+%(M8)s, Equal.trans(Nat, Nat.add(%(M8)s, 1n), 1n+Nat.add(%(M8)s, 0n), 1n+%(M8)s, PD.ld.add_succ(%(M8)s, 0n), PD.ld.succ_cong(Nat.add(%(M8)s, 0n), %(M8)s, PD.ld.add_zero(%(M8)s)))), {==}, PD.ld.le_refl(1n+%(M8)s))
+  +hb = PD.ld.le_rw(1n+%(M8)s, Nat.add(%(M8)s, 1n), 1n+%(M8)s, 1n+%(M8)s, Equal.sym(Nat, Nat.add(%(M8)s, 1n), 1n+%(M8)s, Equal.trans(Nat, Nat.add(%(M8)s, 1n), 1n+Nat.add(%(M8)s, 0n), 1n+%(M8)s, UL.nat_add_succ(%(M8)s, 0n), PD.ld.succ_cong(Nat.add(%(M8)s, 0n), %(M8)s, UL.nat_add_zero(%(M8)s)))), {==}, UL.nat_le_refl(1n+%(M8)s))
   +nb = PD.ld.not_below(%(LEN)s, %(A8)s, %(M8)s, Nat.add(%(M8)s, 1n), hd, hb)
   +hlt = PD.ld.ltf_rw(Nat.add(%(A8)s, %(M8)s), %(O2)s, %(LEN)s, %(CNT)s, Equal.sym(Nat, %(O2)s, Nat.add(%(A8)s, %(M8)s), PD.ld.m2_o(x, h, hh)), Equal.sym(Nat, %(CNT)s, %(LEN)s, hc), nb)
   %%Equal.sym(D.LzoDec, D.dec.apply(D.dec.ins(c, x), acc, win, room), %(NEAR2)s, bd_ins_m2(c, x, acc, win, room, hnf, hx)) : {D.dec.out(D.dec.end(D.dec.go(Con{h, R}, _))) == %(F)s : %(RES)s}
@@ -865,7 +865,7 @@ M3HD = '+hd: {Nat.is_lt(%s, Nat.add(%s, 1n)) == True{} : Bool}' % (LEN, DLAW)
 w('''# M3: lo and hi give D; the distance D + 1 is more than the bytes written
 def bd_m3d(+len: Nat, +acc: List<&2, U32>, +win: W.LzoWin, +room: Nat, %(BP)s, +R: List<&2, U32>, +hc: {%(CNT)s == %(LEN)s : Nat}, %(HD)s) -> %(G)s:
   +nb = PD.ld.not_below(%(LEN)s, %(DLAW)s, 0n, 1n, hd, {==})
-  +hlt = PD.ld.ltf_rw(Nat.add(%(DLAW)s, 0n), %(O3)s, %(LEN)s, %(CNT)s, Equal.trans(Nat, Nat.add(%(DLAW)s, 0n), %(DLAW)s, %(O3)s, PD.ld.add_zero(%(DLAW)s), Equal.sym(Nat, U32.to_nat(%(D14E)s), %(DLAW)s, PD.ld.d14_v(%(BA)s))), Equal.sym(Nat, %(CNT)s, %(LEN)s, hc), nb)
+  +hlt = PD.ld.ltf_rw(Nat.add(%(DLAW)s, 0n), %(O3)s, %(LEN)s, %(CNT)s, Equal.trans(Nat, Nat.add(%(DLAW)s, 0n), %(DLAW)s, %(O3)s, UL.nat_add_zero(%(DLAW)s), Equal.sym(Nat, U32.to_nat(%(D14E)s), %(DLAW)s, PD.ld.d14_v(%(BA)s))), Equal.sym(Nat, %(CNT)s, %(LEN)s, hc), nb)
   %%Equal.sym(D.LzoDec, D.dec.copy.at(%(CNT)s, %(O3)s, len, D.dec.s2(%(LO)s), acc, win, room), %(BAD)s, bd_far(%(CNT)s, %(O3)s, len, D.dec.s2(%(LO)s), acc, win, room, hlt)) : {D.dec.out(D.dec.end(D.dec.go(R, _))) == %(F)s : %(RES)s}
   absorb_out(R, E.LzoBadDistance{}, acc, win, room)
 

@@ -6,6 +6,10 @@ import Base
 import ./textsearch.bend as T
 import ./auto.bend as A
 import ./naive.bend as V
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Absurdities
 
@@ -81,26 +85,10 @@ def tsl.and_r(+a: Bool, +b: Bool, +e: {Bool.and(a, b) == True{} : Bool}) -> {b =
 
 # U32: is_eq is equality
 
-def tsl.bool_cmp_self(+b: Bool) -> {Bool.cmp(b, b) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def tsl.word_cmp_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{}, Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, tsl.word_cmp_self(p, t)), tsl.bool_cmp_self(b))
-
 def tsl.u32_refl(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, tsl.word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def tsl.word_eq_tail(c: Cmp, x: Bool, y: Bool, e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {Cmp.is_eq(c) == True{} : Bool}:
@@ -152,24 +140,8 @@ def tsl.u32_eq(a: U32, b: U32, e: {U32.is_eq(a, b) == True{} : Bool}) -> {a == b
 
 # Nat
 
-def tsl.add_zero(+m: Nat) -> {Nat.add(m, 0n) == m : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+p:
-      %tsl.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def tsl.add_succ(+x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %tsl.add_succ(p, y) : {1n+Nat.add(p, 1n+y) == 1n+_ : Nat}
-      {==}
-
 def tsl.add_one(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
-  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, tsl.add_succ(a, 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(a, 0n), a, tsl.add_zero(a)))
+  Equal.trans(Nat, Nat.add(a, 1n), 1n+Nat.add(a, 0n), 1n+a, UL.nat_add_succ(a, 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(a, 0n), a, UL.nat_add_zero(a)))
 
 def tsl.lt_succ(+a: Nat) -> {Nat.is_lt(a, 1n+a) == True{} : Bool}:
   match a:
@@ -418,23 +390,23 @@ def tsl.go_app(~S: Data, ~step: S -> U32 -> S & Bool, xs: List<&2, U32>, +ys: Li
     case Nil{}:
       match r:
         case (+s, +h):
-          %Equal.sym(Nat, Nat.add(pos, 0n), pos, tsl.add_zero(pos)) : {A.ts.auto.go(~S, ~step, ys, pos, (s, h)) == A.ts.auto.then(~S, ~step, (s, A.ts.auto.hit(h, pos, Nil{})), _, ys) : S & List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(pos, 0n), pos, UL.nat_add_zero(pos)) : {A.ts.auto.go(~S, ~step, ys, pos, (s, h)) == A.ts.auto.then(~S, ~step, (s, A.ts.auto.hit(h, pos, Nil{})), _, ys) : S & List<&2, Nat>}
           tsl.go_nil(~S, ~step, ys, pos, s, h)
     case Con{+c, +t}:
       match r:
         case (+s, +h):
           %Equal.sym(S & List<&2, Nat>, A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)), A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), Nat.add(1n+pos, List.length(&2, U32, t)), ys), tsl.go_app(~S, ~step, t, ys, 1n+pos, step(s, c))) : {A.ts.auto.cons(~S, h, pos, _) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), Nat.add(pos, 1n+List.length(&2, U32, t)), ys) : S & List<&2, Nat>}
-          %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), tsl.add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.cons(~S, h, pos, A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), _, ys) : S & List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), UL.nat_add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.cons(~S, h, pos, A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.cons(~S, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c))), _, ys) : S & List<&2, Nat>}
           tsl.cons_then(~S, ~step, h, pos, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), 1n+Nat.add(pos, List.length(&2, U32, t)), ys)
 
 # feeding xs ++ ys: xs, then ys from where xs ended
 def tsl.feed_app(~S: Data, ~step: S -> U32 -> S & Bool, +s: S, +pos: Nat, xs: List<&2, U32>, +ys: List<&2, U32>) -> {A.ts.auto.feed(~S, ~step, s, pos, List.append(&2, U32, xs, ys)) == A.ts.auto.then(~S, ~step, A.ts.auto.feed(~S, ~step, s, pos, xs), Nat.add(pos, List.length(&2, U32, xs)), ys) : S & List<&2, Nat>}:
   match xs:
     case Nil{}:
-      %Equal.sym(Nat, Nat.add(pos, 0n), pos, tsl.add_zero(pos)) : {A.ts.auto.feed(~S, ~step, s, pos, ys) == A.ts.auto.then(~S, ~step, (s, Nil{}), _, ys) : S & List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 0n), pos, UL.nat_add_zero(pos)) : {A.ts.auto.feed(~S, ~step, s, pos, ys) == A.ts.auto.then(~S, ~step, (s, Nil{}), _, ys) : S & List<&2, Nat>}
       Equal.sym(S & List<&2, Nat>, A.ts.auto.pre(~S, Nil{}, A.ts.auto.feed(~S, ~step, s, pos, ys)), A.ts.auto.feed(~S, ~step, s, pos, ys), tsl.pre_nil(~S, A.ts.auto.feed(~S, ~step, s, pos, ys)))
     case Con{+c, +t}:
-      %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), tsl.add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)) == A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), _, ys) : S & List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 1n+List.length(&2, U32, t)), 1n+Nat.add(pos, List.length(&2, U32, t)), UL.nat_add_succ(pos, List.length(&2, U32, t))) : {A.ts.auto.go(~S, ~step, List.append(&2, U32, t, ys), 1n+pos, step(s, c)) == A.ts.auto.then(~S, ~step, A.ts.auto.go(~S, ~step, t, 1n+pos, step(s, c)), _, ys) : S & List<&2, Nat>}
       tsl.go_app(~S, ~step, t, ys, 1n+pos, step(s, c))
 
 # Any chunks: the matches of the bytes of all of them
@@ -517,9 +489,6 @@ def tsl.lt_irrefl(+a: Nat) -> {Nat.is_lt(a, a) == False{} : Bool}:
       {==}
     case 1n+p:
       tsl.lt_irrefl(p)
-
-def tsl.lt_trans(+a: Nat, +b: Nat, +c: Nat, +h1: {Nat.is_lt(a, b) == True{} : Bool}, +h2: {Nat.is_lt(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  tsl.lt_le_trans(a, b, c, h1, tsl.lt_weak(b, c, h2))
 
 # a < b: a is not b
 def tsl.lt_ne(+a: Nat, +b: Nat, +h: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_eq(a, b) == False{} : Bool}:
