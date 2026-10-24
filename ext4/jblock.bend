@@ -50,8 +50,11 @@ def Jbd2.flag_last() -> U32:
 def Jbd2.be16(o: B.Octets, i: Nat) -> U32:
   Maybe.default(&2, U32, B.Octets.be16_at(o, i), 0)
 
+# 2^32: the successor of the largest literal Bend reads, so that the
+# checker compares it as a literal (a product of literals it would expand
+# when the proofs compare block numbers' halves, Jbd2.lo and Jbd2.hi)
 def Jbd2.two32() -> Nat:
-  Nat.mul(65536n, 65536n)
+  1n+4294967295n
 
 # a 48-bit block number from its halves (64bit: the high half's low 16
 # bits count; Nat holds 48 bits, as ext4's block numbers)
@@ -240,6 +243,51 @@ def Jbd2Desc.encode(+g: J.Jbd2Geom, +seq: U32, ts: List<&2, Jbd2Tag>, +uuid: B.O
 def Jbd2Desc.capacity(+g: J.Jbd2Geom) -> Nat:
   Nat.div(Nat.sub(Nat.sub(Nat.sub(J.Jbd2Geom.bs(g), 12n), J.Jbd2Geom.tail(g)), 16n), J.Jbd2Geom.tag_size(g))
 
+# What the descriptor's codec needs (LAWS.bend: jdesc_round_trip)
+
+# whether block number b survives being split into the two 32-bit halves
+# a tag or revoke record stores (below 2^32; with 64bit, below 2^48)
+def Jbd2.block_fits(+wide: Bool, +b: Nat) -> Bool:
+  Nat.is_eq(Jbd2.join(wide, Jbd2.hi(b), Jbd2.lo(b)), b)
+
+# the bytes a tag takes in a descriptor: its fields, and the journal's
+# UUID unless its flags have SAME_UUID
+def Jbd2Tag.size(+g: J.Jbd2Geom, +t: Jbd2Tag) -> Nat:
+  Nat.add(J.Jbd2Geom.tag_size(g), Jbd2Tag.uuid.pick(J.Jbd2.has(Jbd2Tag.flags(t), Jbd2.flag_same_uuid())))
+
+def Jbd2Tag.storable.fields(v3: Bool, +f: U32, +c: U32) -> Bool:
+  match v3:
+    case True{}:
+      True{}
+    case False{}:
+      Bool.and(U32.is_eq(B.low16(f), f), U32.is_eq(B.low16(c), c))
+
+# whether a tag reads back as it was written: its block number fits, and
+# (but with csum_v3, whose fields are 32 bits) its flags and checksum fit
+# in their 16 bits
+def Jbd2Tag.storable(+g: J.Jbd2Geom, t: Jbd2Tag) -> Bool:
+  match t:
+    case Jbd2Tag{b, f, c}:
+      Bool.and(Jbd2.block_fits(J.Jbd2Geom.wide(g), b), Jbd2Tag.storable.fields(Nat.is_eq(J.Jbd2Geom.csum(g), 3n), f, c))
+
+# whether the tags fill avail bytes of a descriptor's tag area as its
+# reader walks them: there is at least one, each is storable, only the
+# last has LAST_TAG, after each but the last there is room for one more
+# tag, and the last ends inside the area
+def Jbd2Desc.fits.go(+g: J.Jbd2Geom, ts: List<&2, Jbd2Tag>, +avail: Nat) -> Bool:
+  match ts:
+    case Nil{}:
+      False{}
+    case Con{+t, Nil{}}:
+      Bool.and(Jbd2Tag.storable(g, t), Bool.and(J.Jbd2.has(Jbd2Tag.flags(t), Jbd2.flag_last()), Nat.is_le(Jbd2Tag.size(g, t), avail)))
+    case Con{+t, rest}:
+      Bool.and(Jbd2Tag.storable(g, t), Bool.and(Bool.not(J.Jbd2.has(Jbd2Tag.flags(t), Jbd2.flag_last())), Bool.and(Nat.is_le(Nat.add(Jbd2Tag.size(g, t), J.Jbd2Geom.tag_size(g)), avail), Jbd2Desc.fits.go(g, rest, Nat.sub(avail, Jbd2Tag.size(g, t))))))
+
+# whether a descriptor block holds the tags ts (its tag area: the block
+# but the header and the tail)
+def Jbd2Desc.fits(+g: J.Jbd2Geom, ts: List<&2, Jbd2Tag>) -> Bool:
+  Jbd2Desc.fits.go(g, ts, Nat.sub(Nat.sub(J.Jbd2Geom.bs(g), 12n), J.Jbd2Geom.tail(g)))
+
 # Data blocks: escaping, and the tag checksum
 
 # whether a data block starts with the magic number, and must be escaped
@@ -351,6 +399,25 @@ def Jbd2Revoke.encode(+g: J.Jbd2Geom, +seq: U32, +bs: List<&2, Nat>) -> B.Octets
 # how many block numbers a revoke block holds
 def Jbd2Revoke.capacity(+g: J.Jbd2Geom) -> Nat:
   Nat.div(Nat.sub(Nat.sub(J.Jbd2Geom.bs(g), 16n), J.Jbd2Geom.tail(g)), Jbd2Revoke.entry_size(J.Jbd2Geom.wide(g)))
+
+# What the revoke block's codec needs (LAWS.bend: jrevoke_round_trip)
+
+# r_count of a revoke block for bs: the header, r_count, the records
+def Jbd2Revoke.count(+g: J.Jbd2Geom, bs: List<&2, Nat>) -> Nat:
+  Nat.add(16n, Nat.mul(List.length(&2, Nat, bs), Jbd2Revoke.entry_size(J.Jbd2Geom.wide(g))))
+
+def Jbd2Revoke.blocks_fit(+wide: Bool, bs: List<&2, Nat>) -> Bool:
+  match bs:
+    case Nil{}:
+      True{}
+    case Con{b, t}:
+      Bool.and(Jbd2.block_fits(wide, b), Jbd2Revoke.blocks_fit(wide, t))
+
+# whether a revoke block holds the block numbers bs: each fits its record,
+# and r_count fits in its 32 bits and inside the block but its tail
+def Jbd2Revoke.fits(+g: J.Jbd2Geom, +bs: List<&2, Nat>) -> Bool:
+  +count = Jbd2Revoke.count(g, bs)
+  Bool.and(Jbd2Revoke.blocks_fit(J.Jbd2Geom.wide(g), bs), Bool.and(Nat.is_eq(U32.to_nat(U32.from_nat(count)), count), Nat.is_le(count, Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g)))))
 
 # Commit blocks
 
