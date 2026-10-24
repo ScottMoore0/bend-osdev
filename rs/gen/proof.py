@@ -18,13 +18,19 @@ are rewritten by this script:
           position and error value;
   inv     a a^-1 = 1 in GF(8) and GF(16), by trying every element.
 
+It also writes the whole of proof_pat8.bend, the lemma file of
+PROOF_errors.bend: the 1079 patterns of at most two errors in a word of
+Rs.small8, each decoded alone in a def of its own (see gen_pat8).
+
 The tried values are computed in defs of their own whose statements have
 no unknown bits: the proof kernel has a step budget per def, and computes
 literals far faster than words with unknown bits.
 
-Usage: python3 gen/proof.py   (from rs/)
+Usage: python3 gen/proof.py           (from rs/) rewrites the files
+       python3 gen/proof.py --check   fails if a generated part differs
+                                      from what this script writes
 """
-import os, re
+import os, re, sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -299,10 +305,243 @@ def gen_inv():
     return "\n".join(out)
 
 
+# Rs.small8's patterns of at most two errors (proof_pat8.bend)
+
+def gf8mul(a, b):
+    r = 0
+    for i in range(3):
+        if (b >> i) & 1:
+            r ^= a << i
+    for i in (4, 3):
+        if (r >> i) & 1:
+            r ^= 11 << (i - 3)
+    return r
+
+
+def pattern8(i, x, j, y):
+    """pat8(i, x, j, y): x added at index i and y at index j (an index of\n    7 stands for every index past the end, which changes nothing)"""
+    e = [0] * 7
+    if i < 7:
+        e[i] ^= x
+    if j < 7:
+        e[j] ^= y
+    return e
+
+
+def patterns8():
+    """every pattern of at most two errors (1079), fewest errors first"""
+    seen = set()
+    for i in range(8):
+        for x in range(8):
+            for j in range(8):
+                for y in range(8):
+                    seen.add(tuple(pattern8(i, x, j, y)))
+    return sorted((list(e) for e in seen), key=lambda e: (sum(1 for s in e if s), e))
+
+
+def lst(xs):
+    return "[%s]" % ", ".join(map(str, xs))
+
+
+PAT8_HEADER = """# Rs.small8's patterns of at most two errors, each corrected alone (this
+# whole file is written by gen/proof.py: do not edit it).
+#
+# For a word x of 7 symbols, chk8(x) applies to x the decoder's
+# corrections for x's syndromes (Rs.plan), and ok8(x) says that this is
+# the zero word. For each pattern e with at most two nonzero symbols (1079
+# of them) ok8(e) holds: the decoder finds exactly e's errors. Each is
+# computed in a def of its own (p8_<e>), on literals: the proof kernel has
+# a step budget per def, and computes literals far faster than words with
+# unknown bits.
+#
+# q8 takes a pattern given as two changes (pat8: a value added at an
+# index, twice) apart. Each value is read modulo 2^3, as the decoder reads
+# it, so its low three bits are tried and the unknown others rewritten
+# away (l8_<x>); then each index is tried (0 to 6, or past the end, which
+# changes nothing), the pattern rewritten into its list of symbols
+# (r8_<i>_<j>, from facts about single symbols: s8a, s8b, s8c), and each
+# case is one of the patterns. b1 is a fact about elements that
+# PROOF_errors.bend needs. The facts about elements are proved by
+# splitting the words into their 32 bits.
+import Base
+import ../gf/gfm.bend as M
+import ./poly.bend as P
+import ./code.bend as C
+import ./encode.bend as E
+import ./syndrome.bend as Sy
+import ./rs.bend as D
+"""
+
+
+def gen_pat8():
+    C8 = "C.Rs.small8()"
+    L = "List<&2, U32>"
+    R = "Result<&2, &2, E.RsError, List<&2, U32>>"
+    RP = "Result<&2, &2, E.RsError, List<&2, D.RsFix>>"
+    Z7 = lst([0] * 7)
+    EL = "M.Gfm.elt(%s, %%s)" % F8
+    GA = "M.Gfm.add(%s, %%s, %%s)" % F8
+    A, B = word(sym("a")), word(sym("b"))
+    out = [PAT8_HEADER]
+    out.append("# the word of 7 symbols with x added at index i and y at index j")
+    out.append("def pat8(i: Nat, +x: U32, j: Nat, +y: U32) -> %s:" % L)
+    out.append("  P.RsPoly.add(%s, D.Rs.inject(E.rs.zeros(7n), i, x), D.Rs.inject(E.rs.zeros(7n), j, y))\n" % F8)
+    out.append("# the corrections for x's syndromes, applied to x")
+    out.append("def chk8r(r: %s, +x: %s) -> %s:" % (RP, L, R))
+    out.append("  match r:\n    case Fail{e}:\n      Fail{e}\n    case Done{fs}:\n      Done{D.Rs.apply(%s, fs, x)}\n" % C8)
+    out.append("def chk8(+x: %s) -> %s:" % (L, R))
+    out.append("  chk8r(D.Rs.plan(%s, Sy.Rs.syndromes(%s, x), Nil{}, 7), x)\n" % (C8, C8))
+    out.append("def ok8(+x: %s) -> Type:" % L)
+    out.append("  {chk8(x) == Done{%s} : %s}\n" % (Z7, R))
+    # facts about elements
+    out.append("# elt (u + v) = elt u + (0 + elt v)")
+    out.append("def b1(u: U32, v: U32) -> {%s == %s : U32}:" % (EL % "U32.xor(u, v)", GA % (EL % "u", "U32.xor(0, %s)" % (EL % "v"))))
+    out.append("  match u v:\n    case %s %s:\n      {==}\n" % (A, B))
+    out.append("# x + 0 = x")
+    out.append("def bx0(+b: Bool) -> {Bool.xor(b, False{}) == b : Bool}:")
+    out.append("  match b:\n    case True{}:\n      {==}\n    case False{}:\n      {==}\n")
+    out.append("def wx0(n: Nat, a: Word(n)) -> {Word.xor(n, a, Word.zero(n)) == a : Word(n)}:")
+    out.append("  match n:\n    case 0n:\n      match a:\n        case WNil{}:\n          {==}\n    case 1n+p:\n      match a:\n        case WCon{+ah, +at}:")
+    out.append("          %bx0(ah) : {WCon{Bool.xor(ah, False{}), Word.xor(p, at, Word.zero(p))} == WCon{_, at} : Word(1n+p)}")
+    out.append("          %wx0(p, at) : {WCon{Bool.xor(ah, False{}), Word.xor(p, at, Word.zero(p))} == WCon{Bool.xor(ah, False{}), _} : Word(1n+p)}")
+    out.append("          {==}\n")
+    out.append("def ux0(a: U32) -> {U32.xor(a, 0) == a : U32}:")
+    out.append("  match a:\n    case U32{+x}:\n      %wx0(32n, x) : {U32{Word.xor(32n, x, Word.zero(32n))} == U32{_} : U32}\n      {==}\n")
+    out.append("def b2e(u: U32) -> {%s == %s : U32}:" % (EL % (EL % "U32.xor(0, u)"), EL % "u"))
+    out.append("  match u:\n    case %s:\n      {==}\n" % A)
+    out.append("def b2(+u: U32) -> {%s == %s : U32}:" % (EL % (GA % ("U32.xor(0, u)", "0")), EL % "u"))
+    out.append("  %%Equal.sym(U32, U32.xor(U32.xor(0, u), 0), U32.xor(0, u), ux0(U32.xor(0, u))) : {%s == %s : U32}" % (EL % (EL % "_"), EL % "u"))
+    out.append("  b2e(u)\n")
+    out.append("def b3(u: U32) -> {%s == %s : U32}:" % (EL % (GA % ("0", "U32.xor(0, u)")), EL % "u"))
+    out.append("  match u:\n    case %s:\n      {==}\n" % A)
+    out.append("def s8c(u: U32, v: U32) -> {%s == %s : U32}:" % (EL % (GA % ("U32.xor(0, u)", "U32.xor(0, v)")), GA % ("u", "v")))
+    out.append("  match u v:\n    case %s %s:\n      {==}\n" % (A, B))
+    out.append("# a change x at index i, alone (s8a) or with y at another (s8b)")
+    out.append("def s8a(+x: U32, +hx: {%s == x : U32}) -> {%s == x : U32}:" % (EL % "x", EL % (GA % ("U32.xor(0, x)", "0"))))
+    out.append("  Equal.trans(U32, %s, %s, x, b2(x), hx)\n" % (EL % (GA % ("U32.xor(0, x)", "0")), EL % "x"))
+    out.append("def s8b(+y: U32, +hy: {%s == y : U32}) -> {%s == y : U32}:" % (EL % "y", EL % (GA % ("0", "U32.xor(0, y)"))))
+    out.append("  Equal.trans(U32, %s, %s, y, b3(y), hy)\n" % (EL % (GA % ("0", "U32.xor(0, y)")), EL % "y"))
+    hs = ", ".join("+a%d: Bool" % i for i in range(3, 32))
+    for x in range(8):
+        out.append("def l8_%d(%s) -> {%d == %s : U32}:\n  {==}\n" % (x, hs, x, EL % word(low("a", x, 3))))
+    for x in range(8):
+        out.append("def ev8_%d() -> {%s == %d : U32}:\n  {==}\n" % (x, EL % str(x), x))
+    for x in range(8):
+        for y in range(8):
+            out.append("def xr8_%d_%d() -> {%d == %s : U32}:\n  {==}\n" % (x, y, x ^ y, GA % (str(x), str(y))))
+    # the patterns as lists
+    out.append("# A pattern's list of symbols, for each pair of indexes")
+    out.append("")
+
+    def nat(i, v):
+        return "%dn" % i if i < 7 else "7n+%s" % v
+
+    for i in range(8):
+        for j in range(8):
+            params, sl, steps = [], [], []
+            if i < 7:
+                params.append("+x: U32")
+            else:
+                params = ["k: Nat", "+x: U32"]
+            if j < 7:
+                params.append("+y: U32")
+            else:
+                params += ["l: Nat", "+y: U32"]
+            # the list, and the rewrites taking it to the normal form
+            cur = ["0"] * 7
+            if i < 7 and j < 7 and i == j:
+                cur[i] = GA % ("x", "y")
+            else:
+                if i < 7:
+                    cur[i] = "x"
+                    params.append("+hx: {%s == x : U32}" % (EL % "x"))
+                if j < 7:
+                    cur[j] = "y"
+                    params.append("+hy: {%s == y : U32}" % (EL % "y"))
+            rhs = "E.Rs.mask(%s, pat8(%s, x, %s, y))" % (C8, nat(i, "k"), nat(j, "l"))
+            name = "r8_%s_%s" % (i if i < 7 else "far", j if j < 7 else "far")
+            out.append("def %s(%s) -> {%s == %s : %s}:" % (name, ", ".join(params), lst(cur), rhs, L))
+            todo = []
+            if i < 7 and j < 7 and i == j:
+                todo.append((i, "s8c(x, y)", EL % (GA % ("U32.xor(0, x)", "U32.xor(0, y)"))))
+            else:
+                if i < 7:
+                    todo.append((i, "s8a(x, hx)", EL % (GA % ("U32.xor(0, x)", "0"))))
+                if j < 7:
+                    todo.append((j, "s8b(y, hy)", EL % (GA % ("0", "U32.xor(0, y)"))))
+            for pos, prf, nf in todo:
+                pl = list(cur)
+                pl[pos] = "_"
+                out.append("  %%%s : {%s == %s : %s}" % (prf, lst(pl), rhs, L))
+                cur[pos] = nf
+            out.append("  {==}\n")
+    out.append("# The patterns")
+    out.append("")
+    for e in patterns8():
+        out.append("def p8_%s() -> ok8(%s):\n  {==}\n" % ("".join(map(str, e)), lst(e)))
+    out.append("# The indexes, for each pair of values")
+    out.append("")
+    for x in range(8):
+        for y in range(8):
+            out.append("def q8_%d_%d(i: Nat, j: Nat) -> ok8(E.Rs.mask(%s, pat8(i, %d, j, %d))):" % (x, y, C8, x, y))
+            out.append("  match i:")
+            for i in range(8):
+                out.append("    case %s:" % nat(i, "k"))
+                out.append("      match j:")
+                for j in range(8):
+                    out.append("        case %s:" % nat(j, "l"))
+                    args = []
+                    if i == 7:
+                        args.append("k")
+                    args.append(str(x))
+                    if j == 7:
+                        args.append("l")
+                    args.append(str(y))
+                    if not (i < 7 and j < 7 and i == j):
+                        if i < 7:
+                            args.append("ev8_%d()" % x)
+                        if j < 7:
+                            args.append("ev8_%d()" % y)
+                    name = "r8_%s_%s" % (i if i < 7 else "far", j if j < 7 else "far")
+                    out.append("          %%%s(%s) : ok8(_)" % (name, ", ".join(args)))
+                    if i < 7 and j < 7 and i == j:
+                        pl = ["0"] * 7
+                        pl[i] = "_"
+                        out.append("          %%xr8_%d_%d() : ok8(%s)" % (x, y, lst(pl)))
+                    out.append("          p8_%s()" % "".join(map(str, pattern8(i, x, j, y))))
+            out.append("")
+    out.append("# The second value's low bits")
+    out.append("")
+    hb = ", ".join("b%d" % i for i in range(3, 32))
+    ha = ", ".join("a%d" % i for i in range(3, 32))
+
+    def goal(x, y):
+        return "ok8(E.Rs.mask(%s, pat8(i, %s, j, %s)))" % (C8, x, y)
+    for x in range(8):
+        out.append("def q8_%d(+i: Nat, +j: Nat, v: U32) -> %s:" % (x, goal(x, EL % "v")))
+        out.append("  match v:")
+        for y in range(8):
+            out.append("    case %s:" % word(low("b", y, 3)))
+            out.append("      %%l8_%d(%s) : %s" % (y, hb, goal(x, "_")))
+            out.append("      q8_%d_%d(i, j)" % (x, y))
+        out.append("")
+    out.append("# Every pattern of at most two errors, given as two changes")
+    out.append("def q8(+i: Nat, u: U32, +j: Nat, +v: U32) -> %s:" % goal(EL % "u", EL % "v"))
+    out.append("  match u:")
+    for x in range(8):
+        out.append("    case %s:" % word(low("a", x, 3)))
+        out.append("      %%l8_%d(%s) : %s" % (x, ha, goal("_", EL % "v")))
+        out.append("      q8_%d(i, j, v)" % x)
+    return "\n".join(out) + "\n"
+
 SECTIONS = {"bits": gen_bits, "dist8": gen_dist8, "lin8": gen_lin8, "basis8": gen_basis8, "small4": gen_small4, "inv": gen_inv}
 
 
 def main():
+    check = sys.argv[1:] == ["--check"]
+    if sys.argv[1:] not in ([], ["--check"]):
+        raise SystemExit("usage: python3 gen/proof.py [--check]")
+    files = {}
     path = os.path.join(HERE, "PROOF.bend")
     text = open(path).read()
     for name, fn in SECTIONS.items():
@@ -312,8 +551,20 @@ def main():
         if i < 0 or j < 0:
             raise SystemExit("PROOF.bend has no section " + name)
         text = text[:i + len(begin)] + fn().rstrip("\n") + "\n" + text[j:]
-    with open(path, "w", newline="\n") as f:
-        f.write(text)
+    files[path] = text
+    files[os.path.join(HERE, "proof_pat8.bend")] = gen_pat8()
+    stale = []
+    for path, text in files.items():
+        old = open(path).read() if os.path.exists(path) else None
+        if old == text:
+            continue
+        if check:
+            stale.append(os.path.relpath(path, HERE))
+        else:
+            with open(path, "w", newline="\n") as f:
+                f.write(text)
+    if stale:
+        raise SystemExit("not what gen/proof.py writes: " + ", ".join(stale))
 
 
 main()

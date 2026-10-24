@@ -144,22 +144,58 @@ corrected word's syndromes are not zero.
   8-bit codes from the independent model, and each of `Rs.check`'s
   refusals.
 
-Not proved: that every error pattern of weight at most t is corrected for
-the codes beyond t = 1. For the GF(8) code (t = 2) that is a statement
-about 7 positions and 7 values per error over all 512 messages; it is
-tested exhaustively instead (see Tests), and the decoder's steps that do
-not depend on the error pattern (syndromes of codewords, no corrections
-for a codeword) are proved for every message.
-
 How: the small codes' encoder and decoder read every symbol modulo 2^m,
 so each law first masks the message (and the injected change), then
 splits the symbol into its 32 bits and tries the low m bits, computing
 each case in a def of its own on literals (`gen/proof.py` writes these
-parts). The GF(8) laws are proved by induction (Horner's rule and the
-shift register are linear, from (x + y) k = x k + y k for each constant
-k, tried on all 64 pairs), and every message is a sum of messages with one
-nonzero symbol, whose codewords are computed. No law of another package is
-needed.
+parts; `python3 gen/proof.py --check` fails if a generated part is not
+what it writes). The GF(8) laws are proved by induction (Horner's rule
+and the shift register are linear, from (x + y) k = x k + y k for each
+constant k, tried on all 64 pairs), and every message is a sum of
+messages with one nonzero symbol, whose codewords are computed. No law of
+another package is needed.
+
+`LAWS_errors.bend`, proved for every input in `PROOF_errors.bend` (a pair
+of its own, checked in a process of its own: its proofs take in
+`PROOF.bend`'s, whose linearity and codeword laws they use, and 1079
+computed patterns), for the GF(8) code with 4 parity symbols (t = 2):
+
+* `small8_syndromes_shift`: for every message of up to k = 3 symbols and
+  every word e as long as its codeword, the codeword plus e
+  (`RsPoly.add`) has e's syndromes;
+* `small8_decode_shift`, the reduction: for every message of 3 symbols
+  and every word e of 7 symbols that decodes, alone, to the zero message,
+  the codeword plus e decodes to the message. The decoder's corrections
+  are a function of the syndromes (`Rs.plan`), which are e's; applying
+  them to the codeword plus e adds them to e; and the final check reads
+  the corrected word's syndromes, which are e corrected's;
+* `small8_two_errors`: every codeword of a message of 3 symbols with any
+  two of its symbols changed by any values (`Rs.inject` twice: two
+  errors, one or none, since the indexes may be equal, a value may be
+  zero, and an index past the end changes nothing) decodes to its message.
+  So every pattern of at most t = 2 errors is corrected, for all 512
+  messages.
+
+How: a codeword with two symbols changed, read modulo 2^3 as the decoder
+reads it, is the codeword plus the pattern of the two changes; each of the
+1079 patterns of at most two errors (1 + 49 + 1029) is corrected alone in
+a def of its own, on literals (`proof_pat8.bend`, written whole by
+`gen/proof.py`), and the law takes the changes apart into them: each
+value's low three bits, then each index, then the pattern rewritten into
+its list of symbols. Closed facts the generic steps need (the zero word
+passes the final check) are computed in defs of their own and rewritten
+in: `--verdict`'s kernel computes closed terms far faster than terms with
+unknowns, and runs out of fuel on such a computation inside a proof about
+unknown words.
+
+Not proved: that every error pattern of weight at most t is corrected for
+the other codes beyond t = 1, and for the GF(8) code's shortened words
+(messages of 1 or 2 symbols, words of 5 or 6) and its errors with
+erasures; they are left to the tests (see Tests). The method above takes
+one def per pattern, so each shortened length needs patterns of its own
+(526 and 778 of them), and the larger codes have far more patterns than
+one def each can cover (Geisel's (15,9) code, t = 3, has 1,559,476 of
+weight at most 3).
 
 ## Tests
 
@@ -179,5 +215,9 @@ with Gaussian elimination instead of Berlekamp-Massey and Forney).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 76 cases match, `scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` and `PROOF_errors.bend` ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK for both, `check.bend` passes, `ref/run.sh`
+76 cases match, `scripts/deps.sh` passes. `PROOF_errors.bend` takes in
+`PROOF.bend`'s proofs: alone it checks in about 10 minutes and 1.2 GB
+peak, and its `--verdict` takes about 28 minutes (the kernel's part about
+18) at the same peak; `PROOF.bend`'s is about 1 GB and 2 minutes.
