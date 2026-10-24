@@ -154,13 +154,27 @@ size (proved by induction over the scan the first fits share):
   number of granules and the `n` granules there are free, and `None`
   otherwise; without `GpOffset` it answers `None`.
 
-Not proved: that the best fit picks the shortest free run long enough (the
-first of those on ties), and that the order-aligned first fit picks the
-lowest free run at a multiple of `n` rounded up to a power of two. The order
-alignment is computed by an internal def (`genpool.fit.pow2`, with a fuel of
-48 doublings), so the law would have to state it through a public
-characterisation of that power of two first. Both are tested against the
-model below.
+* best fit (`best_fit_free`, `best_fit_starts`, `best_fit_shortest`,
+  `best_fit_first`, `best_fit_none`): its answer `s` starts a free run of
+  `n` granules, and starts a run (`s` is 0 or granule `s - 1` is
+  allocated); for every maximal free run (`bf.maximal(bits, s2, l2)`: `l2
+  >= 1` granules from `s2` free, `s2` 0 or granule `s2 - 1` allocated, and
+  granule `s2 + l2` allocated or past the end) of `n` or more granules, the
+  maximal run at `s` is no longer, and strictly shorter when `s2 < s` (the
+  first of the shortest); when it answers `None` with `n >= 1`, no run of
+  `n` granules is free. Proved through a model of `genpool.fit.runs`: the
+  runs it lists are exactly the maximal free runs (every run listed is
+  maximal, every maximal run is listed), in order of start, and a free run
+  of `n` lies in a listed run of `n` or more; and `best.go` answers a
+  listed run that fits, no longer than any run that fits, and shorter than
+  any that fits and starts before it.
+
+Not proved: that the order-aligned first fit picks the lowest free run at a
+multiple of `n` rounded up to a power of two (only that its answer is a free
+run). The order alignment is computed by an internal def
+(`genpool.fit.pow2`, with a fuel of 48 doublings), so the law would have to
+state it through a public characterisation of that power of two first. It
+is tested against the model below.
 
 ## Tests
 
