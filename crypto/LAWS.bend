@@ -18,6 +18,10 @@
 #                  HKDF, PBKDF2 and the SP 800-108 KDFs over them
 #   LAWS_hs.bend   the hashes package's hashes and Michael, and HMAC and
 #                  PBKDF2 over them
+#   LAWS_bytes.bend  the byte layer of ECB, CBC, PCBC and LRW
+#   LAWS_cts.bend  the CBC-CS3 round trip
+#   LAWS_hkdf.bend HKDF's length and prefix laws
+#   LAWS_ctr.bend  the CTR counter's increment
 import Base
 import ../bytes/bytes.bend as B
 import ./crypto.bend as Cr

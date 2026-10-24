@@ -134,6 +134,8 @@ These are stated choices; where the choice is a real one it is an option
 | `chains.bend` | `NftChain`, `NftBaseSpec`, `NftTable`, `NftRuleset`, the base chains at a hook (`NftRuleset.base_chains`), building rule sets (`add_*`, `NftEdit`), `without_rules` |
 | `eval.bend` | `NftOptions` and its default, a chain's evaluation (`Nft.run_chain`, `NftRun`), a base chain's (`Nft.run_base`), a hook's (`Nft.run_hook`, `NftOut`) |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_map.bend`, `PROOF_map.bend` | the key order and map lookup: laws and proofs |
+| `LAWS_expr.bend`, `PROOF_expr.bend` | what payload loads, comparisons and limits mean: laws and proofs |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test |
 
@@ -304,10 +306,92 @@ the outcomes of the key comparisons the insertion makes, so no lemma about
 the order of keys was needed. `PROOF.bend` uses bytes and netheaders only
 through their public defs (no laws of theirs were needed).
 
-Not proved: that map lookup agrees with a list model of maps (it would need
-transitivity of the key order, to show the first containing element is the
-only one); the expressions' semantics (payload loads, comparisons, limits)
-are covered by the differential test and `check.bend`.
+`LAWS_map.bend`, on the public interface only: 9 laws for every input, 1
+vector and 1 witness.
+
+* **the key order:** `key_le_refl`, `key_le_trans`, `key_lt_trans`,
+  `key_lt_le_trans`, `key_le_lt_trans` (`NftKey.le` is reflexive and
+  transitive, `NftKey.lt` transitive, and the two chain either way), and
+  `key_lt_not_le` (a key below another is not at or above it);
+* **maps:** `map_lookup_unique` (on a set with the invariant, if
+  `elements(s)` is `pre ++ [e] ++ post` and `e` holds `x`, then
+  `lookup(s, x)` is `Some{data(e)}`: the element holding a key is the only
+  one), `map_lookup_insert` (after inserting `e`, `lookup` gives `e`'s data
+  for the keys `e` holds and what it gave before for the others; no
+  hypothesis on the set is needed: insertion only puts `e` after elements
+  it lies above), `map_lookup_of_list` (the map built from a list answers
+  as the list does: the data of the first element of the list holding the
+  key, the list model `list_lookup`).
+
+The vector builds a map of two intervals and looks it up inside one and
+between them; the witness is a one-element set with the invariant holding
+the key it is looked up with.
+
+The proofs (`PROOF_map.bend`) state the key order's transitivity as one
+fact about three comparisons (`cm.ck`), prove it for `Nat.cmp` by
+induction, carry it to `U32.cmp` by bend-osdev-u32's `u32_cmp_value` (the
+only law of another package used), and through the lexicographic step by
+induction on the byte lists; comparing the other way round flips the
+result, the same way. Uniqueness: on a list with the invariant every
+element before one lies below its low end and every element after it above
+its high end. Insertion: the element goes in before the first it lies below
+(so lookup reads it first) or after one it lies above (which holds none of
+its keys, so the two lookups commute), and it succeeds only when no element
+holds a key of the new one. The list model follows by induction over the
+insertions, with the set's lookup the first answer of the elements inserted
+so far.
+
+`LAWS_expr.bend`, on the public interface only: 19 laws for every input, 3
+vectors and 1 witness, on what the expressions mean.
+
+* **payload loads are byte reads at offsets:** `payload_load` (with the
+  base's bytes `o`, as `NftPacket.base` gives them: the headers from that
+  layer on, as netheaders builds them, then the data, a load of `len`
+  bytes at `off` that fits is `slice(off, len, o)`), `payload_at` (and its
+  byte `i`, for `i < len`, is `o`'s byte at `off + i`), `payload_short` (a
+  load that would run past the end gives nothing) and `payload_no_base` (so
+  does one from a layer the packet does not have); a match on nothing
+  fails;
+* **comparisons on Octets:** `cmp_eq_holds` (`==` holds only for the value
+  itself: `v == w`), `cmp_eq_refl`, `cmp_ne` (the negation), `cmp_lt`,
+  `cmp_le`, `cmp_gt`, `cmp_ge` (the key order, one way or the other round:
+  `v > w` is `NftKey.lt(w, v)`), `range_contains` and `not_range_contains`
+  (a range test is an element's interval test), `in_set_mem` and
+  `not_in_set_mem` (set membership), `key_u8_cmp` (one-byte keys compare
+  as their bytes, `U32.cmp`, which bend-osdev-u32's `u32_cmp_value` makes
+  the order of the numbers);
+* **limits:** `limit_fresh` (the first packet through a limit with no
+  bucket yet conforms exactly when its cost, `unit_ms` or `unit_ms` per
+  byte, is at most the bucket's capacity, `burst` tokens, or `rate` when
+  `burst` is 0, of `unit_ms` each; `over` inverts), `limit_over` and
+  `limit_over_env` (`over` only inverts the match: for every state the
+  packet, counters and buckets after it are the same).
+
+Vectors: `th dport` on a UDP datagram reads its destination port, a load
+past the header's end and one from a missing network layer give nothing;
+ports compared, a range and a set; a limit of one packet a second with
+burst 1 passing a packet at 0 ms, refusing the next at 0 ms and passing one
+at 1000 ms. The witness is the transport base of that datagram, with loads
+that fit and do not.
+
+The proofs (`PROOF_expr.bend`): a payload load is a cut of the base's
+bytes, so the laws follow by rewriting with the hypotheses; its byte `i`
+is found by splitting the bytes at the offset and at the end of the load
+(bend-osdev-bytes' `take_drop`, and reads inside the first part of a
+joined string through the list form of Octets). Equal comparisons give
+equal byte lists (each `U32.cmp` equal, so each byte equal, by
+bend-osdev-u32's value laws), so equal Octets; the reversed comparisons
+flip by `PROOF_map.bend`'s lemma. A fresh bucket is full, and a full bucket
+refills to its capacity (`W64.cmp`'s value law, bend-osdev-word64);
+`over` changes only the bit `NftBucket.take` answers, which every later
+step passes on, by induction on the buckets.
+
+Not proved: the refill arithmetic (after `elapsed` ms a bucket holds
+`min(capacity, credit + elapsed * rate)`), so nothing about a limit's
+second and later packets: it rests on 64-bit multiplication and division,
+and bend-osdev-word64 has no value laws for those (nor bend-osdev-u32 for
+its multiplication). The differential test (`ref/gen.py` computes the
+bucket as `min(cap, credit + elapsed * rate)`) and `check.bend` cover it.
 
 ## Tests
 
@@ -336,18 +420,19 @@ the state carried between them. The default run is 80 rule sets and 152
 packets, about 40 s natively; seeds 1 to 8 at 120 rule sets (960 rule sets,
 1,914 packets) and seed 7 at 400 rule sets all matched.
 
-**nft.** `nft` is not installed here, and running packets through the
-kernel's nf_tables needs root and a network namespace (veth pairs, packets
-sent and counted), so the verdicts are not compared with the kernel. gen.py
+**nft.** Running packets through the kernel's nf_tables needs root and a
+network namespace (veth pairs, packets sent and counted), so the verdicts
+are not compared with the kernel. gen.py
 also writes the rule sets that it can express in nft syntax (about a third
 of the cases are generated within that subset: raw payload matches,
 comparisons, ranges, anonymous sets, counters, limits per second, marks,
 plain reject, jumps that do not loop) to `ref/nft/`, and when `nft` is
 installed and may reach the kernel, `run.sh` gives each to
-`nft --check -f`, which **validates their syntax only**. That printer could
-not be tried here; if CI installs nft and it refuses a file, the printer (or
-this README's reading of nft's syntax) is wrong. CI needs the apt package
-**`nftables`** (and CAP_NET_ADMIN, e.g. `sudo`, for `nft --check`).
+`nft --check -f`, which **validates their syntax only**. Without
+CAP_NET_ADMIN, `run.sh` runs nft in a new user and network namespace
+(`unshare -rn`), where it has that capability; if nft refuses a file, the
+printer (or this README's reading of nft's syntax) is wrong. CI needs the
+apt package **`nftables`**.
 
 ## Speed
 
@@ -380,6 +465,9 @@ and checking and building it takes about 1 GB.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes (native), `ref/run.sh` 80 cases (152 packets) match
-(nft syntax check skipped: nft not installed), `scripts/deps.sh` ok.
+Bend 2.0.37: `PROOF.bend`, `PROOF_map.bend` and `PROOF_expr.bend` ALL
+PROOFS CHECK, `--verdict` ALL PROOFS CHECK (`PROOF_map.bend` peaks at
+0.22 GB, `PROOF_expr.bend` at 0.44 GB), `check.bend` passes
+(native), `ref/run.sh` 80 cases (152 packets) match, and `nft --check`
+(in a user namespace) accepted all 32 rule sets written in nft syntax;
+`scripts/deps.sh` ok.

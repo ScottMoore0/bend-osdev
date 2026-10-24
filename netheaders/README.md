@@ -31,6 +31,12 @@ compute and verify the Internet checksum, on `Octets` (bend-osdev-bytes).
 | `icmp.bend` | `IcmpHeader`, for ICMP and ICMPv6 |
 | `udp.bend` | `UdpHeader`, its checksum over IPv4 or IPv6 |
 | `tcp.bend` | `TcpHeader`, its checksum over IPv4 or IPv6 |
+| `LAWS.bend`, `PROOF.bend` | the round trips, truncation, the checksum in pieces, and the vectors |
+| `LAWS_sum.bend`, `PROOF_sum.bend` | the checksum's one's complement arithmetic, and that ICMP, ICMPv6, UDP and TCP built with their checksums verify |
+| `LAWS_ipv4.bend`, `PROOF_ipv4.bend` | that an IPv4 header built with its checksum verifies |
+| `LAWS_rev.bend`, `PROOF_rev.bend` | the reverse round trips: building a parsed header gives back its bytes |
+| `LAWS_revsum.bend`, `PROOF_revsum.bend` | the same through the builders that recompute the checksum |
+| `proof_ones.bend` | the one's complement and checksum-field lemmas the proof files rest on (no laws) |
 
 Bend imports do not re-export: import `netheaders.bend` (for `NetError`)
 and the files of the protocols you use.
@@ -64,8 +70,11 @@ shorter than its header), `NetBadChecksum`.
 The checksum (`checksum.bend`): `inet_checksum(o)`, `inet_verify(o)` (the
 sum of data that includes its checksum is all ones), `inet_sum(o)`; in
 pieces `inet_start()`, `inet_update(acc, o)` (every piece but the last of
-even length, `inet_even(o)`), `inet_finish(acc)`; and `inet_fill(pseudo, o,
-off)`, `o` with the checksum of `pseudo ++ o` written at offset `off`.
+even length, `inet_even(o)`), `inet_finish(acc)`; `inet_add(a, b)`, the one's
+complement sum of two 16-bit values (add, then fold the carry back in);
+`inet_put16(o, off, v)`, `o` with the 16-bit big-endian field at `off`
+replaced by `v`; and `inet_fill(pseudo, o, off)`, `o` with the checksum of
+`pseudo ++ o` written at offset `off`.
 
 `NetField.low(k, v)`, `NetField.get(v, p, k)` and `NetField.put(p, k, x, v)`
 read and write the `k`-bit field from bit `p` of a word, by bit slicing.
@@ -103,8 +112,8 @@ The pseudo-header's length is the number of bytes checksummed.
 
 ## Laws
 
-`LAWS.bend`, all on the public
-interface:
+Five pairs of law and proof files, each checked on its own, all on the
+public interface. `LAWS.bend`:
 
 * **for every input** (16 properties):
   * round trips, for every field value, followed by any bytes `rest`:
@@ -131,10 +140,100 @@ their 16 values, and the options list into its required length, the other
 cases contradicting the law's hypotheses. `rest` is handled through bytes'
 interface law `octets_append_list`.
 
-Not proved for every input: that a header built with its checksum verifies
-(that needs one's complement arithmetic lemmas this package does not have),
-and the reverse round trip (building a parsed header gives back its bytes).
-Both are covered by vectors and by the differential test.
+`LAWS_sum.bend`, the one's complement arithmetic of RFC 1071 and what it
+gives the headers (26 laws, for every input but the last two):
+
+* on 16-bit values (a `U32` of at most 65535): `inet_add` is the plain sum
+  when that fits 16 bits (`inet_add_no_carry`) and otherwise the sum less
+  65535, the end-around carry (`inet_add_end_around`); it is commutative
+  (`inet_add_comm`, for all words), associative (`inet_add_assoc`), has 0 as
+  its identity (`inet_add_zero`), keeps values in 16 bits
+  (`inet_add_bound`), and a value plus its checksum is 0xffff
+  (`inet_add_complement`); `inet_finish` is always a 16-bit value
+  (`inet_finish_bound`);
+* order independence: `inet_update` keeps a 16-bit accumulator in 16 bits
+  (`inet_update_bound`), and updates commute with each other
+  (`inet_update_comm`, any data, odd lengths too) and with `inet_add`
+  (`inet_update_add`); two pieces of even length sum the same in either
+  order (`inet_sum_swap`); with `inet_update_split` (`LAWS.bend`) a sum may
+  be split into pieces and summed in any order;
+* the checksum written in: for a pseudo-header of even length and the field
+  at an even offset `2k` with `2k <= len(o)`, `pseudo ++ inet_fill(pseudo,
+  o, 2k)` verifies (`inet_fill_verifies`);
+* headers built with their checksums verify, for every header and payload:
+  ICMP (`icmp_build_verifies`), ICMPv6 over its pseudo-header
+  (`icmp6_build_verifies`), UDP over IPv4 and IPv6
+  (`udp_ipv4_build_verifies`, `udp_ipv6_build_verifies`: RFC 768's
+  computed 0 is sent as 0xffff, which verifies too, and over IPv6 the field
+  read back is never 0), TCP over IPv4 and IPv6 (`tcp_ipv4_build_verifies`,
+  `tcp_ipv6_build_verifies`); the verifier's pseudo-header carries the
+  length the builder used, since writing the field keeps the length;
+* the checksum field written by `inet_put16` (as `inet_fill` and UDP write
+  it): the length is kept (`inet_put16_len`) and so are the bytes past the
+  field (`inet_put16_drop`); ICMP and UDP headers followed by any bytes,
+  with the field written, parse back with it (`icmp_put_parse`,
+  `udp_put_parse`); and with UDP's length field the datagram's length,
+  `UdpHeader.payload` reads the payload back (`udp_put_payload`);
+* a satisfiability law (`inet_sum_sat`) and a vector of the end-around carry
+  and the complement (`inet_add_vector`).
+
+`LAWS_ipv4.bend` (2 laws): an IPv4 header built with `build_checksum`
+verifies, for every header the parser accepts (version 4, IHL 5 to 15 with
+options of the matching length: the round trip's hypotheses), whatever its
+checksum field held (`ipv4_build_verifies`); and its hypotheses hold
+(`ipv4_build_verifies_sat`).
+
+How the one's complement proofs go (`proof_ones.bend`, generated with the
+two proof files by `ref/gen_sum.py`: run `python3 ref/gen_sum.py` in this
+directory, `--check` to check they are up to date). The sum of t ones is
+modelled on `Nat` by `rep(d, t)` with d = 2^16 - 1: counting up from 0, a
+value below d steps to its successor and d steps to 1. Folding early
+changes nothing (`rep(rep(x) + y) = rep(x + y)`) and d more ones go once
+round the cycle, so every order of summing gives one value. `inet_add` on
+two values of at most d computes `rep` of their sum: through bend-osdev-u32's
+value laws, the 32-bit sum does not wrap and is `lo + 2^16 hi` with `hi`
+0 or 1, which the mask and the shift by 16 read. A byte list then sums to
+`rep` of the plain sum of its 16-bit words, and the checksum c of a sum S
+has c + S = d, so data with c written in sums to `rep(S + c) = d`. d is never
+computed: the lemmas take it as a variable with the facts 1 + d = 2^16 and
+d = `U32.to_nat(65535)`, proved without expanding the number (a closed
+2^16 is a unary `Nat` the checkers cannot hold). The IPv4 proof shows that
+the bytes `build_checksum` writes are those of the header with its checksum
+field set to the checksum (by computation on the bits of the fields that
+share the checksum's word), so the round trip parses them back.
+
+`LAWS_rev.bend`, the reverse round trips (7 laws, for every input): for
+bytes o that parse to `Done{h}`, `X.build(h)` is the first `X.length(h)`
+bytes of o (`UdpHeader.header_length` for UDP), for Ethernet (tagged and
+untagged: a tagged frame's TPID is the one the test found), ARP, IPv4 and
+TCP (every header length, the options being the bytes after the fixed
+part), IPv6, ICMP and UDP (`eth_reverse`, `arp_reverse`, `ipv4_reverse`,
+`tcp_reverse`, `ipv6_reverse`, `icmp_reverse`, `udp_reverse`). Every field
+the parser reads is written back bit for bit; the checksum field is
+written as parsed. The proofs (`PROOF_rev.bend`, written by
+`ref/gen_rev.py`: run `python3 ref/gen_rev.py` in this directory) take the
+bytes apart down to the header's length (shorter bytes contradict the
+parse), split the length field's bits where it has one, and compute on the
+bytes' bits.
+
+`LAWS_revsum.bend`, the reverse round trips through the builders that
+recompute the checksum (6 laws, for every input), with the condition on the
+input's checksum field c that makes them hold:
+* `ipv4_reverse_checksum`: bytes that `parse_verified` accepts, with c not
+  0xffff, are given back by `build_checksum`;
+* `icmp_reverse_checksum`: an ICMP message that verifies, c not 0xffff, is
+  given back by `build_checksum(h, data)` with its data;
+* `udp_ipv4_reverse_checksum`, `udp_ipv6_reverse_checksum`: a datagram that
+  verifies with c not 0 (over IPv6 a zero c never verifies) is given back by
+  `build_ipv4` / `build_ipv6` with its payload;
+* `tcp_ipv4_reverse_checksum`, `tcp_ipv6_reverse_checksum`: a segment that
+  verifies, c not 0xffff, is given back by `build_ipv4` / `build_ipv6`.
+The conditions are needed: a field verifies exactly when it is the one's
+complement of the sum of the rest, except that when the rest sums to 0xffff
+both 0x0000 and 0xffff verify and `inet_fill` writes 0x0000; UDP sends a
+computed 0 as 0xffff (RFC 768), so for UDP every verified nonzero field is
+the one it writes, and a zero field is "no checksum", accepted by
+`verify_ipv4` unchecked.
 
 ## Tests
 
@@ -170,5 +269,9 @@ natively; 0.7 s and 280 MB on the JavaScript lane).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
-`check.bend` passes, `ref/run.sh` 696 cases match, `scripts/deps.sh` ok.
+Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (26),
+`PROOF_ipv4.bend` (2), `PROOF_rev.bend` (7) and `PROOF_revsum.bend` (6) ALL
+PROOFS CHECK, and `--verdict` ALL PROOFS CHECK for each (peaks 0.62 GB,
+0.30 GB, 0.58 GB, 1.55 GB and 1.69 GB); `ref/gen_sum.py --check` and
+`ref/gen_rev.py --check` up to date; `check.bend` passes, `ref/run.sh` 696
+cases match, `scripts/deps.sh` ok.
