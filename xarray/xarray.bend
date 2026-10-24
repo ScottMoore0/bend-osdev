@@ -144,6 +144,28 @@ def XTree.erase(-V: Data, n: Nat, p: Word(n), t: XTree<V>) -> XTree<V>:
                 case other:
                   other
 
+# whether every path holding an entry of s holds one of t (s and t read
+# down n levels, as load reads them): the marks' invariant, over the paths
+# load can reach, so a node of s over an empty part of t asks its halves
+def XTree.sub(-V: Data, n: Nat, s: XTree<Unit>, t: XTree<V>) -> Bool:
+  match n:
+    case 0n:
+      match s:
+        case XLeaf{u}:
+          Maybe.is_some(&2, V, XTree.leaf(V, t))
+        case other:
+          True{}
+    case 1n+ +m:
+      match s:
+        case XBin{a, b}:
+          match t:
+            case XBin{c, d}:
+              Bool.and(XTree.sub(V, m, a, c), XTree.sub(V, m, b, d))
+            case other:
+              Bool.and(XTree.sub(V, m, a, XNil{}), XTree.sub(V, m, b, XNil{}))
+        case other:
+          True{}
+
 # Searching. The direction d is False for the smallest path first and True
 # for the largest first.
 
@@ -400,3 +422,10 @@ def XArray.clear_mark(-V: Data, t: XArray<V>, i: U32, m: XMark) -> XArray<V>:
 # the smallest index at or after start that carries mark m
 def XArray.find_marked(-V: Data, t: XArray<V>, start: U32, m: XMark) -> Maybe<&2, U32>:
   XArray.found(XTree.seek(Unit, 32n, XArray.path(start), XArray.marks(V, t, m), False{}))
+
+# The invariant: every index carrying a mark holds a value. The empty array
+# has it, and store, erase, set_mark and clear_mark keep it (LAWS.bend)
+def XArray.wf(-V: Data, t: XArray<V>) -> Bool:
+  match t:
+    case XArray{+vals, m0, m1, m2}:
+      Bool.and(XTree.sub(V, 32n, m0, vals), Bool.and(XTree.sub(V, 32n, m1, vals), XTree.sub(V, 32n, m2, vals)))

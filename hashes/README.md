@@ -40,10 +40,9 @@ Written from the public specifications only; no GPL source was read.
   H.2 holds a Michael reference implementation and test vectors (so says
   the Wi-Fi Alliance's *Wi-Fi Protected Access (WPA): Enhanced Security
   Implementation Based on IEEE P802.11i standard*, version 3.1, August
-  2004, Appendix B, https://www.wi-fi.org/system/files/WPA_80211_v3_1_090922.pdf). No copy of 802.11i or of a
-  later 802.11 edition could be read here (the copies found were
-  unreachable, refused the fetch, or were larger than the fetch limit), so
-  the algorithm was checked instead against two published descriptions:
+  2004, Appendix B, https://www.wi-fi.org/system/files/WPA_80211_v3_1_090922.pdf); IEEE Std 802.11-2024 keeps them
+  as Annex J.2. The algorithm was first written from two published
+  descriptions, before any edition of 802.11 could be read here:
   A. Wool, "A Note on the Fragility of the 'Michael' Message Integrity
   Code", *IEEE Transactions on Wireless Communications* 3(5), pp.
   1459–1462, September 2004, section II-B and Fig. 1; and J. Huang, J.
@@ -70,46 +69,17 @@ Written from the public specifications only; no GPL source was read.
   23, gives exactly those 8 bytes (TK bytes 24 to 31 do not); the 108-byte
   input also exercises the longest padding, 0x5a and seven zeros. It is a
   law (`michael_tkip_m63`) and in `check.bend`.
-  **The six test vectors are unverified.** No published copy of them could
-  be read; they were written from memory (as the standard's chained
-  vectors: key 0, message ""; then each key the previous tag, messages "M",
-  "Mi", "Mic", "Mich", "Michael"), and `ref/model.py` was written from the
-  same memory, so the model's agreement with them is not independent
-  evidence. They are laws (`michael_vector_1` to `_6`), which proves that
-  `michael.bend` computes those values, not that the values are the
-  standard's. Sources tried for them, none readable here (October 2026):
-  * IEEE 802.11i-2004 itself: IEEE's old GET IEEE 802 download URL
-    (https://standards.ieee.org/getieee802/download/802.11i-2004.pdf) now
-    answers the GET Program's landing page, and the Internet Archive's
-    copies cannot be fetched from here; no other public copy of 802.11i,
-    802.11-2007 or 802.11-2012 was found (smartgrid.gov's page for 802.11-2007
-    no longer resolves).
-  * The IEEE 802.11 TGi documents behind the annex: N. Ferguson,
-    *Michael: an improved MIC for 802.11 WEP*, IEEE 802.11-02/020r0
-    (January 2002), and M. Sabin and P. Lambert, *Proposed Test Vectors
-    for IEEE 802.11 TGi*, IEEE 802.11-02/362 (r0 to r6, 2002), are on
-    https://mentor.ieee.org/802.11/dcn/02/, which refuses the fetch (HTTP
-    418); a library mirror of the same documents (bibliotheek.ehb.be, on
-    port 3499) was refused by this session's permission checks, and both
-    are Word files.
-  * Permissively licensed test data: FreeBSD's
-    `tools/regression/net80211/tkip/test_tkip.c` (Sam Leffler, 2004;
-    BSD-3-Clause, or GPL v2 at the recipient's choice; read as data only;
-    https://github.com/freebsd/freebsd-src/blob/main/tools/regression/net80211/tkip/test_tkip.c) has 802.11i's TKIP MPDU, whose MIC is the same
-    68 81 a3 f3 d6 48 d0 3c as M.6.3's above, but not the six chained
-    vectors; hostap's `wlantest/test_vectors.c` likewise (above). No
-    BSD-, MIT- or Apache-licensed project with the chained vectors was
-    found; the copies the searches found are GPL (the Linux kernel's
-    crypto self-tests), which are not read.
-  * Published papers: M. Beck, *Enhanced TKIP Michael Attacks*
-    (arXiv:1410.6295, 2014) prints none.
-
-  To settle them, obtain the current IEEE Std 802.11 through the IEEE GET
-  Program (free, with an IEEE account sign-in;
-  https://standards.ieee.org/about/get/802/802.11.html; superseded
-  editions such as 802.11i-2004 are sold, not in the programme) and
-  compare the Michael test vectors of its TKIP annex (802.11i-2004's
-  Annex H.2.1) with `michael_vector_1` to `_6`.
+  **The six test vectors are verified** against IEEE Std 802.11-2024,
+  Annex J.2.1.3, Table J-2 (read on 2026-10-24): key 0 and message ""; then
+  each key the previous output, with the messages "M", "Mi", "Mic",
+  "Mich" and "Michael". `michael_vector_1` to `_6` are exactly those six rows. They
+  were first written from memory, before any copy could be read, and the
+  table agrees with every byte. Table J-1's vectors for the block function
+  b are laws too (`michael_block_1` to `_4`, one application each, the
+  pair read as (l, r)), and its last row, b applied 1000 times to (1, 0),
+  is in `check.bend`. The annex notes that its vectors had yet to be
+  confirmed by an independent implementation; `michael.bend` and
+  `ref/model.py` agree with all of them.
 
 **SM3 and bend-collections.** bend-collections-laws-crypto@1.0.0.0 (an
 allowed hub package) was searched file by file for SM3 (and MD4, MD5,
@@ -204,7 +174,7 @@ Everything else (`hs.*`, `HsW16`, `HsStbTab`, `HsStbTabs`) is internal.
 
 ## Laws
 
-`LAWS.bend` (written by `gen/laws.py`) has 77 laws.
+`LAWS.bend` (written by `gen/laws.py`) has 81 laws.
 
 **For every input**, with no hypothesis:
 
@@ -226,8 +196,8 @@ suites (`md4_rfc1320_1` to `_7`, `md5_rfc1321_1` to `_7`); FIPS 180-4's
 two SHA-1 examples; the eight values of the RIPEMD-160 page (all but the
 million "a"); SM3's two examples; Streebog's LPS(0), and the first two
 compressions of RFC 6986's example 1 (g_N(h, m) and g_0(h, N), as the RFC
-prints them); Michael's six vectors (unverified against a published
-copy: Specifications above), its MIC on IEEE 802.11-2012 M.6.3's TKIP
+prints them); Michael's six vectors and Table J-1's four single applications of its
+block function (IEEE Std 802.11-2024: Specifications above), its MIC on IEEE 802.11-2012 M.6.3's TKIP
 frame (`michael_tkip_m63`, verified: above) and the refusal of a 7-byte
 key.
 
@@ -246,8 +216,8 @@ does).
   above through the public interface, the digest in one call and in three
   pieces through init/update/final, including Streebog's four RFC 6986
   digests and the intermediate values, a million bytes "a" through SHA-1
-  and RIPEMD-160, Michael's six vectors (whole and in pieces; unverified,
-  above), the M.6.3 TKIP MIC (whole and in pieces) and its short key
+  and RIPEMD-160, Michael's six vectors (whole and in pieces) and its block function
+  1000 times (Table J-1), the M.6.3 TKIP MIC (whole and in pieces) and its short key
   refused. The expected lines are the specifications' values.
 * `ref/run.sh` (216 cases with the default seed): each hash on 27 message
   lengths (around every block boundary up to three blocks, and 1000 and
@@ -259,7 +229,7 @@ does).
     has neither). **The model shares an author with the package**: it is
     checked first against every specification vector above (RFC 1320's,
     RFC 6986's digests and intermediate values, and the six Michael
-    vectors, which are themselves unverified: Specifications above),
+    vectors of IEEE Std 802.11-2024's Table J-2),
     and its MD5, SHA-1, RIPEMD-160 and SM3 against hashlib, but where
     Python lacks an algorithm the differential test is against that model
     alone. Its tables are `gen/spec.py`'s, so a wrong table would show in

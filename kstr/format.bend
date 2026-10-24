@@ -158,9 +158,21 @@ def kfmt.list(f: KFmt, +v: W.W64) -> List<&2, U32>:
 def KStr.format(f: KFmt, +v: W.W64) -> B.Octets:
   B.Octets.of_list(kfmt.list(f, v))
 
-# one 32-bit value by f (%d reads it as a signed 32-bit value)
+# the high half of a 32-bit value as 64 bits: the sign extension for %d,
+# zero for the unsigned conversions
+def kfmt.hi32(signed: Bool, +v: U32) -> U32:
+  match signed:
+    case True{}:
+      U32.sub(0, U32.shrn(v, 31n))
+    case False{}:
+      0
+
+# one 32-bit value by f (%d reads it as a signed 32-bit value; %u, %x, %X
+# and %o as an unsigned one)
 def KStr.format32(f: KFmt, +v: U32) -> B.Octets:
-  KStr.format(f, W.W64.from_parts(U32.sub(0, U32.shrn(v, 31n)), v))
+  match f:
+    case KFmt{+conv, width, zero, left, plus, space}:
+      KStr.format(KFmt{conv, width, zero, left, plus, space}, W.W64.from_parts(kfmt.hi32(kfmt.signed(conv), v), v))
 
 # the hex digit of the nibble b3 b2 b1 b0
 def KStr.nib(b0: Bool, b1: Bool, b2: Bool, b3: Bool) -> U32:

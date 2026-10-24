@@ -2,13 +2,15 @@
 
 The arithmetic of Base's machine words as `Nat` arithmetic: laws that say
 what `U32` (and `Word(n)` of any width) comparison, addition, subtraction,
-increment and shifts compute, in terms of the words' values
-(`U32.to_nat`, `Word.to_nat`). Other bend-osdev packages' proofs use these
+increment, shifts, multiplication, division and the bitwise operations
+compute, in terms of the words' values (`U32.to_nat`, `Word.to_nat`), and
+the `Nat` arithmetic (semiring laws, order, quotient and remainder, the low
+and high bits) they are stated with. Other bend-osdev packages' proofs use these
 laws instead of each proving them again.
 
 The package has no word type of its own. Its public interface is its laws,
-which are about Base's interface, and three small `Nat` functions the laws
-are stated with.
+which are about Base's interface, and the small `Nat` functions (and one
+word, the mask of the low k bits) the laws are stated with.
 
 ## Specification
 
@@ -28,8 +30,9 @@ order) proved for their own use.
 
 | File | Holds |
 |---|---|
-| `u32.bend` | `U32Nat.dbl`, `U32Nat.bit`, `U32Nat.half` |
+| `u32.bend` | `U32Nat.dbl`, `U32Nat.bit`, `U32Nat.half`, `U32Nat.odd`, `U32Nat.low`, `U32Nat.high`, `U32Word.mask` |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `gen/proof.py` | writes the part of `PROOF.bend` after its marker line (the proofs of the `Nat` library, multiplication, division, the bits and the shifts by k) |
 | `check.bend` | the laws' two sides computed at run time, with the expected output |
 
 ## API
@@ -39,6 +42,10 @@ order) proved for their own use.
 | `U32Nat.dbl(n, x)` | x * 2^n (x doubled n times); 2^n is `U32Nat.dbl(n, 1n)` |
 | `U32Nat.bit(b)` | 1 for `True`, 0 for `False` |
 | `U32Nat.half(x)` | x / 2, rounded down (by recursion: for proofs and small values) |
+| `U32Nat.odd(x)` | x mod 2 |
+| `U32Nat.low(k, x)` | x mod 2^k (the low k bits of x) |
+| `U32Nat.high(k, x)` | x / 2^k, rounded down (the bits of x from k up) |
+| `U32Word.mask(n, k)` | the word of width n whose low k bits are set (2^k - 1, for k <= n) |
 
 ## Laws
 
@@ -69,6 +76,43 @@ order) proved for their own use.
   `half_double`, `half_double_one`.
 * Witnesses that the bounds can hold and the wrapping cases happen
   (`u32_wit`), and a vector of the `Nat` functions (`dbl_vec`).
+* **`Nat` arithmetic**, the library other packages' proofs use (and
+  `scripts/natproof.py` writes ring identities from): the semiring laws
+  (`nat_add_zero`, `nat_add_succ`, `nat_add_comm`, `nat_add_assoc`,
+  `nat_add_left_comm`, `nat_add_cancel`, `nat_mul_zero`, `nat_mul_one`,
+  `nat_one_mul`, `nat_mul_succ`, `nat_mul_comm`, `nat_mul_assoc`,
+  `nat_mul_left_comm`, `nat_mul_add`, `nat_add_mul`, `nat_double`), and
+  those of 2^n (`dbl_comm`, `dbl_mul_l`, `dbl_mul_r`, `dbl_le_exp`,
+  `nat_le_dbl`); the order as witnesses: x <= y exactly when (y - x) + x =
+  y (`nat_le_refl`, `nat_le_add`, `nat_lt_add`, `nat_le_witness`,
+  `nat_lt_witness`, `nat_succ_add_absurd`, `nat_mul_lt`); a quotient and
+  remainder are unique (`nat_div_unique`, `nat_mod_unique`); a sum below
+  2^n does not wrap (`dbl_nowrap`).
+* **The low and high bits:** x = low(k, x) + 2^k high(k, x) with low(k, x)
+  < 2^k, and these are the only such pair (`low_high`, `low_lt`,
+  `low_unique`, `high_unique`, `nat_odd_half`, `nat_odd_le`,
+  `low_add_dbl`, `low_small`, `low_double`, `high_double`, `high_lt`).
+* **Multiplication**, for every width and all words: the product's value
+  is the low n bits of the product of the values, what wraps is 2^n times
+  the rest, and with the product no more than a word's value nothing wraps
+  (`word_mul_wrap`, `word_mul_low`, `word_mul_value`, `u32_mul_wrap`,
+  `u32_mul_low`, `u32_mul_value`).
+* **Division:** for b not 0, `U32.div` and `U32.mod` are the `Nat`
+  quotient and remainder, a = q b + r with r < b (`u32_divmod`,
+  `u32_mod_lt`); by 0 the quotient is 0 and the remainder a
+  (`u32_div_zero`, `u32_mod_zero`); and one step of restoring division on
+  n-bit registers, as Base's `U32.divmod` and bend-osdev-word64's
+  `W64.div` take it (`divstep_value`, `divstep_lt`).
+* **The bits:** and, or and xor commute; and + or is the sum of the
+  values, and so is xor + 2 and; an or of a value with one below the low
+  zero bits of the other is their sum; and with a mask of the low k bits
+  is the low k bits; not is the subtraction from all ones
+  (`word_and_comm`, `word_or_comm`, `word_xor_comm`, `word_and_or`,
+  `word_xor_and`, `word_or_split`, `word_mask_value`, `word_and_mask`,
+  `word_not_sub`, and the `u32_` ones; `u32_and_65535`: and with 65535 is
+  the low 16 bits).
+* **Shifts by k bits:** right, the bits from k up (`u32_shrn_value`);
+  left, the low 32 bits of the value times 2^k (`u32_shln_low`).
 
 ### Stating the bounds
 
@@ -89,8 +133,10 @@ term is symbolic.
 * The laws are about Base's words, so they hold for any code built on
   `Word(n)` and `U32`: a package with its own word type of n bits (as
   bend-osdev-word64's two halves) states its laws through these.
-* More operations (multiplication, division, the bitwise operations) are
-  laws to add here, in the same style.
+* More operations (rotations, signed comparison) are laws to add here, in
+  the same style; ring identities between `Nat` terms are written by
+  `scripts/natproof.py` (shared by the generators of word64, kmath, kstr
+  and bignum) from the `Nat` laws.
 * Streaming is not applicable.
 
 ## Tests
@@ -102,5 +148,7 @@ the operations are Base's own, and their values are what the laws prove.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (34 laws), `--verdict` ALL
-PROOFS CHECK, `check.bend` passes, `scripts/deps.sh u32` ok.
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (108 laws), `--verdict` ALL
+PROOFS CHECK (about 1 s, peak 0.25 GB), `check.bend` passes,
+`scripts/deps.sh u32` ok. `PROOF.bend` is about 300 KB, of which
+`gen/proof.py` writes all but the first 34 laws' proofs.
