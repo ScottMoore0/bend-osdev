@@ -53,6 +53,8 @@ two limbs plus two more limbs fits in a `U32`.
 | `prime.bend` | the remainder by a small number, trailing zero bits, Miller-Rabin, probable primes, the next probable prime |
 | `jacobi.bend` | the Jacobi symbol |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_limbs.bend`, `PROOF_limbs.bend` | the limb laws (the value of a number, add, sub, cmp), and their proofs |
+| `gen/proof_limbs.py` | writes `PROOF_limbs.bend` (ring identities by `scripts/natproof.py`) |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -107,13 +109,29 @@ Everything named `bn.*` is internal.
   `inv_vector`, `miller_rabin_561` (the Carmichael number 561 fails base 2),
   `prime_65537`, `jacobi_vector`.
 
-**Not proved, and tested:** that `add`, `mul`, `divmod` and the rest compute
-the sum, product and quotient of the numbers their limbs stand for, for
-every input. Those statements need the arithmetic of 16-bit limbs with
-carries, which the checker cannot do symbolically on `U32` (it can only
-evaluate closed terms), and a proof by hand over limb lists was beyond this
-version. The exhaustive laws cover small values; `ref/run.sh` compares
-every def with Python's integers on numbers of up to 2048 bits.
+`LAWS_limbs.bend`, **for every input** (the first arithmetic laws, the
+interface bignum's further laws build on): `bnlaw.value(x)` is the number
+x's limbs stand for, sum x_i 2^(16 i), and `bnlaw.valid(x)` that every
+limb is below 2^16 (its bits from 16 up are 0). `BnNat.of_limbs` makes a
+valid number (`of_limbs_valid`); for valid a and b, `add` is the sum of the
+values and valid (`add_value`, `add_valid`), `cmp` is the order of the
+values (`cmp_value`), and `sub` is the difference, 0 when b > a
+(`sub_value`); `sub` is always valid (`sub_valid`). One step of `bn.add`
+takes t = x + y + c, below 2^32 since the three are 16-bit, and puts down
+t & 65535 = low16(t) with the carry t >> 16 = high16(t), so by induction
+on the limbs the values add up (bend-osdev-u32's `u32_and_65535`,
+`u32_shrn_value`, `low_high`); `bn.cmp` compares the high limbs last, and
+the high parts decide unless they are equal; one step of `bn.sub` takes t =
+x + 2^16 - y - w, borrows 1 - high16(t) (0 or 1), and the borrow is the
+one the rest needs. The `Nat` reasoning about 2^16 is done for a width that
+is a variable and used at 16 (u32's README, "Stating the bounds").
+
+**Not proved, and tested:** that `mul`, `divmod`, the shifts and the rest
+compute the product, quotient and shifts of the numbers their limbs stand
+for, for every input (the next laws on the ones above: schoolbook product,
+long division, Montgomery's REDC). The exhaustive laws cover small values;
+`ref/run.sh` compares every def with Python's integers on numbers of up to
+2048 bits.
 
 ## Tests
 
@@ -152,10 +170,12 @@ no defence against timing side channels.
 ## Dependencies
 
 `DEPS`: `bytes` (`Octets` for OS2IP and I2OSP, and its laws in the proof of
-`octets_round_trip`).
+`octets_round_trip`), `u32` (`U32Nat.dbl` in the limb laws, and its laws in
+their proofs).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
-(about 46 s), `check.bend` passes, `ref/run.sh` 398 cases match,
-`scripts/deps.sh` passes.
+Bend 2.0.37: `PROOF.bend` (12 laws) and `PROOF_limbs.bend` (6) ALL PROOFS
+CHECK, `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 48 s, peak
+0.50 GB; `PROOF_limbs.bend` about 7 s, peak 0.34 GB), `check.bend` passes,
+`ref/run.sh` 398 cases match, `scripts/deps.sh` passes.

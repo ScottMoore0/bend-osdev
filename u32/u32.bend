@@ -40,3 +40,44 @@ def U32Nat.half(n: Nat) -> Nat:
           0n
         case 1n+q:
           1n+U32Nat.half(q)
+
+# x mod 2: 1 for an odd x, 0 for an even one
+def U32Nat.odd(n: Nat) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+p:
+      match p:
+        case 0n:
+          1n
+        case 1n+q:
+          U32Nat.odd(q)
+
+# the low k bits of x (x mod 2^k), and the rest (x / 2^k, rounded down):
+# x = low(k, x) + 2^k high(k, x)
+def U32Nat.low(k: Nat, +x: Nat) -> Nat:
+  match k:
+    case 0n:
+      0n
+    case 1n+j:
+      Nat.add(U32Nat.odd(x), Nat.double(U32Nat.low(j, U32Nat.half(x))))
+
+def U32Nat.high(k: Nat, x: Nat) -> Nat:
+  match k:
+    case 0n:
+      x
+    case 1n+j:
+      U32Nat.high(j, U32Nat.half(x))
+
+# the word of width n whose low k bits are set (2^k - 1, for k <= n): the
+# mask that U32.and(x, m) takes x's low k bits with
+def U32Word.mask(n: Nat, k: Nat) -> Word(n):
+  match n:
+    case 0n:
+      WNil{}
+    case 1n+p:
+      match k:
+        case 0n:
+          Word.zero(1n+p)
+        case 1n+j:
+          WCon{True{}, U32Word.mask(p, j)}
