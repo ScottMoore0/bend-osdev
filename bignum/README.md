@@ -58,6 +58,9 @@ two limbs plus two more limbs fits in a `U32`.
 | `LAWS_mul.bend`, `PROOF_mul.bend` | the multiplication laws (`mul` is the product of the values), and their proofs |
 | `LAWS_div.bend`, `PROOF_div.bend` | the division laws (`divmod`, `div` and `mod` are long division of the values), and their proofs |
 | `gen/proof_mul.py`, `gen/proof_div.py` | write `PROOF_mul.bend` and `PROOF_div.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_mod.bend`, `PROOF_mod.bend` | the modular laws (`BnMod.add`, `sub`, `mul`, and `exp_plain` is x^e mod m), and their proofs |
+| `LAWS_mont.bend`, `PROOF_mont.bend` | the Montgomery laws (REDC, the conversions, `modexp`), `BnMod.exp` is x^e mod m, and the two orders of a double exponentiation agree; and their proofs |
+| `gen/proof_mod.py`, `gen/proof_mont.py` | write `PROOF_mod.bend` and `PROOF_mont.bend` (ring identities by `scripts/natproof.py`) |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -158,13 +161,60 @@ n)` is x 2^n (n = 16 (n / 16) + n mod 16, by Base's `Nat.divmod`), that
 `bn.shr1` halves and `bn.shl1` doubles and adds a bit, and the bounds of
 the bit length; these are lemmas in `PROOF_div.bend`, not laws.
 
-**Not proved, and tested:** that the public shifts (`shl`, `shr`),
-Montgomery multiplication and its contexts, the modular operations and
-exponentiation, the inverse, gcd and lcm, the Jacobi symbol and
-Miller-Rabin compute what they stand for on the numbers, for every input
-(the next stages, on the laws above). The exhaustive laws cover small
-values; `ref/run.sh` compares every def with Python's integers on numbers
-of up to 2048 bits.
+### Modular arithmetic, Montgomery multiplication and exponentiation
+
+`LAWS_mod.bend`, **for every input** (valid a, b and m): `BnMod.add` is
+(a + b) mod m and `BnMod.mul` is (a b) mod m (`mod_add_value`,
+`mod_mul_value`); `BnMod.sub` is ((a mod m) + m - (b mod m)) mod m, as the
+code computes it (`mod_sub_value`), which for m > 0 is a - b modulo m:
+(sub(a, b) + b) mod m = a mod m (`mod_sub_add`); the three are valid
+(`mod_add_valid`, `mod_sub_valid`, `mod_mul_valid`). `BnMod.exp_plain(x, e,
+m)` is x^value(e) mod m (Base's `Nat.pow`) for valid x, e and m with m > 0
+(`exp_plain_value`), and valid for every input (`exp_plain_valid`): before
+bit p the accumulator is x^(e >> (p + 1)) mod m, `BnNat.bit(e, p)` is bit p
+of the value (limb p / 16, bit p mod 16), and e >> bit_len(e) = 0.
+
+`LAWS_mont.bend`, **for every input**, with R = 2^(16 k) for the k limbs of
+an odd valid m > 1 (`BnMont.limbs`): `BnMont.ctx(m)` is the context of
+`BnMont.of_odd(m)` (`ctx_of_odd`); for valid a, b below m, Montgomery
+multiplication satisfies (mul(a, b) R) mod m = (a b) mod m and is below m
+(`mont_mul_value`, `mont_mul_lt`; R^-1 is not named), and is valid for
+every input (`mont_mul_valid`); `to(x)` is x R mod m for every valid x
+(`mont_to_value`), the form of 1 is R mod m (`mont_one_value`), (of(y) R)
+mod m = y mod m for a valid y below m (`mont_of_value`) and of(to(x)) = x
+mod m (`mont_of_to`); `BnMont.modexp(c, x, e)` is x^e mod m
+(`modexp_value`). `BnMod.exp` is x^e mod m for valid x, e and m with m > 0
+(`exp_value`), so it has exp_plain's value (`exp_eq_plain`; for every odd
+m > 1 by Montgomery's method, for any other m by exp_plain itself), and is
+valid for every input (`exp_valid`); (x^a mod m)^b mod m = x^(a b) mod m
+(`exp_exp_value`), and for an odd valid m > 1 the two orders give the same
+number, exp(exp(x, a, m), b, m) = exp(exp(x, b, m), a, m) (`exp_exp_comm`:
+the Montgomery result is normalised, and valid limbs without zeros on top
+are determined by their value). This is dh's agreement (dh's
+`LAWS_agree.bend`).
+
+On the way (lemmas in `PROOF_mont.bend`, not laws): `bn.np(n0)` gives
+n0 np + 1 = 0 mod 2^16 for every odd n0 (n0 n0 = 1 mod 8, and each Newton
+step i (2 - x i) turns x i = 1 + 2^J h into x i (2 - x i) + 2^(2J) h^2 = 1
+mod 2^16, the 32-bit wrap vanishing modulo 2^16: 3, 6, 12, 16 bits); one
+REDC step puts t1 + m n with a zero low limb (t1_0 (1 + np n0) = 0 mod
+2^16), so 2^16 t' = t + a_i b + m n, t stays below 2 n, after k steps
+2^(16 k) t = a b mod n, and the conditional subtraction and the trim to k
+limbs give the result below n; R is cancelled modulo the odd n (n = 1 + 2 H,
+a = 2 a (1 + H) mod n); R^2 mod n is 1 doubled 32 k times, each step
+reduced. Montgomery exponentiation squares and multiplies over each limb's
+16 bits and the limbs most significant first. The Nat lemmas on `Nat.mod`
+and `Nat.pow` are in `PROOF_mod.bend`.
+
+**Not proved, and tested:** that the public shifts (`shl`, `shr`), the
+Montgomery operations on forms other than `mul` (`sqr`, `add`, `sub`,
+`neg`, `BnMont.exp` on its own), the inverse, gcd and lcm, the Jacobi
+symbol and Miller-Rabin compute what they stand for on the numbers, for
+every input (the next stage: inv, gcd, jacobi, Miller-Rabin and Euler's
+criterion); and `exp_exp_comm` for an even m or m = 1, where `exp_plain`'s
+result may keep zero limbs on top (the values agree there, `exp_exp_value`).
+The exhaustive laws cover small values; `ref/run.sh` compares every def
+with Python's integers on numbers of up to 2048 bits.
 
 ## Tests
 
@@ -209,8 +259,10 @@ their proofs).
 ## Status
 
 Bend 2.0.37: `PROOF.bend` (12 laws), `PROOF_limbs.bend` (6),
-`PROOF_mul.bend` (2) and `PROOF_div.bend` (9) ALL PROOFS CHECK, `--verdict`
-ALL PROOFS CHECK on all four (`PROOF.bend` about 48 s, peak 0.50 GB;
-`PROOF_limbs.bend` about 7 s, peak 0.34 GB; `PROOF_mul.bend` about 7 s,
-peak 0.36 GB; `PROOF_div.bend` about 8 s, peak 0.45 GB), `check.bend`
-passes, `ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
+`PROOF_mul.bend` (2), `PROOF_div.bend` (9), `PROOF_mod.bend` (9) and
+`PROOF_mont.bend` (14) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK on
+all six (`PROOF.bend` about 44 s, peak 0.44 GB; `PROOF_limbs.bend` about
+6 s, peak 0.34 GB; `PROOF_mul.bend` about 9 s, peak 0.36 GB;
+`PROOF_div.bend` about 7 s, peak 0.42 GB; `PROOF_mod.bend` about 7 s, peak
+0.50 GB; `PROOF_mont.bend` about 9 s, peak 0.56 GB), `check.bend` passes,
+`ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
