@@ -420,18 +420,19 @@ the state carried between them. The default run is 80 rule sets and 152
 packets, about 40 s natively; seeds 1 to 8 at 120 rule sets (960 rule sets,
 1,914 packets) and seed 7 at 400 rule sets all matched.
 
-**nft.** `nft` is not installed here, and running packets through the
-kernel's nf_tables needs root and a network namespace (veth pairs, packets
-sent and counted), so the verdicts are not compared with the kernel. gen.py
+**nft.** Running packets through the kernel's nf_tables needs root and a
+network namespace (veth pairs, packets sent and counted), so the verdicts
+are not compared with the kernel. gen.py
 also writes the rule sets that it can express in nft syntax (about a third
 of the cases are generated within that subset: raw payload matches,
 comparisons, ranges, anonymous sets, counters, limits per second, marks,
 plain reject, jumps that do not loop) to `ref/nft/`, and when `nft` is
 installed and may reach the kernel, `run.sh` gives each to
-`nft --check -f`, which **validates their syntax only**. That printer could
-not be tried here; if CI installs nft and it refuses a file, the printer (or
-this README's reading of nft's syntax) is wrong. CI needs the apt package
-**`nftables`** (and CAP_NET_ADMIN, e.g. `sudo`, for `nft --check`).
+`nft --check -f`, which **validates their syntax only**. Without
+CAP_NET_ADMIN, `run.sh` runs nft in a new user and network namespace
+(`unshare -rn`), where it has that capability; if nft refuses a file, the
+printer (or this README's reading of nft's syntax) is wrong. CI needs the
+apt package **`nftables`**.
 
 ## Speed
 
@@ -467,6 +468,6 @@ and checking and building it takes about 1 GB.
 Bend 2.0.37: `PROOF.bend`, `PROOF_map.bend` and `PROOF_expr.bend` ALL
 PROOFS CHECK, `--verdict` ALL PROOFS CHECK (`PROOF_map.bend` peaks at
 0.22 GB, `PROOF_expr.bend` at 0.44 GB), `check.bend` passes
-(native), `ref/run.sh` 80 cases (152 packets) match, and where nft was
-installed, `nft --check` accepted all 32 rule sets written in nft syntax;
+(native), `ref/run.sh` 80 cases (152 packets) match, and `nft --check`
+(in a user namespace) accepted all 32 rule sets written in nft syntax;
 `scripts/deps.sh` ok.
