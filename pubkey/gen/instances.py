@@ -15,7 +15,7 @@ Why per instance: crypto's interface laws (crypto/LAWS.bend's
 sign_verify_bytes_if and kex_agree_if) are stated over template arguments;
 here each is written out for an instance's defs, with its proof filled in
 (the proofs are short rewrites, so they are written out rather than
-imported: crypto's PROOF.bend takes 2 GB of the checker's memory, and the
+imported: crypto's PROOF.bend took 2 GB of the checker's memory then, and the
 algorithm packages' PROOF.bend files hold their exhaustive cases). Where an
 algorithm's package proves that a public key read from bytes is read again
 from the bytes written for it, the instance's pk_format law is stated with

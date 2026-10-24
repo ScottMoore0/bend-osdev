@@ -25,8 +25,9 @@ The directory is `collections-crypto` and the entry file
   package's opaque types, bytes cross as `Octets`, and every refusal is
   crypto's `CrError`; a program that wants these algorithms uses crypto's
   interfaces and this package's named instances.
-* **crypto's check stays where it is.** crypto's `PROOF.bend` takes about
-  2.3 GB of the 3 GB a check may use; these instances have their own table
+* **crypto's check stays where it is.** crypto's `PROOF.bend` took about
+  2.3 GB of the 3 GB a check may use when this package was written (crypto's
+  laws are now in several pairs of files, each checked on its own); these instances have their own table
   (`gen/instances.py`), as pubkey's do, and add no rows to crypto's.
 
 ## Where the code comes from

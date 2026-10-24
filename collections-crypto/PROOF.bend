@@ -177,7 +177,7 @@ def Laws.aead_round_trip_if(k, n, a, p, hr, h):
 
 # Stream ciphers from keystream generators: crypto proves its three CrXor
 # laws for every keystream generator (crypto/PROOF.bend); its PROOF.bend
-# takes over 2 GB of the checker's memory, so the lemmas are written out
+# took over 2 GB of the checker's memory then, so the lemmas are written out
 # here, as crypto states them, and hold for every generator too. They
 # unfold CrXor.update, so they name crypto's stream.bend's loop (cr.ks.*),
 # as pubkey's proofs name crypto's cr.sign.check and cr.kex.with.

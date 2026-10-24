@@ -14,9 +14,10 @@ name is `bend-osdev-pubkey`.
 
 **Why a package of its own** rather than `inst_*` files in crypto (as the
 symmetric instances are): the instances bring in bignum and the curve and
-group tables, and crypto's `PROOF.bend` already takes about 2 GB of the
-checker's memory. With these instances in it, its check outgrew the 3 GB
-a check process is allowed (killed at 3.1 GB). Kept apart, crypto stays
+group tables, and crypto's `PROOF.bend` then took about 2 GB of the
+checker's memory (its laws are now in several pairs of files, each checked
+on its own: crypto `README.md`, Laws). With these instances in it, its
+check outgrew the 3 GB a check process is allowed (killed at 3.1 GB). Kept apart, crypto stays
 free of big-integer dependencies, and the instances' laws check in about a
 second.
 
