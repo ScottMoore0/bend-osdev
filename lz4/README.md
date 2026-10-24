@@ -283,9 +283,31 @@ never happens.
   one (the greedy matcher takes a 5-byte match where lazy matching finds a
   10-byte one a byte later).
 
-The frame format has vectors only: a property over frames would need XXH32
-for every input, and bend-kit-hash's XXH32 is array code that bend-osdev does
-not reason about. (A round trip vector on a 104-byte text proved by
+The frame format has vectors only. XXH32 is not what stands in the way: a
+frame round trip can treat it as an opaque function (bend-osdev does not
+reason about bend-kit-hash's array code), since it needs only that the
+checksum the writer stores equals the one the reader computes over the same
+bytes, which is `U32.is_eq` reflexivity. What a frame round trip still
+needs, and this release does not prove:
+
+* the block size field: the reader takes a block's size and its
+  "uncompressed" flag from the bits of the word the writer builds with
+  `U32.from_nat` of the block's length (with `U32.or` 2^31 for a stored
+  block), so the top bit of that word must be shown to be 0 for every length
+  up to the block maximum, and the masks followed bit by bit;
+* the room: the reader decodes a compressed block of n bytes with room
+  min(room, block maximum, 256 (n + 1)) (`U32.mul`), and the writer checked
+  it with room exactly its length, so it needs the block decoder to answer
+  the same with more room, and a block's output to be at most 256 (n + 1)
+  bytes (a bound over the decoder's states);
+* linked blocks: the writer checks a block after the last 65535 bytes of the
+  frame, the reader decodes it after the whole frame so far, so it needs the
+  decoder's window (a trie keyed by the position modulo 65536) to answer the
+  same for the same last 64 KB (the chunking lemmas);
+* the cutting of the content into blocks (counted in U32), the fuel of the
+  writer's and the reader's loops, the header's FLG and BD bits for every
+  option, the content size (`le64` of the length, `W64` equality) and the
+  stream around the frame. (A round trip vector on a 104-byte text proved by
 `--check-only` but not by `--verdict`, which failed on it without a message;
 the vector kept is shorter. The same happened to an LZ4HC frame vector on
 the 40-byte text of `lz4hc_smaller`, with either matcher; the frame vector
