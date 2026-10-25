@@ -2,7 +2,7 @@
 # as the IETF draft draft-shen-sm2-ecdsa-02, "SM2 Digital Signature
 # Algorithm", S. Shen and X. Lee, 2014, sets it out), over any curve of the
 # ecc package (SM2's recommended curve by default) and any hash (~digest;
-# SM3, the hashes package's, the named default):
+# SM3, the sm3 package's, the named default):
 #   Z_A = H(ENTL_A || ID_A || a || b || x_G || y_G || x_A || y_A),
 #   e = H(Z_A || M) as an integer,
 #   sign: (x1, y1) = k G, r = (e + x1) mod n (refused if r = 0 or r + k = n),
@@ -23,7 +23,7 @@ import ../bignum/modular.bend as Md
 import ../ecc/ecc.bend as E
 import ../ecc/ecdsa.bend as S
 import ../ecc/rfc6979.bend as R
-import ../hashes/sm3.bend as Sm3
+import ../sm3/sm3.bend as Sm3
 
 # Every failure
 type Sm2Error is Data:
@@ -38,7 +38,7 @@ def Sm2Error.check(ok: Bool, e: Sm2Error) -> Result<&2, &2, Sm2Error, Unit>:
     case False{}:
       Fail{e}
 
-# SM3, the named default hash (GB/T 32905, the hashes package)
+# SM3, the named default hash (GB/T 32905, the sm3 package)
 def Sm2.sm3(o: B.Octets) -> B.Octets:
   Sm3.HsSm3.digest(o)
 

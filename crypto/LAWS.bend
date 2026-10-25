@@ -17,8 +17,8 @@
 #   LAWS_crc.bend  crc's CRCs as hashes, and HMAC and HKDF over them
 #   LAWS_sha.bend  bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC,
 #                  HKDF, PBKDF2 and the SP 800-108 KDFs over them
-#   LAWS_hs.bend   the hashes package's hashes and Michael, and HMAC and
-#                  PBKDF2 over them
+#   LAWS_hs.bend   the hash packages' hashes (md4, md5, sha1, ripemd160,
+#                  sm3, streebog) and Michael, and HMAC and PBKDF2 over them
 #   LAWS_bytes.bend  the byte layer of ECB, CBC, PCBC and LRW
 #   LAWS_cts.bend  the CBC-CS3 round trip
 #   LAWS_hkdf.bend HKDF's length and prefix laws

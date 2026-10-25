@@ -58,13 +58,14 @@ from Python, in the same order):
     interface, against this file's XCBC (checked on RFC 3566's vectors) and
     VMAC (checked on draft-krovetz-vmac-01's) over the cipher's block
     function, with verify accepting the tag and refusing it changed.
-  * the hashes package's hashes through the hash interface, one-shot and in
+  * the hash packages' hashes through the hash interface, one-shot and in
     pieces, and HMAC over them: MD5, SHA-1, RIPEMD-160 and SM3 against
-    hashlib and hmac; MD4 and Streebog against hashes/ref/model.py (Python
-    lacks them here; that model shares an author with the package and is
-    checked against the specifications' vectors first) under Python's hmac;
+    hashlib and hmac; MD4 and Streebog against md4/ref/model.py and
+    streebog/ref/model.py (Python lacks them here; each model shares an
+    author with its package and is checked against the specifications'
+    vectors first) under Python's hmac;
   * Michael through the MAC interface (the tag, verify of it and of it
-    changed) against hashes/ref/model.py;
+    changed) against michael/ref/model.py;
   * PBKDF2 over HMAC over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3 against
     hashlib.pbkdf2_hmac, and over SHA-1 and SHA-256 against cryptography's
     PBKDF2HMAC too, with iteration counts of 1 to 40 and outputs of 1 to
@@ -103,9 +104,24 @@ def _model(pkg):
 # the ciphers' models, one per cipher package, under one name
 lcm = types.SimpleNamespace(**{k: v for p in ("serpent", "twofish", "aria", "cast6", "blowfish", "cast5", "tea", "xtea", "fcrypt", "rc4")
                                for k, v in vars(_model(p)).items() if not k.startswith("__")})
-_spec = importlib.util.spec_from_file_location("hsmodel", os.path.join(HERE, "..", "..", "hashes", "ref", "model.py"))
-hsm = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hsm)
+
+
+def _hsmodel(pkg):
+    """the ref/model.py of a hash package (each imports its own package's
+    gen/spec.py as "spec")"""
+    spec = importlib.util.spec_from_file_location("hsmodel_" + pkg, os.path.join(HERE, "..", "..", pkg, "ref", "model.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules.pop("spec", None)
+    spec.loader.exec_module(mod)
+    sys.modules.pop("spec", None)
+    return mod
+
+
+# the hash packages' models, under one name
+_hsms = {p: _hsmodel(p) for p in ("md4", "ripemd160", "sm3", "streebog", "michael")}
+hsm = types.SimpleNamespace(md4=_hsms["md4"].md4, ripemd160=_hsms["ripemd160"].ripemd160, sm3=_hsms["sm3"].sm3,
+                            streebog256=_hsms["streebog"].streebog256, streebog512=_hsms["streebog"].streebog512,
+                            michael=_hsms["michael"].michael, check_vectors=lambda: [m.check_vectors() for m in _hsms.values()])
 
 warnings.simplefilter("ignore")
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # noqa: E402
@@ -485,7 +501,7 @@ SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512, "sha3_256": hashes.SHA3
 
 
 def whole(fn, dsize, name):
-    """a hash of hashes/ref/model.py as a Python hash object (for hmac)"""
+    """a hash of a hash package's ref/model.py as a Python hash object (for hmac)"""
     class Whole:
         digest_size, block_size = dsize, 64
 
@@ -508,7 +524,7 @@ def lib(name):
     return lambda data=b"": hashlib.new(name, data)
 
 
-# the hashes package's hashes: (Python hash object, its source, Bend template
+# the hash packages' hashes: (Python hash object, its source, Bend template
 # arguments)
 HS = {
     "md4": (whole(hsm.md4, 16, "md4"), "hsmodel", "~Hs.HsMdState<Hs.HsW4>, ~64n, ~16n, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, ~HM4.HsMd4.digest"),
@@ -656,14 +672,14 @@ import ../../fcrypt/fcrypt.bend as Fc
 import ../inst_michael.bend as MIC
 import ../pbkdf2.bend as Pb
 import ../kbkdf.bend as Kb
-import ../../hashes/hashes.bend as Hs
-import ../../hashes/md4.bend as HM4
-import ../../hashes/md5.bend as HM5
-import ../../hashes/sha1.bend as HS1
-import ../../hashes/ripemd160.bend as HRM
-import ../../hashes/sm3.bend as HSM
-import ../../hashes/streebog.bend as HST
-import ../../hashes/michael.bend as HMI
+import ../../md-engine/md-engine.bend as Hs
+import ../../md4/md4.bend as HM4
+import ../../md5/md5.bend as HM5
+import ../../sha1/sha1.bend as HS1
+import ../../ripemd160/ripemd160.bend as HRM
+import ../../sm3/sm3.bend as HSM
+import ../../streebog/streebog.bend as HST
+import ../../michael/michael.bend as HMI
 
 def res(r: Result<&2, &2, Cr.CrError, B.Octets>) -> String:
   match r:
@@ -933,7 +949,7 @@ def main():
                 want, src = hkdf(Hc, ikm, salt, info, n), "python"
             case("%s_hkdf" % name, i, "hkdf(%s, %s, %s, %s, %dn)" % (ht, o(ikm), o(salt), o(info), n), want.hex(), src)
 
-    for name, (Hc, src, ht) in HS.items():  # the hashes package's hashes, and HMAC over them
+    for name, (Hc, src, ht) in HS.items():  # the hash packages' hashes, and HMAC over them
         for i in range(4):
             a, b = rb(rng.randrange(0, 90)), rb(rng.randrange(0, 90))
             d = Hc(a + b).digest().hex()
@@ -988,7 +1004,7 @@ def main():
             f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines[j:j + CHUNK]) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from the cipher packages' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from the cipher packages' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from the hash packages' models)"
           % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"], counts["hsmodel"]))
 
 

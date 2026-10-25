@@ -1,13 +1,13 @@
-# Michael (IEEE 802.11i's TKIP MIC; hashes/michael.bend) as a MAC: the
-# adapter for the hashes package's Michael, its key error mapped onto
-# CrError. The instance:
+# Michael (IEEE 802.11i's TKIP MIC; michael/michael.bend) as a MAC: the
+# adapter for the michael package's Michael, its key error (md-engine's
+# HsError) mapped onto CrError. The instance:
 #   ~Hs.HsW2, ~CrMichael.key, ~MI.HsMichael.mic, ~CrMichael.verify
 # (a key of 8 bytes; the tag is 8 bytes). Michael is weak by design (see
-# hashes/README.md): it is here for TKIP.
+# michael/README.md): it is here for TKIP.
 import Base
 import ../bytes/bytes.bend as B
-import ../hashes/hashes.bend as Hs
-import ../hashes/michael.bend as MI
+import ../md-engine/md-engine.bend as Hs
+import ../michael/michael.bend as MI
 import ./crypto.bend as Cr
 import ./mac.bend as Mc
 

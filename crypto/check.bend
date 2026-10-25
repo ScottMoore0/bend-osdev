@@ -66,14 +66,14 @@ import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
 import ./kbkdf.bend as Kb
 import ./inst_kbkdf.bend as KbI
-import ../hashes/hashes.bend as Hs
-import ../hashes/md4.bend as HM4
-import ../hashes/md5.bend as HM5
-import ../hashes/sha1.bend as HS1
-import ../hashes/ripemd160.bend as HRM
-import ../hashes/sm3.bend as HSM
-import ../hashes/streebog.bend as HST
-import ../hashes/michael.bend as HMI
+import ../md-engine/md-engine.bend as Hs
+import ../md4/md4.bend as HM4
+import ../md5/md5.bend as HM5
+import ../sha1/sha1.bend as HS1
+import ../ripemd160/ripemd160.bend as HRM
+import ../sm3/sm3.bend as HSM
+import ../streebog/streebog.bend as HST
+import ../michael/michael.bend as HMI
 
 def cat(a: String, b: String) -> String:
   a ++ b
@@ -349,12 +349,12 @@ def cr.check.first.of(m: Maybe<&2, U32>) -> U32:
 def cr.check.first(+o: B.Octets) -> U32:
   cr.check.first.of(B.Octets.at(o, 0n))
 
-# The hashes package's hashes through the hash interface: the one-shot
+# The hash packages' hashes through the hash interface: the one-shot
 # digest, and the digest of three pieces through init / update / final
 def hs_hash(~H: Data, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +a: B.Octets, +b: B.Octets, +c: B.Octets) -> String:
   cat(B.Octets.hex(digest(B.Octets.append(a, B.Octets.append(b, c)))), cat(" ", B.Octets.hex(H.CrHash.of_pieces(~H, ~init, ~update, ~final, [a, b, c]))))
 
-# HMAC over a hash of the hashes package, in one call and in two pieces,
+# HMAC over a hash of the hash packages, in one call and in two pieces,
 # and verify of the tag
 def hs_hmac(~H: Data, ~bsize: Nat, ~init: H, ~update: H -> B.Octets -> H, ~final: H -> B.Octets, ~digest: B.Octets -> B.Octets, +k: B.Octets, +a: B.Octets, +b: B.Octets) -> String:
   +kk = Hm.CrHmac.key(~bsize, ~digest, k)

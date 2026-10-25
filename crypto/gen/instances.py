@@ -28,8 +28,9 @@ arguments, the names of the laws its own package proves, and its part: the
 pair of files for the package it comes from), then run this script. An
 instance from a package with no pair yet gets a new part: a LAWS_<part>.bend
 and PROOF_<part>.bend with the two regions, importing that package's laws
-and proofs, and its name in PARTS. A hash of the hashes package is a
-hs_row: its interface laws are written here too, each its own package's law.
+and proofs, and its name in PARTS. A hash of a hash package on md-engine
+(md4, md5, sha1, ripemd160, sm3, streebog) is a hs_row: its interface laws
+are written here too, each its own package's law.
 A new schema: a function below, and its rows.
 """
 import os, sys
@@ -134,27 +135,27 @@ HASH = [
 ]
 
 
-def hs_row(name, title, H, mod, init, final, digest, dsize, upd=None, laws=None):
-    """a hash of the hashes package: its interface laws (streaming for every
-    state, split, split3, length) are written here from that package's own
-    laws (iface: HSL.<laws>_streaming and so on), and the HMAC laws from
-    them"""
-    return dict(name=name, title=title + " (hashes)", part="hs", tparams=[], H=H, init=init, update=upd or mod + ".update",
-                final=final, digest=digest, dsize=dsize, iface=laws or name,
+def hs_row(name, title, pkg, H, mod, init, final, digest, dsize, upd=None, laws=None):
+    """a hash of a hash package on md-engine: its interface laws (streaming
+    for every state, split, split3, length) are written here from that
+    package's own laws (iface: <alias>L.<laws>_streaming and so on, the
+    alias of mod with L), and the HMAC laws from them"""
+    return dict(name=name, title=title + " (%s)" % pkg, part="hs", tparams=[], H=H, init=init, update=upd or mod + ".update",
+                final=final, digest=digest, dsize=dsize, iface=laws or name, lawmod=mod.split(".")[0] + "L",
                 streaming="Laws.%s_hash_streaming(%%s, %%s, %%s)" % name, split="Laws.%s_hash_split(%%s, %%s)" % name,
                 split3="Laws.%s_hash_split3(%%s, %%s, %%s)" % name)
 
 
 HASH += [
-    hs_row("md4", "MD4", "Hs.HsMdState<Hs.HsW4>", "HM4.HsMd4", "HM4.HsMd4.init()", "HM4.HsMd4.final", "HM4.HsMd4.digest", 16),
-    hs_row("md5", "MD5", "Hs.HsMdState<Hs.HsW4>", "HM5.HsMd5", "HM5.HsMd5.init()", "HM5.HsMd5.final", "HM5.HsMd5.digest", 16),
-    hs_row("sha1", "SHA-1", "Hs.HsMdState<Hs.HsW5>", "HS1.HsSha1", "HS1.HsSha1.init()", "HS1.HsSha1.final", "HS1.HsSha1.digest", 20),
-    hs_row("ripemd160", "RIPEMD-160", "Hs.HsMdState<Hs.HsW5>", "HRM.HsRipemd160", "HRM.HsRipemd160.init()", "HRM.HsRipemd160.final",
+    hs_row("md4", "MD4", "md4", "Hs.HsMdState<Hs.HsW4>", "HM4.HsMd4", "HM4.HsMd4.init()", "HM4.HsMd4.final", "HM4.HsMd4.digest", 16),
+    hs_row("md5", "MD5", "md5", "Hs.HsMdState<Hs.HsW4>", "HM5.HsMd5", "HM5.HsMd5.init()", "HM5.HsMd5.final", "HM5.HsMd5.digest", 16),
+    hs_row("sha1", "SHA-1", "sha1", "Hs.HsMdState<Hs.HsW5>", "HS1.HsSha1", "HS1.HsSha1.init()", "HS1.HsSha1.final", "HS1.HsSha1.digest", 20),
+    hs_row("ripemd160", "RIPEMD-160", "ripemd160", "Hs.HsMdState<Hs.HsW5>", "HRM.HsRipemd160", "HRM.HsRipemd160.init()", "HRM.HsRipemd160.final",
            "HRM.HsRipemd160.digest", 20),
-    hs_row("sm3", "SM3", "Hs.HsMdState<Hs.HsW8>", "HSM.HsSm3", "HSM.HsSm3.init()", "HSM.HsSm3.final", "HSM.HsSm3.digest", 32),
-    hs_row("streebog256", "Streebog-256", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init256()",
+    hs_row("sm3", "SM3", "sm3", "Hs.HsMdState<Hs.HsW8>", "HSM.HsSm3", "HSM.HsSm3.init()", "HSM.HsSm3.final", "HSM.HsSm3.digest", 32),
+    hs_row("streebog256", "Streebog-256", "streebog", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init256()",
            "HST.HsStreebog.final256", "HST.HsStreebog.digest256", 32),
-    hs_row("streebog512", "Streebog-512", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init512()",
+    hs_row("streebog512", "Streebog-512", "streebog", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init512()",
            "HST.HsStreebog.final512", "HST.HsStreebog.digest512", 64),
 ]
 
@@ -329,25 +330,25 @@ def stream_laws(c):
 
 
 def hash_iface_laws(h):
-    """the hash interface's laws for a hash of the hashes package, each its
-    own package's law (HSL) at the instance's defs"""
-    n, H, t, src = h["name"], h["H"], h["title"], h["iface"]
+    """the hash interface's laws for a hash of a hash package, each its own
+    package's law (h["lawmod"]) at the instance's defs"""
+    n, H, t, src, L = h["name"], h["H"], h["title"], h["iface"], h["lawmod"]
     U = lambda s, m: call(h["update"], s, m)
     F = lambda s: call(h["final"], s)
     D = lambda m: call(h["digest"], m)
     I = h["init"]
     law("%s_hash_streaming" % n, "%s: update over a ++ b is update over a, then b, for every state" % t,
         ["s: %s" % H, "+a: B.Octets", "+b: B.Octets"], "{%s == %s : %s}" % (U("s", "B.Octets.append(a, b)"), U(U("s", "a"), "b"), H))
-    proof("def Laws.%s_hash_streaming(s, a, b):\n  HSL.%s_streaming(s, a, b)\n" % (n, src))
+    proof("def Laws.%s_hash_streaming(s, a, b):\n  %s.%s_streaming(s, a, b)\n" % (n, L, src))
     law("%s_hash_split" % n, "%s: streaming equals one-shot, for every split" % t, ["+a: B.Octets", "+b: B.Octets"],
         "{%s == %s : B.Octets}" % (F(U(U(I, "a"), "b")), D("B.Octets.append(a, b)")))
-    proof("def Laws.%s_hash_split(a, b):\n  HSL.%s_split(a, b)\n" % (n, src))
+    proof("def Laws.%s_hash_split(a, b):\n  %s.%s_split(a, b)\n" % (n, L, src))
     law("%s_hash_split3" % n, "%s: and for every split into three" % t, ["+a: B.Octets", "+b: B.Octets", "+c: B.Octets"],
         "{%s == %s : B.Octets}" % (F(U(U(U(I, "a"), "b"), "c")), D("B.Octets.append(a, B.Octets.append(b, c))")))
-    proof("def Laws.%s_hash_split3(a, b, c):\n  HSL.%s_split3(a, b, c)\n" % (n, src))
+    proof("def Laws.%s_hash_split3(a, b, c):\n  %s.%s_split3(a, b, c)\n" % (n, L, src))
     law("%s_hash_length" % n, "%s: final(s) has %d bytes, for every state" % (t, h["dsize"]), ["+s: %s" % H],
         "{B.Octets.len(%s) == %dn : Nat}" % (F("s"), h["dsize"]))
-    proof("def Laws.%s_hash_length(s):\n  HSL.%s_length(s)\n" % (n, src))
+    proof("def Laws.%s_hash_length(s):\n  %s.%s_length(s)\n" % (n, L, src))
 
 
 def hash_laws(h):
