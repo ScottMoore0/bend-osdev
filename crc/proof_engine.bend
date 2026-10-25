@@ -7,6 +7,8 @@ import Base
 import ./crc.bend as C
 import ../array/array.bend as A
 import ./proof_word.bend as PW
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # A word's low byte, by its bits
 
@@ -28,7 +30,7 @@ def ce.low_idem(x: U32) -> {ce.lowbyte(ce.lowbyte(x)) == ce.lowbyte(x) : U32}:
 
 # the table index (x & 255) has the low byte 255 & x
 def ce.low_and(+x: U32) -> {ce.lowbyte(U32.and(x, 255)) == U32.and(255, x) : U32}:
-  %PW.cw.ua_comm(255, x) : {ce.lowbyte(_) == U32.and(255, x) : U32}
+  %UL.u32_and_comm(255, x) : {ce.lowbyte(_) == U32.and(255, x) : U32}
   %Equal.sym(U32, U32.and(255, x), ce.lowbyte(x), ce.mask_low(x)) : {ce.lowbyte(_) == U32.and(255, x) : U32}
   %Equal.sym(U32, U32.and(255, x), ce.lowbyte(x), ce.mask_low(x)) : {ce.lowbyte(ce.lowbyte(x)) == _ : U32}
   ce.low_idem(x)
@@ -116,9 +118,9 @@ def ce.nb(n: Nat, +p: U32, +k: Nat, +m: U32, +c: U32) -> U32:
 def ce.pick_np(b: Bool, +p: U32, +m: U32, +x: U32) -> {C.n32.pick(b, p, m, x) == ce.npick(b, p, m, x) : U32}:
   match b:
     case True{}:
-      PW.cw.ua_comm(U32.xor(U32.shl(x), p), m)
+      UL.u32_and_comm(U32.xor(U32.shl(x), p), m)
     case False{}:
-      PW.cw.ua_comm(U32.shl(x), m)
+      UL.u32_and_comm(U32.shl(x), m)
 
 # one step commutes with XOR
 def ce.npick_lin(bx: Bool, by: Bool, +p: U32, +m: U32, +x: U32, +y: U32) -> {ce.npick(Bool.xor(bx, by), p, m, U32.xor(x, y)) == U32.xor(ce.npick(bx, p, m, x), ce.npick(by, p, m, y)) : U32}:

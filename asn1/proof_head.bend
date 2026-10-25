@@ -14,6 +14,8 @@ import ./proof_list.bend as AL
 import ./proof_u32.bend as AU
 import ./proof_byte.bend as AB
 import ./proof_num.bend as PN
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 def ph.idb_low(c: T.Asn1Class, cons: Bool, +n: Nat, +hn: {Nat.is_lt(n, 31n) == True{} : Bool}) -> {T.a1.id_bytes(c, cons, n) == [Nu.a1.b(T.a1.id_octet(c, cons, n))] : List<&2, U32>}:
   %Equal.sym(Bool, Nat.is_lt(n, 31n), True{}, hn) : {T.a1.id_pick(_, c, cons, n) == [Nu.a1.b(T.a1.id_octet(c, cons, n))] : List<&2, U32>}
@@ -29,7 +31,7 @@ def ph.id_low(+r: R.Asn1Rules, +c: T.Asn1Class, +cons: Bool, +n: Nat, +rest: Lis
   +want : A.A1Head = A.a1.head.res(En.a1.is_univ0(c, n), r, c, cons, n, rest)
   +e1 = ph.idb_low(c, cons, n, hn)
   %Equal.sym(List<&2, U32>, T.a1.id_bytes(c, cons, n), [x], e1) : {A.a1.head0(r, List.append(&2, U32, _, rest)) == want : A.A1Head}
-  %Equal.sym(T.A1Id1, T.a1.id1(U32.to_nat(x)), T.A1Id1{c, cons, n}, AB.ab.id1(c, cons, n, AN.an.lt_le_trans(n, 31n, 32n, hn, {==}))) : {A.a1.head.id(r, _, x, rest) == want : A.A1Head}
+  %Equal.sym(T.A1Id1, T.a1.id1(U32.to_nat(x)), T.A1Id1{c, cons, n}, AB.ab.id1(c, cons, n, UO.nat_lt_le_trans(n, 31n, 32n, hn, {==}))) : {A.a1.head.id(r, _, x, rest) == want : A.A1Head}
   %Equal.sym(Bool, Nat.is_eq(n, 31n), False{}, AN.an.lt_ne(n, 31n, hn)) : {A.a1.head.hi(_, r, c, cons, n, x, rest) == want : A.A1Head}
   %Equal.sym(List<&2, U32>, T.a1.id_bytes(c, cons, n), [x], e1) : {A.a1.head.tag2(Nu.a1.leq(_, [x]), r, c, cons, n, rest) == want : A.A1Head}
   %Equal.sym(Bool, Nu.a1.leq([x], [x]), True{}, AU.au.leq_refl([x])) : {A.a1.head.tag2(_, r, c, cons, n, rest) == want : A.A1Head}
@@ -80,7 +82,7 @@ def ph.head_tlv(+r: R.Asn1Rules, +c: T.Asn1Class, +cons: Bool, +n: Nat, +cs: Lis
   %Equal.sym(Bool, Nu.a1.leq(lb, lb), True{}, AU.au.leq_refl(lb)) : {A.a1.head.min(R.a1.when(R.Asn1Rules.min_length(r), Bool.and(L.a1.len_ok(l), _)), T.Asn1Tag{c, n}, cons, l, t2) == want : A.A1Head}
   %Equal.sym(Bool, L.a1.len_ok(l), True{}, hok) : {A.a1.head.min(R.a1.when(R.Asn1Rules.min_length(r), Bool.and(_, True{})), T.Asn1Tag{c, n}, cons, l, t2) == want : A.A1Head}
   %Equal.sym(Bool, R.a1.when(R.Asn1Rules.min_length(r), True{}), True{}, ph.when_t(R.Asn1Rules.min_length(r))) : {A.a1.head.min(_, T.Asn1Tag{c, n}, cons, l, t2) == want : A.A1Head}
-  +hle = Equal.trans(Bool, Nat.is_le(l, List.length(&2, U32, t2)), Nat.is_le(l, Nat.add(l, List.length(&2, U32, rest))), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(l, z), List.length(&2, U32, t2), Nat.add(l, List.length(&2, U32, rest)), AL.al.app_len(cs, rest)), AN.an.le_add(l, List.length(&2, U32, rest)))
+  +hle = Equal.trans(Bool, Nat.is_le(l, List.length(&2, U32, t2)), Nat.is_le(l, Nat.add(l, List.length(&2, U32, rest))), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(l, z), List.length(&2, U32, t2), Nat.add(l, List.length(&2, U32, rest)), AL.al.app_len(cs, rest)), UO.nat_le_add_r(l, List.length(&2, U32, rest)))
   %Equal.sym(Bool, Nat.is_le(l, List.length(&2, U32, t2)), True{}, hle) : {A.a1.head.fit(_, T.Asn1Tag{c, n}, cons, l, t2) == want : A.A1Head}
   {==}
 
@@ -128,7 +130,7 @@ def ph.canon_ok(+c: T.Asn1Class, +cons: Bool, +n: Nat, +cs: List<&2, U32>, +rest
   %Equal.sym(Bool, L.a1.len_ok(l), True{}, hok) : {Bool.and(_, Bool.and(Nu.a1.leq(hd, hd), Nat.is_le(l, List.length(&2, U32, y)))) == True{} : Bool}
   %Equal.sym(Bool, Nu.a1.leq(hd, hd), True{}, AU.au.leq_refl(hd)) : {Bool.and(_, Nat.is_le(l, List.length(&2, U32, y))) == True{} : Bool}
   %Equal.sym(Nat, List.length(&2, U32, y), Nat.add(l, List.length(&2, U32, rest)), AL.al.app_len(cs, rest)) : {Nat.is_le(l, _) == True{} : Bool}
-  AN.an.le_add(l, List.length(&2, U32, rest))
+  UO.nat_le_add_r(l, List.length(&2, U32, rest))
 
 def ph.indef_off_keep(a: Bool, +t: T.Asn1Tag, +cs: List<&2, U32>, +rest: List<&2, U32>, +cons: Bool) -> {A.a1.head.indef_off(a, ph.mk(cons, t, cs, rest)) == ph.mk(cons, t, cs, rest) : A.A1Head}:
   match a cons:

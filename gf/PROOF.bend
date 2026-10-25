@@ -11,6 +11,8 @@ import ../array/PROOF.bend as APF
 import ./proof_tab.bend as GT
 import ./proof_tab_cases.bend as GC
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # 1. Bool identities, by cases
 
@@ -6449,24 +6451,8 @@ def Laws.v_tab_zero():
 # 7. GF(2^m): addition commutes (XOR, bit by bit); for the small named
 # fields, products and inverses by cases on the element's m bits
 
-def word_xor_comm(+n: Nat, +a: Word(n), +b: Word(n)) -> {Word.xor(n, a, b) == Word.xor(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match a b:
-        case WCon{+x, +at} WCon{+y, +bt}:
-          %bx_comm(x, y) : {WCon{Bool.xor(x, y), Word.xor(p, at, bt)} == WCon{_, Word.xor(p, bt, at)} : Word(1n+p)}
-          %word_xor_comm(p, at, bt) : {WCon{Bool.xor(x, y), Word.xor(p, at, bt)} == WCon{Bool.xor(x, y), _} : Word(1n+p)}
-          {==}
-
-def u32_xor_comm(+a: U32, +b: U32) -> {U32.xor(a, b) == U32.xor(b, a) : U32}:
-  match a b:
-    case U32{+x} U32{+y}:
-      Equal.cong(Word(32n), U32, w => U32{w}, Word.xor(32n, x, y), Word.xor(32n, y, x), word_xor_comm(32n, x, y))
-
 def Laws.gfm_add_comm(f, a, b):
-  Equal.cong(U32, U32, z => U32.and(M.Gfm.mask(f), z), U32.xor(a, b), U32.xor(b, a), u32_xor_comm(a, b))
+  Equal.cong(U32, U32, z => U32.and(M.Gfm.mask(f), z), U32.xor(a, b), U32.xor(b, a), UL.u32_xor_comm(a, b))
 
 def word_and_zero(+n: Nat, +r: Word(n)) -> {Word.and(n, Word.zero(n), r) == Word.zero(n) : Word(n)}:
   match n:
@@ -7878,7 +7864,7 @@ def tl.nz(+f: G.Gf8Field, +l: List<&2, U32>, +a: U32, +b: U32, +hxa: {A.Arrays.n
   %Equal.sym(U32, U32.add(U32.from_nat(G.Gf8.log(f, a)), U32.from_nat(G.Gf8.log(f, b))), U32.from_nat(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a))), GT.gt.add_nat(G.Gf8.log(f, a), G.Gf8.log(f, b))) : {A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), A.Arrays.index(9n, _), 0) == G.Gf8.mul(f, a, b) : U32}
   %Equal.sym(Nat, A.Arrays.index(9n, U32.from_nat(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)))), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), AL.index_of_nat(9n, GT.gt.hd9(), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), GT.gt.sum_lt(G.Gf8.log(f, b), G.Gf8.log(f, a), GT.gt.log_lt(f, b), GT.gt.log_lt(f, a)))) : {A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), _, 0) == G.Gf8.mul(f, a, b) : U32}
   %Equal.sym(U32, A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), 0), G.Gf8.exp(f, Nat.add(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), 0n)), GT.gt.elist_nth(510n, f, 0n, Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), GT.gt.lt_sum(G.Gf8.log(f, b), 255n, G.Gf8.log(f, a), 255n, GT.gt.log_lt(f, b), GT.gt.log_lt(f, a)))) : {_ == G.Gf8.mul(f, a, b) : U32}
-  %Equal.sym(Nat, Nat.add(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), 0n), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), GT.gt.add_zero_r(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)))) : {G.Gf8.exp(f, _) == G.Gf8.mul(f, a, b) : U32}
+  %Equal.sym(Nat, Nat.add(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), 0n), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)), UL.nat_add_zero(Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a)))) : {G.Gf8.exp(f, _) == G.Gf8.mul(f, a, b) : U32}
   %Equal.sym(U32, G.Gf8.pow(f, G.Gf8.gen(f), Nat.add(G.Gf8.log(f, b), G.Gf8.log(f, a))), G.Gf8.mul(f, G.Gf8.pow(f, G.Gf8.gen(f), G.Gf8.log(f, b)), G.Gf8.pow(f, G.Gf8.gen(f), G.Gf8.log(f, a))), Laws.pow_add(f, G.Gf8.gen(f), G.Gf8.log(f, b), G.Gf8.log(f, a))) : {_ == G.Gf8.mul(f, a, b) : U32}
   %Equal.sym(U32, G.Gf8.exp(f, G.Gf8.log(f, b)), G.Gf8.elt(b), elb) : {G.Gf8.mul(f, _, G.Gf8.pow(f, G.Gf8.gen(f), G.Gf8.log(f, a))) == G.Gf8.mul(f, a, b) : U32}
   %Equal.sym(U32, G.Gf8.exp(f, G.Gf8.log(f, a)), G.Gf8.elt(a), ela) : {G.Gf8.mul(f, G.Gf8.elt(b), _) == G.Gf8.mul(f, a, b) : U32}
@@ -7903,7 +7889,7 @@ def tl.exp(+f: G.Gf8Field, +l: List<&2, U32>, +i: U32, +hi: {Nat.is_lt(U32.to_na
   %Equal.sym(Array<U32> & U32, Array.get(U32, A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), i), (A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), A.Arrays.index(9n, i), 0)), AL.of_list_get(U32, 9n, GT.gt.elist(510n, f, 0n), 0, GT.gt.hl_elist(f), GT.gt.hd9(), i)) : {T.gf8tab.exp.fin(_, A.Arrays.of_list(U32, 8n, l, 0)) == (GT.gt.tab(f, l), G.Gf8.exp(f, U32.to_nat(i))) : T.Gf8Tab & U32}
   %Equal.sym(Nat, A.Arrays.index(9n, i), U32.to_nat(i), AL.index_of_u32(9n, i, GT.gt.lt_add_left(2n, U32.to_nat(i), 510n, hi))) : {(T.Gf8Tab{A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), A.Arrays.of_list(U32, 8n, l, 0)}, A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), _, 0)) == (GT.gt.tab(f, l), G.Gf8.exp(f, U32.to_nat(i))) : T.Gf8Tab & U32}
   %Equal.sym(U32, A.Arrays.nth(U32, GT.gt.elist(510n, f, 0n), U32.to_nat(i), 0), G.Gf8.exp(f, Nat.add(U32.to_nat(i), 0n)), GT.gt.elist_nth(510n, f, 0n, U32.to_nat(i), hi)) : {(T.Gf8Tab{A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), A.Arrays.of_list(U32, 8n, l, 0)}, _) == (GT.gt.tab(f, l), G.Gf8.exp(f, U32.to_nat(i))) : T.Gf8Tab & U32}
-  %Equal.sym(Nat, Nat.add(U32.to_nat(i), 0n), U32.to_nat(i), GT.gt.add_zero_r(U32.to_nat(i))) : {(T.Gf8Tab{A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), A.Arrays.of_list(U32, 8n, l, 0)}, G.Gf8.exp(f, _)) == (GT.gt.tab(f, l), G.Gf8.exp(f, U32.to_nat(i))) : T.Gf8Tab & U32}
+  %Equal.sym(Nat, Nat.add(U32.to_nat(i), 0n), U32.to_nat(i), UL.nat_add_zero(U32.to_nat(i))) : {(T.Gf8Tab{A.Arrays.of_list(U32, 9n, GT.gt.elist(510n, f, 0n), 0), A.Arrays.of_list(U32, 8n, l, 0)}, G.Gf8.exp(f, _)) == (GT.gt.tab(f, l), G.Gf8.exp(f, U32.to_nat(i))) : T.Gf8Tab & U32}
   {==}
 
 # the product through the table, by whether each factor is zero

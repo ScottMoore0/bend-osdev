@@ -25,6 +25,8 @@ import ./proof_engine.bend as PE
 import ./proof_cases.bend as PC
 import ./proof_engine64.bend as P6
 import ./proof_cases64.bend as C6
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # word64's one-place shifts are the clean shifts
 
@@ -133,7 +135,7 @@ def cf6.look_low(+e: P6.CrcPfEng64, j: U32) -> {A.Arrays.nth(W.W64, C6.c6t.tab(e
       C6.c6t.look(e, b0, b1, b2, b3, b4, b5, b6, b7)
 
 def cf6.look_any(+e: P6.CrcPfEng64, +j: U32) -> {A.Arrays.nth(W.W64, C6.c6t.tab(e), A.Arrays.index(8n, j), W.W64.zero()) == P6.c6.ev(e, PE.ce.lowbyte(j)) : W.W64}:
-  %PW.cw.ua_comm(255, j) : {A.Arrays.nth(W.W64, C6.c6t.tab(e), U32.to_nat(_), W.W64.zero()) == P6.c6.ev(e, PE.ce.lowbyte(j)) : W.W64}
+  %UL.u32_and_comm(255, j) : {A.Arrays.nth(W.W64, C6.c6t.tab(e), U32.to_nat(_), W.W64.zero()) == P6.c6.ev(e, PE.ce.lowbyte(j)) : W.W64}
   %Equal.sym(U32, U32.and(255, j), PE.ce.lowbyte(j), PE.ce.mask_low(j)) : {A.Arrays.nth(W.W64, C6.c6t.tab(e), U32.to_nat(_), W.W64.zero()) == P6.c6.ev(e, PE.ce.lowbyte(j)) : W.W64}
   cf6.look_low(e, j)
 
@@ -141,10 +143,10 @@ def cf6.look_any(+e: P6.CrcPfEng64, +j: U32) -> {A.Arrays.nth(W.W64, C6.c6t.tab(
 # and the rest
 
 def cf6.dec_r(+ch: U32, +cl: U32, +h: U32) -> {W.W64.xor(W.W64.from_parts(ch, cl), W.W64.from_u32(U32.and(h, 255))) == W.W64.xor(W.W64.from_parts(ch, U32.and(4294967040, cl)), W.W64.from_u32(U32.and(255, U32.xor(cl, h)))) : W.W64}:
-  P6.c6.fp_cong(U32.xor(ch, 0), U32.xor(ch, 0), U32.xor(cl, U32.and(h, 255)), U32.xor(U32.and(4294967040, cl), U32.and(255, U32.xor(cl, h))), {==}, Equal.trans(U32, U32.xor(cl, U32.and(h, 255)), U32.xor(cl, U32.and(255, h)), U32.xor(U32.and(4294967040, cl), U32.and(255, U32.xor(cl, h))), Equal.cong(U32, U32, z => U32.xor(cl, z), U32.and(h, 255), U32.and(255, h), PW.cw.ua_comm(h, 255)), PC.ct.r_split(cl, h)))
+  P6.c6.fp_cong(U32.xor(ch, 0), U32.xor(ch, 0), U32.xor(cl, U32.and(h, 255)), U32.xor(U32.and(4294967040, cl), U32.and(255, U32.xor(cl, h))), {==}, Equal.trans(U32, U32.xor(cl, U32.and(h, 255)), U32.xor(cl, U32.and(255, h)), U32.xor(U32.and(4294967040, cl), U32.and(255, U32.xor(cl, h))), Equal.cong(U32, U32, z => U32.xor(cl, z), U32.and(h, 255), U32.and(255, h), UL.u32_and_comm(h, 255)), PC.ct.r_split(cl, h)))
 
 def cf6.dec_n(+ch: U32, +cl: U32, +h: U32) -> {W.W64.xor(W.W64.from_parts(ch, cl), W.W64.from_parts(U32.shln(U32.and(h, 255), 24n), 0)) == W.W64.xor(W.W64.from_parts(U32.and(U32.not(4278190080), ch), cl), W.W64.from_parts(U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n), 0)) : W.W64}:
-  P6.c6.fp_cong(U32.xor(ch, U32.shln(U32.and(h, 255), 24n)), U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), U32.xor(cl, 0), U32.xor(cl, 0), Equal.trans(U32, U32.xor(ch, U32.shln(U32.and(h, 255), 24n)), U32.xor(ch, U32.shln(U32.and(255, h), 24n)), U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), Equal.cong(U32, U32, z => U32.xor(ch, U32.shln(z, 24n)), U32.and(h, 255), U32.and(255, h), PW.cw.ua_comm(h, 255)), Equal.sym(U32, U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), U32.xor(ch, U32.shln(U32.and(255, h), 24n)), PE.ce.core_split(24n, 4278190080, ch, h, PC.ct.win32(ch)))), {==})
+  P6.c6.fp_cong(U32.xor(ch, U32.shln(U32.and(h, 255), 24n)), U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), U32.xor(cl, 0), U32.xor(cl, 0), Equal.trans(U32, U32.xor(ch, U32.shln(U32.and(h, 255), 24n)), U32.xor(ch, U32.shln(U32.and(255, h), 24n)), U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), Equal.cong(U32, U32, z => U32.xor(ch, U32.shln(z, 24n)), U32.and(h, 255), U32.and(255, h), UL.u32_and_comm(h, 255)), Equal.sym(U32, U32.xor(U32.and(U32.not(4278190080), ch), U32.shln(U32.and(255, U32.xor(U32.shrn(ch, 24n), h)), 24n)), U32.xor(ch, U32.shln(U32.and(255, h), 24n)), PE.ce.core_split(24n, 4278190080, ch, h, PC.ct.win32(ch)))), {==})
 
 # Reflected: one byte step through the table is eight bitwise steps
 

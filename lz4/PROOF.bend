@@ -9,6 +9,8 @@ import ./hc.bend as H
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # The properties follow the block decoder byte by byte. Each lemma below is
 # about the decoder's internals (block.bend), never stated as a law. Octets
@@ -31,31 +33,6 @@ def false_not_true(h: {False{} == True{} : Bool}) -> Empty:
 
 def absurd(-P: Type, e: Empty) -> P:
   match e:
-
-def add_zero(p: Nat) -> {Nat.add(p, 0n) == p : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_zero(q) : {1n+Nat.add(q, 0n) == 1n+_ : Nat}
-      {==}
-
-def add_succ(p: Nat, x: Nat) -> {Nat.add(p, 1n+x) == 1n+Nat.add(p, x) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_succ(q, x) : {1n+Nat.add(q, 1n+x) == 1n+_ : Nat}
-      {==}
-
-def add_comm(+p: Nat, +q: Nat) -> {Nat.add(p, q) == Nat.add(q, p) : Nat}:
-  match p:
-    case 0n:
-      Equal.sym(Nat, Nat.add(q, 0n), q, add_zero(q))
-    case 1n+r:
-      %Equal.sym(Nat, Nat.add(q, 1n+r), 1n+Nat.add(q, r), add_succ(q, r)) : {1n+Nat.add(r, q) == _ : Nat}
-      %add_comm(r, q) : {1n+Nat.add(r, q) == 1n+_ : Nat}
-      {==}
 
 def sub_zero(m: Nat) -> {Nat.sub(m, 0n) == m : Nat}:
   match m:
@@ -1963,10 +1940,10 @@ def ext_run(+r: Nat, +d: Nat, +a: Nat, +m: U32, +acc: List<&2, U32>, +win: K.Lz4
     case 1n+p:
       match d:
         case 0n:
-          %add_succ(p, Nat.add(254n, a)) : {K.blk.go(B.mask(K.lit.ext.ref(1n+p, 0n)), K.Lz4Dec{K.Lz4LitExt{a, m}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, m}, acc, win, room, last} : K.Lz4Dec}
+          %UL.nat_add_succ(p, Nat.add(254n, a)) : {K.blk.go(B.mask(K.lit.ext.ref(1n+p, 0n)), K.Lz4Dec{K.Lz4LitExt{a, m}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, m}, acc, win, room, last} : K.Lz4Dec}
           ext_run(p, 254n, Nat.add(255n, a), m, acc, win, room, last, {==})
         case 1n+q:
-          %add_succ(p, Nat.add(Nat.sub(254n, 1n+q), a)) : {K.blk.go(B.mask(K.lit.ext.ref(1n+p, 1n+q)), K.Lz4Dec{K.Lz4LitExt{a, m}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, m}, acc, win, room, last} : K.Lz4Dec}
+          %UL.nat_add_succ(p, Nat.add(Nat.sub(254n, 1n+q), a)) : {K.blk.go(B.mask(K.lit.ext.ref(1n+p, 1n+q)), K.Lz4Dec{K.Lz4LitExt{a, m}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, m}, acc, win, room, last} : K.Lz4Dec}
           %sub_succ(254n, q, h) : {K.blk.go(B.mask(K.lit.ext.ref(1n+p, 1n+q)), K.Lz4Dec{K.Lz4LitExt{a, m}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{Nat.add(p, Nat.add(_, a)), Nat.add(p, Nat.add(_, a)), m}, acc, win, room, last} : K.Lz4Dec}
           ext_run(p, q, a, m, acc, win, room, last, le_pred(254n, q, h))
 
@@ -1994,7 +1971,7 @@ def hd_14(+n: Nat, +acc: List<&2, U32>, +win: K.Lz4Win, +room: Nat, +last: Nat) 
     case 0n:
       {==}
     case 1n+p:
-      %add_comm(p, 15n) : {K.blk.go(B.mask(K.lit.h14(1n+p)), K.Lz4Dec{K.Lz4Tok{}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, 0}, acc, win, room, last} : K.Lz4Dec}
+      %UL.nat_add_comm(p, 15n) : {K.blk.go(B.mask(K.lit.h14(1n+p)), K.Lz4Dec{K.Lz4Tok{}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{_, _, 0}, acc, win, room, last} : K.Lz4Dec}
       %ext_fast(p, 254n) : {K.blk.go(B.mask(Con{240, _}), K.Lz4Dec{K.Lz4Tok{}, acc, win, room, last}) == K.Lz4Dec{K.Lz4Lit{Nat.add(p, 15n), Nat.add(p, 15n), 0}, acc, win, room, last} : K.Lz4Dec}
       ext_run(p, 254n, 15n, 0, acc, win, room, last, {==})
 
@@ -2126,13 +2103,6 @@ def le_zero(c: Nat) -> {Nat.is_le(0n, c) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def le_refl(c: Nat) -> {Nat.is_le(c, c) == True{} : Bool}:
-  match c:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_refl(p)
-
 def le_add(a: Nat, b: Nat, c: Nat, h: {Nat.is_le(Nat.add(a, b), c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
   match a c:
     case 0n _:
@@ -2155,11 +2125,11 @@ def len_rev(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {B.len(List.reverse.go(&
     case Nil{}:
       {==}
     case Con{h, t}:
-      %add_succ(B.len(t), B.len(acc)) : {B.len(List.reverse.go(&2, U32, t, Con{h, acc})) == _ : Nat}
+      %UL.nat_add_succ(B.len(t), B.len(acc)) : {B.len(List.reverse.go(&2, U32, t, Con{h, acc})) == _ : Nat}
       len_rev(t, Con{h, acc})
 
 def len_rev_nil(+xs: List<&2, U32>) -> {B.len(K.blk.rev(xs)) == B.len(xs) : Nat}:
-  Equal.trans(Nat, B.len(K.blk.rev(xs)), Nat.add(B.len(xs), 0n), B.len(xs), len_rev(xs, Nil{}), add_zero(B.len(xs)))
+  Equal.trans(Nat, B.len(K.blk.rev(xs)), Nat.add(B.len(xs), 0n), B.len(xs), len_rev(xs, Nil{}), UL.nat_add_zero(B.len(xs)))
 
 def Inv(d: K.Lz4Dec, c: Nat) -> Type:
   match d:
@@ -2171,7 +2141,7 @@ def inv_bad(+e: K.Lz4Error, +c: Nat) -> Inv(K.blk.bad(e), c):
 
 # a byte moved from the room to the output
 def inv_push(+acc: List<&2, U32>, +r: Nat, +b: U32, +c: Nat, i: {Nat.is_le(Nat.add(B.len(acc), 1n+r), c) == True{} : Bool}) -> {Nat.is_le(Nat.add(B.len({Con{b, acc} : List<&2, U32>}), r), c) == True{} : Bool}:
-  %add_succ(B.len(acc), r) : {Nat.is_le(_, c) == True{} : Bool}
+  %UL.nat_add_succ(B.len(acc), r) : {Nat.is_le(_, c) == True{} : Bool}
   i
 
 def inv_copy_go(n: Nat, +room: Nat, +o: Nat, +acc: List<&2, U32>, +win: K.Lz4Win, +last: Nat, +c: Nat, i: {Nat.is_le(Nat.add(B.len(acc), room), c) == True{} : Bool}) -> Inv(K.blk.copy.go(n, room, o, acc, win, last), c):
@@ -2301,7 +2271,7 @@ def fin(d: K.Lz4Dec, +c: Nat, i: Inv(d, c)) -> {Nat.is_le(B.Octets.len(Result.de
 # The laws
 
 def Laws.output_within_max(src, max):
-  fin(K.blk.go(B.Octets.to_list(src), K.Lz4Dec{K.Lz4Tok{}, Nil{}, K.blk.wnew(Nil{}), max, 0n}), max, inv_go(B.Octets.to_list(src), K.Lz4Dec{K.Lz4Tok{}, Nil{}, K.blk.wnew(Nil{}), max, 0n}, max, le_refl(max)))
+  fin(K.blk.go(B.Octets.to_list(src), K.Lz4Dec{K.Lz4Tok{}, Nil{}, K.blk.wnew(Nil{}), max, 0n}), max, inv_go(B.Octets.to_list(src), K.Lz4Dec{K.Lz4Tok{}, Nil{}, K.blk.wnew(Nil{}), max, 0n}, max, UL.nat_le_refl(max)))
 
 def lit_round(+o: B.Octets, +k: Nat) -> {K.block_decompress(K.block_literals(o), Nat.add(B.Octets.len(o), k)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}:
   +ys = B.Octets.to_list(o)
@@ -2313,7 +2283,7 @@ def lit_round(+o: B.Octets, +k: Nat) -> {K.block_decompress(K.block_literals(o),
   {==}
 
 def lit_round0(+o: B.Octets) -> {K.block_decompress(K.block_literals(o), B.Octets.len(o)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}:
-  %add_zero(B.Octets.len(o)) : {K.block_decompress(K.block_literals(o), _) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
+  %UL.nat_add_zero(B.Octets.len(o)) : {K.block_decompress(K.block_literals(o), _) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
   lit_round(o, 0n)
 
 # After a dictionary: the literals land on top of it, and the block's own
@@ -2350,7 +2320,7 @@ def lit_round_dict(+dict: B.Octets, +o: B.Octets, +k: Nat) -> {K.block_decompres
   {==}
 
 def lit_round_dict0(+dict: B.Octets, +o: B.Octets) -> {K.block_decompress_dict(dict, K.block_literals(o), B.Octets.len(o)) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}:
-  %add_zero(B.Octets.len(o)) : {K.block_decompress_dict(dict, K.block_literals(o), _) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
+  %UL.nat_add_zero(B.Octets.len(o)) : {K.block_decompress_dict(dict, K.block_literals(o), _) == Done{o} : Result<&2, &2, K.Lz4Error, B.Octets>}
   lit_round_dict(dict, o, 0n)
 
 # The compressor's check: when it finds the same bytes, the block decodes to

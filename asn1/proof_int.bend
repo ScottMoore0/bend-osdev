@@ -20,6 +20,10 @@ import ./proof_nat.bend as AN
 import ./proof_list.bend as AL
 import ./proof_num.bend as PN
 import ./proof_byte.bend as AB
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Tags
 
@@ -58,9 +62,9 @@ def pi.sub_le(+a: Nat, +d: Nat) -> {Nat.is_le(Nat.sub(a, d), a) == True{} : Bool
     case 0n _:
       {==}
     case 1n+ap 0n:
-      AN.an.le_refl(1n+ap)
+      UL.nat_le_refl(1n+ap)
     case 1n+ap 1n+dp:
-      AN.an.le_trans(Nat.sub(ap, dp), ap, 1n+ap, pi.sub_le(ap, dp), AN.an.le_succ(ap))
+      UO.nat_le_trans(Nat.sub(ap, dp), ap, 1n+ap, pi.sub_le(ap, dp), AN.an.le_succ(ap))
 
 # d <= a: (1 + a) - d = 1 + (a - d)
 def pi.sub_succ(+a: Nat, +d: Nat, +h: {Nat.is_le(d, a) == True{} : Bool}) -> {Nat.sub(1n+a, d) == 1n+Nat.sub(a, d) : Nat}:
@@ -205,7 +209,7 @@ def pi.q_pos(+q: Nat, +r: Nat, +n: Nat, +bp: Nat, +hr: {Nat.add(Nat.mul(q, 1n+bp
       AN.an.le_zero(p)
 
 def pi.div_pos(+n: Nat, +bp: Nat, +hn: {Nat.is_lt(n, 1n+bp) == False{} : Bool}) -> {Nat.is_le(1n, Nat.div(n, 1n+bp)) == True{} : Bool}:
-  pi.q_pos(Nat.div(n, 1n+bp), Nat.mod(n, 1n+bp), n, bp, AN.an.recon(n, bp), AN.an.mod_lt(n, bp), hn)
+  pi.q_pos(Nat.div(n, 1n+bp), Nat.mod(n, 1n+bp), n, bp, UD.nat_div_mod(n, bp), UD.nat_mod_lt(n, bp), hn)
 
 # the first digit of a number of at least 1 is at least 1
 def pi.lead_digits(fuel: Nat, lt: Bool, +bp: Nat, +n: Nat, +hl: {Nat.is_lt(n, 1n+bp) == lt : Bool}, +hn: {Nat.is_le(1n, n) == True{} : Bool}) -> {Nat.is_le(1n, pi.lead(Nu.a1.digits.go(fuel, lt, 1n+bp, n))) == True{} : Bool}:
@@ -299,9 +303,9 @@ def pi.ok_lo(+d0: Nat, rest: List<&2, Nat>, +hd: {Nat.is_lt(d0, 128n) == True{} 
     case Nil{}:
       {==}
     case Con{+d1, +r2}:
-      +h256 = AN.an.lt_le_trans(d0, 128n, 256n, hd, {==})
+      +h256 = UO.nat_lt_le_trans(d0, 128n, 256n, hd, {==})
       +e0 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(d0), 0), Nat.is_eq(d0, 0n), False{}, pi.eq0(d0, h256), pi.ne0(d0, hcan))
-      +e1 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(d0), 255), Nat.is_eq(d0, 255n), False{}, pi.eq255(d0, h256), AN.an.lt_ne(d0, 255n, AN.an.lt_le_trans(d0, 128n, 255n, hd, {==})))
+      +e1 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(d0), 255), Nat.is_eq(d0, 255n), False{}, pi.eq255(d0, h256), AN.an.lt_ne(d0, 255n, UO.nat_lt_le_trans(d0, 128n, 255n, hd, {==})))
       %Equal.sym(Bool, U32.is_eq(Nu.a1.b(d0), 0), False{}, e0) : {Bool.not(Bool.or(Bool.and(_, U32.is_lt(Nu.a1.b(d1), 128)), Bool.and(U32.is_eq(Nu.a1.b(d0), 255), U32.is_le(128, Nu.a1.b(d1))))) == True{} : Bool}
       %Equal.sym(Bool, U32.is_eq(Nu.a1.b(d0), 255), False{}, e1) : {Bool.not(Bool.or(False{}, Bool.and(_, U32.is_le(128, Nu.a1.b(d1))))) == True{} : Bool}
       {==}
@@ -358,7 +362,7 @@ def pi.ok_neg(+d0: Nat, rest: List<&2, Nat>, +hd: {Nat.is_lt(d0, 256n) == True{}
     case Con{+d1, +r2}:
       +c0 = Nat.sub(255n, d0)
       +h256 = pi.sub255_lt(d0)
-      +e0 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(c0), 0), Nat.is_eq(c0, 0n), False{}, pi.eq0(c0, h256), pi.ne0(c0, AN.an.le_trans(1n, 128n, c0, {==}, hge)))
+      +e0 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(c0), 0), Nat.is_eq(c0, 0n), False{}, pi.eq0(c0, h256), pi.ne0(c0, UO.nat_le_trans(1n, 128n, c0, {==}, hge)))
       +e1 = Equal.trans(Bool, U32.is_eq(Nu.a1.b(c0), 255), Nat.is_eq(c0, 255n), False{}, pi.eq255(c0, h256), AN.an.lt_ne(c0, 255n, pi.sub_lt(255n, d0, hcan, pi.lt256_le(d0, hd))))
       %Equal.sym(Bool, U32.is_eq(Nu.a1.b(c0), 0), False{}, e0) : {Bool.not(Bool.or(Bool.and(_, U32.is_lt(Nu.a1.b(Nat.sub(255n, d1)), 128)), Bool.and(U32.is_eq(Nu.a1.b(c0), 255), U32.is_le(128, Nu.a1.b(Nat.sub(255n, d1)))))) == True{} : Bool}
       %Equal.sym(Bool, U32.is_eq(Nu.a1.b(c0), 255), False{}, e1) : {Bool.not(Bool.or(False{}, Bool.and(_, U32.is_le(128, Nu.a1.b(Nat.sub(255n, d1)))))) == True{} : Bool}
@@ -402,8 +406,8 @@ def pi.fix_npad(lo: Bool, +ys: List<&2, U32>, +hf: {B.mask(ys) == ys : List<&2, 
 # (m - 0) + 1 = 1 + m
 def pi.succ_eq(+m: Nat) -> {Nat.add(Nat.sub(m, 0n), 1n) == 1n+m : Nat}:
   %Equal.sym(Nat, Nat.sub(m, 0n), m, AN.an.sub_zero(m)) : {Nat.add(_, 1n) == 1n+m : Nat}
-  %Equal.sym(Nat, Nat.add(m, 1n), 1n+Nat.add(m, 0n), AN.an.add_succ(m, 0n)) : {_ == 1n+m : Nat}
-  %Equal.sym(Nat, Nat.add(m, 0n), m, AN.an.add_zero(m)) : {1n+_ == 1n+m : Nat}
+  %Equal.sym(Nat, Nat.add(m, 1n), 1n+Nat.add(m, 0n), UL.nat_add_succ(m, 0n)) : {_ == 1n+m : Nat}
+  %Equal.sym(Nat, Nat.add(m, 0n), m, UL.nat_add_zero(m)) : {1n+_ == 1n+m : Nat}
   {==}
 
 # the contents as written (the complement of the digits' octets)

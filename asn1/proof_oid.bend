@@ -12,6 +12,10 @@ import ./proof_list.bend as AL
 import ./proof_u32.bend as AU
 import ./proof_num.bend as PN
 import ./proof_enc.bend as PE
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def po.b128_ne(+s: Nat) -> {Nat.is_le(1n, List.length(&2, U32, Nu.a1.b128(s))) == True{} : Bool}:
   %Equal.sym(Nat, List.length(&2, U32, Nu.a1.enc128(Nu.a1.digits(128n, s))), List.length(&2, Nat, Nu.a1.digits(128n, s)), PN.pn.len_enc128(Nu.a1.digits(128n, s))) : {Nat.is_le(1n, _) == True{} : Bool}
@@ -40,7 +44,7 @@ def po.read(ss: List<&2, Nat>, f: Nat, +hne: {Nat.is_le(1n, List.length(&2, Nat,
               +lb = List.length(&2, U32, Nu.a1.b128(s))
               +lt = List.length(&2, U32, O.a1.oid.subids(Nil{}))
               +hlen = Equal.trans(Bool, Nat.is_le(Nat.add(lb, lt), 0n), Nat.is_le(List.length(&2, U32, O.a1.oid.subids(Con{s, Nil{}})), 0n), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, 0n), Nat.add(lb, lt), List.length(&2, U32, O.a1.oid.subids(Con{s, Nil{}})), Equal.sym(Nat, List.length(&2, U32, O.a1.oid.subids(Con{s, Nil{}})), Nat.add(lb, lt), po.len_subids(s, Nil{}))), hf)
-              +h1 = AN.an.le_trans(1n, lb, 0n, po.b128_ne(s), AN.an.le_trans(lb, Nat.add(lb, lt), 0n, AN.an.le_add(lb, lt), hlen))
+              +h1 = UO.nat_le_trans(1n, lb, 0n, po.b128_ne(s), UO.nat_le_trans(lb, Nat.add(lb, lt), 0n, UO.nat_le_add_r(lb, lt), hlen))
               Empty.absurd({O.a1.oid.read(0n, Nu.a1.r128(O.a1.oid.subids(Con{s, Nil{}}), True{}, Nu.a1.max_octets(), 0n)) == Some{Con{s, Nil{}}} : Maybe<&2, List<&2, Nat>>}, AN.an.ft(h1))
             case 1n+ +g:
               +bs = Nu.a1.b128(s)
@@ -53,7 +57,7 @@ def po.read(ss: List<&2, Nat>, f: Nat, +hne: {Nat.is_le(1n, List.length(&2, Nat,
               +lb = List.length(&2, U32, Nu.a1.b128(s))
               +lt = List.length(&2, U32, O.a1.oid.subids(Con{s2, r2}))
               +hlen = Equal.trans(Bool, Nat.is_le(Nat.add(lb, lt), 0n), Nat.is_le(List.length(&2, U32, O.a1.oid.subids(Con{s, Con{s2, r2}})), 0n), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, 0n), Nat.add(lb, lt), List.length(&2, U32, O.a1.oid.subids(Con{s, Con{s2, r2}})), Equal.sym(Nat, List.length(&2, U32, O.a1.oid.subids(Con{s, Con{s2, r2}})), Nat.add(lb, lt), po.len_subids(s, Con{s2, r2}))), hf)
-              +h1 = AN.an.le_trans(1n, lb, 0n, po.b128_ne(s), AN.an.le_trans(lb, Nat.add(lb, lt), 0n, AN.an.le_add(lb, lt), hlen))
+              +h1 = UO.nat_le_trans(1n, lb, 0n, po.b128_ne(s), UO.nat_le_trans(lb, Nat.add(lb, lt), 0n, UO.nat_le_add_r(lb, lt), hlen))
               Empty.absurd({O.a1.oid.read(0n, Nu.a1.r128(O.a1.oid.subids(Con{s, Con{s2, r2}}), True{}, Nu.a1.max_octets(), 0n)) == Some{Con{s, Con{s2, r2}}} : Maybe<&2, List<&2, Nat>>}, AN.an.ft(h1))
             case 1n+ +g:
               +rest2 : List<&2, Nat> = Con{s2, r2}
@@ -63,10 +67,10 @@ def po.read(ss: List<&2, Nat>, f: Nat, +hne: {Nat.is_le(1n, List.length(&2, Nat,
               +lt = List.length(&2, U32, tl)
               +want : Maybe<&2, List<&2, Nat>> = Some{Con{s, rest2}}
               +hlen = Equal.trans(Bool, Nat.is_le(Nat.add(lb, lt), 1n+g), Nat.is_le(List.length(&2, U32, O.a1.oid.subids(Con{s, rest2})), 1n+g), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, 1n+g), Nat.add(lb, lt), List.length(&2, U32, O.a1.oid.subids(Con{s, rest2})), Equal.sym(Nat, List.length(&2, U32, O.a1.oid.subids(Con{s, rest2})), Nat.add(lb, lt), po.len_subids(s, rest2))), hf)
-              +hg = AN.an.lt_succ_le(lt, g, AN.an.lt_le_trans(lt, Nat.add(lb, lt), 1n+g, PE.pe.lt_plus(lb, lt, lt, po.b128_ne(s), AN.an.le_refl(lt)), hlen))
+              +hg = AN.an.lt_succ_le(lt, g, UO.nat_lt_le_trans(lt, Nat.add(lb, lt), 1n+g, PE.pe.lt_plus(lb, lt, lt, po.b128_ne(s), UL.nat_le_refl(lt)), hlen))
               +l2 = List.length(&2, U32, Nu.a1.b128(s2))
               +l3 = List.length(&2, U32, O.a1.oid.subids(r2))
-              +htl = Equal.trans(Bool, Nat.is_le(1n, lt), Nat.is_le(1n, Nat.add(l2, l3)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n, z), lt, Nat.add(l2, l3), po.len_subids(s2, r2)), AN.an.le_trans(1n, l2, Nat.add(l2, l3), po.b128_ne(s2), AN.an.le_add(l2, l3)))
+              +htl = Equal.trans(Bool, Nat.is_le(1n, lt), Nat.is_le(1n, Nat.add(l2, l3)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(1n, z), lt, Nat.add(l2, l3), po.len_subids(s2, r2)), UO.nat_le_trans(1n, l2, Nat.add(l2, l3), po.b128_ne(s2), UO.nat_le_add_r(l2, l3)))
               +more = O.a1.oid.read(g, Nu.a1.r128(tl, True{}, Nu.a1.max_octets(), 0n))
               %Equal.sym(Maybe<&2, Nu.A1Num>, Nu.a1.r128(List.append(&2, U32, bs, tl), True{}, Nu.a1.max_octets(), 0n), Some{Nu.A1Num{s, bs, tl}}, PN.pn.r128_b128(s, tl, 6n, AN.an.and_l(Nat.is_le(List.length(&2, U32, Nu.a1.b128(s)), 6n), O.a1.oid.small(rest2), hsm))) : {O.a1.oid.read(1n+g, _) == want : Maybe<&2, List<&2, Nat>>}
               %Equal.sym(Bool, Nu.a1.leq(bs, bs), True{}, AU.au.leq_refl(bs)) : {O.a1.oid.one(_, s, tl, more) == want : Maybe<&2, List<&2, Nat>>}
@@ -135,7 +139,7 @@ def po.rt(ok: Bool, arcs: List<&2, Nat>, -o: B.Octets, +hv: {O.Asn1.oid_valid(ar
           +sb = O.a1.oid.subids(ss)
           %Equal.cong(Result<&2, &2, E.Asn1Error, B.Octets>, B.Octets, z => po.od(z), Done{B.Octets.of_list(sb)}, Done{o}, e) : {O.Asn1.oid_of_content(_) == Done{Con{x, Con{y, rest}}} : Result<&2, &2, E.Asn1Error, List<&2, Nat>>}
           %Equal.trans(List<&2, U32>, sb, B.mask(sb), B.Octets.to_list(B.Octets.of_list(sb)), Equal.sym(List<&2, U32>, B.mask(sb), sb, po.fix_subids(ss)), Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(sb)), B.mask(sb), AL.al.to_of(sb))) : {O.a1.oid.arcs(O.a1.oid.read(List.length(&2, U32, _), Nu.a1.r128(_, True{}, Nu.a1.max_octets(), 0n))) == Done{Con{x, Con{y, rest}}} : Result<&2, &2, E.Asn1Error, List<&2, Nat>>}
-          %Equal.sym(Maybe<&2, List<&2, Nat>>, O.a1.oid.read(List.length(&2, U32, sb), Nu.a1.r128(sb, True{}, Nu.a1.max_octets(), 0n)), Some{ss}, po.read(ss, List.length(&2, U32, sb), AN.an.le_zero(List.length(&2, Nat, rest)), AN.an.le_refl(List.length(&2, U32, sb)), hsm)) : {O.a1.oid.arcs(_) == Done{Con{x, Con{y, rest}}} : Result<&2, &2, E.Asn1Error, List<&2, Nat>>}
+          %Equal.sym(Maybe<&2, List<&2, Nat>>, O.a1.oid.read(List.length(&2, U32, sb), Nu.a1.r128(sb, True{}, Nu.a1.max_octets(), 0n)), Some{ss}, po.read(ss, List.length(&2, U32, sb), AN.an.le_zero(List.length(&2, Nat, rest)), UL.nat_le_refl(List.length(&2, U32, sb)), hsm)) : {O.a1.oid.arcs(_) == Done{Con{x, Con{y, rest}}} : Result<&2, &2, E.Asn1Error, List<&2, Nat>>}
           po.split(x, y, rest, hva)
         case Con{x, Nil{}}:
           Empty.absurd({O.Asn1.oid_of_content(o) == Done{Con{x, Nil{}}} : Result<&2, &2, E.Asn1Error, List<&2, Nat>>}, AN.an.ft(hv))

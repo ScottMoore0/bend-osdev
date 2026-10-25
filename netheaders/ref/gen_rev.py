@@ -535,6 +535,8 @@ import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./netheaders.bend as N
 import ./checksum.bend as K
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 import ./ipv4.bend as I4
 import ./ipv6.bend as I6
 import ./icmp.bend as C
@@ -572,10 +574,10 @@ def rs.min_le_r(n: Nat, +m: Nat) -> {{Nat.is_le(Nat.min(n, m), m) == True{{}} : 
 
 # k bytes in the first n of o: k <= n and k <= len(o)
 def rs.take_ge_n(+k: Nat, +n: Nat, +o: B.Octets, +h: {le("k", "B.Octets.len(B.Octets.take(n, o))")}) -> {le("k", "n")}:
-  S.os.le_trans(k, Nat.min(n, B.Octets.len(o)), n, Equal.trans(Bool, Nat.is_le(k, Nat.min(n, B.Octets.len(o))), Nat.is_le(k, B.Octets.len(B.Octets.take(n, o))), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.min(n, B.Octets.len(o)), B.Octets.len(B.Octets.take(n, o)), Equal.sym(Nat, B.Octets.len(B.Octets.take(n, o)), Nat.min(n, B.Octets.len(o)), BL.octets_len_take(n, o))), h), rs.min_le(n, B.Octets.len(o)))
+  UO.nat_le_trans(k, Nat.min(n, B.Octets.len(o)), n, Equal.trans(Bool, Nat.is_le(k, Nat.min(n, B.Octets.len(o))), Nat.is_le(k, B.Octets.len(B.Octets.take(n, o))), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.min(n, B.Octets.len(o)), B.Octets.len(B.Octets.take(n, o)), Equal.sym(Nat, B.Octets.len(B.Octets.take(n, o)), Nat.min(n, B.Octets.len(o)), BL.octets_len_take(n, o))), h), rs.min_le(n, B.Octets.len(o)))
 
 def rs.take_ge_o(+k: Nat, +n: Nat, +o: B.Octets, +h: {le("k", "B.Octets.len(B.Octets.take(n, o))")}) -> {le("k", "B.Octets.len(o)")}:
-  S.os.le_trans(k, Nat.min(n, B.Octets.len(o)), B.Octets.len(o), Equal.trans(Bool, Nat.is_le(k, Nat.min(n, B.Octets.len(o))), Nat.is_le(k, B.Octets.len(B.Octets.take(n, o))), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.min(n, B.Octets.len(o)), B.Octets.len(B.Octets.take(n, o)), Equal.sym(Nat, B.Octets.len(B.Octets.take(n, o)), Nat.min(n, B.Octets.len(o)), BL.octets_len_take(n, o))), h), rs.min_le_r(n, B.Octets.len(o)))
+  UO.nat_le_trans(k, Nat.min(n, B.Octets.len(o)), B.Octets.len(o), Equal.trans(Bool, Nat.is_le(k, Nat.min(n, B.Octets.len(o))), Nat.is_le(k, B.Octets.len(B.Octets.take(n, o))), True{{}}, Equal.cong(Nat, Bool, z => Nat.is_le(k, z), Nat.min(n, B.Octets.len(o)), B.Octets.len(B.Octets.take(n, o)), Equal.sym(Nat, B.Octets.len(B.Octets.take(n, o)), Nat.min(n, B.Octets.len(o)), BL.octets_len_take(n, o))), h), rs.min_le_r(n, B.Octets.len(o)))
 
 # k bytes in the built header, the header the first bytes of o: k <= len(o)
 def rs.built_ge(+k: Nat, +n: Nat, +b: B.Octets, +o: B.Octets, +er: {{b == B.Octets.take(n, o) : B.Octets}}, +h: {le("k", "B.Octets.len(b)")}) -> {le("k", "B.Octets.len(o)")}:
@@ -612,9 +614,6 @@ def rs.{nm}_lb(+h: {ty}) -> {le(k, f"B.Octets.len({ty}.build(h))")}:
   rs.{nm}_lb.m(h)
 """)
 q(f"""
-def rs.lower(+a: Nat, +b: Nat, +n: Nat, +h1: {le("a", "b")}, +h2: {le("b", "n")}) -> {le("a", "n")}:
-  S.os.le_trans(a, b, n, h1, h2)
-
 # a bytes string is its first n bytes and the rest
 def rs.rejoin(+b: B.Octets, +n: Nat, +o: B.Octets, +er: {{b == B.Octets.take(n, o) : B.Octets}}) -> {{B.Octets.append(b, B.Octets.drop(n, o)) == o : B.Octets}}:
   %Equal.sym(B.Octets, b, B.Octets.take(n, o), er) : {{B.Octets.append(_, B.Octets.drop(n, o)) == o : B.Octets}}
@@ -659,11 +658,11 @@ COMA = "f0, fc, r2, e2"
 q(f"""
 # the field is not d: CC is c
 def rs.nz.ne({DPAR}, +pseudo: B.Octets, +o: B.Octets, +c: U32, {COM}, +hne: {{Nat.is_eq({VC}, d) == False{{}} : Bool}}) -> {{{CC} == c : U32}}:
-  UL.u32_value_eq({CC}, c, S.os.add_cancel_r({VCC}, {VC}, {VS0}, Equal.trans(Nat, Nat.add({VCC}, {VS0}), d, Nat.add({VC}, {VS0}), e2, Equal.trans(Nat, d, Nat.add({VS0}, {VC}), Nat.add({VC}, {VS0}), Equal.sym(Nat, Nat.add({VS0}, {VC}), d, S.os.rep_eq_d(d, hd, {VS0}, {VC}, f0, fc, hne, r2)), S.os.add_comm({VS0}, {VC})))))
+  UL.u32_value_eq({CC}, c, S.os.add_cancel_r({VCC}, {VC}, {VS0}, Equal.trans(Nat, Nat.add({VCC}, {VS0}), d, Nat.add({VC}, {VS0}), e2, Equal.trans(Nat, d, Nat.add({VS0}, {VC}), Nat.add({VC}, {VS0}), Equal.sym(Nat, Nat.add({VS0}, {VC}), d, S.os.rep_eq_d(d, hd, {VS0}, {VC}, f0, fc, hne, r2)), UL.nat_add_comm({VS0}, {VC})))))
 
 # the field is d and the sum without it 0: CC is d, which is c
 def rs.nz.s0z({DPAR}, +pseudo: B.Octets, +o: B.Octets, +c: U32, {COM}, +es: {{{VS0} == 0n : Nat}}, +ecd: {{{VC} == d : Nat}}, +ez: {{U32.is_eq({CC}, 0) == False{{}} : Bool}}) -> {{{CC} == c : U32}}:
-  UL.u32_value_eq({CC}, c, Equal.trans(Nat, {VCC}, d, {VC}, Equal.trans(Nat, {VCC}, Nat.add({VCC}, 0n), d, Equal.sym(Nat, Nat.add({VCC}, 0n), {VCC}, S.os.add_zero({VCC})), Equal.trans(Nat, Nat.add({VCC}, 0n), Nat.add({VCC}, {VS0}), d, Equal.cong(Nat, Nat, z => Nat.add({VCC}, z), 0n, {VS0}, Equal.sym(Nat, {VS0}, 0n, es)), e2)), Equal.sym(Nat, {VC}, d, ecd)))
+  UL.u32_value_eq({CC}, c, Equal.trans(Nat, {VCC}, d, {VC}, Equal.trans(Nat, {VCC}, Nat.add({VCC}, 0n), d, Equal.sym(Nat, Nat.add({VCC}, 0n), {VCC}, UL.nat_add_zero({VCC})), Equal.trans(Nat, Nat.add({VCC}, 0n), Nat.add({VCC}, {VS0}), d, Equal.cong(Nat, Nat, z => Nat.add({VCC}, z), 0n, {VS0}, Equal.sym(Nat, {VS0}, 0n, es)), e2)), Equal.sym(Nat, {VC}, d, ecd)))
 
 # the field is d and the sum without it not 0: then it is d, CC is 0
 def rs.nz.s0p(+p: Nat, {DPAR}, +pseudo: B.Octets, +o: B.Octets, +c: U32, {COM}, +es: {{{VS0} == 1n+p : Nat}}, +ecd: {{{VC} == d : Nat}}, +ez: {{U32.is_eq({CC}, 0) == False{{}} : Bool}}) -> {{{CC} == c : U32}}:
@@ -690,7 +689,7 @@ def rs.nz.t({DPAR}, +pseudo: B.Octets, +o: B.Octets, +c: U32, {COM}, +ez: {{U32.
   +ec0 = S.os.nat_eq({VCC}, {v("0")}, Equal.trans(Bool, Nat.is_eq({VCC}, {v("0")}), U32.is_eq({CC}, 0), True{{}}, Equal.sym(Bool, U32.is_eq({CC}, 0), Nat.is_eq({VCC}, {v("0")}), UL.u32_eq_value({CC}, 0)), ez))
   +ed = Equal.trans(Nat, {VS0}, Nat.add({VCC}, {VS0}), d, Equal.cong(Nat, Nat, z => Nat.add(z, {VS0}), 0n, {VCC}, Equal.sym(Nat, {VCC}, 0n, ec0)), e2)
   +h1 = rs.ne0({VC}, Equal.trans(Bool, Nat.is_eq({VC}, 0n), U32.is_eq(c, 0), False{{}}, Equal.sym(Bool, U32.is_eq(c, 0), Nat.is_eq({VC}, {v("0")}), UL.u32_eq_value(c, 0)), hk0))
-  +ecd = Equal.trans(Nat, {VC}, S.os.rep(d, {VC}), d, Equal.sym(Nat, S.os.rep(d, {VC}), {VC}, S.os.rep_small(d, {VC}, fc)), Equal.trans(Nat, S.os.rep(d, {VC}), S.os.rep(d, Nat.add({VC}, d)), d, Equal.sym(Nat, S.os.rep(d, Nat.add({VC}, d)), S.os.rep(d, {VC}), S.os.rep_period(d, {VC}, hd, h1)), Equal.trans(Nat, S.os.rep(d, Nat.add({VC}, d)), S.os.rep(d, Nat.add({VS0}, {VC})), d, Equal.cong(Nat, Nat, z => S.os.rep(d, z), Nat.add({VC}, d), Nat.add({VS0}, {VC}), Equal.trans(Nat, Nat.add({VC}, d), Nat.add(d, {VC}), Nat.add({VS0}, {VC}), S.os.add_comm({VC}, d), Equal.cong(Nat, Nat, z => Nat.add(z, {VC}), d, {VS0}, Equal.sym(Nat, {VS0}, d, ed)))), r2)))
+  +ecd = Equal.trans(Nat, {VC}, S.os.rep(d, {VC}), d, Equal.sym(Nat, S.os.rep(d, {VC}), {VC}, S.os.rep_small(d, {VC}, fc)), Equal.trans(Nat, S.os.rep(d, {VC}), S.os.rep(d, Nat.add({VC}, d)), d, Equal.sym(Nat, S.os.rep(d, Nat.add({VC}, d)), S.os.rep(d, {VC}), S.os.rep_period(d, {VC}, hd, h1)), Equal.trans(Nat, S.os.rep(d, Nat.add({VC}, d)), S.os.rep(d, Nat.add({VS0}, {VC})), d, Equal.cong(Nat, Nat, z => S.os.rep(d, z), Nat.add({VC}, d), Nat.add({VS0}, {VC}), Equal.trans(Nat, Nat.add({VC}, d), Nat.add(d, {VC}), Nat.add({VS0}, {VC}), UL.nat_add_comm({VC}, d), Equal.cong(Nat, Nat, z => Nat.add(z, {VC}), d, {VS0}, Equal.sym(Nat, {VS0}, d, ed)))), r2)))
   UL.u32_value_eq(c, 65535, Equal.trans(Nat, {VC}, d, {v("65535")}, ecd, Equal.sym(Nat, {v("65535")}, d, hE)))
 
 def rs.nz.go(z: Bool, {DPAR}, +pseudo: B.Octets, +o: B.Octets, +c: U32, {COM}, +ez: {{U32.is_eq({CC}, 0) == z : Bool}}, +es: {{K.inet_put16(o, 6n, c) == o : B.Octets}}, +hk0: {{U32.is_eq(c, 0) == False{{}} : Bool}}) -> {{K.inet_put16(o, 6n, U.UdpHeader.nonzero.go(z, {CC})) == o : B.Octets}}:
@@ -739,11 +738,11 @@ def Laws.ipv4_reverse_checksum(o, h, c, e, hc, hk):
   +ev = rs.pv_verify(I4.Ipv4Header.parse(o), o, h, e)
   +er = RL.ipv4_reverse(o, h, ep)
   +l20 = rs.ipv4_lb(h)
-  +hn = rs.built_ge_n(Nat.add(10n, 2n), I4.Ipv4Header.length(h), {B4}, o, er, rs.lower(Nat.add(10n, 2n), 20n, B.Octets.len({B4}), {{==}}, l20))
+  +hn = rs.built_ge_n(Nat.add(10n, 2n), I4.Ipv4Header.length(h), {B4}, o, er, UO.nat_le_trans(Nat.add(10n, 2n), 20n, B.Octets.len({B4}), {{==}}, l20))
   +hcB = Equal.trans(Maybe<&2, U32>, B.Octets.be16_at({B4}, 10n), B.Octets.be16_at({TK4}, 10n), Some{{c}}, Equal.cong(B.Octets, Maybe<&2, U32>, z => B.Octets.be16_at(z, 10n), {B4}, {TK4}, er), Equal.trans(Maybe<&2, U32>, B.Octets.be16_at({TK4}, 10n), B.Octets.be16_at(o, 10n), Some{{c}}, BL.octets_be16_at_take(I4.Ipv4Header.length(h), o, 10n, hn), hc))
   +hvB = Equal.trans(Bool, K.inet_verify(B.Octets.append({EMP}, {B4})), K.inet_verify({TK4}), True{{}}, Equal.cong(B.Octets, Bool, z => K.inet_verify(z), B.Octets.append({EMP}, {B4}), {TK4}, Equal.trans(B.Octets, B.Octets.append({EMP}, {B4}), {B4}, {TK4}, BL.octets_append_empty_l({B4}), er)), ev)
   %er : {{I4.Ipv4Header.build_checksum(h) == _ : B.Octets}}
-  S.os.fill_self({DA4}, {EMP}, {B4}, 10n, c, {{==}}, S.os.even_take({B4}, 5n, rs.lower(Nat.double(5n), 20n, B.Octets.len({B4}), {{==}}, l20)), hcB, rs.lower(Nat.add(10n, 2n), 20n, B.Octets.len({B4}), {{==}}, l20), hvB, hk)
+  S.os.fill_self({DA4}, {EMP}, {B4}, 10n, c, {{==}}, S.os.even_take({B4}, 5n, UO.nat_le_trans(Nat.double(5n), 20n, B.Octets.len({B4}), {{==}}, l20)), hcB, UO.nat_le_trans(Nat.add(10n, 2n), 20n, B.Octets.len({B4}), {{==}}, l20), hvB, hk)
 """)
 BI = "C.IcmpHeader.build(h)"
 q(f"""
@@ -751,7 +750,7 @@ def Laws.icmp_reverse_checksum(o, h, c, e, ev, hc, hk):
   +er = RL.icmp_reverse(o, h, e)
   +l8 = rs.built_ge(8n, 8n, {BI}, o, er, rs.icmp_lb(h))
   %Equal.sym(B.Octets, B.Octets.append({BI}, B.Octets.drop(8n, o)), o, rs.rejoin({BI}, 8n, o, er)) : {{K.inet_fill({EMP}, _, 2n) == o : B.Octets}}
-  S.os.fill_self({DA4}, {EMP}, o, 2n, c, {{==}}, S.os.even_take(o, 1n, rs.lower(Nat.double(1n), 8n, B.Octets.len(o), {{==}}, l8)), hc, rs.lower(Nat.add(2n, 2n), 8n, B.Octets.len(o), {{==}}, l8), Equal.trans(Bool, K.inet_verify(B.Octets.append({EMP}, o)), K.inet_verify(o), True{{}}, Equal.cong(B.Octets, Bool, z => K.inet_verify(z), B.Octets.append({EMP}, o), o, BL.octets_append_empty_l(o)), ev), hk)
+  S.os.fill_self({DA4}, {EMP}, o, 2n, c, {{==}}, S.os.even_take(o, 1n, UO.nat_le_trans(Nat.double(1n), 8n, B.Octets.len(o), {{==}}, l8)), hc, UO.nat_le_trans(Nat.add(2n, 2n), 8n, B.Octets.len(o), {{==}}, l8), Equal.trans(Bool, K.inet_verify(B.Octets.append({EMP}, o)), K.inet_verify(o), True{{}}, Equal.cong(B.Octets, Bool, z => K.inet_verify(z), B.Octets.append({EMP}, o), o, BL.octets_append_empty_l(o)), ev), hk)
 """)
 BU = "U.UdpHeader.build(h)"
 for fam, PS, ver_go in [("4", "I4.ipv4_pseudo(src, dst, 17, N.net.len32(dg))", "4"), ("6", "I6.ipv6_pseudo(src, dst, N.net.len32(dg), 17)", "6")]:
@@ -773,7 +772,7 @@ def Laws.udp_ipv{fam}_reverse_checksum({args}):
   +er = RL.udp_reverse(dg, h, e)
   +l8 = rs.built_ge(8n, 8n, {BU}, dg, er, rs.udp_lb(h))
 {pre}  %Equal.sym(B.Octets, B.Octets.append({BU}, B.Octets.drop(8n, dg)), dg, rs.rejoin({BU}, 8n, dg, er)) : {{U.UdpHeader.fill({PSX.replace("_", "_")}, _) == dg : B.Octets}}
-  rs.fillnz_self({DA4}, {PS}, dg, c, {EVP}, S.os.even_take(dg, 3n, rs.lower(Nat.double(3n), 8n, B.Octets.len(dg), {{==}}, l8)), hc, rs.lower(Nat.add(6n, 2n), 8n, B.Octets.len(dg), {{==}}, l8), {sz}, {hk_expr})
+  rs.fillnz_self({DA4}, {PS}, dg, c, {EVP}, S.os.even_take(dg, 3n, UO.nat_le_trans(Nat.double(3n), 8n, B.Octets.len(dg), {{==}}, l8)), hc, UO.nat_le_trans(Nat.add(6n, 2n), 8n, B.Octets.len(dg), {{==}}, l8), {sz}, {hk_expr})
 """)
 BT = "T.TcpHeader.build(h)"
 for fam, PS in [("4", "I4.ipv4_pseudo(src, dst, 6, N.net.len32(seg))"), ("6", "I6.ipv6_pseudo(src, dst, N.net.len32(seg), 6)")]:
@@ -785,7 +784,7 @@ def Laws.tcp_ipv{fam}_reverse_checksum(src, dst, seg, h, c, e, ev, hc, hk):
   +er = RL.tcp_reverse(seg, h, e)
   +l20 = rs.built_ge(20n, T.TcpHeader.length(h), {BT}, seg, er, rs.tcp_lb(h))
   %Equal.sym(B.Octets, B.Octets.append({BT}, B.Octets.drop(T.TcpHeader.length(h), seg)), seg, rs.rejoin({BT}, T.TcpHeader.length(h), seg, er)) : {{K.inet_fill({PSX}, _, 16n) == seg : B.Octets}}
-  S.os.fill_self({DA4}, {PS}, seg, 16n, c, {EVP}, S.os.even_take(seg, 8n, rs.lower(Nat.double(8n), 20n, B.Octets.len(seg), {{==}}, l20)), hc, rs.lower(Nat.add(16n, 2n), 20n, B.Octets.len(seg), {{==}}, l20), ev, hk)
+  S.os.fill_self({DA4}, {PS}, seg, 16n, c, {EVP}, S.os.even_take(seg, 8n, UO.nat_le_trans(Nat.double(8n), 20n, B.Octets.len(seg), {{==}}, l20)), hc, UO.nat_le_trans(Nat.add(16n, 2n), 20n, B.Octets.len(seg), {{==}}, l20), ev, hk)
 """)
 
 out = "".join(P).rstrip() + chr(10)

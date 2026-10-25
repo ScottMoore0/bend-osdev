@@ -24,14 +24,18 @@ the operations are the `Nat` ones modulo 2^n.
 The proofs generalise the private lemmas that bend-osdev-algo
 (`proof_u32.bend`: subtraction, addition, increment and halving when
 nothing wraps) and bend-osdev-array (`PROOF.bend`: comparison as the value
-order) proved for their own use.
+order) proved for their own use; the order laws are those bend-osdev-maple,
+-timerqueue and -itree proved, and the division laws those of
+bend-osdev-ext2, -iodev and -blockdev.
 
 ## Files
 
 | File | Holds |
 |---|---|
 | `u32.bend` | `U32Nat.dbl`, `U32Nat.bit`, `U32Nat.half`, `U32Nat.odd`, `U32Nat.low`, `U32Nat.high`, `U32Word.mask` |
-| `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS.bend`, `PROOF.bend` | the laws of the words' values and of the `Nat` arithmetic, and their proofs |
+| `LAWS_order.bend`, `PROOF_order.bend` | the order of `Nat`, `Word(n)` and `U32` (transitivity, reflexivity, antisymmetry), and its proofs |
+| `LAWS_div.bend`, `PROOF_div.bend` | Base's `Nat` division by a divisor `1 + bp`, and its proofs |
 | `gen/proof.py` | writes the part of `PROOF.bend` after its marker line (the proofs of the `Nat` library, multiplication, division, the bits and the shifts by k) |
 | `check.bend` | the laws' two sides computed at run time, with the expected output |
 
@@ -114,6 +118,34 @@ order) proved for their own use.
 * **Shifts by k bits:** right, the bits from k up (`u32_shrn_value`);
   left, the low 32 bits of the value times 2^k (`u32_shln_low`).
 
+`LAWS_order.bend`, all proved in `PROOF_order.bend`:
+
+* **`Nat` order:** `nat_le_trans`, `nat_lt_trans`, `nat_lt_le_trans`,
+  `nat_le_lt_trans`, and x <= x + w (`nat_le_add_r`).
+* **`Word(n)`, every width:** `Word.cmp` is reflexive (`word_cmp_refl`),
+  equal words are the only ones that compare `EQ` (`word_cmp_eq`), and `LT`
+  is transitive (`word_cmp_lt_trans`).
+* **`U32`:** the same for `U32.cmp` (`u32_cmp_refl`, `u32_cmp_eq`,
+  `u32_cmp_lt_trans`); and for `U32.is_lt` and `U32.is_le`: `u32_le_refl`,
+  `u32_lt_irrefl`, `u32_lt_le` (less is at most), the four transitivities
+  (`u32_lt_trans`, `u32_le_trans`, `u32_lt_le_trans`, `u32_le_lt_trans`),
+  `u32_le_antisym`, and the negations (`u32_not_lt`: not a < b gives
+  b <= a; `u32_not_le`: not a <= b gives b < a; `u32_lt_not_le`,
+  `u32_le_not_lt`).
+
+`LAWS_div.bend`, all proved in `PROOF_div.bend`, for every divisor
+`1n+bp`: the quotient and remainder recompose the dividend
+(`nat_div_mod`), the remainder is below the divisor (`nat_mod_lt`), a
+dividend g (1 + bp) + i with i below the divisor has quotient g and
+remainder i (`nat_divmod_exact`), and rounding a up to a multiple of the
+divisor adds (1 + bp - 1) - (a + bp) mod (1 + bp) (`nat_round_up`). These
+are the facts about Base's `Nat.div` and `Nat.mod` themselves; `u32_divmod`
+and `nat_div_unique` above are about `U32.div` and about any quotient.
+
+A proof elsewhere imports the pair that holds the law it uses (`LAWS.bend`
+with `PROOF.bend`, `LAWS_order.bend` with `PROOF_order.bend`, `LAWS_div.bend`
+with `PROOF_div.bend`).
+
 ### Stating the bounds
 
 A bound such as "no wrap" is stated as "no more than a word's value"
@@ -148,7 +180,8 @@ the operations are Base's own, and their values are what the laws prove.
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (108 laws), `--verdict` ALL
-PROOFS CHECK (about 1 s, peak 0.25 GB), `check.bend` passes,
-`scripts/deps.sh u32` ok. `PROOF.bend` is about 300 KB, of which
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (108 laws), `PROOF_order.bend`
+(23 laws) and `PROOF_div.bend` (4 laws) ALL PROOFS CHECK, `--verdict` ALL
+PROOFS CHECK on each (the three together about 4 s, peak 0.28 GB),
+`check.bend` passes, `scripts/deps.sh u32` ok. `PROOF.bend` is about 300 KB, of which
 `gen/proof.py` writes all but the first 34 laws' proofs.

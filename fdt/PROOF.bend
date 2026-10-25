@@ -17,6 +17,8 @@ import ../bytes/PROOF.bend as BP
 import ../word64/LAWS.bend as WL
 import ../word64/PROOF.bend as WP
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Lemmas are mostly stated as {value == expression}, the direction a rewrite
 # needs: %e : P replaces the expression (marked _ in P) by the value.
@@ -208,14 +210,6 @@ def add_succ_r(+x: Nat, +a: Nat) -> {1n+Nat.add(x, a) == Nat.add(x, 1n+a) : Nat}
       %add_succ_r(p, a) : {1n+1n+Nat.add(p, a) == 1n+_ : Nat}
       {==}
 
-def add_zero_r(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_zero_r(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
 def and_true(+b: Bool) -> {Bool.and(b, True{}) == b : Bool}:
   match b:
     case True{}:
@@ -254,7 +248,7 @@ def hgo(+n: Nat, +a: Nat) -> {Nat.add(L.fdt.half(n), a) == L.fdt.half.go(n, a) :
 
 def half_fast(+n: Nat) -> {L.fdt.half(n) == L.fdt.half.fast(n) : Nat}:
   %hgo(n, 0n) : {L.fdt.half(n) == _ : Nat}
-  Equal.sym(Nat, Nat.add(L.fdt.half(n), 0n), L.fdt.half(n), add_zero_r(L.fdt.half(n)))
+  Equal.sym(Nat, Nat.add(L.fdt.half(n), 0n), L.fdt.half(n), UL.nat_add_zero(L.fdt.half(n)))
 
 def nbits_fast(+k: Nat, +n: Nat) -> {L.fdt.nbits(k, n) == L.fdt.nbits.fast(k, n) : Word(k)}:
   match k:
@@ -2304,7 +2298,7 @@ def add_lift(+m: Maybe<&2, Nat>, +kl: List<&2, U32>, +bytes: List<&2, U32>, +siz
       %BL.append_fast(bytes, B.append(kl, [0])) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse(&2, U32, _), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(_, I.nt.empty(), 0n)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
       %grev_app(U32, bytes, B.append(kl, [0]), Nil{}) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, _, Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(bytes, B.append(kl, [0])), I.nt.empty(), 0n)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
       %ins_app(bytes, B.append(kl, [0]), I.nt.empty(), 0n, et) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), _} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
-      %Equal.sym(Nat, Nat.add(B.len(bytes), 0n), B.len(bytes), add_zero_r(B.len(bytes))) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), _)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
+      %Equal.sym(Nat, Nat.add(B.len(bytes), 0n), B.len(bytes), UL.nat_add_zero(B.len(bytes))) : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), _)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
       %es : {T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse.go(&2, U32, bytes, Nil{})), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), _)} == T.FdtFlatX{Con{S.FdtTokProp{L.fdt.u32n(size), v}, toks}, List.reverse.go(&2, U32, B.append(kl, [0]), List.reverse(&2, U32, bytes)), Nat.add(size, B.len(B.append(kl, [0]))), I.dk.ins(B.append(kl, [0]), I.dk.ins(bytes, I.nt.empty(), 0n), size)} : T.FdtFlatX}
       {==}
 

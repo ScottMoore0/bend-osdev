@@ -333,6 +333,11 @@ in its rules: 100 checks of a path six components deep against 16 layers of
 1,001 rules each (1.6 million rule tests) took 3.9 s in 13.6 MB, about
 2.4 µs per rule, most of it the set union through Bool lists.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of the order of `Nat` and words
+(`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

@@ -96,6 +96,11 @@ cancel. `ref/run.sh` (140 cases with the default seed) compares `xor`,
 often unequal, lengths with Python's own bytes. Python has no `xor_blocks`,
 so that reference is the definition, written in `ref/gen.py`.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

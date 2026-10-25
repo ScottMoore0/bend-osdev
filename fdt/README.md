@@ -497,6 +497,11 @@ native build, see AGENTS.md, "Runtime and checker limits"):
 
 Sizes and offsets are `Nat`.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):

@@ -15,6 +15,8 @@ import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
 import ./gf.bend as G
 import ./tables.bend as T
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions and congruence
 
@@ -119,22 +121,6 @@ def gt.add_nat(+p: Nat, +q: Nat) -> {U32.add(U32.from_nat(p), U32.from_nat(q)) =
 
 # Nat facts
 
-def gt.add_zero_r(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 0n), p, gt.add_zero_r(p)) : {1n+_ == 1n+p : Nat}
-      {==}
-
-def gt.add_succ(+x: Nat, +y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+y), 1n+Nat.add(p, y), gt.add_succ(p, y)) : {1n+_ == 2n+Nat.add(p, y) : Nat}
-      {==}
-
 def gt.lt_succ_r(+x: Nat, +y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_lt(x, 1n+y) == True{} : Bool}:
   match x y:
     case 0n _:
@@ -190,7 +176,7 @@ def gt.log_go_lt(+n: Nat, hit: Bool, +f: G.Gf8Field, +a: U32, +cur: U32, +i: Nat
     case 0n False{}:
       {==}
     case 1n+k False{}:
-      %gt.add_succ(k, i) : {Nat.is_lt(G.Gf8.log.go(k, U32.is_eq(G.Gf8.mul(f, G.Gf8.gen(f), cur), a), f, a, G.Gf8.mul(f, G.Gf8.gen(f), cur), 1n+i), 1n+_) == True{} : Bool}
+      %UL.nat_add_succ(k, i) : {Nat.is_lt(G.Gf8.log.go(k, U32.is_eq(G.Gf8.mul(f, G.Gf8.gen(f), cur), a), f, a, G.Gf8.mul(f, G.Gf8.gen(f), cur), 1n+i), 1n+_) == True{} : Bool}
       gt.log_go_lt(k, U32.is_eq(G.Gf8.mul(f, G.Gf8.gen(f), cur), a), f, a, G.Gf8.mul(f, G.Gf8.gen(f), cur), 1n+i)
 
 def gt.log_lt(+f: G.Gf8Field, +a: U32) -> {Nat.is_lt(G.Gf8.log(f, a), 255n) == True{} : Bool}:
@@ -294,7 +280,7 @@ def gt.elist_nth(+n: Nat, +f: G.Gf8Field, +k: Nat, +j: Nat, h: {Nat.is_lt(j, n) 
     case 1n+m 0n:
       {==}
     case 1n+m 1n+i:
-      %gt.add_succ(i, k) : {A.Arrays.nth(U32, gt.elist(m, f, 1n+k), i, 0) == G.Gf8.exp(f, _) : U32}
+      %UL.nat_add_succ(i, k) : {A.Arrays.nth(U32, gt.elist(m, f, 1n+k), i, 0) == G.Gf8.exp(f, _) : U32}
       gt.elist_nth(m, f, 1n+k, i, h)
 
 # The log table, for a field whose log list is given
@@ -313,7 +299,7 @@ def gt.fl_split(+n: Nat, +m: Nat, xs: List<&2, U32>, +f: G.Gf8Field, +k: Nat) ->
     case 0n:
       {==}
     case 1n+j:
-      %gt.add_succ(j, k) : {gt.fl(Nat.add(j, m), List.set(&2, U32, xs, A.Arrays.index(8n, G.Gf8.exp(f, k)), U32.from_nat(k)), f, 1n+k) == gt.fl(m, gt.fl(j, List.set(&2, U32, xs, A.Arrays.index(8n, G.Gf8.exp(f, k)), U32.from_nat(k)), f, 1n+k), f, _) : List<&2, U32>}
+      %UL.nat_add_succ(j, k) : {gt.fl(Nat.add(j, m), List.set(&2, U32, xs, A.Arrays.index(8n, G.Gf8.exp(f, k)), U32.from_nat(k)), f, 1n+k) == gt.fl(m, gt.fl(j, List.set(&2, U32, xs, A.Arrays.index(8n, G.Gf8.exp(f, k)), U32.from_nat(k)), f, 1n+k), f, _) : List<&2, U32>}
       gt.fl_split(j, m, List.set(&2, U32, xs, A.Arrays.index(8n, G.Gf8.exp(f, k)), U32.from_nat(k)), f, 1n+k)
 
 # A table whose lists are known

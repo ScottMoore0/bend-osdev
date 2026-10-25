@@ -9,6 +9,8 @@ import ../ecc/ecc.bend as E
 import ../ecc/ecdsa.bend as S
 import ./ecrdsa.bend as G
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Small-parameter exhaustive laws
 
@@ -393,7 +395,7 @@ def rt.len_take(+c: E.EcCurve, +o: B.Octets, +h: {B.Octets.len(o) == Nat.mul(2n,
 def rt.len_drop(+c: E.EcCurve, +o: B.Octets, +h: {B.Octets.len(o) == Nat.mul(2n, E.EcCurve.field_len(c)) : Nat}) -> {B.Octets.len(B.Octets.drop(E.EcCurve.field_len(c), o)) == E.EcCurve.field_len(c) : Nat}:
   %Equal.sym(Nat, B.Octets.len(B.Octets.drop(E.EcCurve.field_len(c), o)), Nat.sub(B.Octets.len(o), E.EcCurve.field_len(c)), BL.octets_len_drop(E.EcCurve.field_len(c), o)) : {_ == E.EcCurve.field_len(c) : Nat}
   %Equal.sym(Nat, B.Octets.len(o), Nat.mul(2n, E.EcCurve.field_len(c)), h) : {Nat.sub(_, E.EcCurve.field_len(c)) == E.EcCurve.field_len(c) : Nat}
-  Equal.trans(Nat, Nat.sub(Nat.add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), E.EcCurve.field_len(c)), Nat.add(E.EcCurve.field_len(c), 0n), E.EcCurve.field_len(c), rt.sub_add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), BP.add_zero(E.EcCurve.field_len(c)))
+  Equal.trans(Nat, Nat.sub(Nat.add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), E.EcCurve.field_len(c)), Nat.add(E.EcCurve.field_len(c), 0n), E.EcCurve.field_len(c), rt.sub_add(E.EcCurve.field_len(c), Nat.add(E.EcCurve.field_len(c), 0n)), UL.nat_add_zero(E.EcCurve.field_len(c)))
 
 # reversing a list keeps its length, and commutes with masking
 def rt.rev_len(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {List.length(&2, U32, B.rev_onto(xs, acc)) == Nat.add(List.length(&2, U32, xs), List.length(&2, U32, acc)) : Nat}:
@@ -401,7 +403,7 @@ def rt.rev_len(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {List.length(&2, U32,
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.trans(Nat, List.length(&2, U32, B.rev_onto(t, Con{h, acc})), Nat.add(List.length(&2, U32, t), 1n+List.length(&2, U32, acc)), 1n+Nat.add(List.length(&2, U32, t), List.length(&2, U32, acc)), rt.rev_len(t, Con{h, acc}), BP.add_succ(List.length(&2, U32, t), List.length(&2, U32, acc)))
+      Equal.trans(Nat, List.length(&2, U32, B.rev_onto(t, Con{h, acc})), Nat.add(List.length(&2, U32, t), 1n+List.length(&2, U32, acc)), 1n+Nat.add(List.length(&2, U32, t), List.length(&2, U32, acc)), rt.rev_len(t, Con{h, acc}), UL.nat_add_succ(List.length(&2, U32, t), List.length(&2, U32, acc)))
 
 def rt.mask_rev(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {B.mask(B.rev_onto(xs, acc)) == B.rev_onto(B.mask(xs), B.mask(acc)) : List<&2, U32>}:
   match xs:
@@ -417,7 +419,7 @@ def rt.mask_list(+o: B.Octets) -> {B.mask(B.Octets.to_list(o)) == B.Octets.to_li
 def rt.len_rev(+xs: B.Octets) -> {B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))) == B.Octets.len(xs) : Nat}:
   Equal.trans(Nat, B.Octets.len(B.Octets.of_list(B.rev(B.Octets.to_list(xs)))), B.len(B.rev(B.Octets.to_list(xs))), B.Octets.len(xs), BL.octets_len_of_list(B.rev(B.Octets.to_list(xs))),
     Equal.trans(Nat, B.len(B.rev(B.Octets.to_list(xs))), Nat.add(B.len(B.Octets.to_list(xs)), 0n), B.Octets.len(xs), rt.rev_len(B.Octets.to_list(xs), Nil{}),
-      Equal.trans(Nat, Nat.add(B.len(B.Octets.to_list(xs)), 0n), B.len(B.Octets.to_list(xs)), B.Octets.len(xs), BP.add_zero(B.len(B.Octets.to_list(xs))), Equal.sym(Nat, B.Octets.len(xs), B.len(B.Octets.to_list(xs)), BL.octets_len_list(xs)))))
+      Equal.trans(Nat, Nat.add(B.len(B.Octets.to_list(xs)), 0n), B.len(B.Octets.to_list(xs)), B.Octets.len(xs), UL.nat_add_zero(B.len(B.Octets.to_list(xs))), Equal.sym(Nat, B.Octets.len(xs), B.len(B.Octets.to_list(xs)), BL.octets_len_list(xs)))))
 
 # l little-endian bytes, read as a number and written back to l bytes
 def rt.le_of_le(+xs: B.Octets, +l: Nat, +hl: {B.Octets.len(xs) == l : Nat}) -> {G.ecrdsa.le(G.ecrdsa.of_le(xs), l) == xs : B.Octets}:

@@ -22,6 +22,8 @@ import Base
 import ./itree.bend as T
 import ./proof_heights.bend as Hn
 import ./LAWS_balance.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Bool
 
@@ -66,22 +68,6 @@ def nat.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def nat.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      %nat.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nat.add_succ(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      %nat.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
 # p <= x and p <= y give p + p <= x + y
 def nat.le_add_self(+p: Nat, +x: Nat, +y: Nat, +ex: {Nat.is_le(p, x) == True{} : Bool}, +ey: {Nat.is_le(p, y) == True{} : Bool}) -> {Nat.is_le(Nat.add(p, p), Nat.add(x, y)) == True{} : Bool}:
   match p:
@@ -96,14 +82,14 @@ def nat.le_add_self(+p: Nat, +x: Nat, +y: Nat, +ex: {Nat.is_le(p, x) == True{} :
             case 0n:
               Empty.absurd({Nat.is_le(Nat.add(1n+q, 1n+q), Nat.add(1n+xp, 0n)) == True{} : Bool}, Hn.ab.ft(ey))
             case 1n+(+yp):
-              %Equal.sym(Nat, Nat.add(q, 1n+q), 1n+Nat.add(q, q), nat.add_succ(q, q)) : {Nat.is_le(1n+_, 1n+Nat.add(xp, 1n+yp)) == True{} : Bool}
-              %Equal.sym(Nat, Nat.add(xp, 1n+yp), 1n+Nat.add(xp, yp), nat.add_succ(xp, yp)) : {Nat.is_le(2n+Nat.add(q, q), 1n+_) == True{} : Bool}
+              %Equal.sym(Nat, Nat.add(q, 1n+q), 1n+Nat.add(q, q), UL.nat_add_succ(q, q)) : {Nat.is_le(1n+_, 1n+Nat.add(xp, 1n+yp)) == True{} : Bool}
+              %Equal.sym(Nat, Nat.add(xp, 1n+yp), 1n+Nat.add(xp, yp), UL.nat_add_succ(xp, yp)) : {Nat.is_le(2n+Nat.add(q, q), 1n+_) == True{} : Bool}
               nat.le_add_self(q, xp, yp, ex, ey)
 
 # p <= x + 1 and p <= y + 1 give 2p <= x + y + 2
 def nat.twice(+p: Nat, +x: Nat, +y: Nat, +ex: {Nat.is_le(p, 1n+x) == True{} : Bool}, +ey: {Nat.is_le(p, 1n+y) == True{} : Bool}) -> {Nat.is_le(Nat.mul(2n, p), 2n+Nat.add(x, y)) == True{} : Bool}:
-  %Equal.sym(Nat, Nat.add(p, 0n), p, nat.add_zero(p)) : {Nat.is_le(Nat.add(p, _), 2n+Nat.add(x, y)) == True{} : Bool}
-  %nat.add_succ(x, y) : {Nat.is_le(Nat.add(p, p), 1n+_) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(p, 0n), p, UL.nat_add_zero(p)) : {Nat.is_le(Nat.add(p, _), 2n+Nat.add(x, y)) == True{} : Bool}
+  %UL.nat_add_succ(x, y) : {Nat.is_le(Nat.add(p, p), 1n+_) == True{} : Bool}
   nat.le_add_self(p, 1n+x, 1n+y, ex, ey)
 
 # Trees

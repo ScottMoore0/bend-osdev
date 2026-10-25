@@ -98,6 +98,8 @@ def header():
     emit("import ../array/array.bend as A")
     emit("import ./proof_word.bend as PW")
     emit("import ./proof_engine.bend as PE")
+    emit("import ../u32/LAWS.bend as UL")
+    emit("import ../u32/PROOF.bend as UP")
     emit()
 
 
@@ -183,7 +185,7 @@ def gen_msb():
             bs[K] = tf(b)
             X = u32(bs)
             emit(" " * (i2 + 2) + f"case {X}:")
-            emit(" " * (i2 + 4) + f"%PW.cw.ua_comm(U32.shln(1, {K}n), {X}) : {{Bool.not(U32.is_eq(_, 0)) == PW.cw.bitk({K}n, {X}) : Bool}}")
+            emit(" " * (i2 + 4) + f"%UL.u32_and_comm(U32.shln(1, {K}n), {X}) : {{Bool.not(U32.is_eq(_, 0)) == PW.cw.bitk({K}n, {X}) : Bool}}")
             emit(" " * (i2 + 4) + "{==}")
         nk = f"k{K + 1}"
         emit(" " * (ind + 2) + f"case 1n+{nk}:")
@@ -192,7 +194,7 @@ def gen_msb():
     j = kv
     K32 = f"Nat.add(32n, {j})"
     emit(" " * ind + f"%Equal.sym(U32, U32.shln(U32.shln(1, {j}), 32n), 0, PW.cw.shl32(U32.shln(1, {j}))) : {{Bool.not(U32.is_eq(U32.and(x, _), 0)) == PW.cw.bitk({K32}, x) : Bool}}")
-    emit(" " * ind + f"%PW.cw.ua_comm(0, x) : {{Bool.not(U32.is_eq(_, 0)) == PW.cw.bitk({K32}, x) : Bool}}")
+    emit(" " * ind + f"%UL.u32_and_comm(0, x) : {{Bool.not(U32.is_eq(_, 0)) == PW.cw.bitk({K32}, x) : Bool}}")
     emit(" " * ind + f"%Equal.sym(U32, U32.and(0, x), 0, PW.cw.ua_zero_l(x)) : {{Bool.not(U32.is_eq(_, 0)) == PW.cw.bitk({K32}, x) : Bool}}")
     emit(" " * ind + f"Equal.sym(Bool, PW.cw.bitk({K32}, x), False{{}}, PE.ce.bit_deg({j}, x))")
     emit()

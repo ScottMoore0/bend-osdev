@@ -52,6 +52,15 @@ law lo_from_parts:
   for l: U32
   {W.W64.lo(W.W64.from_parts(h, l)) == l : U32}
 
+# Interface laws: a word whose high half is 0 is the word of its low half,
+# and the word of halves 0 and 0 is zero.
+law from_parts_zero_hi:
+  for a: U32
+  {W.W64.from_parts(0, a) == W.W64.from_u32(a) : W.W64}
+
+law from_parts_zero:
+  {W.W64.from_parts(0, 0) == W.W64.zero() : W.W64}
+
 # Interface law: a word is its two halves joined (for every word). Other
 # packages' proofs use this instead of looking inside W64.
 law parts_of:

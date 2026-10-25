@@ -26,6 +26,8 @@ import ./kmp.bend as K
 import ./naive.bend as V
 import ./proof_lib.bend as L
 import ./LAWS_kmp.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Sets of prefix lengths
 
@@ -495,14 +497,14 @@ def bd.tab_ok2(+p: List<&2, U32>, +acc: List<&2, Nat>, +k: Nat, +i: Nat, +b: U32
 def bd.pi_go(xs: List<&2, U32>, +p: List<&2, U32>, +acc: List<&2, Nat>, +k: Nat, +i: Nat, +h_ok: {bd.ok(p, acc, 1n+i) == True{} : Bool}, +h_len: {List.length(&2, Nat, acc) == 1n+i : Nat}, +h_k: {K.ts.kmp.nat_at(acc, i) == k : Nat}, +h_xs: {List.drop(&2, U32, p, 1n+i) == xs : List<&2, U32>}, +h_m: {List.length(&2, U32, p) == Nat.add(1n+i, List.length(&2, U32, xs)) : Nat}) -> {bd.ok(p, K.ts.kmp.pi.go(xs, p, acc, k), List.length(&2, U32, p)) == True{} : Bool}:
   match xs:
     case Nil{}:
-      %Equal.sym(Nat, List.length(&2, U32, p), 1n+i, Equal.trans(Nat, List.length(&2, U32, p), Nat.add(1n+i, 0n), 1n+i, h_m, L.tsl.add_zero(1n+i))) : {bd.ok(p, acc, _) == True{} : Bool}
+      %Equal.sym(Nat, List.length(&2, U32, p), 1n+i, Equal.trans(Nat, List.length(&2, U32, p), Nat.add(1n+i, 0n), 1n+i, h_m, UL.nat_add_zero(1n+i))) : {bd.ok(p, acc, _) == True{} : Bool}
       h_ok
     case Con{+b, +t}:
       +k2 = K.ts.kmp.next(p, acc, b, k)
       +acc2 = List.append(&2, Nat, acc, [k2])
       +e_len = Equal.trans(Nat, List.length(&2, Nat, acc2), 1n+List.length(&2, Nat, acc), 2n+i, bd.len_app1(acc, k2), Equal.cong(Nat, Nat, n => 1n+n, List.length(&2, Nat, acc), 1n+i, h_len))
       +e_k2 = Equal.trans(Nat, K.ts.kmp.nat_at(acc2, 1n+i), K.ts.kmp.nat_at(acc2, List.length(&2, Nat, acc)), k2, Equal.cong(Nat, Nat, n => K.ts.kmp.nat_at(acc2, n), 1n+i, List.length(&2, Nat, acc), Equal.sym(Nat, List.length(&2, Nat, acc), 1n+i, h_len)), bd.nat_at_end(acc, k2))
-      bd.pi_go(t, p, acc2, k2, 1n+i, bd.tab_ok2(p, acc, k, i, b, t, h_ok, h_len, h_k, h_xs, h_m), e_len, e_k2, bd.drop_tl(p, 1n+i, b, t, h_xs), Equal.trans(Nat, List.length(&2, U32, p), Nat.add(1n+i, 1n+List.length(&2, U32, t)), 1n+Nat.add(1n+i, List.length(&2, U32, t)), h_m, L.tsl.add_succ(1n+i, List.length(&2, U32, t))))
+      bd.pi_go(t, p, acc2, k2, 1n+i, bd.tab_ok2(p, acc, k, i, b, t, h_ok, h_len, h_k, h_xs, h_m), e_len, e_k2, bd.drop_tl(p, 1n+i, b, t, h_xs), Equal.trans(Nat, List.length(&2, U32, p), Nat.add(1n+i, 1n+List.length(&2, U32, t)), 1n+Nat.add(1n+i, List.length(&2, U32, t)), h_m, UL.nat_add_succ(1n+i, List.length(&2, U32, t))))
 
 # the first entry: the borders of one byte are 1 and 0
 def bd.pi_first(+b0: U32, +t: List<&2, U32>) -> {bd.ok(Con{b0, t}, [0n], 1n) == True{} : Bool}:
@@ -599,7 +601,7 @@ def kp.pshift(r: List<&2, U32>, +b: U32, +s: List<&2, Bool>, +c: U32, +t: List<&
       %Equal.sym(List<&2, Nat>, kp.pend(Con{b2, r2}, bd.tl(s), Con{c, t}, pos), V.ts.naive.hit(LZ, 1n+pos, X), kp.pshift(r2, b2, bd.tl(s), c, t, pos)) : {List.append(&2, Nat, _, H0) == RHS : List<&2, Nat>}
       %Equal.sym(List<&2, Nat>, List.append(&2, Nat, V.ts.naive.hit(LZ, 1n+pos, X), H0), V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, X, H0)), L.tsl.hit_app(LZ, 1n+pos, X, H0)) : {_ == RHS : List<&2, Nat>}
       %L.tsl.and_assoc(bd.hd(s), U32.is_eq(b, c), AT) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, X, V.ts.naive.hit(_, Nat.add(pos, 2n+List.length(&2, U32, r2)), Nil{}))) == RHS : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(pos, 2n+List.length(&2, U32, r2)), 1n+Nat.add(pos, 1n+List.length(&2, U32, r2)), L.tsl.add_succ(pos, 1n+List.length(&2, U32, r2))) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, X, V.ts.naive.hit(Bool.and(Bool.and(bd.hd(s), U32.is_eq(b, c)), AT), _, Nil{}))) == RHS : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(pos, 2n+List.length(&2, U32, r2)), 1n+Nat.add(pos, 1n+List.length(&2, U32, r2)), UL.nat_add_succ(pos, 1n+List.length(&2, U32, r2))) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, X, V.ts.naive.hit(Bool.and(Bool.and(bd.hd(s), U32.is_eq(b, c)), AT), _, Nil{}))) == RHS : List<&2, Nat>}
       {==}
 
 # one byte: the automaton's report, then the rest from the set after it
@@ -626,7 +628,7 @@ def kp.gstep(+a0: U32, p1: List<&2, U32>, +s: List<&2, Bool>, +c: U32, +t: List<
       %Equal.sym(Bool, bd.hd(s), True{}, hs) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E0, N))) == A.ts.auto.hit(LZ, 1n+pos, List.append(&2, Nat, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(Bool.and(_, U32.is_eq(a0, c)), AT), E1, Nil{})), N)) : List<&2, Nat>}
       %Equal.sym(List<&2, Nat>, List.append(&2, Nat, List.append(&2, Nat, Y, H1), N), List.append(&2, Nat, Y, List.append(&2, Nat, H1, N)), L.tsl.app_assoc(Y, H1, N)) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E0, N))) == A.ts.auto.hit(LZ, 1n+pos, _) : List<&2, Nat>}
       %Equal.sym(List<&2, Nat>, List.append(&2, Nat, H1, N), V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E1, List.append(&2, Nat, Nil{}, N)), L.tsl.hit_app(Bool.and(U32.is_eq(a0, c), AT), E1, Nil{}, N)) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E0, N))) == A.ts.auto.hit(LZ, 1n+pos, List.append(&2, Nat, Y, _)) : List<&2, Nat>}
-      %Equal.sym(Nat, E0, 1n+Nat.add(pos, List.length(&2, U32, Con{b1, p2})), L.tsl.add_succ(pos, List.length(&2, U32, Con{b1, p2}))) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), _, N))) == A.ts.auto.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E1, N))) : List<&2, Nat>}
+      %Equal.sym(Nat, E0, 1n+Nat.add(pos, List.length(&2, U32, Con{b1, p2})), UL.nat_add_succ(pos, List.length(&2, U32, Con{b1, p2}))) : {V.ts.naive.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), _, N))) == A.ts.auto.hit(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E1, N))) : List<&2, Nat>}
       kp.hits(LZ, 1n+pos, List.append(&2, Nat, Y, V.ts.naive.hit(Bool.and(U32.is_eq(a0, c), AT), E1, N)))
 
 # the automaton does not look at the entry for the whole pattern

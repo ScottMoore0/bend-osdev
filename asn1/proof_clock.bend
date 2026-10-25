@@ -18,26 +18,18 @@ import ./proof_u32.bend as AU
 import ./proof_int.bend as PI
 import ./proof_prims.bend as PP
 import ./proof_d2.bend as PK
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Arithmetic: division's result is unique
 
-def pk.pred(n: Nat) -> Nat:
-  match n:
-    case 0n:
-      0n
-    case 1n+p:
-      p
-
-def pk.add_cancel(+k: Nat, +x: Nat, +y: Nat, +e: {Nat.add(k, x) == Nat.add(k, y) : Nat}) -> {x == y : Nat}:
-  match k:
-    case 0n:
-      e
-    case 1n+kp:
-      pk.add_cancel(kp, x, y, Equal.cong(Nat, Nat, n => pk.pred(n), 1n+Nat.add(kp, x), 1n+Nat.add(kp, y), e))
-
 # x = b + y + z with x < b is impossible
 def pk.no_lt(+x: Nat, +b: Nat, +y: Nat, +z: Nat, +h: {Nat.is_lt(x, b) == True{} : Bool}, +e: {x == Nat.add(Nat.add(b, y), z) : Nat}) -> Empty:
-  +hle = AN.an.le_trans(b, Nat.add(b, y), Nat.add(Nat.add(b, y), z), AN.an.le_add(b, y), AN.an.le_add(Nat.add(b, y), z))
+  +hle = UO.nat_le_trans(b, Nat.add(b, y), Nat.add(Nat.add(b, y), z), UO.nat_le_add_r(b, y), UO.nat_le_add_r(Nat.add(b, y), z))
   +hle2 = Equal.trans(Bool, Nat.is_le(b, x), Nat.is_le(b, Nat.add(Nat.add(b, y), z)), True{}, Equal.cong(Nat, Bool, w => Nat.is_le(b, w), x, Nat.add(Nat.add(b, y), z), e), hle)
   AN.an.ft(Equal.trans(Bool, False{}, Nat.is_le(b, x), True{}, Equal.sym(Bool, Nat.is_le(b, x), False{}, AN.an.lt_nle(x, b, h)), hle2))
 
@@ -51,26 +43,23 @@ def pk.dm_q(+q1: Nat, +q2: Nat, +r1: Nat, +r2: Nat, +bp: Nat, +h1: {Nat.is_lt(r1
     case 1n+p 0n:
       Empty.absurd({1n+p == 0n : Nat}, pk.no_lt(r2, 1n+bp, Nat.mul(p, 1n+bp), r1, h2, Equal.sym(Nat, Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), r2, e)))
     case 1n+p 1n+pp:
-      +e1 = Equal.trans(Nat, Nat.add(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1)), Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(1n+bp, Nat.add(Nat.mul(pp, 1n+bp), r2)), Equal.sym(Nat, Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1)), AN.an.add_assoc(1n+bp, Nat.mul(p, 1n+bp), r1)), Equal.trans(Nat, Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(Nat.add(1n+bp, Nat.mul(pp, 1n+bp)), r2), Nat.add(1n+bp, Nat.add(Nat.mul(pp, 1n+bp), r2)), e, AN.an.add_assoc(1n+bp, Nat.mul(pp, 1n+bp), r2)))
-      +e2 = pk.add_cancel(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1), Nat.add(Nat.mul(pp, 1n+bp), r2), e1)
+      +e1 = Equal.trans(Nat, Nat.add(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1)), Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(1n+bp, Nat.add(Nat.mul(pp, 1n+bp), r2)), Equal.sym(Nat, Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1)), UL.nat_add_assoc(1n+bp, Nat.mul(p, 1n+bp), r1)), Equal.trans(Nat, Nat.add(Nat.add(1n+bp, Nat.mul(p, 1n+bp)), r1), Nat.add(Nat.add(1n+bp, Nat.mul(pp, 1n+bp)), r2), Nat.add(1n+bp, Nat.add(Nat.mul(pp, 1n+bp), r2)), e, UL.nat_add_assoc(1n+bp, Nat.mul(pp, 1n+bp), r2)))
+      +e2 = UL.nat_add_cancel(1n+bp, Nat.add(Nat.mul(p, 1n+bp), r1), Nat.add(Nat.mul(pp, 1n+bp), r2), e1)
       Equal.cong(Nat, Nat, n => 1n+n, p, pp, pk.dm_q(p, pp, r1, r2, bp, h1, h2, e2))
 
 def pk.div_of(+q: Nat, +r: Nat, +bp: Nat, +hr: {Nat.is_lt(r, 1n+bp) == True{} : Bool}) -> {Nat.div(Nat.add(Nat.mul(q, 1n+bp), r), 1n+bp) == q : Nat}:
   +n = Nat.add(Nat.mul(q, 1n+bp), r)
-  pk.dm_q(Nat.div(n, 1n+bp), q, Nat.mod(n, 1n+bp), r, bp, AN.an.mod_lt(n, bp), hr, AN.an.recon(n, bp))
+  pk.dm_q(Nat.div(n, 1n+bp), q, Nat.mod(n, 1n+bp), r, bp, UD.nat_mod_lt(n, bp), hr, UD.nat_div_mod(n, bp))
 
 def pk.mod_of(+q: Nat, +r: Nat, +bp: Nat, +hr: {Nat.is_lt(r, 1n+bp) == True{} : Bool}) -> {Nat.mod(Nat.add(Nat.mul(q, 1n+bp), r), 1n+bp) == r : Nat}:
   +n = Nat.add(Nat.mul(q, 1n+bp), r)
-  +e = Equal.trans(Nat, Nat.add(Nat.mul(q, 1n+bp), Nat.mod(n, 1n+bp)), Nat.add(Nat.mul(Nat.div(n, 1n+bp), 1n+bp), Nat.mod(n, 1n+bp)), Nat.add(Nat.mul(q, 1n+bp), r), Equal.cong(Nat, Nat, x => Nat.add(Nat.mul(x, 1n+bp), Nat.mod(n, 1n+bp)), q, Nat.div(n, 1n+bp), Equal.sym(Nat, Nat.div(n, 1n+bp), q, pk.div_of(q, r, bp, hr))), AN.an.recon(n, bp))
-  pk.add_cancel(Nat.mul(q, 1n+bp), Nat.mod(n, 1n+bp), r, e)
+  +e = Equal.trans(Nat, Nat.add(Nat.mul(q, 1n+bp), Nat.mod(n, 1n+bp)), Nat.add(Nat.mul(Nat.div(n, 1n+bp), 1n+bp), Nat.mod(n, 1n+bp)), Nat.add(Nat.mul(q, 1n+bp), r), Equal.cong(Nat, Nat, x => Nat.add(Nat.mul(x, 1n+bp), Nat.mod(n, 1n+bp)), q, Nat.div(n, 1n+bp), Equal.sym(Nat, Nat.div(n, 1n+bp), q, pk.div_of(q, r, bp, hr))), UD.nat_div_mod(n, bp))
+  UL.nat_add_cancel(Nat.mul(q, 1n+bp), Nat.mod(n, 1n+bp), r, e)
 
 # Order
 
 def pk.lt_of_le(+x: Nat, +c: Nat, +k: Nat, +h: {Nat.is_le(x, c) == True{} : Bool}, +hc: {Nat.is_le(1n+c, k) == True{} : Bool}) -> {Nat.is_lt(x, k) == True{} : Bool}:
-  AN.an.lt_le_trans(x, 1n+c, k, AN.an.le_lt_succ(x, c, h), hc)
-
-def pk.lt_lt(+x: Nat, +c: Nat, +k: Nat, +h: {Nat.is_lt(x, c) == True{} : Bool}, +hc: {Nat.is_le(c, k) == True{} : Bool}) -> {Nat.is_lt(x, k) == True{} : Bool}:
-  AN.an.lt_le_trans(x, c, k, h, hc)
+  UO.nat_lt_le_trans(x, 1n+c, k, AN.an.le_lt_succ(x, c, h), hc)
 
 def pk.mdays_le.feb(lp: Bool) -> {Nat.is_le(Bool.pick(Nat, lp, 29n, 28n), 31n) == True{} : Bool}:
   match lp:
@@ -123,7 +112,7 @@ def pk.fields(+y: Nat, +mo: Nat, +d: Nat, +h: Nat, +mi: Nat, +s: Nat, +f: List<&
   +h1 = AN.an.and_r(c1, r1, hv)
   +c2 = Ti.a1.t.in(d, 1n, Ti.a1.t.mdays(y, mo))
   +r2 = Bool.and(Nat.is_lt(h, 24n), Bool.and(Nat.is_lt(mi, 60n), Bool.and(Nat.is_lt(s, 60n), Ti.a1.t.zone_ok(z))))
-  +hd = AN.an.le_trans(d, Ti.a1.t.mdays(y, mo), 31n, AN.an.and_r(Nat.is_le(1n, d), Nat.is_le(d, Ti.a1.t.mdays(y, mo)), AN.an.and_l(c2, r2, h1)), pk.mdays_le(y, mo))
+  +hd = UO.nat_le_trans(d, Ti.a1.t.mdays(y, mo), 31n, AN.an.and_r(Nat.is_le(1n, d), Nat.is_le(d, Ti.a1.t.mdays(y, mo)), AN.an.and_l(c2, r2, h1)), pk.mdays_le(y, mo))
   +h2 = AN.an.and_r(c2, r2, h1)
   +r3 = Bool.and(Nat.is_lt(mi, 60n), Bool.and(Nat.is_lt(s, 60n), Ti.a1.t.zone_ok(z)))
   +hh = AN.an.and_l(Nat.is_lt(h, 24n), r3, h2)
@@ -133,9 +122,9 @@ def pk.fields(+y: Nat, +mo: Nat, +d: Nat, +h: Nat, +mi: Nat, +s: Nat, +f: List<&
   +hs = AN.an.and_l(Nat.is_lt(s, 60n), Ti.a1.t.zone_ok(z), AN.an.and_r(Nat.is_lt(mi, 60n), r4, h3))
   %Equal.sym(Bool, Nat.is_lt(mo, 100n), True{}, pk.lt_of_le(mo, 12n, 100n, hmo, {==})) : {PkF{_, Nat.is_lt(d, 100n), Nat.is_lt(h, 100n), Nat.is_lt(mi, 100n), Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
   %Equal.sym(Bool, Nat.is_lt(d, 100n), True{}, pk.lt_of_le(d, 31n, 100n, hd, {==})) : {PkF{True{}, _, Nat.is_lt(h, 100n), Nat.is_lt(mi, 100n), Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
-  %Equal.sym(Bool, Nat.is_lt(h, 100n), True{}, pk.lt_lt(h, 24n, 100n, hh, {==})) : {PkF{True{}, True{}, _, Nat.is_lt(mi, 100n), Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
-  %Equal.sym(Bool, Nat.is_lt(mi, 100n), True{}, pk.lt_lt(mi, 60n, 100n, hmi, {==})) : {PkF{True{}, True{}, True{}, _, Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
-  %Equal.sym(Bool, Nat.is_lt(s, 100n), True{}, pk.lt_lt(s, 60n, 100n, hs, {==})) : {PkF{True{}, True{}, True{}, True{}, _} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
+  %Equal.sym(Bool, Nat.is_lt(h, 100n), True{}, UO.nat_lt_le_trans(h, 24n, 100n, hh, {==})) : {PkF{True{}, True{}, _, Nat.is_lt(mi, 100n), Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
+  %Equal.sym(Bool, Nat.is_lt(mi, 100n), True{}, UO.nat_lt_le_trans(mi, 60n, 100n, hmi, {==})) : {PkF{True{}, True{}, True{}, _, Nat.is_lt(s, 100n)} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
+  %Equal.sym(Bool, Nat.is_lt(s, 100n), True{}, UO.nat_lt_le_trans(s, 60n, 100n, hs, {==})) : {PkF{True{}, True{}, True{}, True{}, _} == PkF{True{}, True{}, True{}, True{}, True{}} : PkF}
   {==}
 
 def pk.fmo(p: PkF) -> Bool:
@@ -299,7 +288,7 @@ def pk.utc_rt(+r: R.Asn1Rules, +pivot: Nat, +yy: Nat, +mo: Nat, +d: Nat, +h: Nat
   +ey = Equal.cong(Nat, Nat, x => Ti.a1.utc.year(x, pivot), y2, yy, pk.mod_year(Nat.is_lt(yy, pivot), yy, hyy))
   +hv2 = Equal.trans(Bool, Ti.Asn1Time.valid(Ti.Asn1Time{Ti.a1.utc.year(y2, pivot), mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), Ti.Asn1Time.valid(Ti.Asn1Time{y, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), True{}, Equal.cong(Nat, Bool, x => Ti.Asn1Time.valid(Ti.Asn1Time{x, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), Ti.a1.utc.year(y2, pivot), y, ey), hv)
   %ey : {Ti.Asn1.get_utc_time(r, pivot, Ti.Asn1.utc_time(Ti.Asn1Time{y, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}})) == Done{Ti.Asn1Time{_, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}} : Result<&2, &2, E.Asn1Error, Ti.Asn1Time>}
-  pk.utc_read(r, pivot, y2, mo, d, h, mi, s, AN.an.mod_lt(y, 99n), hv2)
+  pk.utc_read(r, pivot, y2, mo, d, h, mi, s, UD.nat_mod_lt(y, 99n), hv2)
 
 # GeneralizedTime
 
@@ -352,8 +341,8 @@ def pk.gen_rt(+r: R.Asn1Rules, +cc: Nat, +yy: Nat, +mo: Nat, +d: Nat, +h: Nat, +
   +y = Nat.add(Nat.mul(cc, 100n), yy)
   +c1 = Nat.div(y, 100n)
   +c2 = Nat.mod(y, 100n)
-  +er = AN.an.recon(y, 99n)
+  +er = UD.nat_div_mod(y, 99n)
   +hc1 = Equal.trans(Bool, Nat.is_lt(c1, 100n), Nat.is_lt(cc, 100n), True{}, Equal.cong(Nat, Bool, x => Nat.is_lt(x, 100n), c1, cc, pk.div_of(cc, yy, 99n, hyy)), hcc)
   +hv2 = Equal.trans(Bool, Ti.Asn1Time.valid(Ti.Asn1Time{Nat.add(Nat.mul(c1, 100n), c2), mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), Ti.Asn1Time.valid(Ti.Asn1Time{y, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), True{}, Equal.cong(Nat, Bool, x => Ti.Asn1Time.valid(Ti.Asn1Time{x, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}), Nat.add(Nat.mul(c1, 100n), c2), y, er), hv)
   %er : {Ti.Asn1.get_gen_time(r, Ti.Asn1.gen_time(Ti.Asn1Time{y, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}})) == Done{Ti.Asn1Time{_, mo, d, h, mi, s, Nil{}, Ti.Asn1Zulu{}}} : Result<&2, &2, E.Asn1Error, Ti.Asn1Time>}
-  pk.gen_read(r, c1, c2, mo, d, h, mi, s, hc1, AN.an.mod_lt(y, 99n), hv2)
+  pk.gen_read(r, c1, c2, mo, d, h, mi, s, hc1, UD.nat_mod_lt(y, 99n), hv2)

@@ -2,6 +2,10 @@
 # successor and predecessor, and the monotonicity of U32 addition (through
 # the value of a word as a Nat). Nothing here mentions the package.
 import Base
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -46,14 +50,6 @@ def ab.eq_lt(+e: {EQ{} == LT{} : Cmp}) -> Empty:
   Unit{}
 
 def ab.gt_lt(+e: {GT{} == LT{} : Cmp}) -> Empty:
-  %e : ab.is_gt(_)
-  Unit{}
-
-def ab.lt_eq(+e: {LT{} == EQ{} : Cmp}) -> Empty:
-  %e : ab.is_lt(_)
-  Unit{}
-
-def ab.gt_eq(+e: {GT{} == EQ{} : Cmp}) -> Empty:
   %e : ab.is_gt(_)
   Unit{}
 
@@ -172,26 +168,6 @@ def cm.le_of_lt(c: Cmp, +e: {Cmp.is_lt(c) == True{} : Bool}) -> {Cmp.is_le(c) ==
     case GT{}:
       Empty.absurd({False{} == True{} : Bool}, ab.ft(e))
 
-# is_le(c) and not is_lt(c): c is EQ
-def cm.eq_of_le(c: Cmp, +e: {Cmp.is_le(c) == True{} : Bool}, +f: {Cmp.is_lt(c) == False{} : Bool}) -> {c == EQ{} : Cmp}:
-  match c:
-    case LT{}:
-      Empty.absurd({LT{} == EQ{} : Cmp}, ab.tf(f))
-    case EQ{}:
-      {==}
-    case GT{}:
-      Empty.absurd({GT{} == EQ{} : Cmp}, ab.ft(e))
-
-# flipping turns not-less into at-most and the other way
-def cm.le_flip(c: Cmp, +e: {Cmp.is_lt(c) == False{} : Bool}) -> {Cmp.is_le(cm.flip(c)) == True{} : Bool}:
-  match c:
-    case LT{}:
-      Empty.absurd({False{} == True{} : Bool}, ab.tf(e))
-    case EQ{}:
-      {==}
-    case GT{}:
-      {==}
-
 def cm.lt_flip(c: Cmp, +e: {Cmp.is_le(c) == False{} : Bool}) -> {Cmp.is_lt(cm.flip(c)) == True{} : Bool}:
   match c:
     case LT{}:
@@ -201,158 +177,7 @@ def cm.lt_flip(c: Cmp, +e: {Cmp.is_le(c) == False{} : Bool}) -> {Cmp.is_lt(cm.fl
     case GT{}:
       {==}
 
-def cm.not_le_flip(c: Cmp, +e: {Cmp.is_lt(c) == True{} : Bool}) -> {Cmp.is_le(cm.flip(c)) == False{} : Bool}:
-  match c:
-    case LT{}:
-      {==}
-    case EQ{}:
-      Empty.absurd({True{} == False{} : Bool}, ab.ft(e))
-    case GT{}:
-      Empty.absurd({True{} == False{} : Bool}, ab.ft(e))
-
-def cm.not_lt_flip(c: Cmp, +e: {Cmp.is_le(c) == True{} : Bool}) -> {Cmp.is_lt(cm.flip(c)) == False{} : Bool}:
-  match c:
-    case LT{}:
-      {==}
-    case EQ{}:
-      {==}
-    case GT{}:
-      Empty.absurd({True{} == False{} : Bool}, ab.ft(e))
-
 # Words: Base's order on Word(n), compared from the top bit down
-
-def wd.fin_refl(x: Bool) -> {Word.cmp.fin(x, x, EQ{}) == EQ{} : Cmp}:
-  match x:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def wd.refl(n: Nat, a: Word(n)) -> {Word.cmp(n, a, a) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match a:
-        case WCon{+x, +at}:
-          %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{}, wd.refl(p, at)) : {Word.cmp.fin(x, x, _) == EQ{} : Cmp}
-          wd.fin_refl(x)
-
-def wd.fin_eq_tail(c: Cmp, -x: Bool, -y: Bool, +e: {Word.cmp.fin(x, y, c) == EQ{} : Cmp}) -> {c == EQ{} : Cmp}:
-  match c:
-    case LT{}:
-      Empty.absurd({LT{} == EQ{} : Cmp}, ab.lt_eq(e))
-    case EQ{}:
-      {==}
-    case GT{}:
-      Empty.absurd({GT{} == EQ{} : Cmp}, ab.gt_eq(e))
-
-def wd.bool_eq(x: Bool, y: Bool, +e: {Bool.cmp(x, y) == EQ{} : Cmp}) -> {x == y : Bool}:
-  match x y:
-    case False{} False{}:
-      {==}
-    case False{} True{}:
-      Empty.absurd({False{} == True{} : Bool}, ab.lt_eq(e))
-    case True{} False{}:
-      Empty.absurd({True{} == False{} : Bool}, ab.gt_eq(e))
-    case True{} True{}:
-      {==}
-
-def wd.fin_eq_head(c: Cmp, x: Bool, y: Bool, +e: {Word.cmp.fin(x, y, c) == EQ{} : Cmp}) -> {x == y : Bool}:
-  match c:
-    case LT{}:
-      Empty.absurd({x == y : Bool}, ab.lt_eq(e))
-    case EQ{}:
-      wd.bool_eq(x, y, e)
-    case GT{}:
-      Empty.absurd({x == y : Bool}, ab.gt_eq(e))
-
-def wd.eq(n: Nat, a: Word(n), b: Word(n), +e: {Word.cmp(n, a, b) == EQ{} : Cmp}) -> {a == b : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+ +p:
-      match a b:
-        case WCon{+x, +at} WCon{+y, +bt}:
-          %wd.eq(p, at, bt, wd.fin_eq_tail(Word.cmp(p, at, bt), x, y, e)) : {WCon{x, at} == WCon{y, _} : Word(1n+p)}
-          %wd.fin_eq_head(Word.cmp(p, at, bt), x, y, e) : {WCon{x, at} == WCon{_, at} : Word(1n+p)}
-          {==}
-
-def wd.bool_flip(x: Bool, y: Bool) -> {Bool.cmp(y, x) == cm.flip(Bool.cmp(x, y)) : Cmp}:
-  match x y:
-    case False{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case True{} True{}:
-      {==}
-
-def wd.fin_flip(c: Cmp, x: Bool, y: Bool) -> {Word.cmp.fin(y, x, cm.flip(c)) == cm.flip(Word.cmp.fin(x, y, c)) : Cmp}:
-  match c:
-    case LT{}:
-      {==}
-    case EQ{}:
-      wd.bool_flip(x, y)
-    case GT{}:
-      {==}
-
-def wd.flip(n: Nat, a: Word(n), b: Word(n)) -> {Word.cmp(n, b, a) == cm.flip(Word.cmp(n, a, b)) : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match a b:
-        case WCon{+x, +at} WCon{+y, +bt}:
-          %Equal.sym(Cmp, Word.cmp(p, bt, at), cm.flip(Word.cmp(p, at, bt)), wd.flip(p, at, bt)) : {Word.cmp.fin(y, x, _) == cm.flip(Word.cmp.fin(x, y, Word.cmp(p, at, bt))) : Cmp}
-          wd.fin_flip(Word.cmp(p, at, bt), x, y)
-
-def wd.bool_trans(x: Bool, y: Bool, z: Bool, +h1: {Bool.cmp(x, y) == LT{} : Cmp}, +h2: {Bool.cmp(y, z) == LT{} : Cmp}) -> {Bool.cmp(x, z) == LT{} : Cmp}:
-  match x y z:
-    case False{} False{} z:
-      Empty.absurd({Bool.cmp(False{}, z) == LT{} : Cmp}, ab.eq_lt(h1))
-    case False{} True{} False{}:
-      Empty.absurd({EQ{} == LT{} : Cmp}, ab.gt_lt(h2))
-    case False{} True{} True{}:
-      Empty.absurd({LT{} == LT{} : Cmp}, ab.eq_lt(h2))
-    case True{} False{} z:
-      Empty.absurd({Bool.cmp(True{}, z) == LT{} : Cmp}, ab.gt_lt(h1))
-    case True{} True{} z:
-      Empty.absurd({Bool.cmp(True{}, z) == LT{} : Cmp}, ab.eq_lt(h1))
-
-def wd.fin_trans(c1: Cmp, c2: Cmp, +p: Nat, +x: Bool, +y: Bool, +z: Bool, +at: Word(p), +bt: Word(p), +ct: Word(p), +e1: {Word.cmp(p, at, bt) == c1 : Cmp}, +e2: {Word.cmp(p, bt, ct) == c2 : Cmp}, +h1: {Word.cmp.fin(x, y, c1) == LT{} : Cmp}, +h2: {Word.cmp.fin(y, z, c2) == LT{} : Cmp}, ih: {Word.cmp(p, at, bt) == LT{} : Cmp} -> {Word.cmp(p, bt, ct) == LT{} : Cmp} -> {Word.cmp(p, at, ct) == LT{} : Cmp}) -> {Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}:
-  match c1 c2:
-    case LT{} LT{}:
-      %Equal.sym(Cmp, Word.cmp(p, at, ct), LT{}, ih(e1, e2)) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case LT{} EQ{}:
-      %wd.eq(p, bt, ct, e2) : {Word.cmp.fin(x, z, Word.cmp(p, at, _)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, at, bt), LT{}, e1) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case EQ{} LT{}:
-      %Equal.sym(Word(p), at, bt, wd.eq(p, at, bt, e1)) : {Word.cmp.fin(x, z, Word.cmp(p, _, ct)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, bt, ct), LT{}, e2) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case EQ{} EQ{}:
-      %Equal.trans(Word(p), at, bt, ct, wd.eq(p, at, bt, e1), wd.eq(p, bt, ct, e2)) : {Word.cmp.fin(x, z, Word.cmp(p, at, _)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{}, wd.refl(p, at)) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      wd.bool_trans(x, y, z, h1, h2)
-    case GT{} c2:
-      Empty.absurd({Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}, ab.gt_lt(h1))
-    case c1 GT{}:
-      Empty.absurd({Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}, ab.gt_lt(h2))
-
-def wd.lt_trans(n: Nat, a: Word(n), b: Word(n), c: Word(n), +h1: {Word.cmp(n, a, b) == LT{} : Cmp}, +h2: {Word.cmp(n, b, c) == LT{} : Cmp}) -> {Word.cmp(n, a, c) == LT{} : Cmp}:
-  match n:
-    case 0n:
-      Empty.absurd({Word.cmp(0n, a, c) == LT{} : Cmp}, ab.eq_lt(h1))
-    case 1n+ +p:
-      match a b c:
-        case WCon{+x, +at} WCon{+y, +bt} WCon{+z, +ct}:
-          wd.fin_trans(Word.cmp(p, at, bt), Word.cmp(p, bt, ct), p, x, y, z, at, bt, ct, {==}, {==}, h1, h2, u => w => wd.lt_trans(p, at, bt, ct, u, w))
 
 # U32's order, as Bools
 
@@ -362,115 +187,8 @@ def ult(+a: U32, +b: U32) -> Bool:
 def ule(+a: U32, +b: U32) -> Bool:
   Cmp.is_le(U32.cmp(a, b))
 
-def u.refl(a: U32) -> {U32.cmp(a, a) == EQ{} : Cmp}:
-  match a:
-    case U32{+w}:
-      wd.refl(32n, w)
-
-def u.eq(a: U32, b: U32, +e: {U32.cmp(a, b) == EQ{} : Cmp}) -> {a == b : U32}:
-  match a b:
-    case U32{+x} U32{+y}:
-      %wd.eq(32n, x, y, e) : {U32{x} == U32{_} : U32}
-      {==}
-
-def u.flip(a: U32, b: U32) -> {U32.cmp(b, a) == cm.flip(U32.cmp(a, b)) : Cmp}:
-  match a b:
-    case U32{+x} U32{+y}:
-      wd.flip(32n, x, y)
-
-def u.cmp_lt_trans(a: U32, b: U32, c: U32, +h1: {U32.cmp(a, b) == LT{} : Cmp}, +h2: {U32.cmp(b, c) == LT{} : Cmp}) -> {U32.cmp(a, c) == LT{} : Cmp}:
-  match a b c:
-    case U32{+x} U32{+y} U32{+z}:
-      wd.lt_trans(32n, x, y, z, h1, h2)
-
-def u.le_refl(+a: U32) -> {ule(a, a) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, u.refl(a)) : {Cmp.is_le(_) == True{} : Bool}
-  {==}
-
-def ab.lt_eqc(c: Cmp, +h: {c == EQ{} : Cmp}, +e: {Cmp.is_lt(c) == True{} : Bool}) -> Empty:
-  match c:
-    case LT{}:
-      ab.lt_eq(h)
-    case EQ{}:
-      ab.ft(e)
-    case GT{}:
-      ab.gt_eq(h)
-
-def u.lt_irrefl(+a: U32, +e: {ult(a, a) == True{} : Bool}) -> Empty:
-  ab.lt_eqc(U32.cmp(a, a), u.refl(a), e)
-
-def u.le_of_lt(+a: U32, +b: U32, +e: {ult(a, b) == True{} : Bool}) -> {ule(a, b) == True{} : Bool}:
-  cm.le_of_lt(U32.cmp(a, b), e)
-
-def u.lt_trans(+a: U32, +b: U32, +c: U32, +h1: {ult(a, b) == True{} : Bool}, +h2: {ult(b, c) == True{} : Bool}) -> {ult(a, c) == True{} : Bool}:
-  cm.is_lt_of(U32.cmp(a, c), u.cmp_lt_trans(a, b, c, cm.lt_of(U32.cmp(a, b), h1), cm.lt_of(U32.cmp(b, c), h2)))
-
-def u.not_lt(+a: U32, +b: U32, +e: {ult(a, b) == False{} : Bool}) -> {ule(b, a) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, a), cm.flip(U32.cmp(a, b)), u.flip(a, b)) : {Cmp.is_le(_) == True{} : Bool}
-  cm.le_flip(U32.cmp(a, b), e)
-
-def u.not_le(+a: U32, +b: U32, +e: {ule(a, b) == False{} : Bool}) -> {ult(b, a) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, a), cm.flip(U32.cmp(a, b)), u.flip(a, b)) : {Cmp.is_lt(_) == True{} : Bool}
-  cm.lt_flip(U32.cmp(a, b), e)
-
-# a < b: not b <= a
-def u.lt_not_le(+a: U32, +b: U32, +e: {ult(a, b) == True{} : Bool}) -> {ule(b, a) == False{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, a), cm.flip(U32.cmp(a, b)), u.flip(a, b)) : {Cmp.is_le(_) == False{} : Bool}
-  cm.not_le_flip(U32.cmp(a, b), e)
-
-# a <= b: not b < a
-def u.le_not_lt(+a: U32, +b: U32, +e: {ule(a, b) == True{} : Bool}) -> {ult(b, a) == False{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, a), cm.flip(U32.cmp(a, b)), u.flip(a, b)) : {Cmp.is_lt(_) == False{} : Bool}
-  cm.not_lt_flip(U32.cmp(a, b), e)
-
 def u.lt_le_absurd(+a: U32, +b: U32, +e: {ult(a, b) == True{} : Bool}, +f: {ule(b, a) == True{} : Bool}) -> Empty:
-  bo.not_true(ule(b, a), f, u.lt_not_le(a, b, e))
-
-def u.le_lt.go(c1: Cmp, +a: U32, +b: U32, +c: U32, +e1: {U32.cmp(a, b) == c1 : Cmp}, +h1: {Cmp.is_le(c1) == True{} : Bool}, +h2: {U32.cmp(b, c) == LT{} : Cmp}) -> {U32.cmp(a, c) == LT{} : Cmp}:
-  match c1:
-    case LT{}:
-      u.cmp_lt_trans(a, b, c, e1, h2)
-    case EQ{}:
-      %Equal.sym(U32, a, b, u.eq(a, b, e1)) : {U32.cmp(_, c) == LT{} : Cmp}
-      h2
-    case GT{}:
-      Empty.absurd({U32.cmp(a, c) == LT{} : Cmp}, ab.ft(h1))
-
-# a <= b < c
-def u.le_lt(+a: U32, +b: U32, +c: U32, +h1: {ule(a, b) == True{} : Bool}, +h2: {ult(b, c) == True{} : Bool}) -> {ult(a, c) == True{} : Bool}:
-  cm.is_lt_of(U32.cmp(a, c), u.le_lt.go(U32.cmp(a, b), a, b, c, {==}, h1, cm.lt_of(U32.cmp(b, c), h2)))
-
-def u.lt_le.go(c2: Cmp, +a: U32, +b: U32, +c: U32, +e2: {U32.cmp(b, c) == c2 : Cmp}, +h1: {U32.cmp(a, b) == LT{} : Cmp}, +h2: {Cmp.is_le(c2) == True{} : Bool}) -> {U32.cmp(a, c) == LT{} : Cmp}:
-  match c2:
-    case LT{}:
-      u.cmp_lt_trans(a, b, c, h1, e2)
-    case EQ{}:
-      %u.eq(b, c, e2) : {U32.cmp(a, _) == LT{} : Cmp}
-      h1
-    case GT{}:
-      Empty.absurd({U32.cmp(a, c) == LT{} : Cmp}, ab.ft(h2))
-
-# a < b <= c
-def u.lt_le(+a: U32, +b: U32, +c: U32, +h1: {ult(a, b) == True{} : Bool}, +h2: {ule(b, c) == True{} : Bool}) -> {ult(a, c) == True{} : Bool}:
-  cm.is_lt_of(U32.cmp(a, c), u.lt_le.go(U32.cmp(b, c), a, b, c, {==}, cm.lt_of(U32.cmp(a, b), h1), h2))
-
-def u.le_le.go(c1: Cmp, +a: U32, +b: U32, +c: U32, +e1: {U32.cmp(a, b) == c1 : Cmp}, +h1: {Cmp.is_le(c1) == True{} : Bool}, +h2: {ule(b, c) == True{} : Bool}) -> {ule(a, c) == True{} : Bool}:
-  match c1:
-    case LT{}:
-      u.le_of_lt(a, c, u.lt_le(a, b, c, cm.is_lt_of(U32.cmp(a, b), e1), h2))
-    case EQ{}:
-      %Equal.sym(U32, a, b, u.eq(a, b, e1)) : {Cmp.is_le(U32.cmp(_, c)) == True{} : Bool}
-      h2
-    case GT{}:
-      Empty.absurd({ule(a, c) == True{} : Bool}, ab.ft(h1))
-
-# a <= b <= c
-def u.le_trans(+a: U32, +b: U32, +c: U32, +h1: {ule(a, b) == True{} : Bool}, +h2: {ule(b, c) == True{} : Bool}) -> {ule(a, c) == True{} : Bool}:
-  u.le_le.go(U32.cmp(a, b), a, b, c, {==}, h1, h2)
-
-# a <= b and b <= a: a == b
-def u.antisym(+a: U32, +b: U32, +h1: {ule(a, b) == True{} : Bool}, +h2: {ule(b, a) == True{} : Bool}) -> {a == b : U32}:
-  u.eq(a, b, cm.eq_of_le(U32.cmp(a, b), h1, u.le_not_lt(b, a, h2)))
+  bo.not_true(ule(b, a), f, UO.u32_lt_not_le(a, b, e))
 
 # Successor: Word.inc, and U32.inc on it
 
@@ -576,7 +294,7 @@ def wd.inc_gt2(n: Nat, s: Word(n), p: Word(n), +e: {Word.cmp(n, s, Word.inc(n, p
         case WCon{+sb, +st} WCon{pb, +pt}:
           match pb:
             case False{}:
-              %Equal.sym(Cmp, Word.cmp(q, pt, pt), EQ{}, wd.refl(q, pt)) : {Word.cmp.fin(False{}, True{}, _) == LT{} : Cmp}
+              %Equal.sym(Cmp, Word.cmp(q, pt, pt), EQ{}, UO.word_cmp_refl(q, pt)) : {Word.cmp.fin(False{}, True{}, _) == LT{} : Cmp}
               {==}
             case True{}:
               %Equal.sym(Cmp, Word.cmp(q, pt, Word.inc(q, pt)), LT{}, wd.inc_gt2(q, st, pt, wd.fin_xf_lt(Word.cmp(q, st, Word.inc(q, pt)), sb, e))) : {Word.cmp.fin(True{}, False{}, _) == LT{} : Cmp}
@@ -592,7 +310,7 @@ def wd.inc_gt(n: Nat, r: Word(n), p: Word(n), +e: {Word.cmp(n, p, r) == LT{} : C
         case WCon{+rb, +rt} WCon{pb, +pt}:
           match pb:
             case False{}:
-              %Equal.sym(Cmp, Word.cmp(q, pt, pt), EQ{}, wd.refl(q, pt)) : {Word.cmp.fin(False{}, True{}, _) == LT{} : Cmp}
+              %Equal.sym(Cmp, Word.cmp(q, pt, pt), EQ{}, UO.word_cmp_refl(q, pt)) : {Word.cmp.fin(False{}, True{}, _) == LT{} : Cmp}
               {==}
             case True{}:
               %Equal.sym(Cmp, Word.cmp(q, pt, Word.inc(q, pt)), LT{}, wd.inc_gt(q, rt, pt, wd.fin_ty_lt(Word.cmp(q, pt, rt), rb, e))) : {Word.cmp.fin(True{}, False{}, _) == LT{} : Cmp}
@@ -700,56 +418,23 @@ def u.dec_lt(+s: U32, +a: U32, +e: {ult(s, a) == True{} : Bool}) -> {ult(U32.sub
 
 # i <= dec(a) and s < a: i < a
 def u.le_dec_lt(+i: U32, +s: U32, +a: U32, +f: {ule(i, U32.sub(a, 1)) == True{} : Bool}, +e: {ult(s, a) == True{} : Bool}) -> {ult(i, a) == True{} : Bool}:
-  u.le_lt(i, U32.sub(a, 1), a, f, u.dec_lt(s, a, e))
+  UO.u32_le_lt_trans(i, U32.sub(a, 1), a, f, u.dec_lt(s, a, e))
 
 # Successor facts, as Bools, for b < l (so inc(b) does not wrap)
 
 # inc(b) <= i and b < l: b < i
 def u.inc_le_lt(+b: U32, +i: U32, +l: U32, +f: {ule(U32.inc(b), i) == True{} : Bool}, +e: {ult(b, l) == True{} : Bool}) -> {ult(b, i) == True{} : Bool}:
-  u.lt_le(b, U32.inc(b), i, u.inc_gt(b, l, e), f)
+  UO.u32_lt_le_trans(b, U32.inc(b), i, u.inc_gt(b, l, e), f)
 
 # s <= b and b < l: s < inc(b)
 def u.le_lt_inc(+s: U32, +b: U32, +l: U32, +f: {ule(s, b) == True{} : Bool}, +e: {ult(b, l) == True{} : Bool}) -> {ult(s, U32.inc(b)) == True{} : Bool}:
-  u.le_lt(s, b, U32.inc(b), f, u.inc_gt(b, l, e))
+  UO.u32_le_lt_trans(s, b, U32.inc(b), f, u.inc_gt(b, l, e))
 
 # Nat
 
-def nt.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nt.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nt.add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nt.add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
 def nt.add_one(+a: Nat) -> {Nat.add(a, 1n) == 1n+a : Nat}:
-  %nt.add_zero(a) : {Nat.add(a, 1n) == 1n+_ : Nat}
-  nt.add_succ(a, 0n)
-
-def nt.add_comm(a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      Equal.sym(Nat, Nat.add(b, 0n), b, nt.add_zero(b))
-    case 1n+ +p:
-      %Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), nt.add_succ(b, p)) : {1n+Nat.add(p, b) == _ : Nat}
-      %nt.add_comm(p, b) : {1n+Nat.add(p, b) == 1n+_ : Nat}
-      {==}
-
-def nt.add_assoc(a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nt.add_assoc(p, b, c) : {1n+Nat.add(Nat.add(p, b), c) == 1n+_ : Nat}
-      {==}
+  %UL.nat_add_zero(a) : {Nat.add(a, 1n) == 1n+_ : Nat}
+  UL.nat_add_succ(a, 0n)
 
 def nt.refl(a: Nat) -> {Nat.cmp(a, a) == EQ{} : Cmp}:
   match a:
@@ -777,8 +462,8 @@ def nt.cmp_add_l(k: Nat, +a: Nat, +b: Nat) -> {Nat.cmp(Nat.add(k, a), Nat.add(k,
       nt.cmp_add_l(p, a, b)
 
 def nt.cmp_add_r(+a: Nat, +b: Nat, +k: Nat) -> {Nat.cmp(Nat.add(a, k), Nat.add(b, k)) == Nat.cmp(a, b) : Cmp}:
-  %nt.add_comm(k, a) : {Nat.cmp(_, Nat.add(b, k)) == Nat.cmp(a, b) : Cmp}
-  %nt.add_comm(k, b) : {Nat.cmp(Nat.add(k, a), _) == Nat.cmp(a, b) : Cmp}
+  %UL.nat_add_comm(k, a) : {Nat.cmp(_, Nat.add(b, k)) == Nat.cmp(a, b) : Cmp}
+  %UL.nat_add_comm(k, b) : {Nat.cmp(Nat.add(k, a), _) == Nat.cmp(a, b) : Cmp}
   nt.cmp_add_l(k, a, b)
 
 def nt.le_add(a: Nat, d: Nat) -> {Cmp.is_le(Nat.cmp(a, Nat.add(a, d))) == True{} : Bool}:
@@ -883,21 +568,6 @@ def nt.to_nat_con(-q: Nat, x: Bool, -t: Word(q)) -> {Word.to_nat(1n+q, WCon{x, t
     case True{}:
       {==}
 
-# Word's order is the order of the values
-def nt.word_cmp(n: Nat, a: Word(n), b: Word(n)) -> {Word.cmp(n, a, b) == Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)) : Cmp}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+ +q:
-      match a b:
-        case WCon{+x, +at} WCon{+y, +bt}:
-          %Equal.sym(Nat, Word.to_nat(1n+q, WCon{x, at}), Nat.add(bitN(x), Nat.double(Word.to_nat(q, at))), nt.to_nat_con(q, x, at)) : {Word.cmp.fin(x, y, Word.cmp(q, at, bt)) == Nat.cmp(_, Word.to_nat(1n+q, WCon{y, bt})) : Cmp}
-          %Equal.sym(Nat, Word.to_nat(1n+q, WCon{y, bt}), Nat.add(bitN(y), Nat.double(Word.to_nat(q, bt))), nt.to_nat_con(q, y, bt)) : {Word.cmp.fin(x, y, Word.cmp(q, at, bt)) == Nat.cmp(Nat.add(bitN(x), Nat.double(Word.to_nat(q, at))), _) : Cmp}
-          %Equal.sym(Cmp, Word.cmp(q, at, bt), Nat.cmp(Word.to_nat(q, at), Word.to_nat(q, bt)), nt.word_cmp(q, at, bt)) : {Word.cmp.fin(x, y, _) == Nat.cmp(Nat.add(bitN(x), Nat.double(Word.to_nat(q, at))), Nat.add(bitN(y), Nat.double(Word.to_nat(q, bt)))) : Cmp}
-          Equal.sym(Cmp, Nat.cmp(Nat.add(bitN(x), Nat.double(Word.to_nat(q, at))), Nat.add(bitN(y), Nat.double(Word.to_nat(q, bt)))), Word.cmp.fin(x, y, Nat.cmp(Word.to_nat(q, at), Word.to_nat(q, bt))), nt.cmp_bd(Word.to_nat(q, at), Word.to_nat(q, bt), x, y))
-
 def p2(n: Nat) -> Nat:
   match n:
     case 0n:
@@ -967,7 +637,7 @@ def nt.lhs(s: Bool, k: Bool, +a: Nat, +b: Nat) -> {Nat.add(bitN(s), Nat.double(N
     case False{}:
       match k:
         case False{}:
-          %Equal.sym(Nat, Nat.add(Nat.add(a, b), 0n), Nat.add(a, b), nt.add_zero(Nat.add(a, b))) : {Nat.double(_) == Nat.add(Nat.double(a), Nat.double(b)) : Nat}
+          %Equal.sym(Nat, Nat.add(Nat.add(a, b), 0n), Nat.add(a, b), UL.nat_add_zero(Nat.add(a, b))) : {Nat.double(_) == Nat.add(Nat.double(a), Nat.double(b)) : Nat}
           nt.double_add(a, b)
         case True{}:
           %Equal.sym(Nat, Nat.add(Nat.add(a, b), 1n), 1n+Nat.add(a, b), nt.add_one(Nat.add(a, b))) : {Nat.double(_) == 2n+Nat.add(Nat.double(a), Nat.double(b)) : Nat}
@@ -976,7 +646,7 @@ def nt.lhs(s: Bool, k: Bool, +a: Nat, +b: Nat) -> {Nat.add(bitN(s), Nat.double(N
     case True{}:
       match k:
         case False{}:
-          %Equal.sym(Nat, Nat.add(Nat.add(a, b), 0n), Nat.add(a, b), nt.add_zero(Nat.add(a, b))) : {1n+Nat.double(_) == 1n+Nat.add(Nat.double(a), Nat.double(b)) : Nat}
+          %Equal.sym(Nat, Nat.add(Nat.add(a, b), 0n), Nat.add(a, b), UL.nat_add_zero(Nat.add(a, b))) : {1n+Nat.double(_) == 1n+Nat.add(Nat.double(a), Nat.double(b)) : Nat}
           %nt.double_add(a, b) : {1n+Nat.double(Nat.add(a, b)) == 1n+_ : Nat}
           {==}
         case True{}:
@@ -989,12 +659,12 @@ def nt.rhs_y(y: Bool, +da: Nat, +db: Nat) -> {Nat.add(da, Nat.add(bitN(y), db)) 
     case False{}:
       {==}
     case True{}:
-      nt.add_succ(da, db)
+      UL.nat_add_succ(da, db)
 
 def nt.rhs_c(c: Bool, +z: Nat) -> {Nat.add(z, bitN(c)) == Nat.add(bitN(c), z) : Nat}:
   match c:
     case False{}:
-      nt.add_zero(z)
+      UL.nat_add_zero(z)
     case True{}:
       nt.add_one(z)
 
@@ -1082,7 +752,7 @@ def nt.adc(n: Nat, a: Word(n), b: Word(n), +c: Bool) -> {Nat.add(Word.to_nat(n, 
           %Equal.sym(Word(1n+q), Word.adc(1n+q, WCon{x, at}, WCon{y, bt}, False{}, c), WCon{sbit(x, y, c), Word.adc(q, at, bt, False{}, kbit(x, y, c))}, nt.adc_con(q, x, y, c, at, bt)) : {Nat.add(Word.to_nat(1n+q, _), copP(wco(q, at, bt, kbit(x, y, c)), p2(1n+q))) == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
           %Equal.sym(Nat, Word.to_nat(1n+q, WCon{sbit(x, y, c), Word.adc(q, at, bt, False{}, kbit(x, y, c))}), Nat.add(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))))), nt.to_nat_con(q, sbit(x, y, c), Word.adc(q, at, bt, False{}, kbit(x, y, c)))) : {Nat.add(_, copP(wco(q, at, bt, kbit(x, y, c)), p2(1n+q))) == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
           %Equal.sym(Nat, copP(wco(q, at, bt, kbit(x, y, c)), p2(1n+q)), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q))), nt.cop_succ(wco(q, at, bt, kbit(x, y, c)), q)) : {Nat.add(Nat.add(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))))), _) == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
-          %Equal.sym(Nat, Nat.add(Nat.add(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q)))), Nat.add(bitN(sbit(x, y, c)), Nat.add(Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c)))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q))))), nt.add_assoc(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c)))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q))))) : {_ == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
+          %Equal.sym(Nat, Nat.add(Nat.add(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q)))), Nat.add(bitN(sbit(x, y, c)), Nat.add(Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c)))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q))))), UL.nat_add_assoc(bitN(sbit(x, y, c)), Nat.double(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c)))), Nat.double(copP(wco(q, at, bt, kbit(x, y, c)), p2(q))))) : {_ == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
           %nt.double_add(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))), copP(wco(q, at, bt, kbit(x, y, c)), p2(q))) : {Nat.add(bitN(sbit(x, y, c)), _) == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
           %Equal.sym(Nat, Nat.add(Word.to_nat(q, Word.adc(q, at, bt, False{}, kbit(x, y, c))), copP(wco(q, at, bt, kbit(x, y, c)), p2(q))), Nat.add(Nat.add(Word.to_nat(q, at), Word.to_nat(q, bt)), bitN(kbit(x, y, c))), nt.adc(q, at, bt, kbit(x, y, c))) : {Nat.add(bitN(sbit(x, y, c)), Nat.double(_)) == Nat.add(Nat.add(Word.to_nat(1n+q, WCon{x, at}), Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
           %Equal.sym(Nat, Word.to_nat(1n+q, WCon{x, at}), Nat.add(bitN(x), Nat.double(Word.to_nat(q, at))), nt.to_nat_con(q, x, at)) : {Nat.add(bitN(sbit(x, y, c)), Nat.double(Nat.add(Nat.add(Word.to_nat(q, at), Word.to_nat(q, bt)), bitN(kbit(x, y, c))))) == Nat.add(Nat.add(_, Word.to_nat(1n+q, WCon{y, bt})), bitN(c)) : Nat}
@@ -1111,13 +781,13 @@ def nt.le_gt_absurd(+y: Nat, +s: Nat, +h: {Cmp.is_le(Nat.cmp(y, s)) == True{} : 
 
 def nt.carry_y.r(+sy: Nat, +y: Nat, +d: Nat, +p: Nat, +hy: {Nat.add(sy, p) == Nat.add(Nat.add(y, d), 0n) : Nat}) -> {Nat.cmp(Nat.add(sy, p), Nat.add(y, p)) == Nat.cmp(Nat.add(y, d), Nat.add(y, p)) : Cmp}:
   %Equal.sym(Nat, Nat.add(sy, p), Nat.add(Nat.add(y, d), 0n), hy) : {Nat.cmp(_, Nat.add(y, p)) == Nat.cmp(Nat.add(y, d), Nat.add(y, p)) : Cmp}
-  %nt.add_zero(Nat.add(y, d)) : {Nat.cmp(Nat.add(Nat.add(y, d), 0n), Nat.add(y, p)) == Nat.cmp(_, Nat.add(y, p)) : Cmp}
+  %UL.nat_add_zero(Nat.add(y, d)) : {Nat.cmp(Nat.add(Nat.add(y, d), 0n), Nat.add(y, p)) == Nat.cmp(_, Nat.add(y, p)) : Cmp}
   {==}
 
 def nt.carry_y(+y: Nat, +d: Nat, +sy: Nat, cy: Bool, +p: Nat, +hy: {Nat.add(sy, copP(cy, p)) == Nat.add(Nat.add(y, d), 0n) : Nat}, +hd: {Nat.cmp(d, p) == LT{} : Cmp}, +h2: {Cmp.is_le(Nat.cmp(y, sy)) == True{} : Bool}) -> {sy == Nat.add(y, d) : Nat}:
   match cy:
     case False{}:
-      Equal.trans(Nat, sy, Nat.add(sy, 0n), Nat.add(y, d), Equal.sym(Nat, Nat.add(sy, 0n), sy, nt.add_zero(sy)), Equal.trans(Nat, Nat.add(sy, 0n), Nat.add(Nat.add(y, d), 0n), Nat.add(y, d), hy, nt.add_zero(Nat.add(y, d))))
+      Equal.trans(Nat, sy, Nat.add(sy, 0n), Nat.add(y, d), Equal.sym(Nat, Nat.add(sy, 0n), sy, UL.nat_add_zero(sy)), Equal.trans(Nat, Nat.add(sy, 0n), Nat.add(Nat.add(y, d), 0n), Nat.add(y, d), hy, UL.nat_add_zero(Nat.add(y, d))))
     case True{}:
       +lt = Equal.trans(Cmp, Nat.cmp(sy, y), Nat.cmp(Nat.add(sy, p), Nat.add(y, p)), LT{}, Equal.sym(Cmp, Nat.cmp(Nat.add(sy, p), Nat.add(y, p)), Nat.cmp(sy, y), nt.cmp_add_r(sy, y, p)), Equal.trans(Cmp, Nat.cmp(Nat.add(sy, p), Nat.add(y, p)), Nat.cmp(Nat.add(y, d), Nat.add(y, p)), LT{}, nt.carry_y.r(sy, y, d, p, hy), Equal.trans(Cmp, Nat.cmp(Nat.add(y, d), Nat.add(y, p)), Nat.cmp(d, p), LT{}, nt.cmp_add_l(y, d, p), hd)))
       Empty.absurd({sy == Nat.add(y, d) : Nat}, nt.le_gt_absurd(y, sy, h2, lt))
@@ -1132,13 +802,13 @@ def nt.carry_x.lt(+y: Nat, +d: Nat, +sy: Nat, +p: Nat, +hsy: {Nat.cmp(sy, p) == 
 
 def nt.carry_x.top(+sx: Nat, +x: Nat, +d: Nat, +p: Nat, +hx: {Nat.add(sx, p) == Nat.add(Nat.add(x, d), 0n) : Nat}, +lt: {Nat.cmp(Nat.add(x, d), p) == LT{} : Cmp}) -> {Nat.cmp(Nat.add(sx, p), p) == LT{} : Cmp}:
   %Equal.sym(Nat, Nat.add(sx, p), Nat.add(Nat.add(x, d), 0n), hx) : {Nat.cmp(_, p) == LT{} : Cmp}
-  %Equal.sym(Nat, Nat.add(Nat.add(x, d), 0n), Nat.add(x, d), nt.add_zero(Nat.add(x, d))) : {Nat.cmp(_, p) == LT{} : Cmp}
+  %Equal.sym(Nat, Nat.add(Nat.add(x, d), 0n), Nat.add(x, d), UL.nat_add_zero(Nat.add(x, d))) : {Nat.cmp(_, p) == LT{} : Cmp}
   lt
 
 def nt.carry_x(+x: Nat, +y: Nat, +d: Nat, +sx: Nat, +sy: Nat, cx: Bool, +p: Nat, +hx: {Nat.add(sx, copP(cx, p)) == Nat.add(Nat.add(x, d), 0n) : Nat}, +hsy: {Nat.cmp(sy, p) == LT{} : Cmp}, +h1: {Cmp.is_le(Nat.cmp(x, y)) == True{} : Bool}, +ey: {sy == Nat.add(y, d) : Nat}) -> {sx == Nat.add(x, d) : Nat}:
   match cx:
     case False{}:
-      Equal.trans(Nat, sx, Nat.add(sx, 0n), Nat.add(x, d), Equal.sym(Nat, Nat.add(sx, 0n), sx, nt.add_zero(sx)), Equal.trans(Nat, Nat.add(sx, 0n), Nat.add(Nat.add(x, d), 0n), Nat.add(x, d), hx, nt.add_zero(Nat.add(x, d))))
+      Equal.trans(Nat, sx, Nat.add(sx, 0n), Nat.add(x, d), Equal.sym(Nat, Nat.add(sx, 0n), sx, UL.nat_add_zero(sx)), Equal.trans(Nat, Nat.add(sx, 0n), Nat.add(Nat.add(x, d), 0n), Nat.add(x, d), hx, UL.nat_add_zero(Nat.add(x, d))))
     case True{}:
       +top = nt.carry_x.top(sx, x, d, p, hx, nt.le_lt(Nat.add(x, d), Nat.add(y, d), p, nt.carry_x.le(x, y, d, h1), nt.carry_x.lt(y, d, sy, p, hsy, ey)))
       Empty.absurd({sx == Nat.add(x, d) : Nat}, nt.not_lt_zero(sx, Equal.trans(Cmp, Nat.cmp(sx, 0n), Nat.cmp(Nat.add(sx, p), Nat.add(0n, p)), LT{}, Equal.sym(Cmp, Nat.cmp(Nat.add(sx, p), Nat.add(0n, p)), Nat.cmp(sx, 0n), nt.cmp_add_r(sx, 0n, p)), top)))
@@ -1153,11 +823,11 @@ def nt.am_le2(+x: Nat, +y: Nat, +d: Nat, +sx: Nat, +sy: Nat, +ex: {sx == Nat.add
   nt.carry_x.le(x, y, d, h1)
 
 def wd.to_nat_le(+n: Nat, +a: Word(n), +b: Word(n), +h: {Cmp.is_le(Word.cmp(n, a, b)) == True{} : Bool}) -> {Cmp.is_le(Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b))) == True{} : Bool}:
-  %nt.word_cmp(n, a, b) : {Cmp.is_le(_) == True{} : Bool}
+  %UL.word_cmp_value(n, a, b) : {Cmp.is_le(_) == True{} : Bool}
   h
 
 def wd.of_nat_le(+n: Nat, +a: Word(n), +b: Word(n), +h: {Cmp.is_le(Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b))) == True{} : Bool}) -> {Cmp.is_le(Word.cmp(n, a, b)) == True{} : Bool}:
-  %Equal.sym(Cmp, Word.cmp(n, a, b), Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)), nt.word_cmp(n, a, b)) : {Cmp.is_le(_) == True{} : Bool}
+  %Equal.sym(Cmp, Word.cmp(n, a, b), Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)), UL.word_cmp_value(n, a, b)) : {Cmp.is_le(_) == True{} : Bool}
   h
 
 def wd.am(+n: Nat, +xw: Word(n), +yw: Word(n), +dw: Word(n), +h1: {Cmp.is_le(Word.cmp(n, xw, yw)) == True{} : Bool}, +h2: {Cmp.is_le(Word.cmp(n, yw, Word.adc(n, yw, dw, False{}, False{}))) == True{} : Bool}) -> {Bool.and(Cmp.is_le(Word.cmp(n, xw, Word.adc(n, xw, dw, False{}, False{}))), Cmp.is_le(Word.cmp(n, Word.adc(n, xw, dw, False{}, False{}), Word.adc(n, yw, dw, False{}, False{})))) == True{} : Bool}:

@@ -226,6 +226,9 @@ too large for the checker to expand (`check.bend` shows it).
 `bend-osdev-bytes` (buffers are `Octets`) and `bend-osdev-word64`
 (`nla.u64` and `nla.get_u64` use `W64`).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` and `PROOF_validate.bend` ALL PROOFS CHECK,

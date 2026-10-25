@@ -5,6 +5,10 @@
 # laws (u32_sub_value, u32_add_value, u32_inc_value, u32_shr_value), which
 # PROOF.bend and proof_bsearch.bend use.
 import Base
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # 2^n
 def uq.pw(n: Nat) -> Nat:
@@ -43,27 +47,6 @@ def uq.double_cong(-a: Nat, -b: Nat, e: {a == b : Nat}) -> {Nat.double(a) == Nat
   %e : {Nat.double(a) == Nat.double(_) : Nat}
   {==}
 
-def uq.add_zero(x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      uq.succ_cong(Nat.add(p, 0n), p, uq.add_zero(p))
-
-def uq.add_succ(x: Nat, -y: Nat) -> {Nat.add(x, 1n+y) == 1n+Nat.add(x, y) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      uq.succ_cong(Nat.add(p, 1n+y), 1n+Nat.add(p, y), uq.add_succ(p, y))
-
-def uq.add_comm(x: Nat, +y: Nat) -> {Nat.add(x, y) == Nat.add(y, x) : Nat}:
-  match x:
-    case 0n:
-      Equal.sym(Nat, Nat.add(y, 0n), y, uq.add_zero(y))
-    case 1n+p:
-      Equal.trans(Nat, 1n+Nat.add(p, y), 1n+Nat.add(y, p), Nat.add(y, 1n+p), uq.succ_cong(Nat.add(p, y), Nat.add(y, p), uq.add_comm(p, y)), Equal.sym(Nat, Nat.add(y, 1n+p), 1n+Nat.add(y, p), uq.add_succ(y, p)))
-
 def uq.double_add(x: Nat, -y: Nat) -> {Nat.double(Nat.add(x, y)) == Nat.add(Nat.double(x), Nat.double(y)) : Nat}:
   match x:
     case 0n:
@@ -83,7 +66,7 @@ def uq.sub_add_l(y: Nat, +r: Nat) -> {Nat.sub(Nat.add(y, r), y) == r : Nat}:
       uq.sub_add_l(q, r)
 
 def uq.sub_add(+r: Nat, +y: Nat) -> {Nat.sub(Nat.add(r, y), y) == r : Nat}:
-  %uq.add_comm(y, r) : {Nat.sub(_, y) == r : Nat}
+  %UL.nat_add_comm(y, r) : {Nat.sub(_, y) == r : Nat}
   uq.sub_add_l(y, r)
 
 def uq.le_succ(y: Nat, x: Nat) -> {Nat.is_le(1n+y, x) == Nat.is_lt(y, x) : Bool}:
@@ -148,23 +131,6 @@ def uq.lt_succ_r(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.
       Empty.absurd({Nat.is_lt(1n+xp, 1n) == True{} : Bool}, uq.ft(h))
     case 1n+xp 1n+yp:
       uq.lt_succ_r(xp, yp, h)
-
-def uq.le_lt_trans(x: Nat, y: Nat, z: Nat, h1: {Nat.is_le(x, y) == True{} : Bool}, h2: {Nat.is_lt(y, z) == True{} : Bool}) -> {Nat.is_lt(x, z) == True{} : Bool}:
-  match x y z:
-    case 0n 0n 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, uq.ft(h2))
-    case 0n 0n 1n+zp:
-      {==}
-    case 0n 1n+yp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, uq.ft(h2))
-    case 0n 1n+yp 1n+zp:
-      {==}
-    case 1n+xp 0n _:
-      Empty.absurd({Nat.is_lt(1n+xp, z) == True{} : Bool}, uq.ft(h1))
-    case 1n+xp 1n+yp 0n:
-      Empty.absurd({Nat.is_lt(1n+xp, 0n) == True{} : Bool}, uq.ft(h2))
-    case 1n+xp 1n+yp 1n+zp:
-      uq.le_lt_trans(xp, yp, zp, h1, h2)
 
 def uq.lt_dbl_self(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_lt(x, Nat.double(y)) == True{} : Bool}:
   match x y:

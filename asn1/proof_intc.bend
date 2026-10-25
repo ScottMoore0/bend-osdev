@@ -24,6 +24,8 @@ import ./proof_byte.bend as AB
 import ./proof_int.bend as PI
 import ./proof_clock.bend as PK
 import ./proof_strict.bend as PS
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Octets as digits
 
@@ -110,10 +112,10 @@ def pc.canon1(+d: Nat, t: List<&2, Nat>, +h: {Nat.is_le(1n, d) == True{} : Bool}
 def pc.horner_ge(ds: List<&2, Nat>, +acc: Nat) -> {Nat.is_le(acc, Nu.a1.horner(ds, 256n, acc)) == True{} : Bool}:
   match ds:
     case Nil{}:
-      AN.an.le_refl(acc)
+      UL.nat_le_refl(acc)
     case Con{+x, +t}:
       +a2 = Nat.add(Nat.mul(acc, 256n), x)
-      AN.an.le_trans(acc, a2, Nu.a1.horner(t, 256n, a2), AN.an.le_trans(acc, Nat.mul(acc, 256n), a2, AN.an.le_mul(acc, 255n), AN.an.le_add(Nat.mul(acc, 256n), x)), pc.horner_ge(t, a2))
+      UO.nat_le_trans(acc, a2, Nu.a1.horner(t, 256n, a2), UO.nat_le_trans(acc, Nat.mul(acc, 256n), a2, AN.an.le_mul(acc, 255n), UO.nat_le_add_r(Nat.mul(acc, 256n), x)), pc.horner_ge(t, a2))
 
 # h >= 1: 256 <= h * 256 + z, and h < h * 256 + z
 def pc.ge256(+h: Nat, +z: Nat, +h1: {Nat.is_le(1n, h) == True{} : Bool}) -> {Nat.is_le(256n, Nat.add(Nat.mul(h, 256n), z)) == True{} : Bool}:
@@ -121,7 +123,7 @@ def pc.ge256(+h: Nat, +z: Nat, +h1: {Nat.is_le(1n, h) == True{} : Bool}) -> {Nat
     case 0n:
       Empty.absurd({Nat.is_le(256n, Nat.add(Nat.mul(0n, 256n), z)) == True{} : Bool}, AN.an.ft(h1))
     case 1n+p:
-      AN.an.le_trans(256n, Nat.mul(1n+p, 256n), Nat.add(Nat.mul(1n+p, 256n), z), AN.an.le_add(256n, Nat.mul(p, 256n)), AN.an.le_add(Nat.mul(1n+p, 256n), z))
+      UO.nat_le_trans(256n, Nat.mul(1n+p, 256n), Nat.add(Nat.mul(1n+p, 256n), z), UO.nat_le_add_r(256n, Nat.mul(p, 256n)), UO.nat_le_add_r(Nat.mul(1n+p, 256n), z))
 
 def pc.gt_self(+h: Nat, +z: Nat, +h1: {Nat.is_le(1n, h) == True{} : Bool}) -> {Nat.is_le(1n+h, Nat.add(Nat.mul(h, 256n), z)) == True{} : Bool}:
   match h:
@@ -129,8 +131,8 @@ def pc.gt_self(+h: Nat, +z: Nat, +h1: {Nat.is_le(1n, h) == True{} : Bool}) -> {N
       Empty.absurd({Nat.is_le(1n, Nat.add(Nat.mul(0n, 256n), z)) == True{} : Bool}, AN.an.ft(h1))
     case 1n+p:
       +e1 = AN.an.le_add_mono(256n, p, Nat.mul(p, 256n), AN.an.le_mul(p, 255n))
-      +e2 = AN.an.le_trans(2n+p, Nat.add(256n, p), Nat.add(256n, Nat.mul(p, 256n)), AN.an.le_add_l(254n, p), e1)
-      AN.an.le_trans(2n+p, Nat.mul(1n+p, 256n), Nat.add(Nat.mul(1n+p, 256n), z), e2, AN.an.le_add(Nat.mul(1n+p, 256n), z))
+      +e2 = UO.nat_le_trans(2n+p, Nat.add(256n, p), Nat.add(256n, Nat.mul(p, 256n)), UL.nat_le_add(p, 254n), e1)
+      UO.nat_le_trans(2n+p, Nat.mul(1n+p, 256n), Nat.add(Nat.mul(1n+p, 256n), z), e2, UO.nat_le_add_r(Nat.mul(1n+p, 256n), z))
 
 # the digits of the value of canonical digits are those digits
 def pc.dh(fuel: Nat, +d: Nat, t: List<&2, Nat>, +hall: {PN.pn.all_lt(Con{d, t}, 256n) == True{} : Bool}, +hcan: {PI.pi.canon(Con{d, t}) == True{} : Bool}, +hf: {Nat.is_le(Nu.a1.horner(Con{d, t}, 256n, 0n), fuel) == True{} : Bool}) -> {Nu.a1.digits.go(fuel, Nat.is_lt(Nu.a1.horner(Con{d, t}, 256n, 0n), 256n), 256n, Nu.a1.horner(Con{d, t}, 256n, 0n)) == Con{d, t} : List<&2, Nat>}:
@@ -140,8 +142,8 @@ def pc.dh(fuel: Nat, +d: Nat, t: List<&2, Nat>, +hall: {PN.pn.all_lt(Con{d, t}, 
       {==}
     case 0n Con{+e, +u}:
       +hge = pc.ge256(d, e, hcan)
-      +hh = AN.an.le_trans(Nat.add(Nat.mul(d, 256n), e), Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n), 0n, pc.horner_ge(u, Nat.add(Nat.mul(d, 256n), e)), hf)
-      Empty.absurd({Nu.a1.digits.go(0n, Nat.is_lt(Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n), 256n), 256n, Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n)) == Con{d, Con{e, u}} : List<&2, Nat>}, AN.an.ft(AN.an.le_trans(256n, Nat.add(Nat.mul(d, 256n), e), 0n, hge, hh)))
+      +hh = UO.nat_le_trans(Nat.add(Nat.mul(d, 256n), e), Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n), 0n, pc.horner_ge(u, Nat.add(Nat.mul(d, 256n), e)), hf)
+      Empty.absurd({Nu.a1.digits.go(0n, Nat.is_lt(Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n), 256n), 256n, Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n)) == Con{d, Con{e, u}} : List<&2, Nat>}, AN.an.ft(UO.nat_le_trans(256n, Nat.add(Nat.mul(d, 256n), e), 0n, hge, hh)))
     case 1n+ +f Con{+e, +u}:
       +p = pc.init(Con{e, u}, d)
       +z = pc.last(Con{e, u}, d)
@@ -149,12 +151,12 @@ def pc.dh(fuel: Nat, +d: Nat, t: List<&2, Nat>, +hall: {PN.pn.all_lt(Con{d, t}, 
       +hd1 = hcan
       +hz = pc.last_lt(Con{e, u}, d, hall)
       +hpall = pc.all_init(Con{e, u}, d, hall)
-      +hp1 = AN.an.le_trans(1n, d, hp, hd1, pc.horner_ge(pc.init(u, e), d))
+      +hp1 = UO.nat_le_trans(1n, d, hp, hd1, pc.horner_ge(pc.init(u, e), d))
       +n = Nat.add(Nat.mul(hp, 256n), z)
       +es = pc.split(Con{e, u}, d)
       +eh = PN.pn.horner_snoc(p, 256n, 0n, z)
       +hfn = Equal.trans(Bool, Nat.is_le(n, 1n+f), Nat.is_le(Nu.a1.horner(List.append(&2, Nat, p, [z]), 256n, 0n), 1n+f), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(x, 1n+f), n, Nu.a1.horner(List.append(&2, Nat, p, [z]), 256n, 0n), Equal.sym(Nat, Nu.a1.horner(List.append(&2, Nat, p, [z]), 256n, 0n), n, eh)), Equal.trans(Bool, Nat.is_le(Nu.a1.horner(List.append(&2, Nat, p, [z]), 256n, 0n), 1n+f), Nat.is_le(Nu.a1.horner(Con{d, Con{e, u}}, 256n, 0n), 1n+f), True{}, Equal.cong(List<&2, Nat>, Bool, l => Nat.is_le(Nu.a1.horner(l, 256n, 0n), 1n+f), List.append(&2, Nat, p, [z]), Con{d, Con{e, u}}, es), hf))
-      +hpf = AN.an.le_trans(1n+hp, n, 1n+f, pc.gt_self(hp, z, hp1), hfn)
+      +hpf = UO.nat_le_trans(1n+hp, n, 1n+f, pc.gt_self(hp, z, hp1), hfn)
       +ih = pc.dh(f, d, pc.init(u, e), hpall, pc.canon1(d, pc.init(u, e), hd1), hpf)
       %es : {Nu.a1.digits.go(1n+f, Nat.is_lt(Nu.a1.horner(_, 256n, 0n), 256n), 256n, Nu.a1.horner(_, 256n, 0n)) == _ : List<&2, Nat>}
       %Equal.sym(Nat, Nu.a1.horner(List.append(&2, Nat, p, [z]), 256n, 0n), n, eh) : {Nu.a1.digits.go(1n+f, Nat.is_lt(_, 256n), 256n, _) == List.append(&2, Nat, p, [z]) : List<&2, Nat>}
@@ -171,7 +173,7 @@ def pc.be_can(ds: List<&2, Nat>, +hall: {PN.pn.all_lt(ds, 256n) == True{} : Bool
       Empty.absurd({Nu.a1.be(0n) == Nil{} : List<&2, U32>}, AN.an.ft(hcan))
     case Con{+d, +t}:
       +m = Nu.a1.horner(Con{d, t}, 256n, 0n)
-      Equal.cong(List<&2, Nat>, List<&2, U32>, l => Nu.a1.bytes_of(l), Nu.a1.digits.go(m, Nat.is_lt(m, 256n), 256n, m), Con{d, t}, pc.dh(m, d, t, hall, hcan, AN.an.le_refl(m)))
+      Equal.cong(List<&2, Nat>, List<&2, U32>, l => Nu.a1.bytes_of(l), Nu.a1.digits.go(m, Nat.is_lt(m, 256n), 256n, m), Con{d, t}, pc.dh(m, d, t, hall, hcan, UL.nat_le_refl(m)))
 
 # Arithmetic
 
@@ -203,8 +205,8 @@ def pc.not_or_f(b: Bool, +h: {Bool.not(Bool.or(b, False{})) == True{} : Bool}) -
       {==}
 
 def pc.add1(+f: Nat) -> {Nat.add(f, 1n) == 1n+f : Nat}:
-  %Equal.sym(Nat, Nat.add(f, 1n), 1n+Nat.add(f, 0n), AN.an.add_succ(f, 0n)) : {_ == 1n+f : Nat}
-  %Equal.sym(Nat, Nat.add(f, 0n), f, AN.an.add_zero(f)) : {1n+_ == 1n+f : Nat}
+  %Equal.sym(Nat, Nat.add(f, 1n), 1n+Nat.add(f, 0n), UL.nat_add_succ(f, 0n)) : {_ == 1n+f : Nat}
+  %Equal.sym(Nat, Nat.add(f, 0n), f, UL.nat_add_zero(f)) : {1n+_ == 1n+f : Nat}
   {==}
 
 # The writer's contents of the integer of canonical digits
@@ -236,7 +238,7 @@ def pc.pos_d0(d0: Nat, rest: List<&2, Nat>, +hall: {PN.pn.all_lt(Con{d0, rest}, 
       +hlt = pc.not_or_f(U32.is_lt(Nu.a1.b(d1), 128), hok)
       +hge = PI.pi.le_of_nlt(d1, 128n, Equal.trans(Bool, Nat.is_lt(d1, 128n), U32.is_lt(Nu.a1.b(d1), 128), False{}, Equal.sym(Bool, U32.is_lt(Nu.a1.b(d1), 128), Nat.is_lt(d1, 128n), PI.pi.lt128(d1, hd1)), hlt))
       +hi = Equal.trans(Bool, U32.is_le(128, Nu.a1.b(d1)), Nat.is_le(128n, d1), True{}, PI.pi.le128(d1, hd1), hge)
-      pc.nat_c(Con{d1, r2}, hr, pc.canon1(d1, r2, AN.an.le_trans(1n, 128n, d1, {==}, hge)), True{}, hi)
+      pc.nat_c(Con{d1, r2}, hr, pc.canon1(d1, r2, UO.nat_le_trans(1n, 128n, d1, {==}, hge)), True{}, hi)
     case 1n+ +p +rest2:
       pc.nat_c(Con{1n+p, rest2}, hall, pc.canon1(1n+p, rest2, AN.an.le_zero(p)), False{}, hn)
 
@@ -261,7 +263,7 @@ def pc.neg_q(q: Bool, +d0: Nat, rest: List<&2, Nat>, +hall: {PN.pn.all_lt(Con{d0
       +hle = AN.an.not_t(U32.is_le(128, Nu.a1.b(d1)), hok2)
       +hlt1 = AN.an.nle_lt(d1, 128n, Equal.trans(Bool, Nat.is_le(128n, d1), U32.is_le(128, Nu.a1.b(d1)), False{}, Equal.sym(Bool, U32.is_le(128, Nu.a1.b(d1)), Nat.is_le(128n, d1), PI.pi.le128(d1, hd1)), hle))
       +hlo1 = Equal.trans(Bool, U32.is_lt(Nu.a1.b(d1), 128), Nat.is_lt(d1, 128n), True{}, PI.pi.lt128(d1, hd1), hlt1)
-      +hcan = pc.canon1(Nat.sub(255n, d1), PI.pi.cmap(r2), pc.sub_pos(255n, d1, AN.an.lt_le_trans(d1, 128n, 255n, hlt1, {==})))
+      +hcan = pc.canon1(Nat.sub(255n, d1), PI.pi.cmap(r2), pc.sub_pos(255n, d1, UO.nat_lt_le_trans(d1, 128n, 255n, hlt1, {==})))
       %Equal.sym(Nat, d0, 255n, ed) : {P.a1.int.neg(1n+Nu.a1.horner(PI.pi.cmap(Con{_, Con{d1, r2}}), 256n, 0n)) == Nu.a1.bytes_of(Con{_, Con{d1, r2}}) : List<&2, U32>}
       pc.neg_c(Con{d1, r2}, hr, hcan, True{}, hlo1)
 

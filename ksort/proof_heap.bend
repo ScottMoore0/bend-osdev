@@ -14,6 +14,10 @@ import ./heapsort.bend as H
 import ../array/array.bend as AR
 import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -429,74 +433,6 @@ def hm.m_sort(~A: Data, ~le: A -> A -> Bool, +d: Nat, +fl: A, +xs: List<&2, A>, 
 
 # U32's order is the order of the values (by induction over Base's Word)
 
-def hm.bv(b: Bool, x: Nat) -> Nat:
-  match b:
-    case False{}:
-      Nat.double(x)
-    case True{}:
-      1n+Nat.double(x)
-
-def hm.nc(x: Nat, y: Nat, a: Bool, b: Bool) -> {Nat.cmp(hm.bv(a, x), hm.bv(b, y)) == Word.cmp.fin(a, b, Nat.cmp(x, y)) : Cmp}:
-  match x y a b:
-    case 0n 0n False{} False{}:
-      {==}
-    case 0n 0n False{} True{}:
-      {==}
-    case 0n 0n True{} False{}:
-      {==}
-    case 0n 0n True{} True{}:
-      {==}
-    case 0n 1n+yp False{} False{}:
-      {==}
-    case 0n 1n+yp False{} True{}:
-      {==}
-    case 0n 1n+yp True{} False{}:
-      {==}
-    case 0n 1n+yp True{} True{}:
-      {==}
-    case 1n+xp 0n False{} False{}:
-      {==}
-    case 1n+xp 0n False{} True{}:
-      {==}
-    case 1n+xp 0n True{} False{}:
-      {==}
-    case 1n+xp 0n True{} True{}:
-      {==}
-    case 1n+xp 1n+yp False{} False{}:
-      hm.nc(xp, yp, False{}, False{})
-    case 1n+xp 1n+yp False{} True{}:
-      hm.nc(xp, yp, False{}, True{})
-    case 1n+xp 1n+yp True{} False{}:
-      hm.nc(xp, yp, True{}, False{})
-    case 1n+xp 1n+yp True{} True{}:
-      hm.nc(xp, yp, True{}, True{})
-
-def hm.wc(+n: Nat, a: Word(n), b: Word(n)) -> {Word.cmp(n, a, b) == Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)) : Cmp}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{False{}, +at} WCon{False{}, +bt}:
-          %Equal.sym(Cmp, Word.cmp(p, at, bt), Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)), hm.wc(p, at, bt)) : {Word.cmp.fin(False{}, False{}, _) == Nat.cmp(Nat.double(Word.to_nat(p, at)), Nat.double(Word.to_nat(p, bt))) : Cmp}
-          Equal.sym(Cmp, Nat.cmp(hm.bv(False{}, Word.to_nat(p, at)), hm.bv(False{}, Word.to_nat(p, bt))), Word.cmp.fin(False{}, False{}, Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt))), hm.nc(Word.to_nat(p, at), Word.to_nat(p, bt), False{}, False{}))
-        case WCon{False{}, +at} WCon{True{}, +bt}:
-          %Equal.sym(Cmp, Word.cmp(p, at, bt), Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)), hm.wc(p, at, bt)) : {Word.cmp.fin(False{}, True{}, _) == Nat.cmp(Nat.double(Word.to_nat(p, at)), 1n+Nat.double(Word.to_nat(p, bt))) : Cmp}
-          Equal.sym(Cmp, Nat.cmp(hm.bv(False{}, Word.to_nat(p, at)), hm.bv(True{}, Word.to_nat(p, bt))), Word.cmp.fin(False{}, True{}, Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt))), hm.nc(Word.to_nat(p, at), Word.to_nat(p, bt), False{}, True{}))
-        case WCon{True{}, +at} WCon{False{}, +bt}:
-          %Equal.sym(Cmp, Word.cmp(p, at, bt), Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)), hm.wc(p, at, bt)) : {Word.cmp.fin(True{}, False{}, _) == Nat.cmp(1n+Nat.double(Word.to_nat(p, at)), Nat.double(Word.to_nat(p, bt))) : Cmp}
-          Equal.sym(Cmp, Nat.cmp(hm.bv(True{}, Word.to_nat(p, at)), hm.bv(False{}, Word.to_nat(p, bt))), Word.cmp.fin(True{}, False{}, Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt))), hm.nc(Word.to_nat(p, at), Word.to_nat(p, bt), True{}, False{}))
-        case WCon{True{}, +at} WCon{True{}, +bt}:
-          %Equal.sym(Cmp, Word.cmp(p, at, bt), Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)), hm.wc(p, at, bt)) : {Word.cmp.fin(True{}, True{}, _) == Nat.cmp(1n+Nat.double(Word.to_nat(p, at)), 1n+Nat.double(Word.to_nat(p, bt))) : Cmp}
-          Equal.sym(Cmp, Nat.cmp(hm.bv(True{}, Word.to_nat(p, at)), hm.bv(True{}, Word.to_nat(p, bt))), Word.cmp.fin(True{}, True{}, Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt))), hm.nc(Word.to_nat(p, at), Word.to_nat(p, bt), True{}, True{}))
-
-def hm.u32_lt(a: U32, b: U32) -> {U32.is_lt(a, b) == Nat.is_lt(U32.to_nat(a), U32.to_nat(b)) : Bool}:
-  match a b:
-    case U32{+x} U32{+y}:
-      Equal.cong(Cmp, Bool, c => Cmp.is_lt(c), Word.cmp(32n, x, y), Nat.cmp(Word.to_nat(32n, x), Word.to_nat(32n, y)), hm.wc(32n, x, y))
-
 # Nat order
 
 def hm.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
@@ -505,30 +441,6 @@ def hm.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
       {==}
     case 1n+p:
       {==}
-
-def hm.lt_le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_lt(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  match a b c:
-    case _ 0n _:
-      Empty.absurd({Nat.is_lt(a, c) == True{} : Bool}, hm.ft(Equal.trans(Bool, False{}, Nat.is_lt(a, 0n), True{}, Equal.sym(Bool, Nat.is_lt(a, 0n), False{}, hm.lt0(a)), e)))
-    case 0n 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, hm.ft(f))
-    case 0n 1n+bp 1n+cp:
-      {==}
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(1n+ap, 0n) == True{} : Bool}, hm.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      hm.lt_le_trans(ap, bp, cp, e, f)
-
-def hm.le_lt_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_lt(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  match a b c:
-    case _ _ 0n:
-      Empty.absurd({Nat.is_lt(a, 0n) == True{} : Bool}, hm.ft(Equal.trans(Bool, False{}, Nat.is_lt(b, 0n), True{}, Equal.sym(Bool, Nat.is_lt(b, 0n), False{}, hm.lt0(b)), f)))
-    case 0n _ 1n+cp:
-      {==}
-    case 1n+ap 0n 1n+cp:
-      Empty.absurd({Nat.is_lt(1n+ap, 1n+cp) == True{} : Bool}, hm.ft(e))
-    case 1n+ap 1n+bp 1n+cp:
-      hm.le_lt_trans(ap, bp, cp, e, f)
 
 # not a < b: b <= a
 def hm.nlt(a: Nat, b: Nat, e: {Nat.is_lt(a, b) == False{} : Bool}) -> {Nat.is_le(b, a) == True{} : Bool}:
@@ -563,12 +475,12 @@ def hm.idx_g(b: Bool, +d: Nat, +i: U32, +lim: U32, +k: Nat, eb: {Nat.is_lt(U32.t
   match b:
     case True{}:
       %Equal.sym(Nat, AR.Arrays.index(d, i), U32.to_nat(i), AL.index_of_u32(d, i, eb)) : {Nat.is_lt(_, k) == True{} : Bool}
-      hm.lt_le_trans(U32.to_nat(i), U32.to_nat(lim), k, hi, hk)
+      UO.nat_lt_le_trans(U32.to_nat(i), U32.to_nat(lim), k, hi, hk)
     case False{}:
-      hm.lt_le_trans(AR.Arrays.index(d, i), U32.to_nat(i), k, hm.lt_le_trans(AR.Arrays.index(d, i), AR.Arrays.slots(d), U32.to_nat(i), AL.index_below(d, i), hm.nlt(U32.to_nat(i), AR.Arrays.slots(d), eb)), hm.lt_to_le(U32.to_nat(i), k, hm.lt_le_trans(U32.to_nat(i), U32.to_nat(lim), k, hi, hk)))
+      UO.nat_lt_le_trans(AR.Arrays.index(d, i), U32.to_nat(i), k, UO.nat_lt_le_trans(AR.Arrays.index(d, i), AR.Arrays.slots(d), U32.to_nat(i), AL.index_below(d, i), hm.nlt(U32.to_nat(i), AR.Arrays.slots(d), eb)), hm.lt_to_le(U32.to_nat(i), k, UO.nat_lt_le_trans(U32.to_nat(i), U32.to_nat(lim), k, hi, hk)))
 
 def hm.idx_ne(+d: Nat, +i: U32, +lim: U32, +k: Nat, hi: {U32.is_lt(i, lim) == True{} : Bool}, +hk: {Nat.is_le(U32.to_nat(lim), k) == True{} : Bool}) -> {Nat.is_eq(AR.Arrays.index(d, i), k) == False{} : Bool}:
-  hm.lt_ne(AR.Arrays.index(d, i), k, hm.idx_g(Nat.is_lt(U32.to_nat(i), AR.Arrays.slots(d)), d, i, lim, k, {==}, Equal.trans(Bool, Nat.is_lt(U32.to_nat(i), U32.to_nat(lim)), U32.is_lt(i, lim), True{}, Equal.sym(Bool, U32.is_lt(i, lim), Nat.is_lt(U32.to_nat(i), U32.to_nat(lim)), hm.u32_lt(i, lim)), hi), hk))
+  hm.lt_ne(AR.Arrays.index(d, i), k, hm.idx_g(Nat.is_lt(U32.to_nat(i), AR.Arrays.slots(d)), d, i, lim, k, {==}, Equal.trans(Bool, Nat.is_lt(U32.to_nat(i), U32.to_nat(lim)), U32.is_lt(i, lim), True{}, Equal.sym(Bool, U32.is_lt(i, lim), Nat.is_lt(U32.to_nat(i), U32.to_nat(lim)), UL.u32_lt_value(i, lim)), hi), hk))
 
 # The slots at or past lim: no step of the model changes them
 

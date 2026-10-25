@@ -31,6 +31,10 @@ import ./bm.bend as M
 import ./naive.bend as V
 import ./proof_lib.bend as L
 import ./LAWS_bm.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Lists of bytes
 
@@ -647,10 +651,10 @@ def bp.ln1(e: Bool, +f: Nat, +s: Nat, +i: Nat, +p: List<&2, U32>, +m: Nat, +j: N
 def bp.least_nok(fuel: Nat, +s: Nat, +i: Nat, +p: List<&2, U32>, +m: Nat, +j: Nat, +h_inv: {Nat.is_lt(m, Nat.add(s, fuel)) == True{} : Bool}, +h1: {Nat.is_lt(i, s) == False{} : Bool}, +h2: {Nat.is_lt(i, M.ts.bm.gs.least(fuel, p, m, j, s)) == True{} : Bool}) -> {M.ts.bm.gs.ok(p, m, j, i) == False{} : Bool}:
   match fuel:
     case 0n:
-      +h_ms = Equal.trans(Bool, Nat.is_lt(m, s), Nat.is_lt(m, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, L.tsl.add_zero(s))), h_inv)
-      L.tsl.absurd(Bool, M.ts.bm.gs.ok(p, m, j, i), False{}, Equal.trans(Bool, False{}, Nat.is_lt(i, s), True{}, Equal.sym(Bool, Nat.is_lt(i, s), False{}, h1), L.tsl.lt_trans(i, m, s, h2, h_ms)))
+      +h_ms = Equal.trans(Bool, Nat.is_lt(m, s), Nat.is_lt(m, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, UL.nat_add_zero(s))), h_inv)
+      L.tsl.absurd(Bool, M.ts.bm.gs.ok(p, m, j, i), False{}, Equal.trans(Bool, False{}, Nat.is_lt(i, s), True{}, Equal.sym(Bool, Nat.is_lt(i, s), False{}, h1), UO.nat_lt_trans(i, m, s, h2, h_ms)))
     case 1n+ +f:
-      +h_inv2 = Equal.trans(Bool, Nat.is_lt(m, Nat.add(1n+s, f)), Nat.is_lt(m, Nat.add(s, 1n+f)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), 1n+Nat.add(s, f), Nat.add(s, 1n+f), Equal.sym(Nat, Nat.add(s, 1n+f), 1n+Nat.add(s, f), L.tsl.add_succ(s, f))), h_inv)
+      +h_inv2 = Equal.trans(Bool, Nat.is_lt(m, Nat.add(1n+s, f)), Nat.is_lt(m, Nat.add(s, 1n+f)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), 1n+Nat.add(s, f), Nat.add(s, 1n+f), Equal.sym(Nat, Nat.add(s, 1n+f), 1n+Nat.add(s, f), UL.nat_add_succ(s, f))), h_inv)
       bp.ln1(M.ts.bm.gs.ok(p, m, j, s), f, s, i, p, m, j, h1, {==}, h2, h1b => h2b => bp.least_nok(f, 1n+s, i, p, m, j, h_inv2, h1b, h2b))
 
 def bp.pn2(e: Bool, +s: Nat, +i: Nat, +p: List<&2, U32>, +m: Nat, +h1: {Nat.is_lt(i, s) == False{} : Bool}, +e0: {M.ts.bm.agree(p, m, s, 0n) == False{} : Bool}, +ei: {Nat.is_eq(i, s) == e : Bool}, rec: {Nat.is_lt(i, 1n+s) == False{} : Bool} -> {M.ts.bm.agree(p, m, i, 0n) == False{} : Bool}) -> {M.ts.bm.agree(p, m, i, 0n) == False{} : Bool}:
@@ -671,10 +675,10 @@ def bp.pn1(e: Bool, +f: Nat, +s: Nat, +i: Nat, +p: List<&2, U32>, +m: Nat, +h1: 
 def bp.per_nok(fuel: Nat, +s: Nat, +i: Nat, +p: List<&2, U32>, +m: Nat, +h_inv: {Nat.is_lt(m, Nat.add(s, fuel)) == True{} : Bool}, +h1: {Nat.is_lt(i, s) == False{} : Bool}, +h2: {Nat.is_lt(i, M.ts.bm.gs.period(fuel, p, m, s)) == True{} : Bool}) -> {M.ts.bm.agree(p, m, i, 0n) == False{} : Bool}:
   match fuel:
     case 0n:
-      +h_ms = Equal.trans(Bool, Nat.is_lt(m, s), Nat.is_lt(m, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, L.tsl.add_zero(s))), h_inv)
-      L.tsl.absurd(Bool, M.ts.bm.agree(p, m, i, 0n), False{}, Equal.trans(Bool, False{}, Nat.is_lt(i, s), True{}, Equal.sym(Bool, Nat.is_lt(i, s), False{}, h1), L.tsl.lt_trans(i, m, s, h2, h_ms)))
+      +h_ms = Equal.trans(Bool, Nat.is_lt(m, s), Nat.is_lt(m, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, UL.nat_add_zero(s))), h_inv)
+      L.tsl.absurd(Bool, M.ts.bm.agree(p, m, i, 0n), False{}, Equal.trans(Bool, False{}, Nat.is_lt(i, s), True{}, Equal.sym(Bool, Nat.is_lt(i, s), False{}, h1), UO.nat_lt_trans(i, m, s, h2, h_ms)))
     case 1n+ +f:
-      +h_inv2 = Equal.trans(Bool, Nat.is_lt(m, Nat.add(1n+s, f)), Nat.is_lt(m, Nat.add(s, 1n+f)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), 1n+Nat.add(s, f), Nat.add(s, 1n+f), Equal.sym(Nat, Nat.add(s, 1n+f), 1n+Nat.add(s, f), L.tsl.add_succ(s, f))), h_inv)
+      +h_inv2 = Equal.trans(Bool, Nat.is_lt(m, Nat.add(1n+s, f)), Nat.is_lt(m, Nat.add(s, 1n+f)), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(m, n), 1n+Nat.add(s, f), Nat.add(s, 1n+f), Equal.sym(Nat, Nat.add(s, 1n+f), 1n+Nat.add(s, f), UL.nat_add_succ(s, f))), h_inv)
       bp.pn1(M.ts.bm.agree(p, m, s, 0n), f, s, i, p, m, h1, {==}, h2, h1b => h2b => bp.per_nok(f, 1n+s, i, p, m, h_inv2, h1b, h2b))
 
 # entry u of the good-suffix table is the search at position u
@@ -685,10 +689,10 @@ def bp.tab(n: Nat, +p: List<&2, U32>, +m: Nat, +j0: Nat, u: Nat, +h: {Nat.is_lt(
     case 1n+ +k:
       match u:
         case 0n:
-          %Equal.sym(Nat, Nat.add(j0, 0n), j0, L.tsl.add_zero(j0)) : {M.ts.bm.gs.least(m, p, m, j0, 1n) == M.ts.bm.gs.least(m, p, m, _, 1n) : Nat}
+          %Equal.sym(Nat, Nat.add(j0, 0n), j0, UL.nat_add_zero(j0)) : {M.ts.bm.gs.least(m, p, m, j0, 1n) == M.ts.bm.gs.least(m, p, m, _, 1n) : Nat}
           {==}
         case 1n+ +v:
-          %Equal.sym(Nat, Nat.add(j0, 1n+v), 1n+Nat.add(j0, v), L.tsl.add_succ(j0, v)) : {M.ts.bm.nat_at(M.ts.bm.gs.table(k, p, m, 1n+j0), v) == M.ts.bm.gs.least(m, p, m, _, 1n) : Nat}
+          %Equal.sym(Nat, Nat.add(j0, 1n+v), 1n+Nat.add(j0, v), UL.nat_add_succ(j0, v)) : {M.ts.bm.nat_at(M.ts.bm.gs.table(k, p, m, 1n+j0), v) == M.ts.bm.gs.least(m, p, m, _, 1n) : Nat}
           bp.tab(k, p, m, 1n+j0, v, h)
 
 # Shifts and steps
@@ -765,7 +769,7 @@ def bp.hsafe_h(b0: Bool, +w: List<&2, U32>, +p: List<&2, U32>, +i: Nat, +h_pos: 
       +hv2 = L.tsl.le_nlt(Nat.sub(List.length(&2, U32, p), M.ts.bm.hs(p, List.length(&2, U32, p), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)))), v, hmono)
       +h_nb = bp.hs_go(List.take(&2, U32, p, Nat.sub(List.length(&2, U32, p), 1n)), 0n, List.length(&2, U32, p), v, p, M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), List.length(&2, U32, p), L.tsl.sub_le(List.length(&2, U32, p), 1n), bp.drop0(List.take(&2, U32, p, Nat.sub(List.length(&2, U32, p), 1n))), {==}, hv1, hv2)
       +h_cm = bp.c_lt_m(p, h_pos)
-      +h_vm = L.tsl.lt_trans(v, Nat.sub(List.length(&2, U32, p), 1n), List.length(&2, U32, p), hv1, h_cm)
+      +h_vm = UO.nat_lt_trans(v, Nat.sub(List.length(&2, U32, p), 1n), List.length(&2, U32, p), hv1, h_cm)
       +h_eq1 = bp.nat_pos(p, List.drop(&2, U32, w, i), v, e0, h_vm)
       +e_b = Equal.trans(U32, M.ts.bm.at(List.drop(&2, U32, w, i), v), M.ts.bm.at(w, Nat.add(i, v)), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), bp.at_drop(w, i, v), Equal.trans(U32, M.ts.bm.at(w, Nat.add(i, v)), M.ts.bm.at(w, Nat.sub(List.length(&2, U32, p), 1n)), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), Equal.cong(Nat, U32, n => M.ts.bm.at(w, n), Nat.add(i, v), Nat.sub(List.length(&2, U32, p), 1n), L.tsl.add_sub(i, Nat.sub(List.length(&2, U32, p), 1n), h_ic)), Equal.sym(U32, M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), M.ts.bm.at(w, Nat.sub(List.length(&2, U32, p), 1n)), bp.at_win(w, p, Nat.sub(List.length(&2, U32, p), 1n), h_cm))))
       +h_eq2 = Equal.trans(Bool, U32.is_eq(M.ts.bm.at(p, v), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n))), U32.is_eq(M.ts.bm.at(p, v), M.ts.bm.at(List.drop(&2, U32, w, i), v)), True{}, Equal.cong(U32, Bool, y => U32.is_eq(M.ts.bm.at(p, v), y), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), M.ts.bm.at(List.drop(&2, U32, w, i), v), Equal.sym(U32, M.ts.bm.at(List.drop(&2, U32, w, i), v), M.ts.bm.at(List.take(&2, U32, w, List.length(&2, U32, p)), Nat.sub(List.length(&2, U32, p), 1n)), e_b)), h_eq1)
@@ -804,7 +808,7 @@ def bp.agw(n: Nat, +lo: Nat, +w: List<&2, U32>, +p: List<&2, U32>, +s: Nat, +lo0
     case 0n:
       {==}
     case 1n+ +k:
-      +h_n2 = Equal.trans(Bool, Nat.is_lt(Nat.add(1n+lo, k), 1n+List.length(&2, U32, p)), Nat.is_lt(Nat.add(lo, 1n+k), 1n+List.length(&2, U32, p)), True{}, Equal.cong(Nat, Bool, x => Nat.is_lt(x, 1n+List.length(&2, U32, p)), 1n+Nat.add(lo, k), Nat.add(lo, 1n+k), Equal.sym(Nat, Nat.add(lo, 1n+k), 1n+Nat.add(lo, k), L.tsl.add_succ(lo, k))), h_n)
+      +h_n2 = Equal.trans(Bool, Nat.is_lt(Nat.add(1n+lo, k), 1n+List.length(&2, U32, p)), Nat.is_lt(Nat.add(lo, 1n+k), 1n+List.length(&2, U32, p)), True{}, Equal.cong(Nat, Bool, x => Nat.is_lt(x, 1n+List.length(&2, U32, p)), 1n+Nat.add(lo, k), Nat.add(lo, 1n+k), Equal.sym(Nat, Nat.add(lo, 1n+k), 1n+Nat.add(lo, k), UL.nat_add_succ(lo, k))), h_n)
       +h_lm = L.tsl.lt_add_l(lo, k, List.length(&2, U32, p), h_n2)
       +h_lo2 = L.tsl.le_nlt(lo0, 1n+lo, L.tsl.lt_weak(lo0, 1n+lo, L.tsl.nlt_le(lo, lo0, h_lo)))
       %Equal.sym(Bool, Bool.or(Nat.is_lt(lo, s), U32.is_eq(M.ts.bm.at(p, Nat.sub(lo, s)), M.ts.bm.at(p, lo))), True{}, bp.agw_h(Nat.is_lt(lo, s), lo, w, p, s, lo0, hb0, h_suf, h_lo, h_lm, {==})) : {Bool.and(_, M.ts.bm.agree.go(k, p, s, 1n+lo)) == True{} : Bool}
@@ -972,7 +976,7 @@ def bp.skip(d: Nat, u: List<&2, U32>, +p: List<&2, U32>, +m: Nat, +off: Nat, +h:
   match d:
     case 0n:
       %Equal.sym(List<&2, U32>, List.drop(&2, U32, u, 0n), u, bp.drop0(u)) : {V.ts.naive.go(False{}, p, m, u, off) == V.ts.naive.go(False{}, p, m, _, Nat.add(off, 0n)) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(off, 0n), off, L.tsl.add_zero(off)) : {V.ts.naive.go(False{}, p, m, u, off) == V.ts.naive.go(False{}, p, m, u, _) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(off, 0n), off, UL.nat_add_zero(off)) : {V.ts.naive.go(False{}, p, m, u, off) == V.ts.naive.go(False{}, p, m, u, _) : List<&2, Nat>}
       {==}
     case 1n+ +k:
       match u:
@@ -981,7 +985,7 @@ def bp.skip(d: Nat, u: List<&2, U32>, +p: List<&2, U32>, +m: Nat, +off: Nat, +h:
         case Con{+y, +r}:
           +h_at = bp.not_true(V.ts.naive.at(False{}, p, Con{y, r}), L.tsl.and_l(Bool.not(V.ts.naive.at(False{}, p, Con{y, r})), bp.nm(k, p, r), h))
           %Equal.sym(Bool, V.ts.naive.at(False{}, p, Con{y, r}), False{}, h_at) : {V.ts.naive.hit(_, Nat.add(off, m), V.ts.naive.go(False{}, p, m, r, 1n+off)) == V.ts.naive.go(False{}, p, m, List.drop(&2, U32, r, k), Nat.add(off, 1n+k)) : List<&2, Nat>}
-          %Equal.sym(Nat, Nat.add(off, 1n+k), 1n+Nat.add(off, k), L.tsl.add_succ(off, k)) : {V.ts.naive.go(False{}, p, m, r, 1n+off) == V.ts.naive.go(False{}, p, m, List.drop(&2, U32, r, k), _) : List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(off, 1n+k), 1n+Nat.add(off, k), UL.nat_add_succ(off, k)) : {V.ts.naive.go(False{}, p, m, r, 1n+off) == V.ts.naive.go(False{}, p, m, List.drop(&2, U32, r, k), _) : List<&2, Nat>}
           bp.skip(k, r, p, m, 1n+off, L.tsl.and_r(Bool.not(V.ts.naive.at(False{}, p, Con{y, r})), bp.nm(k, p, r), h))
 
 # the offsets 1 + i0 to i0 + d of x then t are safe
@@ -991,7 +995,7 @@ def bp.nmb(d: Nat, +i0: Nat, +rule: M.TsBmRule, +x: U32, +t: List<&2, U32>, +p: 
       {==}
     case 1n+ +k:
       +S = M.ts.bm.step(M.ts.bm.look(M.TsBmConf{False{}, rule, p, List.length(&2, U32, p), M.ts.bm.gs.table(List.length(&2, U32, p), p, List.length(&2, U32, p), 0n), M.ts.bm.gs.period(List.length(&2, U32, p), p, List.length(&2, U32, p), 1n)}, List.take(&2, U32, Con{x, t}, List.length(&2, U32, p))))
-      +h_b2 = Equal.trans(Bool, Nat.is_lt(Nat.add(1n+i0, k), S), Nat.is_lt(Nat.add(i0, 1n+k), S), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(n, S), 1n+Nat.add(i0, k), Nat.add(i0, 1n+k), Equal.sym(Nat, Nat.add(i0, 1n+k), 1n+Nat.add(i0, k), L.tsl.add_succ(i0, k))), h_b)
+      +h_b2 = Equal.trans(Bool, Nat.is_lt(Nat.add(1n+i0, k), S), Nat.is_lt(Nat.add(i0, 1n+k), S), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(n, S), 1n+Nat.add(i0, k), Nat.add(i0, 1n+k), Equal.sym(Nat, Nat.add(i0, 1n+k), 1n+Nat.add(i0, k), UL.nat_add_succ(i0, k))), h_b)
       +h_at = bp.safe(rule, Con{x, t}, p, 1n+i0, h_pos, {==}, L.tsl.lt_add_l(1n+i0, k, S, h_b2))
       %Equal.sym(Bool, V.ts.naive.at(False{}, p, List.drop(&2, U32, t, i0)), False{}, h_at) : {Bool.and(Bool.not(_), bp.nm(k, p, List.tail(&2, U32, List.drop(&2, U32, t, i0)))) == True{} : Bool}
       %Equal.sym(List<&2, U32>, List.tail(&2, U32, List.drop(&2, U32, t, i0)), List.drop(&2, U32, t, 1n+i0), bp.drop_tail(t, i0)) : {bp.nm(k, p, _) == True{} : Bool}
@@ -1032,7 +1036,7 @@ def bp.main(f: Nat, w: List<&2, U32>, +off: Nat, +rule: M.TsBmRule, +p: List<&2,
           +E = Nat.add(off, List.length(&2, U32, p))
           %Equal.sym(List<&2, Nat>, M.ts.bm.scan(g, M.TsBmConf{False{}, rule, p, List.length(&2, U32, p), M.ts.bm.gs.table(List.length(&2, U32, p), p, List.length(&2, U32, p), 0n), M.ts.bm.gs.period(List.length(&2, U32, p), p, List.length(&2, U32, p), 1n)}, List.drop(&2, U32, Con{x, t}, S), Nat.add(off, S)), V.ts.naive.go(False{}, p, List.length(&2, U32, p), List.drop(&2, U32, Con{x, t}, S), Nat.add(off, S)), bp.main(g, List.drop(&2, U32, Con{x, t}, S), Nat.add(off, S), rule, p, h_pos, h_fl)) : {M.ts.bm.emit(M.ts.bm.hit(l), E, _) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
           %e_S : {M.ts.bm.emit(M.ts.bm.hit(l), E, V.ts.naive.go(False{}, p, List.length(&2, U32, p), List.drop(&2, U32, Con{x, t}, _), Nat.add(off, _))) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
-          %Equal.sym(Nat, Nat.add(off, 1n+d), 1n+Nat.add(off, d), L.tsl.add_succ(off, d)) : {M.ts.bm.emit(M.ts.bm.hit(l), E, V.ts.naive.go(False{}, p, List.length(&2, U32, p), List.drop(&2, U32, t, d), _)) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
+          %Equal.sym(Nat, Nat.add(off, 1n+d), 1n+Nat.add(off, d), UL.nat_add_succ(off, d)) : {M.ts.bm.emit(M.ts.bm.hit(l), E, V.ts.naive.go(False{}, p, List.length(&2, U32, p), List.drop(&2, U32, t, d), _)) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
           %h_skip : {M.ts.bm.emit(M.ts.bm.hit(l), E, _) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
           %Equal.sym(Bool, M.ts.bm.hit(l), V.ts.naive.at(False{}, p, Con{x, t}), h_hit) : {M.ts.bm.emit(_, E, V.ts.naive.go(False{}, p, List.length(&2, U32, p), t, 1n+off)) == V.ts.naive.go(False{}, p, List.length(&2, U32, p), Con{x, t}, off) : List<&2, Nat>}
           bp.emit_hit(V.ts.naive.at(False{}, p, Con{x, t}), E, V.ts.naive.go(False{}, p, List.length(&2, U32, p), t, 1n+off))
@@ -1180,21 +1184,13 @@ def bp.len_app(xs: List<&2, U32>, +ys: List<&2, U32>) -> {List.length(&2, U32, L
       %bp.len_app(t, ys) : {1n+List.length(&2, U32, List.append(&2, U32, t, ys)) == 1n+_ : Nat}
       {==}
 
-def bp.add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+ +k:
-      %bp.add_assoc(k, b, c) : {1n+Nat.add(Nat.add(k, b), c) == 1n+_ : Nat}
-      {==}
-
 def bp.add_sub_cancel(+b: Nat, +l: Nat) -> {Nat.sub(Nat.add(b, l), l) == b : Nat}:
   match l:
     case 0n:
-      %Equal.sym(Nat, Nat.add(b, 0n), b, L.tsl.add_zero(b)) : {Nat.sub(_, 0n) == b : Nat}
+      %Equal.sym(Nat, Nat.add(b, 0n), b, UL.nat_add_zero(b)) : {Nat.sub(_, 0n) == b : Nat}
       L.tsl.sub_zero(b)
     case 1n+ +k:
-      %Equal.sym(Nat, Nat.add(b, 1n+k), 1n+Nat.add(b, k), L.tsl.add_succ(b, k)) : {Nat.sub(_, 1n+k) == b : Nat}
+      %Equal.sym(Nat, Nat.add(b, 1n+k), 1n+Nat.add(b, k), UL.nat_add_succ(b, k)) : {Nat.sub(_, 1n+k) == b : Nat}
       bp.add_sub_cancel(b, k)
 
 def bp.sub_sub_le(+n: Nat, +k: Nat) -> {Nat.is_lt(Nat.sub(n, Nat.sub(n, k)), 1n+k) == True{} : Bool}:
@@ -1236,7 +1232,7 @@ def bp.ns_h(e: Bool, +y: U32, +bt: List<&2, U32>, +r: List<&2, U32>, +base: Nat,
       +b : List<&2, U32> = Con{y, bt}
       +h_s = Equal.trans(Bool, Nat.is_lt(List.length(&2, U32, b), List.length(&2, U32, q)), Nat.is_lt(List.length(&2, U32, b), 1n+k), True{}, Equal.cong(Nat, Bool, n => Nat.is_lt(List.length(&2, U32, b), n), List.length(&2, U32, q), 1n+k, h_k), L.tsl.nlt_le(k, List.length(&2, U32, b), ek))
       %Equal.sym(Nat, Nat.sub(List.length(&2, U32, b), k), 0n, bp.sub_le0(List.length(&2, U32, b), k, L.tsl.le_nlt(List.length(&2, U32, b), k, L.tsl.nlt_le(k, List.length(&2, U32, b), ek)))) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, b, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, b, _), r), Nat.add(base, _))) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(base, 0n), base, L.tsl.add_zero(base)) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, b, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), _)) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(base, 0n), base, UL.nat_add_zero(base)) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, b, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), _)) : List<&2, Nat>}
       %Equal.sym(List<&2, Nat>, V.ts.naive.go(icase, q, mm, b, base), Nil{}, bp.go_short(icase, q, mm, b, base, h_s)) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base) == List.append(&2, Nat, _, V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base)) : List<&2, Nat>}
       {==}
     case True{}:
@@ -1247,7 +1243,7 @@ def bp.ns_h(e: Bool, +y: U32, +bt: List<&2, U32>, +r: List<&2, U32>, +base: Nat,
       +e_at = bp.at_app(icase, q, Con{y, bt}, r, h_lq)
       +X = V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, bt, d), r), Nat.add(1n+base, d))
       %Equal.sym(Nat, Nat.sub(1n+l, k), 1n+d, e_d) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, Con{y, bt}, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, Con{y, bt}, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, Con{y, bt}, _), r), Nat.add(base, _))) : List<&2, Nat>}
-      %Equal.sym(Nat, Nat.add(base, 1n+d), 1n+Nat.add(base, d), L.tsl.add_succ(base, d)) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, Con{y, bt}, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, Con{y, bt}, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, bt, d), r), _)) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(base, 1n+d), 1n+Nat.add(base, d), UL.nat_add_succ(base, d)) : {V.ts.naive.go(icase, q, mm, List.append(&2, U32, Con{y, bt}, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, Con{y, bt}, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, bt, d), r), _)) : List<&2, Nat>}
       %Equal.sym(Bool, V.ts.naive.at(icase, q, List.append(&2, U32, Con{y, bt}, r)), V.ts.naive.at(icase, q, Con{y, bt}), e_at) : {V.ts.naive.hit(_, Nat.add(base, mm), V.ts.naive.go(icase, q, mm, List.append(&2, U32, bt, r), 1n+base)) == List.append(&2, Nat, V.ts.naive.hit(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), V.ts.naive.go(icase, q, mm, bt, 1n+base)), X) : List<&2, Nat>}
       %Equal.sym(List<&2, Nat>, V.ts.naive.go(icase, q, mm, List.append(&2, U32, bt, r), 1n+base), List.append(&2, Nat, V.ts.naive.go(icase, q, mm, bt, 1n+base), X), rec(1n+base)) : {V.ts.naive.hit(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), _) == List.append(&2, Nat, V.ts.naive.hit(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), V.ts.naive.go(icase, q, mm, bt, 1n+base)), X) : List<&2, Nat>}
       Equal.sym(List<&2, Nat>, List.append(&2, Nat, V.ts.naive.hit(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), V.ts.naive.go(icase, q, mm, bt, 1n+base)), X), V.ts.naive.hit(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), List.append(&2, Nat, V.ts.naive.go(icase, q, mm, bt, 1n+base), X)), L.tsl.hit_app(V.ts.naive.at(icase, q, Con{y, bt}), Nat.add(base, mm), V.ts.naive.go(icase, q, mm, bt, 1n+base), X))
@@ -1257,7 +1253,7 @@ def bp.ns_h(e: Bool, +y: U32, +bt: List<&2, U32>, +r: List<&2, U32>, +base: Nat,
 def bp.ns(b: List<&2, U32>, +r: List<&2, U32>, +base: Nat, +icase: Bool, +q: List<&2, U32>, +mm: Nat, +k: Nat, +h_k: {List.length(&2, U32, q) == 1n+k : Nat}) -> {V.ts.naive.go(icase, q, mm, List.append(&2, U32, b, r), base) == List.append(&2, Nat, V.ts.naive.go(icase, q, mm, b, base), V.ts.naive.go(icase, q, mm, List.append(&2, U32, List.drop(&2, U32, b, Nat.sub(List.length(&2, U32, b), k)), r), Nat.add(base, Nat.sub(List.length(&2, U32, b), k)))) : List<&2, Nat>}:
   match b:
     case Nil{}:
-      %Equal.sym(Nat, Nat.add(base, 0n), base, L.tsl.add_zero(base)) : {V.ts.naive.go(icase, q, mm, r, base) == V.ts.naive.go(icase, q, mm, r, _) : List<&2, Nat>}
+      %Equal.sym(Nat, Nat.add(base, 0n), base, UL.nat_add_zero(base)) : {V.ts.naive.go(icase, q, mm, r, base) == V.ts.naive.go(icase, q, mm, r, _) : List<&2, Nat>}
       {==}
     case Con{+y, +bt}:
       bp.ns_h(Nat.is_lt(k, 1n+List.length(&2, U32, bt)), y, bt, r, base, icase, q, mm, k, h_k, {==}, base2 => bp.ns(bt, r, base2, icase, q, mm, k, h_k))
@@ -1276,10 +1272,10 @@ def bp.e_pos(+base: Nat, +c: List<&2, U32>, +xs: List<&2, U32>, +k: Nat) -> {Nat
   +buf = List.append(&2, U32, c, xs)
   +n = List.length(&2, U32, buf)
   +d = Nat.sub(n, k)
-  %Equal.sym(Nat, Nat.add(Nat.add(base, List.length(&2, U32, c)), List.length(&2, U32, xs)), Nat.add(base, Nat.add(List.length(&2, U32, c), List.length(&2, U32, xs))), bp.add_assoc(base, List.length(&2, U32, c), List.length(&2, U32, xs))) : {_ == Nat.add(Nat.add(base, d), List.length(&2, U32, List.drop(&2, U32, buf, d))) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(base, List.length(&2, U32, c)), List.length(&2, U32, xs)), Nat.add(base, Nat.add(List.length(&2, U32, c), List.length(&2, U32, xs))), UL.nat_add_assoc(base, List.length(&2, U32, c), List.length(&2, U32, xs))) : {_ == Nat.add(Nat.add(base, d), List.length(&2, U32, List.drop(&2, U32, buf, d))) : Nat}
   %bp.len_app(c, xs) : {Nat.add(base, _) == Nat.add(Nat.add(base, d), List.length(&2, U32, List.drop(&2, U32, buf, d))) : Nat}
   %Equal.sym(Nat, List.length(&2, U32, List.drop(&2, U32, buf, d)), Nat.sub(n, d), bp.len_drop(buf, d)) : {Nat.add(base, n) == Nat.add(Nat.add(base, d), _) : Nat}
-  %Equal.sym(Nat, Nat.add(Nat.add(base, d), Nat.sub(n, d)), Nat.add(base, Nat.add(d, Nat.sub(n, d))), bp.add_assoc(base, d, Nat.sub(n, d))) : {Nat.add(base, n) == _ : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(base, d), Nat.sub(n, d)), Nat.add(base, Nat.add(d, Nat.sub(n, d))), UL.nat_add_assoc(base, d, Nat.sub(n, d))) : {Nat.add(base, n) == _ : Nat}
   %Equal.sym(Nat, Nat.add(d, Nat.sub(n, d)), n, L.tsl.add_sub(d, n, L.tsl.sub_le(n, k))) : {Nat.add(base, n) == Nat.add(base, _) : Nat}
   {==}
 

@@ -15,6 +15,8 @@ import ./oaep.bend as OA
 import ./pss.bend as PS
 import ./octets.bend as O
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Lists and Octets (from bytes' laws)
 
@@ -598,22 +600,6 @@ def oct_len_app(+a: B.Octets, +b: B.Octets) -> {B.Octets.len(B.Octets.append(a, 
   %Equal.sym(Nat, B.Octets.len(b), B.len(B.Octets.to_list(b)), BL.octets_len_list(b)) : {Nat.add(B.len(B.Octets.to_list(a)), B.len(B.Octets.to_list(b))) == Nat.add(B.len(B.Octets.to_list(a)), _) : Nat}
   {==}
 
-def nat_add_succ(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat_add_succ(p, b) : {1n+Nat.add(p, 1n+b) == 1n+_ : Nat}
-      {==}
-
-def nat_add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat_add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
 def sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
   match a:
     case 0n:
@@ -624,10 +610,10 @@ def sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
 def sub_add(+a: Nat, +b: Nat) -> {Nat.sub(Nat.add(a, b), b) == a : Nat}:
   match b:
     case 0n:
-      %Equal.sym(Nat, Nat.add(a, 0n), a, nat_add_zero(a)) : {Nat.sub(_, 0n) == a : Nat}
+      %Equal.sym(Nat, Nat.add(a, 0n), a, UL.nat_add_zero(a)) : {Nat.sub(_, 0n) == a : Nat}
       sub_zero(a)
     case 1n+q:
-      %Equal.sym(Nat, Nat.add(a, 1n+q), 1n+Nat.add(a, q), nat_add_succ(a, q)) : {Nat.sub(_, 1n+q) == a : Nat}
+      %Equal.sym(Nat, Nat.add(a, 1n+q), 1n+Nat.add(a, q), UL.nat_add_succ(a, q)) : {Nat.sub(_, 1n+q) == a : Nat}
       sub_add(a, q)
 
 def nat_eq_refl(+n: Nat) -> {Nat.is_eq(n, n) == True{} : Bool}:
@@ -1224,7 +1210,7 @@ def kr.read2(+v: U32, +m: B.Octets, +rest: B.Octets) -> {K.rsa.read(B.Octets.app
 def kr.go_true(+x: N.BnNat, +rest: B.Octets, +hx: {N.BnNat.of_octets(N.BnNat.to_octets_min(x)) == x : N.BnNat}, +hl: {U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))) == B.Octets.len(N.BnNat.to_octets_min(x)) : Nat}) -> {K.rsa.take.go(Nat.is_le(U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}:
   %Equal.sym(Nat, U32.to_nat(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.len(N.BnNat.to_octets_min(x)), hl) : {K.rsa.take.go(Nat.is_le(_, B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest))), _, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
   %Equal.sym(Nat, B.Octets.len(B.Octets.append(N.BnNat.to_octets_min(x), rest)), Nat.add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest)), BL.octets_len_append(N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.go(Nat.is_le(B.Octets.len(N.BnNat.to_octets_min(x)), _), B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
-  %Equal.sym(Bool, Nat.is_le(B.Octets.len(N.BnNat.to_octets_min(x)), Nat.add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))), True{}, BP.nat_le_add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))) : {K.rsa.take.go(_, B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
+  %Equal.sym(Bool, Nat.is_le(B.Octets.len(N.BnNat.to_octets_min(x)), Nat.add(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))), True{}, UO.nat_le_add_r(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.len(rest))) : {K.rsa.take.go(_, B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
   %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest), B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest)), BL.octets_append_assoc(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.of(N.BnNat.of_octets(B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.drop(4n, _))), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
   %Equal.sym(B.Octets, B.Octets.drop(4n, B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), B.Octets.append(N.BnNat.to_octets_min(x), rest))), B.Octets.append(N.BnNat.to_octets_min(x), rest), kr.drop4(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x))), B.Octets.append(N.BnNat.to_octets_min(x), rest))) : {K.rsa.take.of(N.BnNat.of_octets(B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), _)), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}
   %Equal.sym(B.Octets, B.Octets.take(B.Octets.len(N.BnNat.to_octets_min(x)), B.Octets.append(N.BnNat.to_octets_min(x), rest)), N.BnNat.to_octets_min(x), BL.octets_take_append(N.BnNat.to_octets_min(x), rest)) : {K.rsa.take.of(N.BnNat.of_octets(_), B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) == K.rsa.take.of(x, B.Octets.append(B.Octets.append(B.Octets.be32(U32.from_nat(B.Octets.len(N.BnNat.to_octets_min(x)))), N.BnNat.to_octets_min(x)), rest)) : Result<&2, &2, R.RsaError, K.RsaField>}

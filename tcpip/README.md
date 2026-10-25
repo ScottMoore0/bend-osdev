@@ -255,7 +255,7 @@ connection. Every law with a hypothesis has a satisfiability law (`*_sat`).
 The TCP laws are stated for Reno, since a law cannot quantify over a
 template argument; neither depends on the congestion controller.
 
-**Packet level** (`LAWS_packet.bend`, 7 laws, for every input): the bytes a
+**Packet level** (`LAWS_packet.bend`, 6 laws, for every input): the bytes a
 sender builds, checksum and all, are taken for what was sent.
 `icmp_decode_request`, `icmp_decode_reply`: an echo request's or reply's
 bytes (`Icmp.encode`) decode back to it, identifier and sequence number
@@ -336,9 +336,14 @@ Measured on native builds (Bend 2.0.37, WSL2):
   50 KB echoed with 10% loss): 13 s.
 * `ref/run.sh` (both tests, building the cases and the peer): about 85 s.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
-Bend 2.0.37: `PROOF.bend` (47 laws), `PROOF_packet.bend` (7 laws) and
+Bend 2.0.37: `PROOF.bend` (47 laws), `PROOF_packet.bend` (6 laws) and
 `PROOF_stream.bend` (4 laws) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
 for each (`PROOF_packet.bend` peaks at 0.31 GB, `PROOF_stream.bend` at
 0.30 GB), `ref/gen_packet.py --check` up to date, `check.bend` passes, `ref/run.sh` 100 cases (6671 trace lines) match

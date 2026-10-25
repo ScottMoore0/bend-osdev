@@ -195,6 +195,11 @@ on every random sequence.
   quiet interval an event is allowed, and that each report's count is the
   refusals since the last.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (24 laws), `--verdict` ALL

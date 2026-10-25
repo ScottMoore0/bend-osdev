@@ -22,6 +22,10 @@ import ./jscan.bend as JN
 import ./super.bend as S
 import ../ext2/super.bend as XS
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Logic
 
@@ -275,13 +279,6 @@ def Ext4Proof.le_zero(+x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def Ext4Proof.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      Ext4Proof.le_refl(p)
-
 def Ext4Proof.lt_le(+a: Nat, +b: Nat) -> {Nat.is_lt(a, b) == True{} : Bool} -> {Nat.is_le(a, b) == True{} : Bool}:
   match a b:
     case _ 0n:
@@ -489,7 +486,7 @@ def Ext4Proof.chunk_ord(xs: List<&2, T.Ext4HtEnt>, sp: Bool, +cap: Nat, +cur: Li
         +plt = Ext4Proof.and_r(a2, a3, Ext4Proof.and_r(a1, Bool.and(a2, a3), Equal.sym(Bool, True{}, Bool.and(a1, Bool.and(a2, a3)), q)))
         +st = Ext4Proof.and_r(Nat.is_le(prev, h), Ext4Proof.sorted_from(t, h), s)
         %Equal.sym(List<&2, T.Ext4HtLeaf>, HW.Ext4Htree.chunk(t, sp2, cap, Con{e, Nil{}}, sz, h, h, Con{l, Nil{}}), List.reverse.go(&2, T.Ext4HtLeaf, Con{l, Nil{}}, k), Ext4Proof.chunk_acc(t, sp2, cap, Con{e, Nil{}}, sz, h, h, Con{l, Nil{}})) : {T.Ext4Htree.ordered(Con{T.Ext4HtLeaf{lo0, es0}, _}) == True{} : Bool}
-        +rest = Ext4Proof.chunk_ord(t, sp2, cap, Con{e, Nil{}}, sz, h, h, lo, List.reverse(&2, T.Ext4HtEnt, cur), {==}, st, Ext4Proof.le_refl(h), Ext4Proof.and_i(Nat.is_le(h, h), True{}, Ext4Proof.le_refl(h), {==}), Ext4Proof.and_i(Nat.is_le(h, h), True{}, Ext4Proof.le_refl(h), {==}), Ext4Proof.le_trans(lo, prev, h, hl, Ext4Proof.lt_le(prev, h, plt)), Ext4Proof.all_lt_rev(cur, Nil{}, h, Ext4Proof.all_le_lt(cur, prev, h, hc, plt), {==}))
+        +rest = Ext4Proof.chunk_ord(t, sp2, cap, Con{e, Nil{}}, sz, h, h, lo, List.reverse(&2, T.Ext4HtEnt, cur), {==}, st, UL.nat_le_refl(h), Ext4Proof.and_i(Nat.is_le(h, h), True{}, UL.nat_le_refl(h), {==}), Ext4Proof.and_i(Nat.is_le(h, h), True{}, UL.nat_le_refl(h), {==}), Ext4Proof.le_trans(lo, prev, h, hl, Ext4Proof.lt_le(prev, h, plt)), Ext4Proof.all_lt_rev(cur, Nil{}, h, Ext4Proof.all_le_lt(cur, prev, h, hc, plt), {==}))
         Ext4Proof.and_i(T.Ext4Htree.ordered.pair(T.Ext4HtLeaf{lo0, es0}, l), T.Ext4Htree.ordered(Con{l, k}), Ext4Proof.leaf_pair(lo0, es0, lo, cur, h0, h1, hg), rest)
     case Con{+e, +t} False{}:
       +q => +s => +hl => +hc => +hg => +h0 => +h1 =>
@@ -497,7 +494,7 @@ def Ext4Proof.chunk_ord(xs: List<&2, T.Ext4HtEnt>, sp: Bool, +cap: Nat, +cur: Li
         +u = Nat.add(used, HW.Ext4Htree.size(e))
         +ph = Ext4Proof.and_l(Nat.is_le(prev, h), Ext4Proof.sorted_from(t, h), s)
         +lh = Ext4Proof.le_trans(lo, prev, h, hl, ph)
-        Ext4Proof.chunk_ord(t, HW.Ext4Htree.split(t, cap, u, h), cap, Con{e, cur}, u, lo, h, lo0, es0, {==}, Ext4Proof.and_r(Nat.is_le(prev, h), Ext4Proof.sorted_from(t, h), s), lh, Ext4Proof.and_i(Nat.is_le(h, h), Ext4Proof.all_le(cur, h), Ext4Proof.le_refl(h), Ext4Proof.all_le_up(cur, prev, h, hc, ph)), Ext4Proof.and_i(Nat.is_le(lo, h), T.Ext4Htree.all_ge(cur, lo), lh, hg), h0, h1)
+        Ext4Proof.chunk_ord(t, HW.Ext4Htree.split(t, cap, u, h), cap, Con{e, cur}, u, lo, h, lo0, es0, {==}, Ext4Proof.and_r(Nat.is_le(prev, h), Ext4Proof.sorted_from(t, h), s), lh, Ext4Proof.and_i(Nat.is_le(h, h), Ext4Proof.all_le(cur, h), UL.nat_le_refl(h), Ext4Proof.all_le_up(cur, prev, h, hc, ph)), Ext4Proof.and_i(Nat.is_le(lo, h), T.Ext4Htree.all_ge(cur, lo), lh, hg), h0, h1)
 
 def Ext4Proof.ordered_tail(+l: T.Ext4HtLeaf, k: List<&2, T.Ext4HtLeaf>) -> {T.Ext4Htree.ordered(Con{l, k}) == True{} : Bool} -> {T.Ext4Htree.ordered(k) == True{} : Bool}:
   match k:
@@ -951,7 +948,7 @@ def Ext4Proof.keep_filt(ps: List<&2, JL.Jbd2Put>, +s: Nat, +rv: List<&2, JL.Jbd2
 def Ext4Proof.one_table(+rv: List<&2, Nat>, +s: Nat, +b: Nat) -> {JL.Jbd2Log.revoked(JL.Jbd2Log.rvs(rv, s, Nil{}), b, s) == JL.Jbd2Log.member(rv, b) : Bool}:
   +m = JL.Jbd2Log.member(rv, b)
   %Equal.sym(Bool, JL.Jbd2Log.revoked(JL.Jbd2Log.rvs(rv, s, Nil{}), b, s), Bool.or(Bool.and(Nat.is_le(s, s), m), JL.Jbd2Log.revoked(Nil{}, b, s)), Ext4Proof.rvs(rv, s, Nil{}, b, s)) : {_ == m : Bool}
-  %Equal.sym(Bool, Nat.is_le(s, s), True{}, Ext4Proof.le_refl(s)) : {Bool.or(Bool.and(_, m), False{}) == m : Bool}
+  %Equal.sym(Bool, Nat.is_le(s, s), True{}, UL.nat_le_refl(s)) : {Bool.or(Bool.and(_, m), False{}) == m : Bool}
   Ext4Proof.or_f(m)
 
 def Ext4Proof.filt_unrevoked(ps: List<&2, JL.Jbd2Put>, +s: Nat, +rv: List<&2, Nat>) -> {Ext4Proof.filt(ps, s, JL.Jbd2Log.rvs(rv, s, Nil{})) == JL.Jbd2Log.unrevoked(s, rv, ps) : List<&2, JL.Jbd2Do>}:
@@ -2019,41 +2016,6 @@ def Laws.jtx_uncommitted_witness():
 
 # Natural numbers
 
-def Jc.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 0n), p, Jc.add_zero(p))
-
-def Jc.add_succ(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, 1n+b), 1n+Nat.add(p, b), Jc.add_succ(p, b))
-
-def Jc.add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, k => 1n+k, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), Jc.add_assoc(p, b, c))
-
-def Jc.add_comm(+a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      Equal.sym(Nat, Nat.add(b, 0n), b, Jc.add_zero(b))
-    case 1n+p:
-      Equal.trans(Nat, 1n+Nat.add(p, b), 1n+Nat.add(b, p), Nat.add(b, 1n+p), Equal.cong(Nat, Nat, k => 1n+k, Nat.add(p, b), Nat.add(b, p), Jc.add_comm(p, b)), Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), Jc.add_succ(b, p)))
-
-def Jc.le_add_r(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      Ext4Proof.le_zero(b)
-    case 1n+p:
-      Jc.le_add_r(p, b)
-
 # i + n <= m: i <= m
 def Jc.le_add_l(+i: Nat, +n: Nat, +m: Nat) -> {Nat.is_le(Nat.add(i, n), m) == True{} : Bool} -> {Nat.is_le(i, m) == True{} : Bool}:
   match i m:
@@ -2082,28 +2044,10 @@ def Jc.le_eq(+a: Nat, +x: Nat, +y: Nat, e: {x == y : Nat}, h: {Nat.is_le(a, y) =
 
 # Words: every U32 equals itself
 
-def Jc.bool_cmp_self(+b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def Jc.word_cmp_self(+n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{},
-            Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, Jc.word_cmp_self(p, t)),
-            Jc.bool_cmp_self(b))
-
 def Jc.u32_refl(+a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, Jc.word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 # Bytes: lengths of joined bytes, and reads at the head and past a part
@@ -2168,13 +2112,13 @@ def Jc.patch_same32(+o: B.Octets, +i: Nat, +v: U32, h1: {Nat.is_le(Nat.add(i, 4n
   +t = B.Octets.take(i, o)
   +y = B.Octets.append(B.Octets.be32(v), B.Octets.drop(Nat.add(i, 4n), o))
   +lt = BL.octets_len_take_le(i, o, Jc.le_add_l(i, 4n, B.Octets.len(o), h1))
-  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), i, Jc.add_zero(B.Octets.len(t)), lt) : {B.Octets.be32_at(B.Octets.append(t, y), _) == Some{v} : Maybe<&2, U32>}
+  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), i, UL.nat_add_zero(B.Octets.len(t)), lt) : {B.Octets.be32_at(B.Octets.append(t, y), _) == Some{v} : Maybe<&2, U32>}
   %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.append(t, y), Nat.add(B.Octets.len(t), 0n)), B.Octets.be32_at(y, 0n), BL.octets_be32_at_append_add(t, y, 0n)) : {_ == Some{v} : Maybe<&2, U32>}
   Jc.be32_head(v, B.Octets.drop(Nat.add(i, 4n), o))
 
 # the offset past the patched field, as reads past the first parts see it
 def Jc.off_eq(+t: B.Octets, +q: B.Octets, +i: Nat, +d: Nat, et: {B.Octets.len(t) == i : Nat}, eq: {B.Octets.len(q) == 4n : Nat}) -> {Nat.add(B.Octets.len(t), Nat.add(B.Octets.len(q), d)) == Nat.add(Nat.add(i, 4n), d) : Nat}:
-  %Equal.sym(Nat, Nat.add(Nat.add(i, 4n), d), Nat.add(i, Nat.add(4n, d)), Jc.add_assoc(i, 4n, d)) : {Nat.add(B.Octets.len(t), Nat.add(B.Octets.len(q), d)) == _ : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(i, 4n), d), Nat.add(i, Nat.add(4n, d)), UL.nat_add_assoc(i, 4n, d)) : {Nat.add(B.Octets.len(t), Nat.add(B.Octets.len(q), d)) == _ : Nat}
   %Equal.sym(Nat, B.Octets.len(t), i, et) : {Nat.add(_, Nat.add(B.Octets.len(q), d)) == Nat.add(i, Nat.add(4n, d)) : Nat}
   %Equal.sym(Nat, B.Octets.len(q), 4n, eq) : {Nat.add(i, Nat.add(_, d)) == Nat.add(i, Nat.add(4n, d)) : Nat}
   {==}
@@ -2247,7 +2191,7 @@ def Jc.patch_len(+o: B.Octets, +i: Nat, +v: U32, +h1: {Nat.is_le(Nat.add(i, 4n),
   Equal.trans(Nat, B.Octets.len(J.Jbd2.patch32(o, i, v)), Nat.add(i, Nat.add(4n, x)), B.Octets.len(o),
     Jc.len2(B.Octets.take(i, o), B.Octets.append(B.Octets.be32(v), B.Octets.drop(Nat.add(i, 4n), o)), i, Nat.add(4n, x), BL.octets_len_take_le(i, o, Jc.le_add_l(i, 4n, B.Octets.len(o), h1)),
       Jc.len2(B.Octets.be32(v), B.Octets.drop(Nat.add(i, 4n), o), 4n, x, BL.octets_len_be32(v), BL.octets_len_drop(Nat.add(i, 4n), o))),
-    Equal.trans(Nat, Nat.add(i, Nat.add(4n, x)), Nat.add(Nat.add(i, 4n), x), B.Octets.len(o), Equal.sym(Nat, Nat.add(Nat.add(i, 4n), x), Nat.add(i, Nat.add(4n, x)), Jc.add_assoc(i, 4n, x)), Jc.add_sub(Nat.add(i, 4n), B.Octets.len(o), h1)))
+    Equal.trans(Nat, Nat.add(i, Nat.add(4n, x)), Nat.add(Nat.add(i, 4n), x), B.Octets.len(o), Equal.sym(Nat, Nat.add(Nat.add(i, 4n), x), Nat.add(i, Nat.add(4n, x)), UL.nat_add_assoc(i, 4n, x)), Jc.add_sub(Nat.add(i, 4n), B.Octets.len(o), h1)))
 
 # Block headers: a block of kind k for transaction s starts with them
 
@@ -2335,7 +2279,7 @@ def Jc.commit_raw_len(+g: J.Jbd2Geom, +seq: U32, +sec: U32, +nsec: U32) -> {B.Oc
 
 def Jc.commit_le(+g: J.Jbd2Geom, +seq: U32, +sec: U32, +nsec: U32, +k: Nat, h: {Nat.is_le(k, 60n) == True{} : Bool}) -> {Nat.is_le(k, B.Octets.len(Jc.commit_raw(g, seq, sec, nsec))) == True{} : Bool}:
   +z = B.Octets.zeros(Nat.sub(J.Jbd2Geom.bs(g), B.Octets.len(Jc.commit_body(seq, sec, nsec))))
-  Jc.le_eq(k, B.Octets.len(Jc.commit_raw(g, seq, sec, nsec)), Nat.add(60n, B.Octets.len(z)), Jc.commit_raw_len(g, seq, sec, nsec), Ext4Proof.le_trans(k, 60n, Nat.add(60n, B.Octets.len(z)), h, Jc.le_add_r(60n, B.Octets.len(z))))
+  Jc.le_eq(k, B.Octets.len(Jc.commit_raw(g, seq, sec, nsec)), Nat.add(60n, B.Octets.len(z)), Jc.commit_raw_len(g, seq, sec, nsec), Ext4Proof.le_trans(k, 60n, Nat.add(60n, B.Octets.len(z)), h, UO.nat_le_add_r(60n, B.Octets.len(z))))
 
 # the kind is read from the header, under the checksum's patch
 def Jc.kind_eq.pick(b: Bool, +x: B.Octets, +y: B.Octets, e4: {B.Octets.be32_at(x, 4n) == B.Octets.be32_at(y, 4n) : Maybe<&2, U32>}) -> {JB.Jbd2Block.kind.pick(b, x) == JB.Jbd2Block.kind.pick(b, y) : U32}:
@@ -3074,7 +3018,7 @@ def Jc.le_mono_l(+c: Nat, +a: Nat, +b: Nat) -> {Nat.is_le(a, b) == True{} : Bool
 def Jc.le_mono_r(+a: Nat, +b: Nat, +c: Nat) -> {Nat.is_le(a, b) == True{} : Bool} -> {Nat.is_le(Nat.add(a, c), Nat.add(b, c)) == True{} : Bool}:
   match a b:
     case 0n _:
-      h => Jc.le_eq(c, Nat.add(b, c), Nat.add(c, b), Jc.add_comm(b, c), Jc.le_add_r(c, b))
+      h => Jc.le_eq(c, Nat.add(b, c), Nat.add(c, b), UL.nat_add_comm(b, c), UO.nat_le_add_r(c, b))
     case 1n+p 0n:
       h => Ext4Proof.no({Nat.is_le(Nat.add(1n+p, c), Nat.add(0n, c)) == True{} : Bool}, h)
     case 1n+p 1n+q:
@@ -3131,7 +3075,7 @@ def Jc.le_sub(+i: Nat, +n: Nat, +m: Nat) -> {Nat.is_le(Nat.add(i, n), m) == True
 def Jc.go_ge(+n: Nat, +m: Nat, +q: Nat, +r: Nat) -> {Nat.is_le(q, Pair.fst(Nat, Nat, Nat.divmod.go(n, m, q, r))) == True{} : Bool}:
   match n:
     case 0n:
-      Ext4Proof.le_refl(q)
+      UL.nat_le_refl(q)
     case 1n+np:
       match m:
         case 0n:
@@ -3146,13 +3090,13 @@ def Jc.go8(+k: Nat, +e: Nat, +q: Nat) -> {Pair.fst(Nat, Nat, Nat.divmod.go(Nat.a
     case 1n+p:
       Equal.trans(Nat, Pair.fst(Nat, Nat, Nat.divmod.go(Nat.add(Nat.mul(p, 8n), e), 7n, 1n+q, 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, Nat.add(p, 1n+q), 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, 1n+Nat.add(p, q), 0n)),
         Jc.go8(p, e, 1n+q),
-        Equal.cong(Nat, Nat, x => Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, x, 0n)), Nat.add(p, 1n+q), 1n+Nat.add(p, q), Jc.add_succ(p, q)))
+        Equal.cong(Nat, Nat, x => Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, x, 0n)), Nat.add(p, 1n+q), 1n+Nat.add(p, q), UL.nat_add_succ(p, q)))
 
 def Jc.div8(+k: Nat, +n: Nat, +h: {Nat.is_le(Nat.mul(k, 8n), n) == True{} : Bool}) -> {Nat.is_le(k, Nat.div(n, 8n)) == True{} : Bool}:
   +e = Nat.sub(n, Nat.mul(k, 8n))
   %Jc.add_sub(Nat.mul(k, 8n), n, h) : {Nat.is_le(k, Pair.fst(Nat, Nat, Nat.divmod.go(_, 7n, 0n, 0n))) == True{} : Bool}
   %Equal.sym(Nat, Pair.fst(Nat, Nat, Nat.divmod.go(Nat.add(Nat.mul(k, 8n), e), 7n, 0n, 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, Nat.add(k, 0n), 0n)), Jc.go8(k, e, 0n)) : {Nat.is_le(k, _) == True{} : Bool}
-  %Equal.sym(Nat, Nat.add(k, 0n), k, Jc.add_zero(k)) : {Nat.is_le(k, Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, _, 0n))) == True{} : Bool}
+  %Equal.sym(Nat, Nat.add(k, 0n), k, UL.nat_add_zero(k)) : {Nat.is_le(k, Pair.fst(Nat, Nat, Nat.divmod.go(e, 7n, _, 0n))) == True{} : Bool}
   Jc.go_ge(e, 7n, k, 0n)
 
 # Descriptor tags: every tag takes at least 8 bytes
@@ -3199,7 +3143,7 @@ def Jc.ts8(+g: J.Jbd2Geom) -> {Nat.is_le(8n, J.Jbd2Geom.tag_size(g)) == True{} :
                           {==}
 
 def Jc.size8(+g: J.Jbd2Geom, +t: JB.Jbd2Tag) -> {Nat.is_le(8n, JB.Jbd2Tag.size(g, t)) == True{} : Bool}:
-  Ext4Proof.le_trans(8n, J.Jbd2Geom.tag_size(g), JB.Jbd2Tag.size(g, t), Jc.ts8(g), Jc.le_add_r(J.Jbd2Geom.tag_size(g), JB.Jbd2Tag.uuid.pick(J.Jbd2.has(JB.Jbd2Tag.flags(t), JB.Jbd2.flag_same_uuid()))))
+  Ext4Proof.le_trans(8n, J.Jbd2Geom.tag_size(g), JB.Jbd2Tag.size(g, t), Jc.ts8(g), UO.nat_le_add_r(J.Jbd2Geom.tag_size(g), JB.Jbd2Tag.uuid.pick(J.Jbd2.has(JB.Jbd2Tag.flags(t), JB.Jbd2.flag_same_uuid()))))
 
 # the bytes the tags take: each tag's fields and UUID (if any), in order
 
@@ -3267,7 +3211,7 @@ def Jc.len_tb(+g: J.Jbd2Geom, ts: List<&2, JB.Jbd2Tag>, +uuid: B.Octets, +hu: {N
       Equal.trans(Nat, B.Octets.len(Jc.ER(g, Con{t, rest}, uuid, B.Octets.empty())), Nat.add(J.Jbd2Geom.tag_size(g), Nat.add(pk, Jc.sizes(g, rest))), Jc.sizes(g, Con{t, rest}),
         Jc.len2(JB.Jbd2Tag.encode(g, t), B.Octets.append(Jc.tu(t, uuid), Jc.ER(g, rest, uuid, B.Octets.empty())), J.Jbd2Geom.tag_size(g), Nat.add(pk, Jc.sizes(g, rest)), Jc.tag_len(g, t),
           Jc.len2(Jc.tu(t, uuid), Jc.ER(g, rest, uuid, B.Octets.empty()), pk, Jc.sizes(g, rest), Jc.len_tu(J.Jbd2.has(f, JB.Jbd2.flag_same_uuid()), uuid, hu), Jc.len_tb(g, rest, uuid, hu))),
-        Equal.sym(Nat, Nat.add(Nat.add(J.Jbd2Geom.tag_size(g), pk), Jc.sizes(g, rest)), Nat.add(J.Jbd2Geom.tag_size(g), Nat.add(pk, Jc.sizes(g, rest))), Jc.add_assoc(J.Jbd2Geom.tag_size(g), pk, Jc.sizes(g, rest))))
+        Equal.sym(Nat, Nat.add(Nat.add(J.Jbd2Geom.tag_size(g), pk), Jc.sizes(g, rest)), Nat.add(J.Jbd2Geom.tag_size(g), Nat.add(pk, Jc.sizes(g, rest))), UL.nat_add_assoc(J.Jbd2Geom.tag_size(g), pk, Jc.sizes(g, rest))))
 
 # the tag's fields and UUID, dropped, leave what follows
 def Jc.drop_tag(+g: J.Jbd2Geom, +t: JB.Jbd2Tag, +uuid: B.Octets, +x: B.Octets, hu: {Nat.is_eq(B.Octets.len(uuid), 16n) == True{} : Bool}) -> {B.Octets.drop(JB.Jbd2Tag.size(g, t), B.Octets.append(JB.Jbd2Tag.encode(g, t), B.Octets.append(Jc.tu(t, uuid), x))) == x : B.Octets}:
@@ -3377,7 +3321,7 @@ def Jc.fsz(ts: List<&2, JB.Jbd2Tag>, +g: J.Jbd2Geom, +avail: Nat) -> {JB.Jbd2Des
     case Nil{}:
       +hf => Ext4Proof.no({Nat.is_le(0n, avail) == True{} : Bool}, hf)
     case Con{+t, Nil{}}:
-      +hf => Jc.le_eql(Nat.add(JB.Jbd2Tag.size(g, t), 0n), JB.Jbd2Tag.size(g, t), avail, Jc.add_zero(JB.Jbd2Tag.size(g, t)), Jc.fits_one(g, t, avail, hf))
+      +hf => Jc.le_eql(Nat.add(JB.Jbd2Tag.size(g, t), 0n), JB.Jbd2Tag.size(g, t), avail, UL.nat_add_zero(JB.Jbd2Tag.size(g, t)), Jc.fits_one(g, t, avail, hf))
     case Con{+t, Con{+t2, +r2}}:
       +hf =>
         +sz = JB.Jbd2Tag.size(g, t)
@@ -3393,7 +3337,7 @@ def Jc.fpos(ts: List<&2, JB.Jbd2Tag>, +g: J.Jbd2Geom, +avail: Nat) -> {JB.Jbd2De
     case Nil{}:
       +hf => Ext4Proof.no({Nat.is_lt(0n, 0n) == True{} : Bool}, hf)
     case Con{+t, +rest}:
-      +hf => Jc.lt0(Jc.sizes(g, Con{t, rest}), Ext4Proof.le_trans(8n, JB.Jbd2Tag.size(g, t), Jc.sizes(g, Con{t, rest}), Jc.size8(g, t), Jc.le_add_r(JB.Jbd2Tag.size(g, t), Jc.sizes(g, rest))))
+      +hf => Jc.lt0(Jc.sizes(g, Con{t, rest}), Ext4Proof.le_trans(8n, JB.Jbd2Tag.size(g, t), Jc.sizes(g, Con{t, rest}), Jc.size8(g, t), UO.nat_le_add_r(JB.Jbd2Tag.size(g, t), Jc.sizes(g, rest))))
 
 # The descriptor block: its shape, the area after the header, the tail
 
@@ -3462,7 +3406,7 @@ def Jc.tok_t(+check: Bool, +g: J.Jbd2Geom, +p: B.Octets, hb: {J.Jbd2Geom.has_csu
   +k = K.Ext2Csum.crc32c(K.Ext2Csum.crc32c(J.Jbd2Geom.seed(g), p), B.Octets.zeros(4n))
   %Equal.sym(Bool, J.Jbd2Geom.has_csum(g), True{}, hb) : {Bool.or(Bool.not(Bool.and(check, _)), U32.is_eq(JB.Jbd2Block.tail_csum(g, blk), J.Jbd2.be32(blk, Nat.sub(J.Jbd2Geom.bs(g), 4n)))) == True{} : Bool}
   %Equal.sym(U32, JB.Jbd2Block.tail_csum(g, blk), k, Jc.tcs(g, p, q, lp)) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(_, J.Jbd2.be32(blk, Nat.sub(J.Jbd2Geom.bs(g), 4n)))) == True{} : Bool}
-  %Equal.trans(Nat, Nat.add(B.Octets.len(p), 0n), B.Octets.len(p), Nat.sub(J.Jbd2Geom.bs(g), 4n), Jc.add_zero(B.Octets.len(p)), lp) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(k, Maybe.default(&2, U32, B.Octets.be32_at(blk, _), 0))) == True{} : Bool}
+  %Equal.trans(Nat, Nat.add(B.Octets.len(p), 0n), B.Octets.len(p), Nat.sub(J.Jbd2Geom.bs(g), 4n), UL.nat_add_zero(B.Octets.len(p)), lp) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(k, Maybe.default(&2, U32, B.Octets.be32_at(blk, _), 0))) == True{} : Bool}
   %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(blk, Nat.add(B.Octets.len(p), 0n)), B.Octets.be32_at(q, 0n), BL.octets_be32_at_append_add(p, q, 0n)) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(k, Maybe.default(&2, U32, _, 0))) == True{} : Bool}
   %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(q, 0n), Some{c}, BL.octets_be32_round_trip(c)) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(k, Maybe.default(&2, U32, _, 0))) == True{} : Bool}
   %Equal.sym(U32, c, k, Jc.tcs(g, p, B.Octets.zeros(4n), lp)) : {Bool.or(Bool.not(Bool.and(check, True{})), U32.is_eq(k, _)) == True{} : Bool}
@@ -3470,7 +3414,7 @@ def Jc.tok_t(+check: Bool, +g: J.Jbd2Geom, +p: B.Octets, hb: {J.Jbd2Geom.has_csu
 
 # the walk's fuel suffices
 def Jc.dfuel(+g: J.Jbd2Geom, +ts: List<&2, JB.Jbd2Tag>, +hf: {JB.Jbd2Desc.fits.go(g, ts, Jc.darea(g)) == True{} : Bool}) -> {Nat.is_le(List.length(&2, JB.Jbd2Tag, ts), Nat.add(Nat.div(Jc.darea(g), 8n), 1n)) == True{} : Bool}:
-  Ext4Proof.le_trans(List.length(&2, JB.Jbd2Tag, ts), Nat.div(Jc.darea(g), 8n), Nat.add(Nat.div(Jc.darea(g), 8n), 1n), Jc.div8(List.length(&2, JB.Jbd2Tag, ts), Jc.darea(g), Jc.fm8(ts, g, Jc.darea(g), hf)), Jc.le_add_r(Nat.div(Jc.darea(g), 8n), 1n))
+  Ext4Proof.le_trans(List.length(&2, JB.Jbd2Tag, ts), Nat.div(Jc.darea(g), 8n), Nat.add(Nat.div(Jc.darea(g), 8n), 1n), Jc.div8(List.length(&2, JB.Jbd2Tag, ts), Jc.darea(g), Jc.fm8(ts, g, Jc.darea(g), hf)), UO.nat_le_add_r(Nat.div(Jc.darea(g), 8n), 1n))
 
 # without checksums
 def Jc.desc_f(+check: Bool, +g: J.Jbd2Geom, +seq: U32, +ts: List<&2, JB.Jbd2Tag>, +uuid: B.Octets, +hu: {Nat.is_eq(B.Octets.len(uuid), 16n) == True{} : Bool}, +hf: {JB.Jbd2Desc.fits.go(g, ts, Jc.darea(g)) == True{} : Bool}, hb: {J.Jbd2Geom.has_csum(g) == False{} : Bool}) -> {JB.Jbd2Desc.decode(check, g, JB.Jbd2Block.seal(False{}, g, B.Octets.append(Jc.dbody(g, seq, ts, uuid), Jc.dpad(g, seq, ts, uuid)))) == Some{ts} : Maybe<&2, List<&2, JB.Jbd2Tag>>}:
@@ -3543,19 +3487,19 @@ def Jc.go4(+k: Nat, +e: Nat, +q: Nat) -> {Pair.fst(Nat, Nat, Nat.divmod.go(Nat.a
     case 1n+p:
       Equal.trans(Nat, Pair.fst(Nat, Nat, Nat.divmod.go(Nat.add(Nat.mul(p, 4n), e), 3n, 1n+q, 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(e, 3n, Nat.add(p, 1n+q), 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(e, 3n, 1n+Nat.add(p, q), 0n)),
         Jc.go4(p, e, 1n+q),
-        Equal.cong(Nat, Nat, x => Pair.fst(Nat, Nat, Nat.divmod.go(e, 3n, x, 0n)), Nat.add(p, 1n+q), 1n+Nat.add(p, q), Jc.add_succ(p, q)))
+        Equal.cong(Nat, Nat, x => Pair.fst(Nat, Nat, Nat.divmod.go(e, 3n, x, 0n)), Nat.add(p, 1n+q), 1n+Nat.add(p, q), UL.nat_add_succ(p, q)))
 
 # k records of e bytes, divided by e, are k
 def Jc.rdiv(w: Bool, +k: Nat) -> {Nat.div(Nat.mul(k, JB.Jbd2Revoke.entry_size(w)), JB.Jbd2Revoke.entry_size(w)) == k : Nat}:
   match w:
     case True{}:
-      %Jc.add_zero(Nat.mul(k, 8n)) : {Pair.fst(Nat, Nat, Nat.divmod.go(_, 7n, 0n, 0n)) == k : Nat}
+      %UL.nat_add_zero(Nat.mul(k, 8n)) : {Pair.fst(Nat, Nat, Nat.divmod.go(_, 7n, 0n, 0n)) == k : Nat}
       %Equal.sym(Nat, Pair.fst(Nat, Nat, Nat.divmod.go(Nat.add(Nat.mul(k, 8n), 0n), 7n, 0n, 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(0n, 7n, Nat.add(k, 0n), 0n)), Jc.go8(k, 0n, 0n)) : {_ == k : Nat}
-      Jc.add_zero(k)
+      UL.nat_add_zero(k)
     case False{}:
-      %Jc.add_zero(Nat.mul(k, 4n)) : {Pair.fst(Nat, Nat, Nat.divmod.go(_, 3n, 0n, 0n)) == k : Nat}
+      %UL.nat_add_zero(Nat.mul(k, 4n)) : {Pair.fst(Nat, Nat, Nat.divmod.go(_, 3n, 0n, 0n)) == k : Nat}
       %Equal.sym(Nat, Pair.fst(Nat, Nat, Nat.divmod.go(Nat.add(Nat.mul(k, 4n), 0n), 3n, 0n, 0n)), Pair.fst(Nat, Nat, Nat.divmod.go(0n, 3n, Nat.add(k, 0n), 0n)), Jc.go4(k, 0n, 0n)) : {_ == k : Nat}
-      Jc.add_zero(k)
+      UL.nat_add_zero(k)
 
 def Jc.el(+w: Bool, bs: List<&2, Nat>) -> List<&2, B.Octets>:
   match bs:
@@ -3699,7 +3643,7 @@ def Jc.rlen(+g: J.Jbd2Geom, +seq: U32, +bs: List<&2, Nat>) -> {B.Octets.len(Jc.r
 
 # the condition decode.go checks holds; then the records read back
 def Jc.rcond(+g: J.Jbd2Geom, +bs: List<&2, Nat>, +hc: {Nat.is_le(JB.Jbd2Revoke.count(g, bs), Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g))) == True{} : Bool}) -> {Bool.and(True{}, Bool.and(Nat.is_le(16n, JB.Jbd2Revoke.count(g, bs)), Nat.is_le(JB.Jbd2Revoke.count(g, bs), Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g))))) == True{} : Bool}:
-  %Equal.sym(Bool, Nat.is_le(16n, JB.Jbd2Revoke.count(g, bs)), True{}, Jc.le_add_r(16n, Nat.mul(List.length(&2, Nat, bs), JB.Jbd2Revoke.entry_size(J.Jbd2Geom.wide(g))))) : {Bool.and(True{}, Bool.and(_, Nat.is_le(JB.Jbd2Revoke.count(g, bs), Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g))))) == True{} : Bool}
+  %Equal.sym(Bool, Nat.is_le(16n, JB.Jbd2Revoke.count(g, bs)), True{}, UO.nat_le_add_r(16n, Nat.mul(List.length(&2, Nat, bs), JB.Jbd2Revoke.entry_size(J.Jbd2Geom.wide(g))))) : {Bool.and(True{}, Bool.and(_, Nat.is_le(JB.Jbd2Revoke.count(g, bs), Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g))))) == True{} : Bool}
   %Equal.sym(Bool, Nat.is_le(JB.Jbd2Revoke.count(g, bs), Nat.sub(J.Jbd2Geom.bs(g), J.Jbd2Geom.tail(g))), True{}, hc) : {Bool.and(True{}, Bool.and(True{}, _)) == True{} : Bool}
   {==}
 
@@ -3788,13 +3732,6 @@ def Laws.jrevoke_round_trip(check, g, seq, bs, f):
 
 # The plan's log, scanned: arithmetic
 
-def Jc.add_swap(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(a, Nat.add(b, c)) == Nat.add(b, Nat.add(a, c)) : Nat}:
-  Equal.trans(Nat, Nat.add(a, Nat.add(b, c)), Nat.add(Nat.add(a, b), c), Nat.add(b, Nat.add(a, c)),
-    Equal.sym(Nat, Nat.add(Nat.add(a, b), c), Nat.add(a, Nat.add(b, c)), Jc.add_assoc(a, b, c)),
-    Equal.trans(Nat, Nat.add(Nat.add(a, b), c), Nat.add(Nat.add(b, a), c), Nat.add(b, Nat.add(a, c)),
-      Equal.cong(Nat, Nat, k => Nat.add(k, c), Nat.add(a, b), Nat.add(b, a), Jc.add_comm(a, b)),
-      Jc.add_assoc(b, a, c)))
-
 # a < b: 1 + a <= b
 def Jc.lt_succ_le(+a: Nat, +b: Nat) -> {Nat.is_lt(a, b) == True{} : Bool} -> {Nat.is_le(1n+a, b) == True{} : Bool}:
   match a b:
@@ -3851,9 +3788,9 @@ def Jc.dm_z(+np: Nat, +q: Nat, +r: Nat, +bp: Nat, e: {Nat.add(0n, r) == bp : Nat
   +mq = Nat.mul(q, d)
   +b1 = Nat.add(np, Nat.add(Nat.mul(1n+q, d), 0n))
   +b2 = Nat.add(1n+np, Nat.add(mq, r))
-  +e1 = Equal.cong(Nat, Nat, k => Nat.add(np, k), Nat.add(Nat.mul(1n+q, d), 0n), Nat.mul(1n+q, d), Jc.add_zero(Nat.mul(1n+q, d)))
-  +e2 = Jc.add_succ(np, Nat.add(bp, mq))
-  +e3 = Equal.cong(Nat, Nat, k => 1n+Nat.add(np, k), Nat.add(bp, mq), Nat.add(mq, r), Equal.trans(Nat, Nat.add(bp, mq), Nat.add(mq, bp), Nat.add(mq, r), Jc.add_comm(bp, mq), Equal.cong(Nat, Nat, k => Nat.add(mq, k), bp, r, Equal.sym(Nat, r, bp, e))))
+  +e1 = Equal.cong(Nat, Nat, k => Nat.add(np, k), Nat.add(Nat.mul(1n+q, d), 0n), Nat.mul(1n+q, d), UL.nat_add_zero(Nat.mul(1n+q, d)))
+  +e2 = UL.nat_add_succ(np, Nat.add(bp, mq))
+  +e3 = Equal.cong(Nat, Nat, k => 1n+Nat.add(np, k), Nat.add(bp, mq), Nat.add(mq, r), Equal.trans(Nat, Nat.add(bp, mq), Nat.add(mq, bp), Nat.add(mq, r), UL.nat_add_comm(bp, mq), Equal.cong(Nat, Nat, k => Nat.add(mq, k), bp, r, Equal.sym(Nat, r, bp, e))))
   +ch = Equal.trans(Nat, b1, Nat.add(np, Nat.mul(1n+q, d)), b2, e1, Equal.trans(Nat, Nat.add(np, Nat.mul(1n+q, d)), 1n+Nat.add(np, Nat.add(bp, mq)), b2, e2, e3))
   Jc.le_eq(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+q, 0n)), d), b2, b1, Equal.sym(Nat, b1, b2, ch), ih)
 
@@ -3861,7 +3798,7 @@ def Jc.dm_s(+np: Nat, +mp: Nat, +q: Nat, +r: Nat, +bp: Nat, ih: {Nat.is_le(Nat.m
   +mq = Nat.mul(q, 1n+bp)
   +b1 = Nat.add(np, Nat.add(mq, 1n+r))
   +b2 = Nat.add(1n+np, Nat.add(mq, r))
-  +ch = Equal.trans(Nat, b1, Nat.add(np, 1n+Nat.add(mq, r)), b2, Equal.cong(Nat, Nat, k => Nat.add(np, k), Nat.add(mq, 1n+r), 1n+Nat.add(mq, r), Jc.add_succ(mq, r)), Jc.add_succ(np, Nat.add(mq, r)))
+  +ch = Equal.trans(Nat, b1, Nat.add(np, 1n+Nat.add(mq, r)), b2, Equal.cong(Nat, Nat, k => Nat.add(np, k), Nat.add(mq, 1n+r), 1n+Nat.add(mq, r), UL.nat_add_succ(mq, r)), UL.nat_add_succ(np, Nat.add(mq, r)))
   Jc.le_eq(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, q, 1n+r)), 1n+bp), b2, b1, Equal.sym(Nat, b1, b2, ch), ih)
 
 # the quotient times the divisor is at most the dividend (divmod's
@@ -3869,20 +3806,20 @@ def Jc.dm_s(+np: Nat, +mp: Nat, +q: Nat, +r: Nat, +bp: Nat, ih: {Nat.is_le(Nat.m
 def Jc.dm(+n: Nat, +m: Nat, +q: Nat, +r: Nat, +bp: Nat) -> {Nat.add(m, r) == bp : Nat} -> {Nat.is_le(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(n, m, q, r)), 1n+bp), Nat.add(n, Nat.add(Nat.mul(q, 1n+bp), r))) == True{} : Bool}:
   match n:
     case 0n:
-      e => Jc.le_add_r(Nat.mul(q, 1n+bp), r)
+      e => UO.nat_le_add_r(Nat.mul(q, 1n+bp), r)
     case 1n+np:
       match m:
         case 0n:
-          +e => Jc.dm_z(np, q, r, bp, e, Jc.dm(np, r, 1n+q, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, Jc.add_zero(r), e)))
+          +e => Jc.dm_z(np, q, r, bp, e, Jc.dm(np, r, 1n+q, 0n, bp, Equal.trans(Nat, Nat.add(r, 0n), r, bp, UL.nat_add_zero(r), e)))
         case 1n+mp:
-          +e => Jc.dm_s(np, mp, q, r, bp, Jc.dm(np, mp, q, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, Jc.add_succ(mp, r), e)))
+          +e => Jc.dm_s(np, mp, q, r, bp, Jc.dm(np, mp, q, 1n+r, bp, Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), bp, UL.nat_add_succ(mp, r), e)))
 
 def Jc.mul_div_le(+x: Nat, +d: Nat) -> {Nat.is_lt(0n, d) == True{} : Bool} -> {Nat.is_le(Nat.mul(Nat.div(x, d), d), x) == True{} : Bool}:
   match d:
     case 0n:
       h => Ext4Proof.no({Nat.is_le(Nat.mul(Nat.div(x, 0n), 0n), x) == True{} : Bool}, h)
     case 1n+bp:
-      h => Jc.le_eq(Nat.mul(Nat.div(x, 1n+bp), 1n+bp), x, Nat.add(x, Nat.add(Nat.mul(0n, 1n+bp), 0n)), Equal.sym(Nat, Nat.add(x, 0n), x, Jc.add_zero(x)), Jc.dm(x, bp, 0n, 0n, bp, Jc.add_zero(bp)))
+      h => Jc.le_eq(Nat.mul(Nat.div(x, 1n+bp), 1n+bp), x, Nat.add(x, Nat.add(Nat.mul(0n, 1n+bp), 0n)), Equal.sym(Nat, Nat.add(x, 0n), x, UL.nat_add_zero(x)), Jc.dm(x, bp, 0n, 0n, bp, UL.nat_add_zero(bp)))
 
 # The plan's tags: flags, checksums, and that a group's tags fit its
 # descriptor
@@ -3998,7 +3935,7 @@ def Jc.dfits_one(+g: J.Jbd2Geom, +s: U32, +first: Bool, +q: Nat, +avail: Nat, +b
   Ext4Proof.and_i(JB.Jbd2Tag.storable(g, t), Bool.and(J.Jbd2.has(fl, JB.Jbd2.flag_last()), Nat.is_le(JB.Jbd2Tag.size(g, t), avail)),
     Ext4Proof.and_i(JB.Jbd2.block_fits(J.Jbd2Geom.wide(g), b), JB.Jbd2Tag.storable.fields(Nat.is_eq(J.Jbd2Geom.csum(g), 3n), fl, c), hb, Jc.sfields(g, fl, s, JB.Jbd2.escape(d), Jc.flags16(e, first, True{}))),
     Ext4Proof.and_i(J.Jbd2.has(fl, JB.Jbd2.flag_last()), Nat.is_le(JB.Jbd2Tag.size(g, t), avail), Jc.flags_last(e, first, True{}),
-      Jc.le_eql(JB.Jbd2Tag.size(g, t), pk, avail, Jc.tsize(g, b, e, first, True{}, c), Jc.le_eql(pk, Nat.add(pk, 0n), avail, Equal.sym(Nat, Nat.add(pk, 0n), pk, Jc.add_zero(pk)), hd))))
+      Jc.le_eql(JB.Jbd2Tag.size(g, t), pk, avail, Jc.tsize(g, b, e, first, True{}, c), Jc.le_eql(pk, Nat.add(pk, 0n), avail, Equal.sym(Nat, Nat.add(pk, 0n), pk, UL.nat_add_zero(pk)), hd))))
 
 def Jc.dfits(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, +first: Bool, +q: Nat, +avail: Nat) -> {JT.Ext4JTx.blocks_fit(J.Jbd2Geom.wide(g), ws) == True{} : Bool} -> {Nat.is_lt(0n, List.length(&2, JW.Jbd2Write, ws)) == True{} : Bool} -> {Nat.is_le(Jc.dsz(ws, g, first), avail) == True{} : Bool} -> {JB.Jbd2Desc.fits.go(g, Jc.gt(ws, g, s, first, q), avail) == True{} : Bool}:
   match ws:
@@ -4021,7 +3958,7 @@ def Jc.dfits(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, +first: Bool, 
         +rest = Jc.gt(rws, g, s, False{}, Nat.add(q, 1n))
         +esz = Jc.tsize(g, b, e, first, False{}, c)
         +hb2 = Ext4Proof.and_r(JB.Jbd2.block_fits(w, b), JT.Ext4JTx.blocks_fit(w, rws), hb)
-        +ht = Ext4Proof.le_trans(tz, Nat.add(tz, 0n), d2s, Jc.le_add_r(tz, 0n), Jc.le_add_r(Nat.add(tz, 0n), Jc.dsz(t2, g, False{})))
+        +ht = Ext4Proof.le_trans(tz, Nat.add(tz, 0n), d2s, UO.nat_le_add_r(tz, 0n), UO.nat_le_add_r(Nat.add(tz, 0n), Jc.dsz(t2, g, False{})))
         +h3 = Jc.le_eql(Nat.add(sz, tz), Nat.add(sz0, tz), avail, Equal.cong(Nat, Nat, k => Nat.add(k, tz), sz, sz0, esz), Ext4Proof.le_trans(Nat.add(sz0, tz), Nat.add(sz0, d2s), avail, Jc.le_mono_l(sz0, tz, d2s, ht), hd))
         +h4 = Jc.le_eq(d2s, Nat.sub(avail, sz), Nat.sub(avail, sz0), Equal.cong(Nat, Nat, k => Nat.sub(avail, k), sz, sz0, esz), Jc.le_sub(sz0, d2s, avail, hd))
         Ext4Proof.and_i(JB.Jbd2Tag.storable(g, t), Bool.and(Bool.not(J.Jbd2.has(fl, JB.Jbd2.flag_last())), Bool.and(Nat.is_le(Nat.add(sz, tz), avail), JB.Jbd2Desc.fits.go(g, rest, Nat.sub(avail, sz)))),
@@ -4038,7 +3975,7 @@ def Jc.dsz_f(+g: J.Jbd2Geom, ws: List<&2, JW.Jbd2Write>) -> {Jc.dsz(ws, g, False
     case Con{+w, +t}:
       +tz = J.Jbd2Geom.tag_size(g)
       Equal.trans(Nat, Nat.add(Nat.add(tz, 0n), Jc.dsz(t, g, False{})), Nat.add(tz, Jc.dsz(t, g, False{})), Nat.add(tz, Nat.mul(List.length(&2, JW.Jbd2Write, t), tz)),
-        Equal.cong(Nat, Nat, k => Nat.add(k, Jc.dsz(t, g, False{})), Nat.add(tz, 0n), tz, Jc.add_zero(tz)),
+        Equal.cong(Nat, Nat, k => Nat.add(k, Jc.dsz(t, g, False{})), Nat.add(tz, 0n), tz, UL.nat_add_zero(tz)),
         Equal.cong(Nat, Nat, k => Nat.add(tz, k), Jc.dsz(t, g, False{}), Nat.mul(List.length(&2, JW.Jbd2Write, t), tz), Jc.dsz_f(g, t)))
 
 # a group of at most capacity writes fits its descriptor's tag area
@@ -4055,10 +3992,10 @@ def Jc.gbound(+g: J.Jbd2Geom, h: List<&2, JW.Jbd2Write>) -> {Nat.is_lt(0n, JB.Jb
         +mt = Nat.mul(List.length(&2, JW.Jbd2Write, t), tz)
         +hpos = Jc.lt0(tz, Jc.ts8(g))
         +hm = Ext4Proof.le_trans(Nat.mul(lh, tz), Nat.mul(JB.Jbd2Desc.capacity(g), tz), x, Jc.le_mul(lh, JB.Jbd2Desc.capacity(g), tz, hk), Jc.mul_div_le(x, tz, hpos))
-        +h16 = Jc.sub_pos(n, 16n, Ext4Proof.lt_le_lt(0n, tz, x, hpos, Ext4Proof.le_trans(tz, Nat.mul(lh, tz), x, Jc.le_add_r(tz, mt), hm)))
+        +h16 = Jc.sub_pos(n, 16n, Ext4Proof.lt_le_lt(0n, tz, x, hpos, Ext4Proof.le_trans(tz, Nat.mul(lh, tz), x, UO.nat_le_add_r(tz, mt), hm)))
         +eqd = Equal.trans(Nat, Jc.dsz(Con{w, t}, g, True{}), Nat.add(Nat.add(tz, 16n), mt), Nat.add(16n, Nat.mul(lh, tz)),
           Equal.cong(Nat, Nat, k => Nat.add(Nat.add(tz, 16n), k), Jc.dsz(t, g, False{}), mt, Jc.dsz_f(g, t)),
-          Equal.trans(Nat, Nat.add(Nat.add(tz, 16n), mt), Nat.add(tz, Nat.add(16n, mt)), Nat.add(16n, Nat.mul(lh, tz)), Jc.add_assoc(tz, 16n, mt), Jc.add_swap(tz, 16n, mt)))
+          Equal.trans(Nat, Nat.add(Nat.add(tz, 16n), mt), Nat.add(tz, Nat.add(16n, mt)), Nat.add(16n, Nat.mul(lh, tz)), UL.nat_add_assoc(tz, 16n, mt), UL.nat_add_left_comm(tz, 16n, mt)))
         Jc.le_eql(Jc.dsz(Con{w, t}, g, True{}), Nat.add(16n, Nat.mul(lh, tz)), n, eqd, Jc.le_eq(Nat.add(16n, Nat.mul(lh, tz)), n, Nat.add(16n, x), Equal.sym(Nat, Nat.add(16n, x), n, Jc.add_sub(16n, n, h16)), Jc.le_mono_l(16n, Nat.mul(lh, tz), x, hm)))
 
 # Groups: each nonempty and at most capacity long; every block fits
@@ -4186,12 +4123,12 @@ def Jc.adv(ws: List<&2, JW.Jbd2Write>, +q: Nat) -> Nat:
 def Jc.adv_add(ws: List<&2, JW.Jbd2Write>, +q: Nat) -> {Jc.adv(ws, q) == Nat.add(q, List.length(&2, JW.Jbd2Write, ws)) : Nat}:
   match ws:
     case Nil{}:
-      Equal.sym(Nat, Nat.add(q, 0n), q, Jc.add_zero(q))
+      Equal.sym(Nat, Nat.add(q, 0n), q, UL.nat_add_zero(q))
     case Con{+w, +t}:
-      Equal.trans(Nat, Jc.adv(t, Nat.add(q, 1n)), Nat.add(Nat.add(q, 1n), List.length(&2, JW.Jbd2Write, t)), Nat.add(q, Nat.add(1n, List.length(&2, JW.Jbd2Write, t))), Jc.adv_add(t, Nat.add(q, 1n)), Jc.add_assoc(q, 1n, List.length(&2, JW.Jbd2Write, t)))
+      Equal.trans(Nat, Jc.adv(t, Nat.add(q, 1n)), Nat.add(Nat.add(q, 1n), List.length(&2, JW.Jbd2Write, t)), Nat.add(q, Nat.add(1n, List.length(&2, JW.Jbd2Write, t))), Jc.adv_add(t, Nat.add(q, 1n)), UL.nat_add_assoc(q, 1n, List.length(&2, JW.Jbd2Write, t)))
 
 def Jc.adv_ge(+ws: List<&2, JW.Jbd2Write>, +q: Nat) -> {Nat.is_le(q, Jc.adv(ws, q)) == True{} : Bool}:
-  Jc.le_eq(q, Jc.adv(ws, q), Nat.add(q, List.length(&2, JW.Jbd2Write, ws)), Jc.adv_add(ws, q), Jc.le_add_r(q, List.length(&2, JW.Jbd2Write, ws)))
+  Jc.le_eq(q, Jc.adv(ws, q), Nat.add(q, List.length(&2, JW.Jbd2Write, ws)), Jc.adv_add(ws, q), UO.nat_le_add_r(q, List.length(&2, JW.Jbd2Write, ws)))
 
 def Jc.next_nw(+g: J.Jbd2Geom, +p: Nat, h: {Nat.is_lt(Nat.add(p, 1n), J.Jbd2Geom.maxlen(g)) == True{} : Bool}) -> {J.Jbd2Geom.next(g, p) == Nat.add(p, 1n) : Nat}:
   %Equal.sym(Bool, Nat.is_le(J.Jbd2Geom.maxlen(g), Nat.add(p, 1n)), False{}, Jc.lt_not_le(Nat.add(p, 1n), J.Jbd2Geom.maxlen(g), h)) : {J.Jbd2Geom.next.pick(_, J.Jbd2Geom.first(g), Nat.add(p, 1n)) == Nat.add(p, 1n) : Nat}
@@ -4260,7 +4197,7 @@ def Jc.feed_group(+h: List<&2, JW.Jbd2Write>, +check: Bool, +g: J.Jbd2Geom, +uui
   %Equal.sym(Nat, J.Jbd2Geom.next(g, pos), q, Jc.next_nw(g, pos, Ext4Proof.le_lt_lt(q, e, J.Jbd2Geom.maxlen(g), Jc.adv_ge(h, q), hnw))) : {Laws.Ext4Laws.feed(ad, check, g, JN.Jbd2Scan.desc.go(JN.Jbd2Scan.place(ts, g, _, Nil{}), seq, rs)) == rhs : JN.Jbd2Scan}
   %Equal.sym(List<&2, JL.Jbd2Put> & Nat, JN.Jbd2Scan.place(ts, g, q, Nil{}), (List.reverse.go(&2, JL.Jbd2Put, Nil{}, ps), e), Jc.place_ok(h, g, s, True{}, q, Nil{}, hnw)) : {Laws.Ext4Laws.feed(ad, check, g, JN.Jbd2Scan.desc.go(_, seq, rs)) == rhs : JN.Jbd2Scan}
   %Equal.sym(JN.Jbd2Scan, JN.Jbd2Scan.desc.go((List.reverse.go(&2, JL.Jbd2Put, Nil{}, ps), e), seq, rs), st2, Jc.fg5(ps, e, seq, rs)) : {Laws.Ext4Laws.feed(ad, check, g, _) == rhs : JN.Jbd2Scan}
-  Jc.skip_ds(h, g, s, True{}, q, check, st2, rest, Ext4Proof.le_refl(e))
+  Jc.skip_ds(h, g, s, True{}, q, check, st2, rest, UL.nat_le_refl(e))
 
 # Every group
 
@@ -4281,9 +4218,9 @@ def Jc.drecs(gs: List<&2, List<&2, JW.Jbd2Write>>, +seq: Nat, +g: J.Jbd2Geom, +s
 def Jc.lend_ge(gs: List<&2, List<&2, JW.Jbd2Write>>, +pos: Nat) -> {Nat.is_le(pos, Jc.lend(gs, pos)) == True{} : Bool}:
   match gs:
     case Nil{}:
-      Ext4Proof.le_refl(pos)
+      UL.nat_le_refl(pos)
     case Con{+h, +t}:
-      Ext4Proof.le_trans(pos, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h)), Jc.lend(t, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))), Jc.le_add_r(pos, 1n+List.length(&2, JW.Jbd2Write, h)), Jc.lend_ge(t, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))))
+      Ext4Proof.le_trans(pos, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h)), Jc.lend(t, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))), UO.nat_le_add_r(pos, 1n+List.length(&2, JW.Jbd2Write, h)), Jc.lend_ge(t, Nat.add(pos, 1n+List.length(&2, JW.Jbd2Write, h))))
 
 def Jc.lassoc(-A: Data, xs: List<&2, A>, +ys: List<&2, A>, +zs: List<&2, A>) -> {List.append(&2, A, List.append(&2, A, xs, ys), zs) == List.append(&2, A, xs, List.append(&2, A, ys, zs)) : List<&2, A>}:
   match xs:
@@ -4309,7 +4246,7 @@ def Jc.len_datas(ws: List<&2, JW.Jbd2Write>, +g: J.Jbd2Geom, +s: U32, f: Bool, +
 def Jc.lend_len(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s: U32, +uuid: B.Octets, +pos: Nat) -> {Nat.add(pos, List.length(&2, JT.Ext4JStep, JT.Ext4JTx.logs(gs, g, s, uuid, pos))) == Jc.lend(gs, pos) : Nat}:
   match gs:
     case Nil{}:
-      Jc.add_zero(pos)
+      UL.nat_add_zero(pos)
     case Con{+h, +t}:
       +lh = {1n+List.length(&2, JW.Jbd2Write, h) : Nat}
       +p2 = Nat.add(pos, lh)
@@ -4318,7 +4255,7 @@ def Jc.lend_len(gs: List<&2, List<&2, JW.Jbd2Write>>, +g: J.Jbd2Geom, +s: U32, +
       +lg = Equal.trans(Nat, List.length(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, gr, JT.Ext4JTx.logs(t, g, s, uuid, p2))), Nat.add(List.length(&2, JT.Ext4JStep, gr), lt), Nat.add(lh, lt), Jc.llen_app(JT.Ext4JStep, gr, JT.Ext4JTx.logs(t, g, s, uuid, p2)), Equal.cong(Nat, Nat, k => Nat.add(1n+k, lt), List.length(&2, JT.Ext4JStep, JT.Ext4JTx.datas(h, g, s, True{}, Nat.add(pos, 1n))), List.length(&2, JW.Jbd2Write, h), Jc.len_datas(h, g, s, True{}, Nat.add(pos, 1n))))
       Equal.trans(Nat, Nat.add(pos, List.length(&2, JT.Ext4JStep, JT.Ext4JTx.logs(Con{h, t}, g, s, uuid, pos))), Nat.add(pos, Nat.add(lh, lt)), Jc.lend(t, p2),
         Equal.cong(Nat, Nat, k => Nat.add(pos, k), List.length(&2, JT.Ext4JStep, JT.Ext4JTx.logs(Con{h, t}, g, s, uuid, pos)), Nat.add(lh, lt), lg),
-        Equal.trans(Nat, Nat.add(pos, Nat.add(lh, lt)), Nat.add(p2, lt), Jc.lend(t, p2), Equal.sym(Nat, Nat.add(p2, lt), Nat.add(pos, Nat.add(lh, lt)), Jc.add_assoc(pos, lh, lt)), Jc.lend_len(t, g, s, uuid, p2)))
+        Equal.trans(Nat, Nat.add(pos, Nat.add(lh, lt)), Nat.add(p2, lt), Jc.lend(t, p2), Equal.sym(Nat, Nat.add(p2, lt), Nat.add(pos, Nat.add(lh, lt)), UL.nat_add_assoc(pos, lh, lt)), Jc.lend_len(t, g, s, uuid, p2)))
 
 def Jc.recs_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +seq: Nat, +g: J.Jbd2Geom, +s: U32, +uuid: B.Octets, +pos: Nat) -> {JT.Ext4JTx.records(seq, JT.Ext4JTx.logs(gs, g, s, uuid, pos)) == Jc.drecs(gs, seq, g, s, pos) : List<&2, JL.Jbd2Rec>}:
   match gs:
@@ -4355,7 +4292,7 @@ def Jc.feed_logs(gs: List<&2, List<&2, JW.Jbd2Write>>, +check: Bool, +g: J.Jbd2G
         +bh = Ext4Proof.and_l(JT.Ext4JTx.blocks_fit(w, h), Jc.gfit(w, t), hb)
         +hz = Ext4Proof.and_l(a1, Bool.and(a2, a3), hk)
         +hfit = Jc.dfits(h, g, s, True{}, q, Jc.darea(g), bh, hz, Jc.gbound(g, h, hc, hz, Ext4Proof.and_l(a2, a3, k23)))
-        +ea = Equal.trans(Nat, Jc.adv(h, q), Nat.add(q, lh), p2, Jc.adv_add(h, q), Jc.add_assoc(pos, 1n, lh))
+        +ea = Equal.trans(Nat, Jc.adv(h, q), Nat.add(q, lh), p2, Jc.adv_add(h, q), UL.nat_add_assoc(pos, 1n, lh))
         +hnw = Ext4Proof.le_lt_lt(Jc.adv(h, q), Jc.lend(t, p2), J.Jbd2Geom.maxlen(g), Jc.le_eql(Jc.adv(h, q), p2, Jc.lend(t, p2), ea, Jc.lend_ge(t, p2)), hn)
         %Equal.sym(List<&2, JT.Ext4JStep>, List.append(&2, JT.Ext4JStep, List.append(&2, JT.Ext4JStep, gr, lt), rest), List.append(&2, JT.Ext4JStep, gr, List.append(&2, JT.Ext4JStep, lt, rest)), Jc.lassoc(JT.Ext4JStep, gr, lt, rest)) : {Laws.Ext4Laws.feed(_, check, g, JN.Jbd2Scan{pos, seq, rs, True{}, None{}}) == Laws.Ext4Laws.feed(rest, check, g, JN.Jbd2Scan{Jc.lend(Con{h, t}, pos), seq, List.reverse.go(&2, JL.Jbd2Rec, Jc.drecs(Con{h, t}, seq, g, s, pos), rs), True{}, None{}}) : JN.Jbd2Scan}
         %Equal.sym(JN.Jbd2Scan, Laws.Ext4Laws.feed(List.append(&2, JT.Ext4JStep, gr, List.append(&2, JT.Ext4JStep, lt, rest)), check, g, JN.Jbd2Scan{pos, seq, rs, True{}, None{}}), Laws.Ext4Laws.feed(List.append(&2, JT.Ext4JStep, lt, rest), check, g, JN.Jbd2Scan{Jc.adv(h, q), seq, Con{rd, rs}, True{}, None{}}), Jc.feed_group(h, check, g, uuid, seq, pos, rs, List.append(&2, JT.Ext4JStep, lt, rest), hu, hfit, hnw)) : {_ == Laws.Ext4Laws.feed(rest, check, g, JN.Jbd2Scan{Jc.lend(Con{h, t}, pos), seq, List.reverse.go(&2, JL.Jbd2Rec, Jc.drecs(Con{h, t}, seq, g, s, pos), rs), True{}, None{}}) : JN.Jbd2Scan}
@@ -4415,7 +4352,7 @@ def Laws.jtx_log_scan(check, g, uuid, jsb, seq, m, fresh, ws, sec, nsec, u, c, b
   +hbf = Jc.gfit_concat(gs, w, Equal.trans(Bool, JT.Ext4JTx.blocks_fit(w, List.concat(&2, JW.Jbd2Write, gs)), JT.Ext4JTx.blocks_fit(w, lg), True{}, Equal.cong(List<&2, JW.Jbd2Write>, Bool, k => JT.Ext4JTx.blocks_fit(w, k), List.concat(&2, JW.Jbd2Write, gs), lg, Ext4Proof.chunks(lg, JT.Ext4JTx.cap(g))), Jc.bf_logged(m, fresh, J.Jbd2Geom.bs(g), ws, w, b)))
   +r2 = Jc.le_eql(1n+ln, JT.Ext4JTx.log_blocks(Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), Nat.sub(J.Jbd2Geom.maxlen(g), f0), Equal.sym(Nat, JT.Ext4JTx.log_blocks(Laws.Ext4Laws.tx(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), 1n+ln, Jc.tx_blocks(g, uuid, jsb, seq, m, fresh, ws, sec, nsec)), r)
   +r3 = Jc.le_sub_add(f0, J.Jbd2Geom.maxlen(g), 1n+ln, {==}, r2)
-  +r4 = Jc.le_succ_lt(Nat.add(f0, ln), J.Jbd2Geom.maxlen(g), Jc.le_eql(1n+Nat.add(f0, ln), Nat.add(f0, 1n+ln), J.Jbd2Geom.maxlen(g), Equal.sym(Nat, Nat.add(f0, 1n+ln), 1n+Nat.add(f0, ln), Jc.add_succ(f0, ln)), r3))
+  +r4 = Jc.le_succ_lt(Nat.add(f0, ln), J.Jbd2Geom.maxlen(g), Jc.le_eql(1n+Nat.add(f0, ln), Nat.add(f0, 1n+ln), J.Jbd2Geom.maxlen(g), Equal.sym(Nat, Nat.add(f0, 1n+ln), 1n+Nat.add(f0, ln), UL.nat_add_succ(f0, ln)), r3))
   +hn = Equal.trans(Bool, Nat.is_lt(p, J.Jbd2Geom.maxlen(g)), Nat.is_lt(Nat.add(f0, ln), J.Jbd2Geom.maxlen(g)), True{}, Equal.cong(Nat, Bool, k => Nat.is_lt(k, J.Jbd2Geom.maxlen(g)), p, Nat.add(f0, ln), Equal.sym(Nat, Nat.add(f0, ln), p, ll)), r4)
   +he = Equal.trans(Bool, Nat.is_eq(Nat.add(f0, ln), p), Nat.is_eq(p, p), True{}, Equal.cong(Nat, Bool, k => Nat.is_eq(k, p), Nat.add(f0, ln), p, ll), Ext4Proof.eq_refl(p))
   +st0 = {JN.Jbd2Scan{f0, seq, Nil{}, True{}, None{}} : JN.Jbd2Scan}
@@ -4500,7 +4437,7 @@ def Laws.super_with_len(sb, set, clear, h):
 def Jc.swx96(+sb: B.Octets, +set: U32, +clear: U32, +hl: {B.Octets.len(sb) == 1024n : Nat}) -> {B.Octets.le32_at(Jc.swx(sb, set, clear), 96n) == Some{Jc.swnew(sb, set, clear)} : Maybe<&2, U32>}:
   +t = B.Octets.take(96n, sb)
   +y = B.Octets.append(B.Octets.le32(Jc.swnew(sb, set, clear)), B.Octets.drop(100n, sb))
-  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), 96n, Jc.add_zero(B.Octets.len(t)), Jc.lt96(sb, hl)) : {B.Octets.le32_at(B.Octets.append(t, y), _) == Some{Jc.swnew(sb, set, clear)} : Maybe<&2, U32>}
+  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), 96n, UL.nat_add_zero(B.Octets.len(t)), Jc.lt96(sb, hl)) : {B.Octets.le32_at(B.Octets.append(t, y), _) == Some{Jc.swnew(sb, set, clear)} : Maybe<&2, U32>}
   %Equal.sym(Maybe<&2, U32>, B.Octets.le32_at(B.Octets.append(t, y), Nat.add(B.Octets.len(t), 0n)), B.Octets.le32_at(y, 0n), BL.octets_le32_at_append_add(t, y, 0n)) : {_ == Some{Jc.swnew(sb, set, clear)} : Maybe<&2, U32>}
   Jc.le32_head(Jc.swnew(sb, set, clear), B.Octets.drop(100n, sb))
 
@@ -4595,7 +4532,7 @@ def Jc.swtail_t(+x: B.Octets, +sb: B.Octets, +hx: {B.Octets.len(x) == 1024n : Na
   +y = B.Octets.append(t, q)
   +lt = Jc.t1020(x, hx)
   %Equal.sym(B.Octets, DW.Ext4Dev.super_with.seal(True{}, x), y, Jc.sws_t(x)) : {Bool.or(U32.is_eq(Maybe.default(&2, U32, B.Octets.le32_at(_, 1020n), 0), K.Ext2Csum.super(_)), B.Octets.is_eq(B.Octets.slice(1020n, 4n, _), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
-  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), 1020n, Jc.add_zero(B.Octets.len(t)), lt) : {Bool.or(U32.is_eq(Maybe.default(&2, U32, B.Octets.le32_at(y, _), 0), K.Ext2Csum.super(y)), B.Octets.is_eq(B.Octets.slice(1020n, 4n, y), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
+  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), 1020n, UL.nat_add_zero(B.Octets.len(t)), lt) : {Bool.or(U32.is_eq(Maybe.default(&2, U32, B.Octets.le32_at(y, _), 0), K.Ext2Csum.super(y)), B.Octets.is_eq(B.Octets.slice(1020n, 4n, y), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
   %Equal.sym(Maybe<&2, U32>, B.Octets.le32_at(y, Nat.add(B.Octets.len(t), 0n)), B.Octets.le32_at(q, 0n), BL.octets_le32_at_append_add(t, q, 0n)) : {Bool.or(U32.is_eq(Maybe.default(&2, U32, _, 0), K.Ext2Csum.super(y)), B.Octets.is_eq(B.Octets.slice(1020n, 4n, y), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
   %Equal.sym(Maybe<&2, U32>, B.Octets.le32_at(q, 0n), Some{c}, BL.octets_le32_round_trip(c)) : {Bool.or(U32.is_eq(Maybe.default(&2, U32, _, 0), K.Ext2Csum.super(y)), B.Octets.is_eq(B.Octets.slice(1020n, 4n, y), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
   %Equal.sym(U32, K.Ext2Csum.super(y), K.Ext2Csum.crc32c(4294967295, B.Octets.take(1020n, y)), Jc.esup(y)) : {Bool.or(U32.is_eq(c, _), B.Octets.is_eq(B.Octets.slice(1020n, 4n, y), B.Octets.slice(1020n, 4n, sb))) == True{} : Bool}
@@ -4651,7 +4588,7 @@ def Laws.jtx_mark_super(bs, d, h):
   +lt = BL.octets_len_take_le(off, d, Jc.le_add_l(off, 1024n, B.Octets.len(d), h))
   +ls = Jc.mk_lsw(bs, d, h)
   %Equal.sym(B.Octets, Laws.Ext4Laws.marked(bs, d), B.Octets.append(t, B.Octets.append(sw, r)), Jc.mk_eq(bs, d)) : {B.Octets.slice(off, 1024n, _) == sw : B.Octets}
-  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), off, Jc.add_zero(B.Octets.len(t)), lt) : {B.Octets.slice(_, 1024n, B.Octets.append(t, B.Octets.append(sw, r))) == sw : B.Octets}
+  %Equal.trans(Nat, Nat.add(B.Octets.len(t), 0n), B.Octets.len(t), off, UL.nat_add_zero(B.Octets.len(t)), lt) : {B.Octets.slice(_, 1024n, B.Octets.append(t, B.Octets.append(sw, r))) == sw : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(Nat.add(B.Octets.len(t), 0n), 1024n, B.Octets.append(t, B.Octets.append(sw, r))), B.Octets.slice(0n, 1024n, B.Octets.append(sw, r)), BL.octets_slice_append_add(t, 0n, 1024n, B.Octets.append(sw, r))) : {_ == sw : B.Octets}
   %Equal.sym(B.Octets, B.Octets.slice(0n, 1024n, B.Octets.append(sw, r)), B.Octets.slice(0n, 1024n, sw), BL.octets_slice_append_le(0n, 1024n, sw, r, Jc.le_eq(1024n, B.Octets.len(sw), 1024n, ls, {==}))) : {_ == sw : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(0n, sw), sw, BL.octets_drop_zero(sw)) : {B.Octets.take(1024n, _) == sw : B.Octets}

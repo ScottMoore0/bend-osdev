@@ -11,6 +11,8 @@ import ./domain.bend as D
 import ./refer.bend as F
 import ./landlock.bend as L
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -440,27 +442,10 @@ def sp.has_union_l(+a: S.LandlockScope, +b: S.LandlockScope, +r: S.LandlockScope
 
 # Equality is reflexive: U32 (bit by bit), names and paths
 
-def u.bool_cmp(+x: Bool) -> {Bool.cmp(x, x) == EQ{} : Cmp}:
-  match x:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def u.word(+n: Nat, +w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+(+p):
-      match w:
-        case WCon{+b0, +t}:
-          %Equal.sym(Cmp, Word.cmp(p, t, t), EQ{}, u.word(p, t)) : {Word.cmp.fin(b0, b0, _) == EQ{} : Cmp}
-          u.bool_cmp(b0)
-
 def u.u32(+x: U32) -> {U32.is_eq(x, x) == True{} : Bool}:
   match x:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, u.word(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def u.char(+c: Char) -> {Char.is_eq(c, c) == True{} : Bool}:

@@ -12,6 +12,10 @@ import ./rto.bend as R
 import ./udp.bend as U
 import ./icmp.bend as IC
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # The proofs. Sequence numbers: lemmas on Base's words (bit by bit, the
 # carries of two subtractions related by a small table of states found by
@@ -385,20 +389,6 @@ def Laws.seq_lt_trans(a, b, c, h1, h2, h3):
 
 # Nat and length lemmas
 
-def nat_add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(p, 0n), p, nat_add_zero(p))
-
-def nat_add_assoc(a: Nat, b: Nat, c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), nat_add_assoc(p, b, c))
-
 def list_len_append(xs: List<&2, U32>, ys: List<&2, U32>) -> {B.len(B.append(xs, ys)) == Nat.add(B.len(xs), B.len(ys)) : Nat}:
   match xs:
     case Nil{}:
@@ -431,11 +421,11 @@ def cons_data(f: B.Octets, o: Q.RcvOut) -> {Q.RcvOut.data(Q.RcvOut.cons(f, o)) =
 def pull_contig(+xs: List<&2, Q.RcvSeg>, +n: Nat, r: Bool) -> {Q.RcvQ.next(Q.RcvOut.queue(Q.RcvQ.pull(xs, n, r))) == Nat.add(n, B.Octets.len(Q.RcvOut.data(Q.RcvQ.pull(xs, n, r)))) : Nat}:
   match xs:
     case Nil{}:
-      Equal.sym(Nat, Nat.add(n, 0n), n, nat_add_zero(n))
+      Equal.sym(Nat, Nat.add(n, 0n), n, UL.nat_add_zero(n))
     case Con{Q.RcvSeg{+at, +d}, +t}:
       match r:
         case False{}:
-          Equal.sym(Nat, Nat.add(n, 0n), n, nat_add_zero(n))
+          Equal.sym(Nat, Nat.add(n, 0n), n, UL.nat_add_zero(n))
         case True{}:
           +f = B.Octets.drop(Nat.sub(n, at), d)
           +n2 = Nat.add(n, B.Octets.len(f))
@@ -443,7 +433,7 @@ def pull_contig(+xs: List<&2, Q.RcvSeg>, +n: Nat, r: Bool) -> {Q.RcvQ.next(Q.Rcv
           +lo = B.Octets.len(Q.RcvOut.data(o))
           +e1 = cons_next(f, o)
           +e2 = pull_contig(t, n2, Q.RcvQ.ready(t, n2))
-          +e3 = nat_add_assoc(n, B.Octets.len(f), lo)
+          +e3 = UL.nat_add_assoc(n, B.Octets.len(f), lo)
           +e4 = Equal.cong(Nat, Nat, x => Nat.add(n, x), Nat.add(B.Octets.len(f), lo), B.Octets.len(B.Octets.append(f, Q.RcvOut.data(o))), Equal.sym(Nat, B.Octets.len(B.Octets.append(f, Q.RcvOut.data(o))), Nat.add(B.Octets.len(f), lo), octets_len_append(f, Q.RcvOut.data(o))))
           +e5 = Equal.cong(B.Octets, Nat, x => Nat.add(n, B.Octets.len(x)), B.Octets.append(f, Q.RcvOut.data(o)), Q.RcvOut.data(Q.RcvOut.cons(f, o)), Equal.sym(B.Octets, Q.RcvOut.data(Q.RcvOut.cons(f, o)), B.Octets.append(f, Q.RcvOut.data(o)), cons_data(f, o)))
           +x1 = Q.RcvQ.next(Q.RcvOut.queue(Q.RcvOut.cons(f, o)))
@@ -825,25 +815,10 @@ def Laws.tcp_step_allowed(o, conn, ev, now, isn):
 
 # Equality of 32-bit words is reflexive
 
-def word_cmp_refl(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      match w:
-        case WNil{}:
-          {==}
-    case 1n+p:
-      match w:
-        case WCon{False{}, t}:
-          %Equal.sym(Cmp, Word.cmp(p, t, t), EQ{}, word_cmp_refl(p, t)) : {Word.cmp.fin(False{}, False{}, _) == EQ{} : Cmp}
-          {==}
-        case WCon{True{}, t}:
-          %Equal.sym(Cmp, Word.cmp(p, t, t), EQ{}, word_cmp_refl(p, t)) : {Word.cmp.fin(True{}, True{}, _) == EQ{} : Cmp}
-          {==}
-
 def u32_eq_refl(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def key_refl(k: D.DemuxKey) -> {D.DemuxKey.is_eq(k, k) == True{} : Bool}:
@@ -893,19 +868,13 @@ def Laws.demux_route_exact(S, d, p, a, r, s):
 
 # The retransmission timer
 
-def u32_le_refl(a: U32) -> {U32.is_le(a, a) == True{} : Bool}:
-  match a:
-    case U32{w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_refl(32n, w)) : {Cmp.is_le(_) == True{} : Bool}
-      {==}
-
 # at_most(x, hi) is at most hi, whatever x
 def at_most_le(+fits: Bool, +x: U32, +hi: U32, e: {U32.is_le(x, hi) == fits : Bool}) -> {U32.is_le(R.Rto.at_most.pick(fits, x, hi), hi) == True{} : Bool}:
   match fits:
     case True{}:
       e
     case False{}:
-      u32_le_refl(hi)
+      UO.u32_le_refl(hi)
 
 def at_most_bounded(+x: U32, +hi: U32) -> {U32.is_le(R.Rto.at_most(x, hi), hi) == True{} : Bool}:
   at_most_le(U32.is_le(x, hi), x, hi, {==})
@@ -915,7 +884,7 @@ def double_bounded(+small: Bool, +x: U32, +hi: U32) -> {U32.is_le(R.Rto.double.p
     case True{}:
       at_most_bounded(U32.add(x, x), hi)
     case False{}:
-      u32_le_refl(hi)
+      UO.u32_le_refl(hi)
 
 def Laws.rto_backoff_bounded(p, r):
   match p r:

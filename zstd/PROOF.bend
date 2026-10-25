@@ -15,6 +15,8 @@ import ./frame.bend as Fr
 import ./zstd.bend as Z
 import ./compress.bend as C
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # The lemmas below are about the package's internals; Octets enter them only
 # through bytes' interface laws (octets_append_list, octets_to_of,
@@ -41,46 +43,13 @@ def true_not_false(h: {True{} == False{} : Bool}) -> Empty:
 def absurd(-P: Type, e: Empty) -> P:
   match e:
 
-def add_zero(p: Nat) -> {Nat.add(p, 0n) == p : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_zero(q) : {1n+Nat.add(q, 0n) == 1n+_ : Nat}
-      {==}
-
-def add_succ(p: Nat, x: Nat) -> {Nat.add(p, 1n+x) == 1n+Nat.add(p, x) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_succ(q, x) : {1n+Nat.add(q, 1n+x) == 1n+_ : Nat}
-      {==}
-
-def add_comm(+p: Nat, +q: Nat) -> {Nat.add(p, q) == Nat.add(q, p) : Nat}:
-  match p:
-    case 0n:
-      Equal.sym(Nat, Nat.add(q, 0n), q, add_zero(q))
-    case 1n+r:
-      %Equal.sym(Nat, Nat.add(q, 1n+r), 1n+Nat.add(q, r), add_succ(q, r)) : {1n+Nat.add(r, q) == _ : Nat}
-      %add_comm(r, q) : {1n+Nat.add(r, q) == 1n+_ : Nat}
-      {==}
-
-def add_assoc(p: Nat, +q: Nat, +r: Nat) -> {Nat.add(Nat.add(p, q), r) == Nat.add(p, Nat.add(q, r)) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+s:
-      %add_assoc(s, q, r) : {1n+Nat.add(Nat.add(s, q), r) == 1n+_ : Nat}
-      {==}
-
 # (a + b) + (c + d) == (a + c) + (b + d)
 def add_swap(+a: Nat, +b: Nat, +c: Nat, +d: Nat) -> {Nat.add(Nat.add(a, b), Nat.add(c, d)) == Nat.add(Nat.add(a, c), Nat.add(b, d)) : Nat}:
-  %Equal.sym(Nat, Nat.add(Nat.add(a, b), Nat.add(c, d)), Nat.add(a, Nat.add(b, Nat.add(c, d))), add_assoc(a, b, Nat.add(c, d))) : {_ == Nat.add(Nat.add(a, c), Nat.add(b, d)) : Nat}
-  %Equal.sym(Nat, Nat.add(Nat.add(a, c), Nat.add(b, d)), Nat.add(a, Nat.add(c, Nat.add(b, d))), add_assoc(a, c, Nat.add(b, d))) : {Nat.add(a, Nat.add(b, Nat.add(c, d))) == _ : Nat}
-  %add_assoc(b, c, d) : {Nat.add(a, _) == Nat.add(a, Nat.add(c, Nat.add(b, d))) : Nat}
-  %add_assoc(c, b, d) : {Nat.add(a, Nat.add(Nat.add(b, c), d)) == Nat.add(a, _) : Nat}
-  %Equal.sym(Nat, Nat.add(b, c), Nat.add(c, b), add_comm(b, c)) : {Nat.add(a, Nat.add(_, d)) == Nat.add(a, Nat.add(Nat.add(c, b), d)) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(a, b), Nat.add(c, d)), Nat.add(a, Nat.add(b, Nat.add(c, d))), UL.nat_add_assoc(a, b, Nat.add(c, d))) : {_ == Nat.add(Nat.add(a, c), Nat.add(b, d)) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(a, c), Nat.add(b, d)), Nat.add(a, Nat.add(c, Nat.add(b, d))), UL.nat_add_assoc(a, c, Nat.add(b, d))) : {Nat.add(a, Nat.add(b, Nat.add(c, d))) == _ : Nat}
+  %UL.nat_add_assoc(b, c, d) : {Nat.add(a, _) == Nat.add(a, Nat.add(c, Nat.add(b, d))) : Nat}
+  %UL.nat_add_assoc(c, b, d) : {Nat.add(a, Nat.add(Nat.add(b, c), d)) == Nat.add(a, _) : Nat}
+  %Equal.sym(Nat, Nat.add(b, c), Nat.add(c, b), UL.nat_add_comm(b, c)) : {Nat.add(a, Nat.add(_, d)) == Nat.add(a, Nat.add(Nat.add(c, b), d)) : Nat}
   {==}
 
 def sub_zero(m: Nat) -> {Nat.sub(m, 0n) == m : Nat}:
@@ -189,7 +158,7 @@ def pow_pred(p: Nat) -> {Bi.ZstdBits.pow2(Nat.sub(p, 0n)) == Bi.ZstdBits.pow2(p)
 def rd_one(+p: Nat, +a: Nat, +v: Nat, h: {Nat.is_le(Bi.ZstdBits.pow2(p), v) == True{} : Bool}) -> {Nat.add(sh(p, Nat.add(a, 1n)), Nat.sub(v, Bi.ZstdBits.pow2(p))) == Nat.add(sh(p, a), v) : Nat}:
   %Equal.sym(Nat, sh(p, Nat.add(a, 1n)), Nat.add(sh(p, a), sh(p, 1n)), sh_add(p, a, 1n)) : {Nat.add(_, Nat.sub(v, Bi.ZstdBits.pow2(p))) == Nat.add(sh(p, a), v) : Nat}
   %Equal.sym(Nat, sh(p, 1n), Bi.ZstdBits.pow2(p), sh_one(p)) : {Nat.add(Nat.add(sh(p, a), _), Nat.sub(v, Bi.ZstdBits.pow2(p))) == Nat.add(sh(p, a), v) : Nat}
-  %Equal.sym(Nat, Nat.add(Nat.add(sh(p, a), Bi.ZstdBits.pow2(p)), Nat.sub(v, Bi.ZstdBits.pow2(p))), Nat.add(sh(p, a), Nat.add(Bi.ZstdBits.pow2(p), Nat.sub(v, Bi.ZstdBits.pow2(p)))), add_assoc(sh(p, a), Bi.ZstdBits.pow2(p), Nat.sub(v, Bi.ZstdBits.pow2(p)))) : {_ == Nat.add(sh(p, a), v) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(sh(p, a), Bi.ZstdBits.pow2(p)), Nat.sub(v, Bi.ZstdBits.pow2(p))), Nat.add(sh(p, a), Nat.add(Bi.ZstdBits.pow2(p), Nat.sub(v, Bi.ZstdBits.pow2(p)))), UL.nat_add_assoc(sh(p, a), Bi.ZstdBits.pow2(p), Nat.sub(v, Bi.ZstdBits.pow2(p)))) : {_ == Nat.add(sh(p, a), v) : Nat}
   %le_add_sub(Bi.ZstdBits.pow2(p), v, h) : {Nat.add(sh(p, a), Nat.add(Bi.ZstdBits.pow2(p), Nat.sub(v, Bi.ZstdBits.pow2(p)))) == Nat.add(sh(p, a), _) : Nat}
   {==}
 
@@ -201,7 +170,7 @@ def rd_go(n: Nat, hi: Bool, +v: Nat, +acc: Nat, +rest: List<&2, Bool>, h1: {hi =
   match n:
     case 0n:
       %Equal.sym(Nat, v, 0n, lt1_zero(v, h2)) : {Some{Bi.ZstdBits{acc, rest}} == Some{Bi.ZstdBits{Nat.add(acc, _), rest}} : Maybe<&2, Bi.ZstdBits>}
-      %Equal.sym(Nat, Nat.add(acc, 0n), acc, add_zero(acc)) : {Some{Bi.ZstdBits{acc, rest}} == Some{Bi.ZstdBits{_, rest}} : Maybe<&2, Bi.ZstdBits>}
+      %Equal.sym(Nat, Nat.add(acc, 0n), acc, UL.nat_add_zero(acc)) : {Some{Bi.ZstdBits{acc, rest}} == Some{Bi.ZstdBits{_, rest}} : Maybe<&2, Bi.ZstdBits>}
       {==}
     case 1n+(+p):
       match hi:
@@ -213,7 +182,7 @@ def rd_go(n: Nat, hi: Bool, +v: Nat, +acc: Nat, +rest: List<&2, Bool>, h1: {hi =
         case False{}:
           +nle = hi_of(p, v, False{}, h1)
           +a2 = Nat.add(Nat.add(acc, acc), 0n)
-          Equal.trans(Maybe<&2, Bi.ZstdBits>, Bi.bits.read.go(p, List.append(&2, Bool, Bi.bits.of_nat.go(p, Nat.is_le(Bi.ZstdBits.pow2(Nat.sub(p, 1n)), v), v), rest), a2), Some{Bi.ZstdBits{Nat.add(sh(p, a2), v), rest}}, Some{Bi.ZstdBits{Nat.add(sh(p, Nat.add(acc, acc)), v), rest}}, rd_go(p, Nat.is_le(Bi.ZstdBits.pow2(Nat.sub(p, 1n)), v), v, a2, rest, {==}, not_le_lt(Bi.ZstdBits.pow2(p), v, nle)), Equal.cong(Nat, Maybe<&2, Bi.ZstdBits>, x => Some{Bi.ZstdBits{Nat.add(sh(p, x), v), rest}}, a2, Nat.add(acc, acc), add_zero(Nat.add(acc, acc))))
+          Equal.trans(Maybe<&2, Bi.ZstdBits>, Bi.bits.read.go(p, List.append(&2, Bool, Bi.bits.of_nat.go(p, Nat.is_le(Bi.ZstdBits.pow2(Nat.sub(p, 1n)), v), v), rest), a2), Some{Bi.ZstdBits{Nat.add(sh(p, a2), v), rest}}, Some{Bi.ZstdBits{Nat.add(sh(p, Nat.add(acc, acc)), v), rest}}, rd_go(p, Nat.is_le(Bi.ZstdBits.pow2(Nat.sub(p, 1n)), v), v, a2, rest, {==}, not_le_lt(Bi.ZstdBits.pow2(p), v, nle)), Equal.cong(Nat, Maybe<&2, Bi.ZstdBits>, x => Some{Bi.ZstdBits{Nat.add(sh(p, x), v), rest}}, a2, Nat.add(acc, acc), UL.nat_add_zero(Nat.add(acc, acc))))
 
 def Laws.bits_round_trip(n, v, rest, h):
   match n:
@@ -293,7 +262,7 @@ def len_rev_go(+xs: List<&2, Nat>, +acc: List<&2, Nat>) -> {List.length(&2, Nat,
     case Nil{}:
       {==}
     case Con{h, t}:
-      Equal.trans(Nat, List.length(&2, Nat, List.reverse.go(&2, Nat, t, Con{h, acc})), Nat.add(List.length(&2, Nat, t), 1n+List.length(&2, Nat, acc)), 1n+Nat.add(List.length(&2, Nat, t), List.length(&2, Nat, acc)), len_rev_go(t, Con{h, acc}), add_succ(List.length(&2, Nat, t), List.length(&2, Nat, acc)))
+      Equal.trans(Nat, List.length(&2, Nat, List.reverse.go(&2, Nat, t, Con{h, acc})), Nat.add(List.length(&2, Nat, t), 1n+List.length(&2, Nat, acc)), 1n+Nat.add(List.length(&2, Nat, t), List.length(&2, Nat, acc)), len_rev_go(t, Con{h, acc}), UL.nat_add_succ(List.length(&2, Nat, t), List.length(&2, Nat, acc)))
 
 def and_true_l(+a: Bool, +b: Bool, h: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
   match a:
@@ -464,7 +433,7 @@ def fse_fin(+t: F.ZstdFseTable, m: Maybe<&2, F.ZsFseEnc>, +done: List<&2, Nat>, 
 
 # the length of the symbols decoded: one, and the earlier ones
 def fse_len(+last: Nat, +earlier: List<&2, Nat>) -> {List.length(&2, Nat, List.reverse.go(&2, Nat, earlier, [last])) == 1n+List.length(&2, Nat, earlier) : Nat}:
-  Equal.trans(Nat, List.length(&2, Nat, List.reverse.go(&2, Nat, earlier, [last])), Nat.add(List.length(&2, Nat, earlier), 1n), 1n+List.length(&2, Nat, earlier), len_rev_go(earlier, [last]), Equal.trans(Nat, Nat.add(List.length(&2, Nat, earlier), 1n), 1n+Nat.add(List.length(&2, Nat, earlier), 0n), 1n+List.length(&2, Nat, earlier), add_succ(List.length(&2, Nat, earlier), 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(List.length(&2, Nat, earlier), 0n), List.length(&2, Nat, earlier), add_zero(List.length(&2, Nat, earlier)))))
+  Equal.trans(Nat, List.length(&2, Nat, List.reverse.go(&2, Nat, earlier, [last])), Nat.add(List.length(&2, Nat, earlier), 1n), 1n+List.length(&2, Nat, earlier), len_rev_go(earlier, [last]), Equal.trans(Nat, Nat.add(List.length(&2, Nat, earlier), 1n), 1n+Nat.add(List.length(&2, Nat, earlier), 0n), 1n+List.length(&2, Nat, earlier), UL.nat_add_succ(List.length(&2, Nat, earlier), 0n), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(List.length(&2, Nat, earlier), 0n), List.length(&2, Nat, earlier), UL.nat_add_zero(List.length(&2, Nat, earlier)))))
 
 # the encoder over the symbols reversed (rs): what it writes decodes to them
 def fse_go(+rs: List<&2, Nat>, +t: F.ZstdFseTable, +bits: List<&2, Bool>, +rest: List<&2, Bool>, h: {F.fse.encode.go(rs, t) == Some{bits} : Maybe<&2, List<&2, Bool>>}) -> {F.ZstdFse.decode(t, List.append(&2, Bool, bits, rest), List.length(&2, Nat, List.reverse(&2, Nat, rs))) == Some{F.ZstdFseSyms{List.reverse(&2, Nat, rs), rest}} : Maybe<&2, F.ZstdFseSyms>}:

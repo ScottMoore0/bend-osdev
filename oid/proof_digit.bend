@@ -6,6 +6,8 @@
 import Base
 import ./text.bend as T
 import ./proof_nat.bend as ON
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # a digit's character reads back as the digit
 def og.cval10(+k: Nat, +lt: {Nat.is_lt(Nat.add(10n, k), 10n) == True{} : Bool}) -> {T.oid.cval(T.oid.dchar(Nat.add(10n, k))) == Some{Nat.add(10n, k)} : Maybe<&2, Nat>}:
@@ -256,4 +258,4 @@ def og.nonzero(+d: Nat, +h1: {Nat.is_le(1n, d) == True{} : Bool}, +lt: {Nat.is_l
     case 0n:
       Empty.absurd({T.oid.is_zero(T.oid.dchar(0n)) == False{} : Bool}, ON.on.ft(h1))
     case 1n+e:
-      og.nzx(e, ON.on.lt_le_trans(e, 9n, 10n, lt, {==}))
+      og.nzx(e, UO.nat_lt_le_trans(e, 9n, 10n, lt, {==}))

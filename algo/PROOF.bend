@@ -14,6 +14,8 @@ import ../u32/PROOF.bend as UP
 import ./proof_u32.bend as U
 import ./proof_bsearch.bend as Q
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -91,13 +93,6 @@ def nat.lt_irrefl(x: Nat) -> {Nat.is_lt(x, x) == False{} : Bool}:
     case 1n+p:
       nat.lt_irrefl(p)
 
-def nat.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_le(a, 1n+b) == True{} : Bool}:
   match a b:
     case 0n _:
@@ -107,42 +102,12 @@ def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.i
     case 1n+ap 1n+bp:
       nat.le_succ(ap, bp, e)
 
-def nat.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nat.add_succ(a: Nat, -b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+b), 1n+Nat.add(p, b), nat.add_succ(p, b)) : {1n+_ == 2n+Nat.add(p, b) : Nat}
-      {==}
-
-# n - k + k = n, for k <= n
-def nat.sub_add(n: Nat, k: Nat, e: {Nat.is_le(k, n) == True{} : Bool}) -> {Nat.add(Nat.sub(n, k), k) == n : Nat}:
-  match n k:
-    case 0n 0n:
-      {==}
-    case 0n 1n+kp:
-      Empty.absurd({Nat.add(0n, 1n+kp) == 0n : Nat}, absurd.ft(e))
-    case 1n+np 0n:
-      nat.add_zero(1n+np)
-    case 1n+ +np 1n+ +kp:
-      %Equal.sym(Nat, Nat.add(Nat.sub(np, kp), 1n+kp), 1n+Nat.add(Nat.sub(np, kp), kp), nat.add_succ(Nat.sub(np, kp), kp)) : {_ == 1n+np : Nat}
-      %nat.sub_add(np, kp, e) : {1n+Nat.add(Nat.sub(np, kp), kp) == 1n+_ : Nat}
-      {==}
-
 def nat.sub_le(n: Nat, k: Nat) -> {Nat.is_le(Nat.sub(n, k), n) == True{} : Bool}:
   match n k:
     case 0n _:
       {==}
     case 1n+np 0n:
-      nat.le_refl(np)
+      UL.nat_le_refl(np)
     case 1n+ +np 1n+ +kp:
       nat.le_succ(Nat.sub(np, kp), np, nat.sub_le(np, kp))
 
@@ -181,7 +146,7 @@ def bitw.popcount_not(n: Nat, w: Word(n)) -> {Nat.add(A.bitw.popcount(n, w), A.b
           %bitw.popcount_not(p, t) : {1n+Nat.add(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t))) == 1n+_ : Nat}
           {==}
         case WCon{False{}, +t}:
-          %Equal.sym(Nat, Nat.add(A.bitw.popcount(p, t), 1n+A.bitw.popcount(p, Word.not(p, t))), 1n+Nat.add(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t))), nat.add_succ(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t)))) : {_ == 1n+p : Nat}
+          %Equal.sym(Nat, Nat.add(A.bitw.popcount(p, t), 1n+A.bitw.popcount(p, Word.not(p, t))), 1n+Nat.add(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t))), UL.nat_add_succ(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t)))) : {_ == 1n+p : Nat}
           %bitw.popcount_not(p, t) : {1n+Nat.add(A.bitw.popcount(p, t), A.bitw.popcount(p, Word.not(p, t))) == 1n+_ : Nat}
           {==}
 
@@ -505,7 +470,7 @@ def bitw.last_le(+m: Nat, +w: Word(1n+m), +k: Nat, e: {A.bitw.index(A.bitw.fls(1
 
 def bitw.clz_last_set(+m: Nat, +w: Word(1n+m), +k: Nat, +e: {A.bitw.index(A.bitw.fls(1n+m, w)) == Some{k} : Maybe<&2, Nat>}) -> {Nat.add(A.bitw.clz(1n+m, w), k) == m : Nat}:
   %Equal.sym(Nat, A.bitw.fls(1n+m, w), 1n+k, bitw.index_some(A.bitw.fls(1n+m, w), k, e)) : {Nat.add(Nat.sub(1n+m, _), k) == m : Nat}
-  nat.sub_add(m, k, bitw.last_le(m, w, k, e))
+  UL.nat_le_witness(k, m, bitw.last_le(m, w, k, e))
 
 def bitw.first_le_last(+n: Nat, +w: Word(n), +i: Nat, +k: Nat, e: {A.bitw.index(A.bitw.ffs(n, w)) == Some{i} : Maybe<&2, Nat>}, f: {A.bitw.index(A.bitw.fls(n, w)) == Some{k} : Maybe<&2, Nat>}) -> {Nat.is_le(i, k) == True{} : Bool}:
   %bitw.index_some(A.bitw.ffs(n, w), i, e) : {Nat.is_le(_, 1n+k) == True{} : Bool}
@@ -586,7 +551,7 @@ def bitseq.next_le(size: Nat, start: Nat, want: Bool, bs: List<&2, Bool>) -> {Na
         case 0n False{} Nil{}:
           {==}
         case 0n True{} Nil{}:
-          nat.le_refl(s)
+          UL.nat_le_refl(s)
         case 0n True{} Con{True{}, t}:
           {==}
         case 0n False{} Con{False{}, t}:
@@ -856,107 +821,20 @@ def bool.and_r(a: Bool, -b: Bool, e: {Bool.and(a, b) == True{} : Bool}) -> {b ==
 
 # Binary search: the order of U32 is the order of its value as a Nat
 
-def nat.dbit(b: Bool, a: Nat) -> Nat:
-  match b:
-    case False{}:
-      Nat.double(a)
-    case True{}:
-      1n+Nat.double(a)
-
-def word.cmp_nat.d(a: Nat, b: Nat, x: Bool, y: Bool) -> {Word.cmp.fin(x, y, Nat.cmp(a, b)) == Nat.cmp(nat.dbit(x, a), nat.dbit(y, b)) : Cmp}:
-  match a b:
-    case 0n 0n:
-      match x y:
-        case True{} True{}:
-          {==}
-        case True{} False{}:
-          {==}
-        case False{} True{}:
-          {==}
-        case False{} False{}:
-          {==}
-    case 0n 1n+bp:
-      match x y:
-        case True{} True{}:
-          {==}
-        case True{} False{}:
-          {==}
-        case False{} True{}:
-          {==}
-        case False{} False{}:
-          {==}
-    case 1n+ap 0n:
-      match x y:
-        case True{} True{}:
-          {==}
-        case True{} False{}:
-          {==}
-        case False{} True{}:
-          {==}
-        case False{} False{}:
-          {==}
-    case 1n+ +ap 1n+ +bp:
-      match x y:
-        case True{} True{}:
-          word.cmp_nat.d(ap, bp, True{}, True{})
-        case True{} False{}:
-          word.cmp_nat.d(ap, bp, True{}, False{})
-        case False{} True{}:
-          word.cmp_nat.d(ap, bp, False{}, True{})
-        case False{} False{}:
-          word.cmp_nat.d(ap, bp, False{}, False{})
-
-def word.cmp_nat.h(+p: Nat, +x: Bool, +y: Bool, +at: Word(p), +bt: Word(p), ih: {Word.cmp(p, at, bt) == Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)) : Cmp}) -> {Word.cmp.fin(x, y, Word.cmp(p, at, bt)) == Nat.cmp(nat.dbit(x, Word.to_nat(p, at)), nat.dbit(y, Word.to_nat(p, bt))) : Cmp}:
-  %Equal.sym(Cmp, Word.cmp(p, at, bt), Nat.cmp(Word.to_nat(p, at), Word.to_nat(p, bt)), ih) : {Word.cmp.fin(x, y, _) == Nat.cmp(nat.dbit(x, Word.to_nat(p, at)), nat.dbit(y, Word.to_nat(p, bt))) : Cmp}
-  word.cmp_nat.d(Word.to_nat(p, at), Word.to_nat(p, bt), x, y)
-
-def word.cmp_nat(n: Nat, a: Word(n), b: Word(n)) -> {Word.cmp(n, a, b) == Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)) : Cmp}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+ +p:
-      match a b:
-        case WCon{True{}, +at} WCon{True{}, +bt}:
-          word.cmp_nat.h(p, True{}, True{}, at, bt, word.cmp_nat(p, at, bt))
-        case WCon{True{}, +at} WCon{False{}, +bt}:
-          word.cmp_nat.h(p, True{}, False{}, at, bt, word.cmp_nat(p, at, bt))
-        case WCon{False{}, +at} WCon{True{}, +bt}:
-          word.cmp_nat.h(p, False{}, True{}, at, bt, word.cmp_nat(p, at, bt))
-        case WCon{False{}, +at} WCon{False{}, +bt}:
-          word.cmp_nat.h(p, False{}, False{}, at, bt, word.cmp_nat(p, at, bt))
-
-def u32.cmp_nat(a: U32, b: U32) -> {U32.cmp(a, b) == Nat.cmp(U32.to_nat(a), U32.to_nat(b)) : Cmp}:
-  match a b:
-    case U32{wa} U32{wb}:
-      word.cmp_nat(32n, wa, wb)
-
 # a hypothesis about U32's order, as one about Nat's
 def u32.mv_le(+a: U32, +b: U32, -v: Bool, h: {U32.is_le(a, b) == v : Bool}) -> {Nat.is_le(U32.to_nat(a), U32.to_nat(b)) == v : Bool}:
-  %u32.cmp_nat(a, b) : {Cmp.is_le(_) == v : Bool}
+  %UL.u32_cmp_value(a, b) : {Cmp.is_le(_) == v : Bool}
   h
 
 def u32.mv_lt(+a: U32, +b: U32, -v: Bool, h: {U32.is_lt(a, b) == v : Bool}) -> {Nat.is_lt(U32.to_nat(a), U32.to_nat(b)) == v : Bool}:
-  %u32.cmp_nat(a, b) : {Cmp.is_lt(_) == v : Bool}
+  %UL.u32_cmp_value(a, b) : {Cmp.is_lt(_) == v : Bool}
   h
 
 def u32.mv_eq(+a: U32, +b: U32, -v: Bool, h: {U32.is_eq(a, b) == v : Bool}) -> {Nat.is_eq(U32.to_nat(a), U32.to_nat(b)) == v : Bool}:
-  %u32.cmp_nat(a, b) : {Cmp.is_eq(_) == v : Bool}
+  %UL.u32_cmp_value(a, b) : {Cmp.is_eq(_) == v : Bool}
   h
 
 # Nat order facts
-
-def nat.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      nat.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, absurd.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, absurd.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.le_trans(ap, bp, cp, e, f)
 
 # not a < c, a <= b: not b < c
 def nat.nlt_le(a: Nat, b: Nat, c: Nat, e: {Nat.is_lt(a, c) == False{} : Bool}, f: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.is_lt(b, c) == False{} : Bool}:
@@ -988,16 +866,12 @@ def nat.gt_le_ne(a: Nat, b: Nat, k: Nat, e: {Nat.is_lt(a, k) == False{} : Bool},
 
 # U32 order facts
 
-def u32.le_trans(+a: U32, +b: U32, +c: U32, e: {U32.is_le(a, b) == True{} : Bool}, f: {U32.is_le(b, c) == True{} : Bool}) -> {U32.is_le(a, c) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(a, c), Nat.cmp(U32.to_nat(a), U32.to_nat(c)), u32.cmp_nat(a, c)) : {Cmp.is_le(_) == True{} : Bool}
-  nat.le_trans(U32.to_nat(a), U32.to_nat(b), U32.to_nat(c), u32.mv_le(a, b, True{}, e), u32.mv_le(b, c, True{}, f))
-
 def u32.nlt_le(+a: U32, +b: U32, +c: U32, e: {U32.is_lt(a, c) == False{} : Bool}, f: {U32.is_le(a, b) == True{} : Bool}) -> {U32.is_lt(b, c) == False{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, c), Nat.cmp(U32.to_nat(b), U32.to_nat(c)), u32.cmp_nat(b, c)) : {Cmp.is_lt(_) == False{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(b, c), Nat.cmp(U32.to_nat(b), U32.to_nat(c)), UL.u32_cmp_value(b, c)) : {Cmp.is_lt(_) == False{} : Bool}
   nat.nlt_le(U32.to_nat(a), U32.to_nat(b), U32.to_nat(c), u32.mv_lt(a, c, False{}, e), u32.mv_le(a, b, True{}, f))
 
 def u32.gt_le_ne(+a: U32, +b: U32, +k: U32, e: {U32.is_lt(a, k) == False{} : Bool}, f: {U32.is_eq(a, k) == False{} : Bool}, g: {U32.is_le(a, b) == True{} : Bool}) -> {U32.is_eq(b, k) == False{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(b, k), Nat.cmp(U32.to_nat(b), U32.to_nat(k)), u32.cmp_nat(b, k)) : {Cmp.is_eq(_) == False{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(b, k), Nat.cmp(U32.to_nat(b), U32.to_nat(k)), UL.u32_cmp_value(b, k)) : {Cmp.is_eq(_) == False{} : Bool}
   nat.gt_le_ne(U32.to_nat(a), U32.to_nat(b), U32.to_nat(k), u32.mv_lt(a, k, False{}, e), u32.mv_eq(a, k, False{}, f), u32.mv_le(a, b, True{}, g))
 
 def cmp.lt_ne(c: Cmp, e: {Cmp.is_lt(c) == True{} : Bool}) -> {Cmp.is_eq(c) == False{} : Bool}:
@@ -1079,7 +953,7 @@ def bs.head_le(t: List<&2, U32>, +x0: U32, s: {S.bsearch.sorted.pair(t, x0) == T
       bool.and_l(U32.is_le(x0, y), S.bsearch.sorted.pair(tt, y), s)
     case Con{+y, +tt} 1n+ip:
       +s2 = s
-      u32.le_trans(x0, y, x, bool.and_l(U32.is_le(x0, y), S.bsearch.sorted.pair(tt, y), s2), bs.head_le(tt, y, bool.and_r(U32.is_le(x0, y), S.bsearch.sorted.pair(tt, y), s2), ip, x, e))
+      UO.u32_le_trans(x0, y, x, bool.and_l(U32.is_le(x0, y), S.bsearch.sorted.pair(tt, y), s2), bs.head_le(tt, y, bool.and_r(U32.is_le(x0, y), S.bsearch.sorted.pair(tt, y), s2), ip, x, e))
 
 # Binary search: lower_bound
 
@@ -1279,7 +1153,7 @@ def ba.kc(b: Bool, +l: List<&2, U32>, +key: U32, +n: U32, +hs: {S.bsearch.sorted
       bs.above(Q.bq.pre(l, n), key, m, AR.Arrays.nth(U32, l, m, 0), hs, eg, Q.bq.not_lt(m, Q.bq.lb(l, n, key), eb))
 
 def ba.key_cmp(+d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hN: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}, +mid: U32, +m: Nat, +eM: {U32.to_nat(mid) == m : Nat}, +hmN: {Nat.is_lt(m, U32.to_nat(n)) == True{} : Bool}) -> {U32.is_lt(AR.Arrays.nth(U32, l, AR.Arrays.index(d, mid), 0), key) == Nat.is_lt(m, Q.bq.lb(l, n, key)) : Bool}:
-  +hmS = Q.bq.lt_le_trans(m, U32.to_nat(n), AR.Arrays.slots(d), hmN, hN)
+  +hmS = UO.nat_lt_le_trans(m, U32.to_nat(n), AR.Arrays.slots(d), hmN, hN)
   +eI = Equal.trans(Nat, AR.Arrays.index(d, mid), U32.to_nat(mid), m, AL.index_of_u32(d, mid, Q.bq.lt_rw(m, AR.Arrays.slots(d), U32.to_nat(mid), AR.Arrays.slots(d), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, hmS)), eM)
   +hml = Q.bq.lt_rw(m, AR.Arrays.slots(d), m, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hmS)
   +eg = Equal.trans(Maybe<&2, U32>, List.get(&2, U32, Q.bq.pre(l, n), m), List.get(&2, U32, l, m), Some{AR.Arrays.nth(U32, l, m, 0)}, Q.bq.get_take(l, U32.to_nat(n), m, hmN), Q.bq.get_nth(l, m, hml))
@@ -1295,7 +1169,7 @@ def ba.jz_eq(+lo: U32, +hi: U32, eI: {U32.to_nat(U32.inc(Q.bq.mid(lo, hi))) == 1
   +m = Q.bq.m(lo, hi)
   %Equal.sym(Nat, U32.to_nat(U32.inc(Q.bq.mid(lo, hi))), 1n+m, eI) : {Nat.sub(s, 1n+hs) == Nat.sub(U32.to_nat(hi), _) : Nat}
   %ehs : {Nat.sub(s, 1n+hs) == Nat.sub(_, 1n+m) : Nat}
-  %U.uq.add_succ(l0, hs) : {Nat.sub(s, 1n+hs) == Nat.sub(Nat.add(l0, s), _) : Nat}
+  %UL.nat_add_succ(l0, hs) : {Nat.sub(s, 1n+hs) == Nat.sub(Nat.add(l0, s), _) : Nat}
   Equal.sym(Nat, Nat.sub(Nat.add(l0, s), Nat.add(l0, 1n+hs)), Nat.sub(s, 1n+hs), Q.bq.sub_cancel(l0, s, 1n+hs))
 
 # one halving, with the element at mid below the key (b) or not
@@ -1321,7 +1195,7 @@ def ba.adv2(b: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +key: U32, +n: U32, +l
       +mid = Q.bq.mid(lo, hi)
       +lb = Q.bq.lb(l, n, key)
       +j2 = Q.bq.le_rw(lb, m, lb, U32.to_nat(mid), {==}, Equal.sym(Nat, U32.to_nat(mid), m, eM), Q.bq.not_lt(m, lb, eb))
-      +j3 = Q.bq.le_rw(m, U32.to_nat(n), U32.to_nat(mid), U32.to_nat(n), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, Q.bq.le_trans(m, h0, U32.to_nat(n), Q.bq.lt_le(m, h0, hmh), i3))
+      +j3 = Q.bq.le_rw(m, U32.to_nat(n), U32.to_nat(mid), U32.to_nat(n), Equal.sym(Nat, U32.to_nat(mid), m, eM), {==}, UO.nat_le_trans(m, h0, U32.to_nat(n), Q.bq.lt_le(m, h0, hmh), i3))
       +e2 = Equal.trans(Nat, UN.U32Nat.half(s), Nat.sub(Nat.add(l0, UN.U32Nat.half(s)), l0), Nat.sub(U32.to_nat(mid), l0), Equal.sym(Nat, Nat.sub(Nat.add(l0, UN.U32Nat.half(s)), l0), UN.U32Nat.half(s), U.uq.sub_add_l(l0, UN.U32Nat.half(s))), Equal.cong(Nat, Nat, z => Nat.sub(z, l0), m, U32.to_nat(mid), Equal.sym(Nat, U32.to_nat(mid), m, eM)))
       +jz = Q.bq.lt_rw(UN.U32Nat.half(s), U.uq.pw(g), Q.bq.s(lo, mid), U.uq.pw(g), e2, {==}, Q.bq.half_lt_pw(s, U.uq.pw(g), hz))
       ih(lo, mid, i1, j2, j3, jz)
@@ -1350,7 +1224,7 @@ def ba.adv(c: Bool, +g: Nat, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U
       +hmh = Q.bq.lt_rw(Nat.add(l0, UN.U32Nat.half(s)), Nat.add(l0, s), m, h0, {==}, ehs, Equal.trans(Bool, Nat.is_lt(Nat.add(l0, UN.U32Nat.half(s)), Nat.add(l0, s)), Nat.is_lt(UN.U32Nat.half(s), s), True{}, Q.bq.lt_cancel(l0, UN.U32Nat.half(s), s), Q.bq.half_lt(s, Q.bq.sub_pos(l0, h0, hlt))))
       +hadd = Q.bq.le_rw(m, h0, Nat.add(l0, sh), h0, Equal.cong(Nat, Nat, z => Nat.add(l0, z), UN.U32Nat.half(s), sh, Equal.sym(Nat, sh, UN.U32Nat.half(s), eE)), {==}, Q.bq.lt_le(m, h0, hmh))
       +eM = Equal.trans(Nat, U32.to_nat(mid), Nat.add(l0, sh), m, UL.u32_add_value(lo, U32.shr(U32.sub(hi, lo)), hi, hadd), Equal.cong(Nat, Nat, z => Nat.add(l0, z), sh, UN.U32Nat.half(s), eE))
-      +hmN = Q.bq.lt_le_trans(m, h0, U32.to_nat(n), hmh, i3)
+      +hmN = UO.nat_lt_le_trans(m, h0, U32.to_nat(n), hmh, i3)
       %Equal.sym(Bool, U32.is_lt(Q.bq.x(d, l, lo, hi), key), Nat.is_lt(m, lb), ba.key_cmp(d, l, hl, key, n, hN, hs, mid, m, eM, hmN)) : {U32.to_nat(Q.bq.run(g, d, l, Q.bq.lo_b(_, lo, mid), Q.bq.hi_b(_, hi, mid), key)) == lb : Nat}
       ba.adv2(Nat.is_lt(m, lb), g, d, l, key, n, lo, hi, {==}, i1, i2, i3, hz, eM, ehs, hmh, ih)
 
@@ -1361,7 +1235,7 @@ def ba.run(f: Nat, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == 
       +l0 = U32.to_nat(lo)
       +h0 = U32.to_nat(hi)
       +lb = Q.bq.lb(l, n, key)
-      Q.bq.le_antisym(l0, lb, i1, Q.bq.le_trans(lb, h0, l0, i2, Q.bq.sub0_le(h0, l0, Q.bq.lt_one(Q.bq.s(lo, hi), hz))))
+      Q.bq.le_antisym(l0, lb, i1, UO.nat_le_trans(lb, h0, l0, i2, Q.bq.sub0_le(h0, l0, Q.bq.lt_one(Q.bq.s(lo, hi), hz))))
     case 1n+ +g:
       ba.adv(U32.is_lt(lo, hi), g, d, l, hl, key, n, hN, hs, lo, hi, {==}, i1, i2, i3, hz, lo2 => hi2 => j1 => j2 => j3 => jz => ba.run(g, d, l, hl, key, n, hN, hs, lo2, hi2, j1, j2, j3, jz))
 
@@ -1378,7 +1252,7 @@ def ba.lb_le(-d: Nat, +l: List<&2, U32>, +n: U32, +key: U32, +hl: {List.length(&
 
 # the search's answer is the lower bound
 def ba.answer(+d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, +key: U32, +n: U32, +hn: {Nat.is_le(U32.to_nat(n), AR.Arrays.slots(d)) == True{} : Bool}, +hs: {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}) -> {U32.to_nat(Q.bq.run(33n, d, l, 0, n, key)) == Q.bq.lb(l, n, key) : Nat}:
-  ba.run(33n, d, l, hl, key, n, hn, hs, 0, n, Q.bq.le_zero(Q.bq.lb(l, n, key)), ba.lb_le(d, l, n, key, hl, hn), Q.bq.le_refl(U32.to_nat(n)), ba.hz33(n))
+  ba.run(33n, d, l, hl, key, n, hn, hs, 0, n, Q.bq.le_zero(Q.bq.lb(l, n, key)), ba.lb_le(d, l, n, key, hl, hn), UL.nat_le_refl(U32.to_nat(n)), ba.hz33(n))
 
 # a sorted prefix of the reflected array is a sorted prefix of l
 def ba.hs(+d: Nat, -a: Array<U32>, +l: List<&2, U32>, +n: U32, e1: {AR.Arrays.of_list(U32, d, l, 0) == a : Array<U32>}, +hl: {List.length(&2, U32, l) == AR.Arrays.slots(d) : Nat}, hs: {S.bsearch.sorted(List.take(&2, U32, AR.Arrays.leaves(U32, a), U32.to_nat(n))) == True{} : Bool}) -> {S.bsearch.sorted(Q.bq.pre(l, n)) == True{} : Bool}:
@@ -1403,7 +1277,7 @@ def ba.fd(c: Bool, +d: Nat, +l: List<&2, U32>, +hl: {List.length(&2, U32, l) == 
       +pre = Q.bq.pre(l, n)
       +hnl = Q.bq.le_rw(nn, AR.Arrays.slots(d), nn, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hn)
       +hc = Equal.trans(Bool, Nat.is_lt(lb, nn), Nat.is_lt(U32.to_nat(r), nn), True{}, Equal.cong(Nat, Bool, z => Nat.is_lt(z, nn), lb, U32.to_nat(r), Equal.sym(Nat, U32.to_nat(r), lb, er)), u32.mv_lt(r, n, True{}, ec))
-      +hls = Q.bq.lt_le_trans(lb, nn, AR.Arrays.slots(d), hc, hn)
+      +hls = UO.nat_lt_le_trans(lb, nn, AR.Arrays.slots(d), hc, hn)
       +ei = Equal.trans(Nat, AR.Arrays.index(d, r), U32.to_nat(r), lb, AL.index_of_u32(d, r, Q.bq.lt_rw(lb, AR.Arrays.slots(d), U32.to_nat(r), AR.Arrays.slots(d), Equal.sym(Nat, U32.to_nat(r), lb, er), {==}, hls)), er)
       +hll = Q.bq.lt_rw(lb, AR.Arrays.slots(d), lb, List.length(&2, U32, l), {==}, Equal.sym(Nat, List.length(&2, U32, l), AR.Arrays.slots(d), hl), hls)
       +eg = Equal.trans(Maybe<&2, U32>, List.get(&2, U32, pre, lb), List.get(&2, U32, l, lb), Some{AR.Arrays.nth(U32, l, lb, 0)}, Q.bq.get_take(l, nn, lb, hc), Q.bq.get_nth(l, lb, hll))

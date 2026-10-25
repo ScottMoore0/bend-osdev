@@ -18,6 +18,8 @@ import ../u32/u32.bend as UN
 import ../u32/LAWS.bend as UL
 import ../u32/PROOF.bend as UP
 import ./proof_u32.bend as U
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Shorthands (they unfold to the defs they name)
 
@@ -154,13 +156,6 @@ def bq.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def bq.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      bq.le_refl(p)
-
 def bq.le_succ_r(x: Nat, y: Nat, h: {Nat.is_le(x, y) == True{} : Bool}) -> {Nat.is_le(x, 1n+y) == True{} : Bool}:
   match x y:
     case 0n _:
@@ -178,32 +173,6 @@ def bq.lt_le(x: Nat, y: Nat, h: {Nat.is_lt(x, y) == True{} : Bool}) -> {Nat.is_l
       Empty.absurd({Nat.is_le(1n+xp, 0n) == True{} : Bool}, bq.ft(h))
     case 1n+xp 1n+yp:
       bq.lt_le(xp, yp, h)
-
-def bq.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      bq.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, bq.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, bq.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      bq.le_trans(ap, bp, cp, e, f)
-
-def bq.lt_le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_lt(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_lt(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n 0n _:
-      Empty.absurd({Nat.is_lt(0n, c) == True{} : Bool}, bq.ft(e))
-    case 0n 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, bq.ft(f))
-    case 0n 1n+bp 1n+cp:
-      {==}
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_lt(1n+ap, c) == True{} : Bool}, bq.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_lt(1n+ap, 0n) == True{} : Bool}, bq.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      bq.lt_le_trans(ap, bp, cp, e, f)
 
 def bq.le_antisym(x: Nat, y: Nat, h1: {Nat.is_le(x, y) == True{} : Bool}, h2: {Nat.is_le(y, x) == True{} : Bool}) -> {x == y : Nat}:
   match x y:
@@ -333,7 +302,7 @@ def bq.sub_step(q: Nat, k: Nat) -> {Nat.is_le(Nat.sub(q, k), 1n+Nat.sub(q, 1n+k)
       {==}
     case 1n+ +qp 0n:
       %Equal.sym(Nat, Nat.sub(qp, 0n), qp, bq.sub_zero(qp)) : {Nat.is_le(1n+qp, 1n+_) == True{} : Bool}
-      bq.le_refl(qp)
+      UL.nat_le_refl(qp)
     case 1n+qp 1n+kp:
       bq.sub_step(qp, kp)
 
@@ -407,7 +376,7 @@ def bq.hr_lt_pw(s: Nat, p: Nat, h: {Nat.is_lt(s, Nat.double(p)) == True{} : Bool
             case 0n:
               Empty.absurd({Nat.is_lt(Nat.sub(q, UN.U32Nat.half(q)), 0n) == True{} : Bool}, bq.ft(h))
             case 1n+ +pp:
-              U.uq.le_lt_trans(Nat.sub(q, UN.U32Nat.half(q)), 1n+Nat.sub(q, 1n+UN.U32Nat.half(q)), 1n+pp, bq.sub_step(q, UN.U32Nat.half(q)), bq.hr_lt_pw(q, pp, h))
+              UO.nat_le_lt_trans(Nat.sub(q, UN.U32Nat.half(q)), 1n+Nat.sub(q, 1n+UN.U32Nat.half(q)), 1n+pp, bq.sub_step(q, UN.U32Nat.half(q)), bq.hr_lt_pw(q, pp, h))
 
 # Lists
 

@@ -599,6 +599,11 @@ program, only its frame list does, by one per nested term or call. Lists
 of entries, tables and resources are walked once each. Sizes and offsets
 are `Nat`.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):

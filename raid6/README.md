@@ -115,6 +115,11 @@ with an independent model written in `ref/gen.py` from the paper (Q as a
 sum of terms rather than by Horner's rule, and recovery by equations 5 and
 16 to 20, each checked against the original blocks).
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

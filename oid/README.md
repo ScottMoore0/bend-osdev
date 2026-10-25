@@ -231,6 +231,10 @@ cryptography's.
 `bend-osdev-bytes` (octets), `bend-osdev-asn1` (the OBJECT IDENTIFIER
 element).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
+`Nat` and words (`LAWS_order.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` and `PROOF_registry.bend` ALL PROOFS CHECK,

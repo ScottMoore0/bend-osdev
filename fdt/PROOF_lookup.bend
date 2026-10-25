@@ -9,73 +9,36 @@ import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ../word64/LAWS.bend as WL
 import ../word64/PROOF.bend as WP
+import ./PROOF.bend as FP
 import ./LAWS_lookup.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Lemmas are mostly stated as {value == expression}, the direction a rewrite
 # needs: %e : P replaces the expression (marked _ in P) by the value.
 
 # Booleans and words
 
-def bdisc(+b: Bool) -> Type:
-  match b:
-    case True{}:
-      Empty
-    case False{}:
-      Unit
-
-def ft_absurd(+e: {False{} == True{} : Bool}) -> Empty:
-  %e : bdisc(_)
-  Unit{}
-
-def tf_absurd(+e: {True{} == False{} : Bool}) -> Empty:
-  ft_absurd(Equal.sym(Bool, True{}, False{}, e))
-
 def or_false_l(+a: Bool, +b: Bool, +e: {Bool.or(a, b) == False{} : Bool}) -> {False{} == a : Bool}:
   match a:
     case True{}:
-      Empty.absurd({False{} == True{} : Bool}, tf_absurd(e))
+      Empty.absurd({False{} == True{} : Bool}, FP.tf_absurd(e))
     case False{}:
       {==}
 
 def or_false_r(+a: Bool, +b: Bool, +e: {Bool.or(a, b) == False{} : Bool}) -> {False{} == b : Bool}:
   match a:
     case True{}:
-      Empty.absurd({False{} == b : Bool}, tf_absurd(e))
+      Empty.absurd({False{} == b : Bool}, FP.tf_absurd(e))
     case False{}:
       Equal.sym(Bool, b, False{}, e)
 
-def wrefl(+n: Nat, +a: Word(n)) -> {EQ{} == Word.cmp(n, a, a) : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match a:
-        case WCon{x, at}:
-          match x:
-            case False{}:
-              %wrefl(p, at) : {EQ{} == Word.cmp.fin(False{}, False{}, _) : Cmp}
-              {==}
-            case True{}:
-              %wrefl(p, at) : {EQ{} == Word.cmp.fin(True{}, True{}, _) : Cmp}
-              {==}
-
-def irefl(+a: U32) -> {True{} == U32.is_eq(a, a) : Bool}:
-  match a:
-    case U32{x}:
-      %wrefl(32n, x) : {True{} == Cmp.is_eq(_) : Bool}
-      {==}
-
 # <u32> values read back (as fdt's own u32_round_trip, through bytes' laws)
-
-def len4(+x: U32) -> {True{} == Nat.is_eq(B.len(B.mask(B.be32(x))), 4n) : Bool}:
-  match x:
-    case U32{w}:
-      {==}
 
 def u32rt(+v: U32) -> {Done{v} == P.FdtProp.u32(P.FdtProp.of_u32(v)) : Result<&2, &2, E.FdtError, U32>}:
   %Equal.sym(Nat, B.Octets.len(B.Octets.be32(v)), B.len(B.Octets.to_list(B.Octets.be32(v))), BL.octets_len_list(B.Octets.be32(v))) : {Done{v} == P.pr.u32.pick(Nat.is_eq(_, 4n), B.Octets.be32(v)) : Result<&2, &2, E.FdtError, U32>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(B.be32(v))), B.mask(B.be32(v)), BL.octets_to_of(B.be32(v))) : {Done{v} == P.pr.u32.pick(Nat.is_eq(B.len(_), 4n), B.Octets.be32(v)) : Result<&2, &2, E.FdtError, U32>}
-  %len4(v) : {Done{v} == P.pr.u32.pick(_, B.Octets.be32(v)) : Result<&2, &2, E.FdtError, U32>}
+  %FP.len4(v) : {Done{v} == P.pr.u32.pick(_, B.Octets.be32(v)) : Result<&2, &2, E.FdtError, U32>}
   %Equal.sym(Maybe<&2, U32>, B.Octets.be32_at(B.Octets.be32(v), 0n), Some{v}, BL.octets_be32_round_trip(v)) : {Done{v} == P.pr.must32(_) : Result<&2, &2, E.FdtError, U32>}
   {==}
 
@@ -153,206 +116,20 @@ def Laws.find_phandle_none(root, ph, e):
 
 def Laws.find_phandle_head(nm, ph, ps, cs):
   %u32rt(ph) : {Pa.lk.ph.pick(Bool.or(Pa.lk.ph.res(_, ph), Pa.lk.ph.is(Pa.lk.prop(Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, B.Octets.of_string("linux,phandle")), ph)), T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}, Pa.lk.ph.go(cs, ph), None{}) == Some{T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}} : Maybe<&2, T.FdtNode>}
-  %irefl(ph) : {Pa.lk.ph.pick(Bool.or(_, Pa.lk.ph.is(Pa.lk.prop(Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, B.Octets.of_string("linux,phandle")), ph)), T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}, Pa.lk.ph.go(cs, ph), None{}) == Some{T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}} : Maybe<&2, T.FdtNode>}
+  %FP.irefl(ph) : {Pa.lk.ph.pick(Bool.or(_, Pa.lk.ph.is(Pa.lk.prop(Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, B.Octets.of_string("linux,phandle")), ph)), T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}, Pa.lk.ph.go(cs, ph), None{}) == Some{T.FdtNode{nm, Con{T.FdtProp{B.Octets.of_string("phandle"), P.FdtProp.of_u32(ph)}, ps}, cs}} : Maybe<&2, T.FdtNode>}
   {==}
 
 def Laws.find_phandle_none_example():
   {==}
 
-# Lemmas copied from PROOF.bend (that file is checked in a process of its own)
-
-def and_l(+a: Bool, +b: Bool, +e: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
-  match a:
-    case True{}:
-      {==}
-    case False{}:
-      Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
-
-def and_r(+a: Bool, +b: Bool, +e: {Bool.and(a, b) == True{} : Bool}) -> {b == True{} : Bool}:
-  match a:
-    case True{}:
-      e
-    case False{}:
-      Empty.absurd({b == True{} : Bool}, ft_absurd(e))
-
-def ndisc(+n: Nat) -> Type:
-  match n:
-    case 0n:
-      Unit
-    case 1n+p:
-      Empty
-
-def nz_absurd(+p: Nat, +e: {0n == 1n+p : Nat}) -> Empty:
-  %e : ndisc(_)
-  Unit{}
-
-def len_app(+a: List<&2, U32>, +b: List<&2, U32>) -> {Nat.add(B.len(a), B.len(b)) == B.len(B.append(a, b)) : Nat}:
-  match a:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      %len_app(t, b) : {1n+Nat.add(B.len(t), B.len(b)) == 1n+_ : Nat}
-      {==}
-
-def drop_app(+a: List<&2, U32>, +b: List<&2, U32>) -> {b == B.drop(B.len(a), B.append(a, b)) : List<&2, U32>}:
-  match a:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      drop_app(t, b)
-
-def take_app(+a: List<&2, U32>, +b: List<&2, U32>) -> {a == B.take(B.len(a), B.append(a, b)) : List<&2, U32>}:
-  match a:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      %take_app(t, b) : {Con{h, t} == Con{h, _} : List<&2, U32>}
-      {==}
-
-def gapp_nil(-A: Data, +xs: List<&2, A>) -> {xs == List.append(&2, A, xs, Nil{}) : List<&2, A>}:
-  match xs:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      %gapp_nil(A, t) : {Con{h, t} == Con{h, _} : List<&2, A>}
-      {==}
-
-def rev_app(-A: Data, +xs: List<&2, A>, +a: List<&2, A>, +b: List<&2, A>) -> {List.reverse.go(&2, A, a, List.append(&2, A, xs, b)) == List.reverse.go(&2, A, List.reverse.go(&2, A, xs, a), b) : List<&2, A>}:
-  match xs:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      rev_app(A, t, Con{h, a}, b)
-
-def revrev(-A: Data, +xs: List<&2, A>) -> {xs == List.reverse(&2, A, List.reverse.go(&2, A, xs, Nil{})) : List<&2, A>}:
-  Equal.trans(List<&2, A>, xs, List.append(&2, A, xs, Nil{}), List.reverse(&2, A, List.reverse.go(&2, A, xs, Nil{})), gapp_nil(A, xs), rev_app(A, xs, Nil{}, Nil{}))
-
-def add_succ_r(+x: Nat, +a: Nat) -> {1n+Nat.add(x, a) == Nat.add(x, 1n+a) : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_succ_r(p, a) : {1n+1n+Nat.add(p, a) == 1n+_ : Nat}
-      {==}
-
-def add_zero_r(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %add_zero_r(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def grev_app(-A: Data, +xs: List<&2, A>, +b: List<&2, A>, +acc: List<&2, A>) -> {List.reverse.go(&2, A, b, List.reverse.go(&2, A, xs, acc)) == List.reverse.go(&2, A, List.append(&2, A, xs, b), acc) : List<&2, A>}:
-  match xs:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      grev_app(A, t, b, Con{h, acc})
-
-def fin_c(+c: Cmp, +x: Bool, +y: Bool, +e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {Cmp.is_eq(c) == True{} : Bool}:
-  match c:
-    case LT{}:
-      Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
-    case EQ{}:
-      {==}
-    case GT{}:
-      Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
-
-def fin_xy(+c: Cmp, +x: Bool, +y: Bool, +e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {x == y : Bool}:
-  match c:
-    case LT{}:
-      Empty.absurd({x == y : Bool}, ft_absurd(e))
-    case EQ{}:
-      match x y:
-        case False{} False{}:
-          {==}
-        case False{} True{}:
-          Empty.absurd({False{} == True{} : Bool}, ft_absurd(e))
-        case True{} False{}:
-          Empty.absurd({True{} == False{} : Bool}, ft_absurd(e))
-        case True{} True{}:
-          {==}
-    case GT{}:
-      Empty.absurd({x == y : Bool}, ft_absurd(e))
-
-def weq(+n: Nat, +a: Word(n), +b: Word(n), +e: {Cmp.is_eq(Word.cmp(n, a, b)) == True{} : Bool}) -> {a == b : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{x, at} WCon{y, bt}:
-          %weq(p, at, bt, fin_c(Word.cmp(p, at, bt), x, y, e)) : {WCon{x, at} == WCon{y, _} : Word(1n+p)}
-          %fin_xy(Word.cmp(p, at, bt), x, y, e) : {WCon{x, at} == WCon{_, at} : Word(1n+p)}
-          {==}
-
-def ieq(+a: U32, +b: U32, +e: {U32.is_eq(a, b) == True{} : Bool}) -> {a == b : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      %weq(32n, x, y, e) : {U32{x} == U32{_} : U32}
-      {==}
-
-def cout(+cs: List<&2, U32>, +acc: List<&2, U32>) -> {List.reverse.go(&2, U32, P.pr.cells.list(cs), acc) == P.pr.cells.out(cs, acc) : List<&2, U32>}:
-  match cs:
-    case Nil{}:
-      {==}
-    case Con{c, t}:
-      %grev_app(U32, B.be32(c), P.pr.cells.list(t), acc) : {_ == P.pr.cells.out(t, List.reverse.go(&2, U32, B.be32(c), acc)) : List<&2, U32>}
-      cout(t, List.reverse.go(&2, U32, B.be32(c), acc))
-
-def cells_fast(+cs: List<&2, U32>) -> {P.pr.cells.list(cs) == P.pr.cells.fast(cs) : List<&2, U32>}:
-  %cout(cs, Nil{}) : {P.pr.cells.list(cs) == List.reverse(&2, U32, _) : List<&2, U32>}
-  revrev(U32, P.pr.cells.list(cs))
-
-def mask_app(+a: List<&2, U32>, +b: List<&2, U32>) -> {B.append(B.mask(a), B.mask(b)) == B.mask(B.append(a, b)) : List<&2, U32>}:
-  match a:
-    case Nil{}:
-      {==}
-    case Con{h, t}:
-      %mask_app(t, b) : {Con{B.byte(h), B.append(B.mask(t), B.mask(b))} == Con{B.byte(h), _} : List<&2, U32>}
-      {==}
-
-def mask_id_app(+a: List<&2, U32>, +b: List<&2, U32>, +ea: {a == B.mask(a) : List<&2, U32>}, +eb: {b == B.mask(b) : List<&2, U32>}) -> {B.append(a, b) == B.mask(B.append(a, b)) : List<&2, U32>}:
-  %mask_app(a, b) : {B.append(a, b) == _ : List<&2, U32>}
-  %ea : {B.append(a, b) == B.append(_, B.mask(b)) : List<&2, U32>}
-  %eb : {B.append(a, b) == B.append(a, _) : List<&2, U32>}
-  {==}
-
-def mask_be32(+x: U32) -> {B.be32(x) == B.mask(B.be32(x)) : List<&2, U32>}:
-  match x:
-    case U32{WCon{x0, WCon{x1, WCon{x2, WCon{x3, WCon{x4, WCon{x5, WCon{x6, WCon{x7, WCon{x8, WCon{x9, WCon{x10, WCon{x11, WCon{x12, WCon{x13, WCon{x14, WCon{x15, WCon{x16, WCon{x17, WCon{x18, WCon{x19, WCon{x20, WCon{x21, WCon{x22, WCon{x23, WCon{x24, WCon{x25, WCon{x26, WCon{x27, WCon{x28, WCon{x29, WCon{x30, WCon{x31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
-      {==}
-
-def cstep(+c: U32, +rest: List<&2, U32>, +acc: List<&2, U32>) -> {P.pr.cells.go(rest, Con{c, acc}) == P.pr.cells.go(B.append(B.be32(c), rest), acc) : Result<&2, &2, E.FdtError, List<&2, U32>>}:
-  match c:
-    case U32{WCon{c0, WCon{c1, WCon{c2, WCon{c3, WCon{c4, WCon{c5, WCon{c6, WCon{c7, WCon{c8, WCon{c9, WCon{c10, WCon{c11, WCon{c12, WCon{c13, WCon{c14, WCon{c15, WCon{c16, WCon{c17, WCon{c18, WCon{c19, WCon{c20, WCon{c21, WCon{c22, WCon{c23, WCon{c24, WCon{c25, WCon{c26, WCon{c27, WCon{c28, WCon{c29, WCon{c30, WCon{c31, WNil{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}:
-      {==}
-
-def cells_rt(+cs: List<&2, U32>, +acc: List<&2, U32>) -> {Done{List.reverse(&2, U32, List.reverse.go(&2, U32, cs, acc))} == P.pr.cells.go(P.pr.cells.list(cs), acc) : Result<&2, &2, E.FdtError, List<&2, U32>>}:
-  match cs:
-    case Nil{}:
-      {==}
-    case Con{c, t}:
-      %cstep(c, P.pr.cells.list(t), acc) : {Done{List.reverse(&2, U32, List.reverse.go(&2, U32, Con{c, t}, acc))} == _ : Result<&2, &2, E.FdtError, List<&2, U32>>}
-      cells_rt(t, Con{c, acc})
-
-def mask_cl(+cs: List<&2, U32>) -> {P.pr.cells.list(cs) == B.mask(P.pr.cells.list(cs)) : List<&2, U32>}:
-  match cs:
-    case Nil{}:
-      {==}
-    case Con{c, t}:
-      mask_id_app(B.be32(c), P.pr.cells.list(t), mask_be32(c), mask_cl(t))
-
+# cells read back as written (with PROOF.bend's lemmas, FP)
 
 def cells_rt0(+cs: List<&2, U32>) -> {P.FdtProp.cells(P.FdtProp.of_cells(cs)) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}:
-  %cells_fast(cs) : {P.pr.cells.go(B.Octets.to_list(B.Octets.of_list(_)), Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
+  %FP.cells_fast(cs) : {P.pr.cells.go(B.Octets.to_list(B.Octets.of_list(_)), Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(P.pr.cells.list(cs))), B.mask(P.pr.cells.list(cs)), BL.octets_to_of(P.pr.cells.list(cs))) : {P.pr.cells.go(_, Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
-  %mask_cl(cs) : {P.pr.cells.go(_, Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
-  %cells_rt(cs, Nil{}) : {_ == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
-  %revrev(U32, cs) : {Done{_} == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
+  %FP.mask_cl(cs) : {P.pr.cells.go(_, Nil{}) == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
+  %FP.cells_rt(cs, Nil{}) : {_ == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
+  %FP.revrev(U32, cs) : {Done{_} == Done{cs} : Result<&2, &2, E.FdtError, List<&2, U32>>}
   {==}
 
 # More lists
@@ -405,7 +182,7 @@ def neq(+n: Nat, +b: Nat) -> {False{} == Nat.is_eq(n, 1n+Nat.add(b, n)) : Bool}:
     case 0n:
       {==}
     case 1n+p:
-      %add_succ_r(b, p) : {False{} == Nat.is_eq(p, _) : Bool}
+      %FP.add_succ_r(b, p) : {False{} == Nat.is_eq(p, _) : Bool}
       neq(p, b)
 
 # Children: the specification's searches are the code's
@@ -509,7 +286,7 @@ def sp.slash(+cur: List<&2, U32>, +comps: List<&2, List<&2, U32>>, +h: U32, +p: 
     case Con{h2, t2}:
       match p:
         case Laws.FdtPathParts{+f, +r}:
-          %gapp_nil(U32, List.reverse.go(&2, U32, t2, Con{h2, Nil{}})) : {List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Nil{}}), Laws.fdtlaw.nonempty(Con{f, r})) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Laws.fdtlaw.nonempty(Con{_, Con{f, r}})) : List<&2, List<&2, U32>>}
+          %FP.gapp_nil(U32, List.reverse.go(&2, U32, t2, Con{h2, Nil{}})) : {List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Nil{}}), Laws.fdtlaw.nonempty(Con{f, r})) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Laws.fdtlaw.nonempty(Con{_, Con{f, r}})) : List<&2, List<&2, U32>>}
           %sp.ne_rev(t2, h2, Nil{}, Con{f, r}) : {List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Nil{}}), Laws.fdtlaw.nonempty(Con{f, r})) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), _) : List<&2, List<&2, U32>>}
           %rev_acc(List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Nil{}}) : {List.append(&2, List<&2, U32>, _, Laws.fdtlaw.nonempty(Con{f, r})) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Laws.fdtlaw.nonempty(Con{f, r})}) : List<&2, List<&2, U32>>}
           gapp_assoc(List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Con{List.reverse.go(&2, U32, t2, Con{h2, Nil{}}), Nil{}}, Laws.fdtlaw.nonempty(Con{f, r}))
@@ -534,9 +311,9 @@ def sp.S(+xs: List<&2, U32>, +cur: List<&2, U32>, +comps: List<&2, List<&2, U32>
     case Nil{}:
       match cur:
         case Nil{}:
-          gapp_nil(List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}))
+          FP.gapp_nil(List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}))
         case Con{h, t}:
-          %gapp_nil(U32, List.reverse.go(&2, U32, t, Con{h, Nil{}})) : {List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Laws.fdtlaw.nonempty(Con{_, Nil{}})) : List<&2, List<&2, U32>>}
+          %FP.gapp_nil(U32, List.reverse.go(&2, U32, t, Con{h, Nil{}})) : {List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Laws.fdtlaw.nonempty(Con{_, Nil{}})) : List<&2, List<&2, U32>>}
           %sp.ne_rev(t, h, Nil{}, Nil{}) : {List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}) == List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), _) : List<&2, List<&2, U32>>}
           Equal.sym(List<&2, List<&2, U32>>, List.append(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, comps, Nil{}), Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}), List.reverse.go(&2, List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}), rev_acc(List<&2, U32>, comps, Con{List.reverse.go(&2, U32, t, Con{h, Nil{}}), Nil{}}))
     case Con{+h, t}:
@@ -632,8 +409,8 @@ def rg.rout(+ac: Nat, +sc: Nat, +rs: List<&2, P.FdtReg>, +acc: List<&2, U32>) ->
     case Con{r, t}:
       match r:
         case P.FdtReg{+a, +s}:
-          %grev_app(U32, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)), rg.cells(ac, sc, t), acc) : {_ == P.pr.reg.out(ac, sc, t, List.reverse.go(&2, U32, P.pr.cells_of(sc, s), List.reverse.go(&2, U32, P.pr.cells_of(ac, a), acc))) : List<&2, U32>}
-          %grev_app(U32, P.pr.cells_of(ac, a), P.pr.cells_of(sc, s), acc) : {List.reverse.go(&2, U32, rg.cells(ac, sc, t), _) == P.pr.reg.out(ac, sc, t, List.reverse.go(&2, U32, P.pr.cells_of(sc, s), List.reverse.go(&2, U32, P.pr.cells_of(ac, a), acc))) : List<&2, U32>}
+          %FP.grev_app(U32, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)), rg.cells(ac, sc, t), acc) : {_ == P.pr.reg.out(ac, sc, t, List.reverse.go(&2, U32, P.pr.cells_of(sc, s), List.reverse.go(&2, U32, P.pr.cells_of(ac, a), acc))) : List<&2, U32>}
+          %FP.grev_app(U32, P.pr.cells_of(ac, a), P.pr.cells_of(sc, s), acc) : {List.reverse.go(&2, U32, rg.cells(ac, sc, t), _) == P.pr.reg.out(ac, sc, t, List.reverse.go(&2, U32, P.pr.cells_of(sc, s), List.reverse.go(&2, U32, P.pr.cells_of(ac, a), acc))) : List<&2, U32>}
           rg.rout(ac, sc, t, List.reverse.go(&2, U32, P.pr.cells_of(sc, s), List.reverse.go(&2, U32, P.pr.cells_of(ac, a), acc)))
 
 # n cells (0, 1 or 2) of a number: n of them
@@ -650,41 +427,41 @@ def rg.co_len(+n: Nat, +v: W.W64, +hle: {Nat.is_le(n, 2n) == True{} : Bool}) -> 
             case 0n:
               {==}
             case 1n+j:
-              Empty.absurd({1n+1n+1n+j == B.len(P.pr.cells_of(1n+1n+1n+j, v)) : Nat}, ft_absurd(hle))
+              Empty.absurd({1n+1n+1n+j == B.len(P.pr.cells_of(1n+1n+1n+j, v)) : Nat}, FP.ft_absurd(hle))
 
 # and they read back as the number, when it fits them (W64 through word64's
 # parts_of; a W64 of halves 0 and x is from_u32(x) and, for x = 0, zero(),
-# by word64's definitions)
+# by word64's from_parts_zero_hi and from_parts_zero)
 def rg.co_num(+n: Nat, +v: W.W64, +hle: {Nat.is_le(n, 2n) == True{} : Bool}, +hf: {Laws.fdtlaw.fits(n, v) == True{} : Bool}) -> {v == P.pr.num(P.pr.cells_of(n, v)) : W.W64}:
   match n:
     case 0n:
       %WL.parts_of(v) : {_ == W.W64.zero() : W.W64}
-      %Equal.sym(U32, W.W64.hi(v), 0, ieq(W.W64.hi(v), 0, and_l(U32.is_eq(W.W64.hi(v), 0), U32.is_eq(W.W64.lo(v), 0), hf))) : {W.W64.from_parts(_, W.W64.lo(v)) == W.W64.zero() : W.W64}
-      %Equal.sym(U32, W.W64.lo(v), 0, ieq(W.W64.lo(v), 0, and_r(U32.is_eq(W.W64.hi(v), 0), U32.is_eq(W.W64.lo(v), 0), hf))) : {W.W64.from_parts(0, _) == W.W64.zero() : W.W64}
-      {==}
+      %Equal.sym(U32, W.W64.hi(v), 0, FP.ieq(W.W64.hi(v), 0, FP.and_l(U32.is_eq(W.W64.hi(v), 0), U32.is_eq(W.W64.lo(v), 0), hf))) : {W.W64.from_parts(_, W.W64.lo(v)) == W.W64.zero() : W.W64}
+      %Equal.sym(U32, W.W64.lo(v), 0, FP.ieq(W.W64.lo(v), 0, FP.and_r(U32.is_eq(W.W64.hi(v), 0), U32.is_eq(W.W64.lo(v), 0), hf))) : {W.W64.from_parts(0, _) == W.W64.zero() : W.W64}
+      WL.from_parts_zero()
     case 1n+m:
       match m:
         case 0n:
           %WL.parts_of(v) : {_ == W.W64.from_u32(W.W64.lo(v)) : W.W64}
-          %Equal.sym(U32, W.W64.hi(v), 0, ieq(W.W64.hi(v), 0, hf)) : {W.W64.from_parts(_, W.W64.lo(v)) == W.W64.from_u32(W.W64.lo(v)) : W.W64}
-          {==}
+          %Equal.sym(U32, W.W64.hi(v), 0, FP.ieq(W.W64.hi(v), 0, hf)) : {W.W64.from_parts(_, W.W64.lo(v)) == W.W64.from_u32(W.W64.lo(v)) : W.W64}
+          WL.from_parts_zero_hi(W.W64.lo(v))
         case 1n+k:
           match k:
             case 0n:
               Equal.sym(W.W64, W.W64.from_parts(W.W64.hi(v), W.W64.lo(v)), v, WL.parts_of(v))
             case 1n+j:
-              Empty.absurd({v == P.pr.num(P.pr.cells_of(1n+1n+1n+j, v)) : W.W64}, ft_absurd(hle))
+              Empty.absurd({v == P.pr.num(P.pr.cells_of(1n+1n+1n+j, v)) : W.W64}, FP.ft_absurd(hle))
 
 def rg.glen(+ac: Nat, +sc: Nat, +a: W.W64, +s: W.W64, +q: Nat, +hk: {Nat.add(ac, sc) == 1n+q : Nat}, +hac: {Nat.is_le(ac, 2n) == True{} : Bool}, +hsc: {Nat.is_le(sc, 2n) == True{} : Bool}) -> {B.len(B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s))) == 1n+q : Nat}:
-  %len_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {_ == 1n+q : Nat}
+  %FP.len_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {_ == 1n+q : Nat}
   %rg.co_len(ac, a, hac) : {Nat.add(_, B.len(P.pr.cells_of(sc, s))) == 1n+q : Nat}
   %rg.co_len(sc, s, hsc) : {Nat.add(ac, _) == 1n+q : Nat}
   hk
 
 def rg.elem(+ac: Nat, +sc: Nat, +a: W.W64, +s: W.W64, +hac: {Nat.is_le(ac, 2n) == True{} : Bool}, +hsc: {Nat.is_le(sc, 2n) == True{} : Bool}, +hfa: {Laws.fdtlaw.fits(ac, a) == True{} : Bool}, +hfs: {Laws.fdtlaw.fits(sc, s) == True{} : Bool}) -> {P.FdtReg{a, s} == P.FdtReg{P.pr.num(B.take(ac, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)))), P.pr.num(B.drop(ac, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s))))} : P.FdtReg}:
   %Equal.sym(Nat, ac, B.len(P.pr.cells_of(ac, a)), rg.co_len(ac, a, hac)) : {P.FdtReg{a, s} == P.FdtReg{P.pr.num(B.take(_, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)))), P.pr.num(B.drop(_, B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s))))} : P.FdtReg}
-  %take_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {P.FdtReg{a, s} == P.FdtReg{P.pr.num(_), P.pr.num(B.drop(B.len(P.pr.cells_of(ac, a)), B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s))))} : P.FdtReg}
-  %drop_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {P.FdtReg{a, s} == P.FdtReg{P.pr.num(P.pr.cells_of(ac, a)), P.pr.num(_)} : P.FdtReg}
+  %FP.take_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {P.FdtReg{a, s} == P.FdtReg{P.pr.num(_), P.pr.num(B.drop(B.len(P.pr.cells_of(ac, a)), B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s))))} : P.FdtReg}
+  %FP.drop_app(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)) : {P.FdtReg{a, s} == P.FdtReg{P.pr.num(P.pr.cells_of(ac, a)), P.pr.num(_)} : P.FdtReg}
   %rg.co_num(ac, a, hac, hfa) : {P.FdtReg{a, s} == P.FdtReg{_, P.pr.num(P.pr.cells_of(sc, s))} : P.FdtReg}
   %rg.co_num(sc, s, hsc, hfs) : {P.FdtReg{a, s} == P.FdtReg{a, _} : P.FdtReg}
   {==}
@@ -700,15 +477,15 @@ def rg.piece(+t: List<&2, U32>, +x: U32, +r: List<&2, U32>, +ac: Nat, +q: Nat, +
     case Con{y, t2}:
       %hyp : {P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, List.reverse(&2, U32, List.reverse.go(&2, U32, t2, Con{y, Con{x, buf}})))), P.pr.num(B.drop(ac, List.reverse(&2, U32, List.reverse.go(&2, U32, t2, Con{y, Con{x, buf}}))))}, regs}}) == P.pr.reg.go(Con{y, B.append(t2, r)}, ac, 1n+q, P.pr.reg.emit(Nat.is_eq(1n+n, 1n+_), ac, Con{x, buf}, 1n+n, regs)) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
       %neq(n, B.len(t2)) : {P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, List.reverse(&2, U32, List.reverse.go(&2, U32, t2, Con{y, Con{x, buf}})))), P.pr.num(B.drop(ac, List.reverse(&2, U32, List.reverse.go(&2, U32, t2, Con{y, Con{x, buf}}))))}, regs}}) == P.pr.reg.go(Con{y, B.append(t2, r)}, ac, 1n+q, P.pr.reg.emit(_, ac, Con{x, buf}, 1n+n, regs)) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
-      rg.piece(t2, y, r, ac, q, 1n+n, Con{x, buf}, regs, Equal.trans(Nat, Nat.add(B.len(t2), 1n+n), 1n+Nat.add(B.len(t2), n), q, Equal.sym(Nat, 1n+Nat.add(B.len(t2), n), Nat.add(B.len(t2), 1n+n), add_succ_r(B.len(t2), n)), hyp))
+      rg.piece(t2, y, r, ac, q, 1n+n, Con{x, buf}, regs, Equal.trans(Nat, Nat.add(B.len(t2), 1n+n), 1n+Nat.add(B.len(t2), n), q, Equal.sym(Nat, 1n+Nat.add(B.len(t2), n), Nat.add(B.len(t2), 1n+n), FP.add_succ_r(B.len(t2), n)), hyp))
 
 def rg.group(+g: List<&2, U32>, +r: List<&2, U32>, +ac: Nat, +q: Nat, +regs: List<&2, P.FdtReg>, +hl: {B.len(g) == 1n+q : Nat}) -> {P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, g)), P.pr.num(B.drop(ac, g))}, regs}}) == P.pr.reg.go(B.append(g, r), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}:
   match g:
     case Nil{}:
-      Empty.absurd({P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, Nil{})), P.pr.num(B.drop(ac, Nil{}))}, regs}}) == P.pr.reg.go(B.append(Nil{}, r), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}, nz_absurd(q, hl))
+      Empty.absurd({P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, Nil{})), P.pr.num(B.drop(ac, Nil{}))}, regs}}) == P.pr.reg.go(B.append(Nil{}, r), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}, FP.nz_absurd(q, hl))
     case Con{+x, +t}:
-      %Equal.sym(List<&2, U32>, Con{x, t}, List.reverse(&2, U32, List.reverse.go(&2, U32, Con{x, t}, Nil{})), revrev(U32, Con{x, t})) : {P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, _)), P.pr.num(B.drop(ac, _))}, regs}}) == P.pr.reg.go(B.append(Con{x, t}, r), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
-      rg.piece(t, x, r, ac, q, 0n, Nil{}, regs, Equal.trans(Nat, Nat.add(B.len(t), 0n), B.len(t), q, add_zero_r(B.len(t)), succ_inj(B.len(t), q, hl)))
+      %Equal.sym(List<&2, U32>, Con{x, t}, List.reverse(&2, U32, List.reverse.go(&2, U32, Con{x, t}, Nil{})), FP.revrev(U32, Con{x, t})) : {P.pr.reg.go(r, ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{P.FdtReg{P.pr.num(B.take(ac, _)), P.pr.num(B.drop(ac, _))}, regs}}) == P.pr.reg.go(B.append(Con{x, t}, r), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
+      rg.piece(t, x, r, ac, q, 0n, Nil{}, regs, Equal.trans(Nat, Nat.add(B.len(t), 0n), B.len(t), q, UL.nat_add_zero(B.len(t)), succ_inj(B.len(t), q, hl)))
 
 def rg.M(+rs: List<&2, P.FdtReg>, +ac: Nat, +sc: Nat, +q: Nat, +hk: {Nat.add(ac, sc) == 1n+q : Nat}, +hac: {Nat.is_le(ac, 2n) == True{} : Bool}, +hsc: {Nat.is_le(sc, 2n) == True{} : Bool}, +hf: {Laws.fdtlaw.reg_fits(ac, sc, rs) == True{} : Bool}, +regs: List<&2, P.FdtReg>) -> {P.pr.reg.go(rg.cells(ac, sc, rs), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, regs}) == Done{List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, rs, regs))} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}:
   match rs:
@@ -718,15 +495,15 @@ def rg.M(+rs: List<&2, P.FdtReg>, +ac: Nat, +sc: Nat, +q: Nat, +hk: {Nat.add(ac,
       match r:
         case P.FdtReg{+a, +s}:
           %rg.group(B.append(P.pr.cells_of(ac, a), P.pr.cells_of(sc, s)), rg.cells(ac, sc, t), ac, q, regs, rg.glen(ac, sc, a, s, q, hk, hac, hsc)) : {_ == Done{List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, t, Con{P.FdtReg{a, s}, regs}))} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
-          %rg.elem(ac, sc, a, s, hac, hsc, and_l(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s), and_l(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf)), and_r(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s), and_l(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf))) : {P.pr.reg.go(rg.cells(ac, sc, t), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{_, regs}}) == Done{List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, t, Con{P.FdtReg{a, s}, regs}))} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
-          rg.M(t, ac, sc, q, hk, hac, hsc, and_r(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf), Con{P.FdtReg{a, s}, regs})
+          %rg.elem(ac, sc, a, s, hac, hsc, FP.and_l(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s), FP.and_l(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf)), FP.and_r(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s), FP.and_l(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf))) : {P.pr.reg.go(rg.cells(ac, sc, t), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Con{_, regs}}) == Done{List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, t, Con{P.FdtReg{a, s}, regs}))} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
+          rg.M(t, ac, sc, q, hk, hac, hsc, FP.and_r(Bool.and(Laws.fdtlaw.fits(ac, a), Laws.fdtlaw.fits(sc, s)), Laws.fdtlaw.reg_fits(ac, sc, t), hf), Con{P.FdtReg{a, s}, regs})
 
 def rg.fin(+ac: Nat, +sc: Nat, +k: Nat, +ek: {Nat.add(ac, sc) == k : Nat}, +hz: {Nat.is_eq(k, 0n) == False{} : Bool}, +hac: {Nat.is_le(ac, 2n) == True{} : Bool}, +hsc: {Nat.is_le(sc, 2n) == True{} : Bool}, +rs: List<&2, P.FdtReg>, +hf: {Laws.fdtlaw.reg_fits(ac, sc, rs) == True{} : Bool}) -> {P.pr.reg.go(rg.cells(ac, sc, rs), ac, k, P.FdtRegAcc{Nil{}, 0n, Nil{}}) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}:
   match k:
     case 0n:
-      Empty.absurd({P.pr.reg.go(rg.cells(ac, sc, rs), ac, 0n, P.FdtRegAcc{Nil{}, 0n, Nil{}}) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}, tf_absurd(hz))
+      Empty.absurd({P.pr.reg.go(rg.cells(ac, sc, rs), ac, 0n, P.FdtRegAcc{Nil{}, 0n, Nil{}}) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}, FP.tf_absurd(hz))
     case 1n+q:
-      %Equal.sym(List<&2, P.FdtReg>, rs, List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, rs, Nil{})), revrev(P.FdtReg, rs)) : {P.pr.reg.go(rg.cells(ac, sc, rs), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Nil{}}) == Done{_} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
+      %Equal.sym(List<&2, P.FdtReg>, rs, List.reverse(&2, P.FdtReg, List.reverse.go(&2, P.FdtReg, rs, Nil{})), FP.revrev(P.FdtReg, rs)) : {P.pr.reg.go(rg.cells(ac, sc, rs), ac, 1n+q, P.FdtRegAcc{Nil{}, 0n, Nil{}}) == Done{_} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
       rg.M(rs, ac, sc, q, ek, hac, hsc, hf, Nil{})
 
 def Laws.reg_round_trip(ac, sc, hac, hsc, hnz, rs, hf):
@@ -734,7 +511,7 @@ def Laws.reg_round_trip(ac, sc, hac, hsc, hnz, rs, hf):
   %Equal.sym(Bool, Nat.is_le(sc, 2n), True{}, hsc) : {P.pr.reg.ok(Bool.and(True{}, Bool.and(_, Bool.not(Nat.is_eq(Nat.add(ac, sc), 0n)))), P.FdtProp.of_reg(ac, sc, rs), ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
   %Equal.sym(Bool, Nat.is_eq(Nat.add(ac, sc), 0n), False{}, hnz) : {P.pr.reg.ok(Bool.and(True{}, Bool.and(True{}, Bool.not(_))), P.FdtProp.of_reg(ac, sc, rs), ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
   %rg.rout(ac, sc, rs, Nil{}) : {P.pr.reg.cells(P.FdtProp.cells(P.FdtProp.of_cells(List.reverse(&2, U32, _))), ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
-  %revrev(U32, rg.cells(ac, sc, rs)) : {P.pr.reg.cells(P.FdtProp.cells(P.FdtProp.of_cells(_)), ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
+  %FP.revrev(U32, rg.cells(ac, sc, rs)) : {P.pr.reg.cells(P.FdtProp.cells(P.FdtProp.of_cells(_)), ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
   %Equal.sym(Result<&2, &2, E.FdtError, List<&2, U32>>, P.FdtProp.cells(P.FdtProp.of_cells(rg.cells(ac, sc, rs))), Done{rg.cells(ac, sc, rs)}, cells_rt0(rg.cells(ac, sc, rs))) : {P.pr.reg.cells(_, ac, sc) == Done{rs} : Result<&2, &2, E.FdtError, List<&2, P.FdtReg>>}
   rg.fin(ac, sc, Nat.add(ac, sc), {==}, hnz, hac, hsc, rs, hf)
 

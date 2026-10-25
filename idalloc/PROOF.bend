@@ -1,6 +1,10 @@
 import Base
 import ./idalloc.bend as I
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -121,13 +125,6 @@ def nat.lt_zero(x: Nat) -> {Nat.is_lt(x, 0n) == False{} : Bool}:
     case 1n+p:
       {==}
 
-def nat.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
-
 def nat.le_antisym(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, a) == True{} : Bool}) -> {a == b : Nat}:
   match a b:
     case 0n 0n:
@@ -160,17 +157,6 @@ def nat.lt_le(a: Nat, b: Nat, e: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_
       Empty.absurd({False{} == True{} : Bool}, absurd.ft(e))
     case 1n+ap 1n+bp:
       nat.lt_le(ap, bp, e)
-
-def nat.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      nat.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, absurd.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, absurd.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.le_trans(ap, bp, cp, e, f)
 
 # not i <= max, j <= max: j < i
 def nat.nle_le_lt(i: Nat, max: Nat, j: Nat, e: {Nat.is_le(i, max) == False{} : Bool}, f: {Nat.is_le(j, max) == True{} : Bool}) -> {Nat.is_lt(j, i) == True{} : Bool}:
@@ -271,7 +257,7 @@ def sl.ff_free(-V: Data, xs: List<&2, Maybe<&2, V>>, min: Nat) -> {I.idr.slots.g
 def sl.ff_ge(-V: Data, xs: List<&2, Maybe<&2, V>>, min: Nat) -> {Nat.is_le(min, I.idr.slots.free_from(V, xs, min)) == True{} : Bool}:
   match xs min:
     case Nil{} m:
-      nat.le_refl(m)
+      UL.nat_le_refl(m)
     case Con{h, t} 1n+m:
       sl.ff_ge(V, t, m)
     case Con{None{}, t} 0n:
@@ -538,7 +524,7 @@ def g.free_lowest(s: I.Idr<Unit>, +min: Nat, +max: Nat, +t: I.Idr<Unit>, +id: Na
       +le = nat.lt_le(k, i, lt)
       %Equal.sym(Bool, Nat.is_le(min, max), True{}, al.ord(Unit, xs, min, max, Unit{}, t, id, e)) : {I.idr.alloc.order(Unit, _, c, min, max, Unit{}) == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
       %Equal.sym(Nat, I.idr.slots.free_from(Unit, c, min), k, sl.ff_clear(Unit, xs, min, k, l, le)) : {I.idr.alloc.at(Unit, Nat.is_le(_, max), c, _, Unit{}) == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
-      %Equal.sym(Bool, Nat.is_le(k, max), True{}, nat.le_trans(k, i, max, le, al.fits(Unit, xs, min, max, Unit{}, t, id, e))) : {I.idr.alloc.at(Unit, _, c, k, Unit{}) == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
+      %Equal.sym(Bool, Nat.is_le(k, max), True{}, UO.nat_le_trans(k, i, max, le, al.fits(Unit, xs, min, max, Unit{}, t, id, e))) : {I.idr.alloc.at(Unit, _, c, k, Unit{}) == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
       %Equal.sym(List<&2, Maybe<&2, Unit>>, I.idr.slots.put(Unit, c, k, Some{Unit{}}), I.idr.slots.put(Unit, xs, k, Some{Unit{}}), sl.put_clear(Unit, xs, k, Some{Unit{}})) : {Done{I.IdrAlloc{I.Idr{_}, k}} == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
       %Equal.sym(List<&2, Maybe<&2, Unit>>, I.idr.slots.put(Unit, xs, k, Some{Unit{}}), xs, sl.put_same(Unit, xs, k, Unit{}, unit.some(I.idr.slots.get(Unit, xs, k), sl.ff_lowest(Unit, xs, min, k, l, lt)))) : {Done{I.IdrAlloc{I.Idr{_}, k}} == Done{I.IdrAlloc{I.Idr{xs}, k}} : Result<&2, &2, I.IdError, I.IdrAlloc<Unit>>}
       {==}

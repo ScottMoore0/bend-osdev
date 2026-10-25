@@ -7,6 +7,10 @@ import ./crypto.bend as Cr
 import ./hmac.bend as Hm
 import ./hkdf.bend as Hk
 import ./LAWS_hkdf.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # How the proofs go. HKDF's loop is its blocks T(1), T(2), ... reversed onto
 # an accumulator (hk.blocks_ts), so the output is the first len bytes of the
@@ -58,22 +62,6 @@ def hk.pred(n: Nat) -> Nat:
 
 # Arithmetic
 
-def hk.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %hk.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def hk.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %hk.add_succ(p, n) : {1n+Nat.add(p, 1n+n) == 1n+_ : Nat}
-      {==}
-
 def hk.sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
   match a:
     case 0n:
@@ -81,40 +69,12 @@ def hk.sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
     case 1n+p:
       {==}
 
-def hk.add_comm(+a: Nat, +b: Nat) -> {Nat.add(a, b) == Nat.add(b, a) : Nat}:
-  match a:
-    case 0n:
-      Equal.sym(Nat, Nat.add(b, 0n), b, hk.add_zero(b))
-    case 1n+p:
-      Equal.trans(Nat, 1n+Nat.add(p, b), 1n+Nat.add(b, p), Nat.add(b, 1n+p), Equal.cong(Nat, Nat, z => 1n+z, Nat.add(p, b), Nat.add(b, p), hk.add_comm(p, b)), Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), hk.add_succ(b, p)))
-
-def hk.add_assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, z => 1n+z, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), hk.add_assoc(p, b, c))
-
 def hk.add_cancel_r(+x: Nat, +y: Nat, +r: Nat) -> {Nat.add(x, r) == Nat.add(y, r) : Nat} -> {x == y : Nat}:
   match r:
     case 0n:
-      h => Equal.trans(Nat, x, Nat.add(x, 0n), y, Equal.sym(Nat, Nat.add(x, 0n), x, hk.add_zero(x)), Equal.trans(Nat, Nat.add(x, 0n), Nat.add(y, 0n), y, h, hk.add_zero(y)))
+      h => Equal.trans(Nat, x, Nat.add(x, 0n), y, Equal.sym(Nat, Nat.add(x, 0n), x, UL.nat_add_zero(x)), Equal.trans(Nat, Nat.add(x, 0n), Nat.add(y, 0n), y, h, UL.nat_add_zero(y)))
     case 1n+rp:
-      h => hk.add_cancel_r(x, y, rp)(Equal.cong(Nat, Nat, z => hk.pred(z), 1n+Nat.add(x, rp), 1n+Nat.add(y, rp), Equal.trans(Nat, 1n+Nat.add(x, rp), Nat.add(x, 1n+rp), 1n+Nat.add(y, rp), Equal.sym(Nat, Nat.add(x, 1n+rp), 1n+Nat.add(x, rp), hk.add_succ(x, rp)), Equal.trans(Nat, Nat.add(x, 1n+rp), Nat.add(y, 1n+rp), 1n+Nat.add(y, rp), h, hk.add_succ(y, rp)))))
-
-def hk.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      hk.le_refl(p)
-
-def hk.le0(+y: Nat) -> {Nat.is_le(0n, y) == True{} : Bool}:
-  match y:
-    case 0n:
-      {==}
-    case 1n+p:
-      {==}
+      h => hk.add_cancel_r(x, y, rp)(Equal.cong(Nat, Nat, z => hk.pred(z), 1n+Nat.add(x, rp), 1n+Nat.add(y, rp), Equal.trans(Nat, 1n+Nat.add(x, rp), Nat.add(x, 1n+rp), 1n+Nat.add(y, rp), Equal.sym(Nat, Nat.add(x, 1n+rp), 1n+Nat.add(x, rp), UL.nat_add_succ(x, rp)), Equal.trans(Nat, Nat.add(x, 1n+rp), Nat.add(y, 1n+rp), 1n+Nat.add(y, rp), h, UL.nat_add_succ(y, rp)))))
 
 def hk.le_step(+x: Nat, +y: Nat) -> {Nat.is_le(x, y) == True{} : Bool} -> {Nat.is_le(x, 1n+y) == True{} : Bool}:
   match x y:
@@ -137,20 +97,6 @@ def hk.le_trans(+a: Nat, +b: Nat, +c: Nat) -> {Nat.is_le(a, b) == True{} : Bool}
       h1 => h2 => hk.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, h2)
     case 1n+ap 1n+bp 1n+cp:
       h1 => h2 => hk.le_trans(ap, bp, cp)(h1)(h2)
-
-def hk.le_add(+a: Nat, +b: Nat) -> {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}:
-  match a:
-    case 0n:
-      hk.le0(b)
-    case 1n+p:
-      hk.le_add(p, b)
-
-def hk.le_add_l(+m: Nat, +r: Nat) -> {Nat.is_le(r, Nat.add(m, r)) == True{} : Bool}:
-  match m:
-    case 0n:
-      hk.le_refl(r)
-    case 1n+mp:
-      hk.le_step(r, Nat.add(mp, r))(hk.le_add_l(mp, r))
 
 def hk.add_sub(+d: Nat, +n: Nat) -> {Nat.is_le(d, n) == True{} : Bool} -> {Nat.add(d, Nat.sub(n, d)) == n : Nat}:
   match d n:
@@ -175,11 +121,11 @@ def hk.min_add(+n: Nat, +j: Nat) -> {Nat.min(n, Nat.add(n, j)) == n : Nat}:
 # x + r = (l + s) + r gives l <= x
 def hk.cancel.go(+x: Nat, +r: Nat, +l: Nat, +s: Nat, e: {Nat.add(x, r) == Nat.add(Nat.add(l, s), r) : Nat}) -> {Nat.is_le(l, x) == True{} : Bool}:
   %Equal.sym(Nat, x, Nat.add(l, s), hk.add_cancel_r(x, Nat.add(l, s), r)(e)) : {Nat.is_le(l, _) == True{} : Bool}
-  hk.le_add(l, s)
+  UO.nat_le_add_r(l, s)
 
 # x + r = l + q with r <= q gives l <= x
 def hk.cancel(+x: Nat, +r: Nat, +l: Nat, +q: Nat) -> {Nat.add(x, r) == Nat.add(l, q) : Nat} -> {Nat.is_le(r, q) == True{} : Bool} -> {Nat.is_le(l, x) == True{} : Bool}:
-  h1 => h2 => hk.cancel.go(x, r, l, Nat.sub(q, r), Equal.trans(Nat, Nat.add(x, r), Nat.add(l, q), Nat.add(Nat.add(l, Nat.sub(q, r)), r), h1, Equal.trans(Nat, Nat.add(l, q), Nat.add(l, Nat.add(r, Nat.sub(q, r))), Nat.add(Nat.add(l, Nat.sub(q, r)), r), Equal.cong(Nat, Nat, z => Nat.add(l, z), q, Nat.add(r, Nat.sub(q, r)), Equal.sym(Nat, Nat.add(r, Nat.sub(q, r)), q, hk.add_sub(r, q)(h2))), Equal.trans(Nat, Nat.add(l, Nat.add(r, Nat.sub(q, r))), Nat.add(l, Nat.add(Nat.sub(q, r), r)), Nat.add(Nat.add(l, Nat.sub(q, r)), r), Equal.cong(Nat, Nat, z => Nat.add(l, z), Nat.add(r, Nat.sub(q, r)), Nat.add(Nat.sub(q, r), r), hk.add_comm(r, Nat.sub(q, r))), Equal.sym(Nat, Nat.add(Nat.add(l, Nat.sub(q, r)), r), Nat.add(l, Nat.add(Nat.sub(q, r), r)), hk.add_assoc(l, Nat.sub(q, r), r))))))
+  h1 => h2 => hk.cancel.go(x, r, l, Nat.sub(q, r), Equal.trans(Nat, Nat.add(x, r), Nat.add(l, q), Nat.add(Nat.add(l, Nat.sub(q, r)), r), h1, Equal.trans(Nat, Nat.add(l, q), Nat.add(l, Nat.add(r, Nat.sub(q, r))), Nat.add(Nat.add(l, Nat.sub(q, r)), r), Equal.cong(Nat, Nat, z => Nat.add(l, z), q, Nat.add(r, Nat.sub(q, r)), Equal.sym(Nat, Nat.add(r, Nat.sub(q, r)), q, hk.add_sub(r, q)(h2))), Equal.trans(Nat, Nat.add(l, Nat.add(r, Nat.sub(q, r))), Nat.add(l, Nat.add(Nat.sub(q, r), r)), Nat.add(Nat.add(l, Nat.sub(q, r)), r), Equal.cong(Nat, Nat, z => Nat.add(l, z), Nat.add(r, Nat.sub(q, r)), Nat.add(Nat.sub(q, r), r), UL.nat_add_comm(r, Nat.sub(q, r))), Equal.sym(Nat, Nat.add(Nat.add(l, Nat.sub(q, r)), r), Nat.add(l, Nat.add(Nat.sub(q, r), r)), UL.nat_add_assoc(l, Nat.sub(q, r), r))))))
 
 # Base's division: m the steps left before the remainder wraps, d the
 # quotient, r the remainder so far (m + r = q, for a divisor 1 + q)
@@ -188,13 +134,13 @@ def hk.mod_le(+a: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) == 
   match a:
     case 0n:
       inv => %inv : {Nat.is_le(r, _) == True{} : Bool}
-        hk.le_add_l(m, r)
+        UL.nat_le_add(r, m)
     case 1n+ap:
       match m:
         case 0n:
-          inv => hk.mod_le(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, hk.add_zero(r), inv))
+          inv => hk.mod_le(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, UL.nat_add_zero(r), inv))
         case 1n+mp:
-          inv => hk.mod_le(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, hk.add_succ(mp, r), inv))
+          inv => hk.mod_le(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, UL.nat_add_succ(mp, r), inv))
 
 # quotient (1 + q) + remainder = dividend (kmath's division specification)
 def hk.ds(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) == q : Nat} -> {Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(n, m, d, r)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(n, m, d, r))) == Nat.add(n, Nat.add(Nat.mul(d, 1n+q), r)) : Nat}:
@@ -204,24 +150,24 @@ def hk.ds(+n: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) == q : 
     case 1n+np:
       match m:
         case 0n:
-          +inv => Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))), Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+q), 0n)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), hk.ds(np, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, hk.add_zero(r), inv)), Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+q), 0n)), Nat.add(np, Nat.mul(1n+d, 1n+q)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(1n+d, 1n+q), 0n), Nat.mul(1n+d, 1n+q), hk.add_zero(Nat.mul(1n+d, 1n+q))), Equal.trans(Nat, Nat.add(np, 1n+Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), hk.add_succ(np, Nat.add(q, Nat.mul(d, 1n+q))), Equal.trans(Nat, 1n+Nat.add(np, Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), q)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, z), Nat.add(q, Nat.mul(d, 1n+q)), Nat.add(Nat.mul(d, 1n+q), q), hk.add_comm(q, Nat.mul(d, 1n+q))), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), z)), q, r, Equal.sym(Nat, r, q, inv))))))
+          +inv => Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(np, r, 1n+d, 0n))), Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+q), 0n)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), hk.ds(np, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, UL.nat_add_zero(r), inv)), Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(1n+d, 1n+q), 0n)), Nat.add(np, Nat.mul(1n+d, 1n+q)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(1n+d, 1n+q), 0n), Nat.mul(1n+d, 1n+q), UL.nat_add_zero(Nat.mul(1n+d, 1n+q))), Equal.trans(Nat, Nat.add(np, 1n+Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), UL.nat_add_succ(np, Nat.add(q, Nat.mul(d, 1n+q))), Equal.trans(Nat, 1n+Nat.add(np, Nat.add(q, Nat.mul(d, 1n+q))), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), q)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, z), Nat.add(q, Nat.mul(d, 1n+q)), Nat.add(Nat.mul(d, 1n+q), q), UL.nat_add_comm(q, Nat.mul(d, 1n+q))), Equal.cong(Nat, Nat, z => 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), z)), q, r, Equal.sym(Nat, r, q, inv))))))
         case 1n+mp:
-          inv => Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))), Nat.add(np, Nat.add(Nat.mul(d, 1n+q), 1n+r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), hk.ds(np, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, hk.add_succ(mp, r), inv)), Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(d, 1n+q), 1n+r)), Nat.add(np, 1n+Nat.add(Nat.mul(d, 1n+q), r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(d, 1n+q), 1n+r), 1n+Nat.add(Nat.mul(d, 1n+q), r), hk.add_succ(Nat.mul(d, 1n+q), r)), hk.add_succ(np, Nat.add(Nat.mul(d, 1n+q), r))))
+          inv => Equal.trans(Nat, Nat.add(Nat.mul(Pair.fst(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r)), 1n+q), Pair.snd(Nat, Nat, Nat.divmod.go(np, mp, d, 1n+r))), Nat.add(np, Nat.add(Nat.mul(d, 1n+q), 1n+r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), hk.ds(np, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, UL.nat_add_succ(mp, r), inv)), Equal.trans(Nat, Nat.add(np, Nat.add(Nat.mul(d, 1n+q), 1n+r)), Nat.add(np, 1n+Nat.add(Nat.mul(d, 1n+q), r)), 1n+Nat.add(np, Nat.add(Nat.mul(d, 1n+q), r)), Equal.cong(Nat, Nat, z => Nat.add(np, z), Nat.add(Nat.mul(d, 1n+q), 1n+r), 1n+Nat.add(Nat.mul(d, 1n+q), r), UL.nat_add_succ(Nat.mul(d, 1n+q), r)), UL.nat_add_succ(np, Nat.add(Nat.mul(d, 1n+q), r))))
 
 # the number of blocks covers the length: len <= ceil(len / (1 + q)) (1 + q)
 def hk.ceil(+len: Nat, +q: Nat) -> {Nat.is_le(len, Nat.mul(Nat.div(Nat.add(len, Nat.sub(1n+q, 1n)), 1n+q), 1n+q)) == True{} : Bool}:
   %Equal.sym(Nat, Nat.sub(q, 0n), q, hk.sub_zero(q)) : {Nat.is_le(len, Nat.mul(Nat.div(Nat.add(len, _), 1n+q), 1n+q)) == True{} : Bool}
-  hk.cancel(Nat.mul(Nat.div(Nat.add(len, q), 1n+q), 1n+q), Nat.mod(Nat.add(len, q), 1n+q), len, q)(Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.add(len, q), 1n+q), 1n+q), Nat.mod(Nat.add(len, q), 1n+q)), Nat.add(Nat.add(len, q), Nat.add(Nat.mul(0n, 1n+q), 0n)), Nat.add(len, q), hk.ds(Nat.add(len, q), q, 0n, 0n, q)(hk.add_zero(q)), hk.add_zero(Nat.add(len, q))))(hk.mod_le(Nat.add(len, q), q, 0n, 0n, q)(hk.add_zero(q)))
+  hk.cancel(Nat.mul(Nat.div(Nat.add(len, q), 1n+q), 1n+q), Nat.mod(Nat.add(len, q), 1n+q), len, q)(Equal.trans(Nat, Nat.add(Nat.mul(Nat.div(Nat.add(len, q), 1n+q), 1n+q), Nat.mod(Nat.add(len, q), 1n+q)), Nat.add(Nat.add(len, q), Nat.add(Nat.mul(0n, 1n+q), 0n)), Nat.add(len, q), hk.ds(Nat.add(len, q), q, 0n, 0n, q)(UL.nat_add_zero(q)), UL.nat_add_zero(Nat.add(len, q))))(hk.mod_le(Nat.add(len, q), q, 0n, 0n, q)(UL.nat_add_zero(q)))
 
 # the quotient never falls as the dividend grows
 def hk.q_ge(+x: Nat, +m: Nat, +d: Nat, +r: Nat) -> {Nat.is_le(d, Pair.fst(Nat, Nat, Nat.divmod.go(x, m, d, r))) == True{} : Bool}:
   match x:
     case 0n:
-      hk.le_refl(d)
+      UL.nat_le_refl(d)
     case 1n+xp:
       match m:
         case 0n:
-          hk.le_trans(d, 1n+d, Pair.fst(Nat, Nat, Nat.divmod.go(xp, r, 1n+d, 0n)))(hk.le_step(d, d)(hk.le_refl(d)))(hk.q_ge(xp, r, 1n+d, 0n))
+          hk.le_trans(d, 1n+d, Pair.fst(Nat, Nat, Nat.divmod.go(xp, r, 1n+d, 0n)))(hk.le_step(d, d)(UL.nat_le_refl(d)))(hk.q_ge(xp, r, 1n+d, 0n))
         case 1n+mp:
           hk.q_ge(xp, mp, d, 1n+r)
 
@@ -239,7 +185,7 @@ def hk.qmono(+a: Nat, +j: Nat, +m: Nat, +d: Nat, +r: Nat) -> {Nat.is_le(Pair.fst
 # more bytes need no fewer blocks
 def hk.nmono(+n: Nat, +j: Nat, +q: Nat) -> {Nat.is_le(Nat.div(Nat.add(n, Nat.sub(1n+q, 1n)), 1n+q), Nat.div(Nat.add(Nat.add(n, j), Nat.sub(1n+q, 1n)), 1n+q)) == True{} : Bool}:
   %Equal.sym(Nat, Nat.sub(q, 0n), q, hk.sub_zero(q)) : {Nat.is_le(Nat.div(Nat.add(n, _), 1n+q), Nat.div(Nat.add(Nat.add(n, j), _), 1n+q)) == True{} : Bool}
-  %Equal.trans(Nat, Nat.add(Nat.add(n, q), j), Nat.add(n, Nat.add(q, j)), Nat.add(Nat.add(n, j), q), hk.add_assoc(n, q, j), Equal.trans(Nat, Nat.add(n, Nat.add(q, j)), Nat.add(n, Nat.add(j, q)), Nat.add(Nat.add(n, j), q), Equal.cong(Nat, Nat, z => Nat.add(n, z), Nat.add(q, j), Nat.add(j, q), hk.add_comm(q, j)), Equal.sym(Nat, Nat.add(Nat.add(n, j), q), Nat.add(n, Nat.add(j, q)), hk.add_assoc(n, j, q)))) : {Nat.is_le(Nat.div(Nat.add(n, q), 1n+q), Nat.div(_, 1n+q)) == True{} : Bool}
+  %Equal.trans(Nat, Nat.add(Nat.add(n, q), j), Nat.add(n, Nat.add(q, j)), Nat.add(Nat.add(n, j), q), UL.nat_add_assoc(n, q, j), Equal.trans(Nat, Nat.add(n, Nat.add(q, j)), Nat.add(n, Nat.add(j, q)), Nat.add(Nat.add(n, j), q), Equal.cong(Nat, Nat, z => Nat.add(n, z), Nat.add(q, j), Nat.add(j, q), UL.nat_add_comm(q, j)), Equal.sym(Nat, Nat.add(Nat.add(n, j), q), Nat.add(n, Nat.add(j, q)), UL.nat_add_assoc(n, j, q)))) : {Nat.is_le(Nat.div(Nat.add(n, q), 1n+q), Nat.div(_, 1n+q)) == True{} : Bool}
   hk.qmono(Nat.add(n, q), j, q, 0n, 0n)
 
 # Lists of Nat and of Octets
@@ -524,7 +470,7 @@ def hk.pre_ok(~bsize: Nat, ~digest: B.Octets -> B.Octets, ok: Bool, +d: Nat, hd:
         case 0n:
           e => hk.absurd({Done{B.Octets.take(n, B.Octets.take(Nat.add(n, j), B.Octets.concat(Hk.cr.hkdf.rev(Hk.cr.hkdf.blocks(~digest, Nat.div(Nat.add(Nat.add(n, j), Nat.sub(0n, 1n)), 0n), Hm.CrHmac.key(~bsize, ~digest, prk), info, B.Octets.empty(), 1, Nil{}), Nil{}))))} == hk.exp(~bsize, ~digest, 0n, False{}, prk, info, n) : Result<&2, &2, Cr.CrError, B.Octets>}, e)
         case 1n+q:
-          e => %Equal.sym(Bool, Nat.is_le(n, Nat.mul(255n, 1n+q)), True{}, hk.le_trans(n, Nat.add(n, j), Nat.mul(255n, 1n+q))(hk.le_add(n, j))(e)) : {Done{B.Octets.take(n, B.Octets.take(Nat.add(n, j), B.Octets.concat(Hk.cr.hkdf.rev(Hk.cr.hkdf.blocks(~digest, Nat.div(Nat.add(Nat.add(n, j), Nat.sub(1n+q, 1n)), 1n+q), Hm.CrHmac.key(~bsize, ~digest, prk), info, B.Octets.empty(), 1, Nil{}), Nil{}))))} == hk.exp(~bsize, ~digest, 1n+q, _, prk, info, n) : Result<&2, &2, Cr.CrError, B.Octets>}
+          e => %Equal.sym(Bool, Nat.is_le(n, Nat.mul(255n, 1n+q)), True{}, hk.le_trans(n, Nat.add(n, j), Nat.mul(255n, 1n+q))(UO.nat_le_add_r(n, j))(e)) : {Done{B.Octets.take(n, B.Octets.take(Nat.add(n, j), B.Octets.concat(Hk.cr.hkdf.rev(Hk.cr.hkdf.blocks(~digest, Nat.div(Nat.add(Nat.add(n, j), Nat.sub(1n+q, 1n)), 1n+q), Hm.CrHmac.key(~bsize, ~digest, prk), info, B.Octets.empty(), 1, Nil{}), Nil{}))))} == hk.exp(~bsize, ~digest, 1n+q, _, prk, info, n) : Result<&2, &2, Cr.CrError, B.Octets>}
             hk.pre_core(~bsize, ~digest, q, hd, prk, info, n, j)
 
 def Laws.hkdf_prefix(bsize, dsize, digest, hd, ikm, salt, info, n, j):

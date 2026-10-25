@@ -12,6 +12,8 @@ import ./lzop.bend as P
 import ../u32/u32.bend as U
 import ./proof_distance.bend as PD
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # The properties follow the decoder byte by byte. Each lemma below is about
 # the package's internals (decode.bend, encode.bend), never stated as a law.
@@ -67,31 +69,6 @@ def succ_not_zero(-p: Nat, h: {1n+p == 0n : Nat}) -> Empty:
 
 # Arithmetic on Nat
 
-def add_zero(p: Nat) -> {Nat.add(p, 0n) == p : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_zero(q) : {1n+Nat.add(q, 0n) == 1n+_ : Nat}
-      {==}
-
-def add_succ(p: Nat, x: Nat) -> {Nat.add(p, 1n+x) == 1n+Nat.add(p, x) : Nat}:
-  match p:
-    case 0n:
-      {==}
-    case 1n+q:
-      %add_succ(q, x) : {1n+Nat.add(q, 1n+x) == 1n+_ : Nat}
-      {==}
-
-def add_comm(+p: Nat, +q: Nat) -> {Nat.add(p, q) == Nat.add(q, p) : Nat}:
-  match p:
-    case 0n:
-      Equal.sym(Nat, Nat.add(q, 0n), q, add_zero(q))
-    case 1n+r:
-      %Equal.sym(Nat, Nat.add(q, 1n+r), 1n+Nat.add(q, r), add_succ(q, r)) : {1n+Nat.add(r, q) == _ : Nat}
-      %add_comm(r, q) : {1n+Nat.add(r, q) == 1n+_ : Nat}
-      {==}
-
 def sub_zero(m: Nat) -> {Nat.sub(m, 0n) == m : Nat}:
   match m:
     case 0n:
@@ -134,13 +111,6 @@ def le_zero(c: Nat) -> {Nat.is_le(0n, c) == True{} : Bool}:
     case 1n+p:
       {==}
 
-def le_refl(c: Nat) -> {Nat.is_le(c, c) == True{} : Bool}:
-  match c:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_refl(p)
-
 def le_add(a: Nat, b: Nat, c: Nat, h: {Nat.is_le(Nat.add(a, b), c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
   match a c:
     case 0n _:
@@ -165,11 +135,11 @@ def len_rev(+xs: List<&2, U32>, +acc: List<&2, U32>) -> {B.len(B.rev_onto(xs, ac
     case Nil{}:
       {==}
     case Con{h, t}:
-      %add_succ(B.len(t), B.len(acc)) : {B.len(B.rev_onto(t, Con{h, acc})) == _ : Nat}
+      %UL.nat_add_succ(B.len(t), B.len(acc)) : {B.len(B.rev_onto(t, Con{h, acc})) == _ : Nat}
       len_rev(t, Con{h, acc})
 
 def len_rev_nil(+xs: List<&2, U32>) -> {B.len(B.rev(xs)) == B.len(xs) : Nat}:
-  Equal.trans(Nat, B.len(B.rev(xs)), Nat.add(B.len(xs), 0n), B.len(xs), len_rev(xs, Nil{}), add_zero(B.len(xs)))
+  Equal.trans(Nat, B.len(B.rev(xs)), Nat.add(B.len(xs), 0n), B.len(xs), len_rev(xs, Nil{}), UL.nat_add_zero(B.len(xs)))
 
 # The decoder: running over a ++ b is running over a, then over b
 
@@ -206,7 +176,7 @@ def Inv(d: D.LzoDec, c: Nat) -> Type:
 
 # a byte moved from the room to the output
 def inv_push(+acc: List<&2, U32>, +r: Nat, +b: U32, +c: Nat, i: {Nat.is_le(Nat.add(B.len(acc), 1n+r), c) == True{} : Bool}) -> {Nat.is_le(Nat.add(B.len({Con{b, acc} : List<&2, U32>}), r), c) == True{} : Bool}:
-  %add_succ(B.len(acc), r) : {Nat.is_le(_, c) == True{} : Bool}
+  %UL.nat_add_succ(B.len(acc), r) : {Nat.is_le(_, c) == True{} : Bool}
   i
 
 def inv_copy_go(n: Nat, +room: Nat, +o: Nat, +s: Nat, +acc: List<&2, U32>, +win: W.LzoWin, +c: Nat, i: {Nat.is_le(Nat.add(B.len(acc), room), c) == True{} : Bool}) -> Inv(D.dec.copy.go(n, room, o, s, acc, win), c):
@@ -2119,10 +2089,10 @@ def ext_run(+r: Nat, +d: Nat, +a: Nat, +acc: List<&2, U32>, +win: W.LzoWin, +roo
     case 1n+p:
       match d:
         case 0n:
-          %add_succ(p, Nat.add(255n, a)) : {D.dec.go(B.mask(C.ext.ref(1n+p, 0n)), D.LzoDec{D.LzoLitExt{a}, acc, win, room}) == D.LzoDec{D.LzoLit{_, D.LzoMany{}}, acc, win, room} : D.LzoDec}
+          %UL.nat_add_succ(p, Nat.add(255n, a)) : {D.dec.go(B.mask(C.ext.ref(1n+p, 0n)), D.LzoDec{D.LzoLitExt{a}, acc, win, room}) == D.LzoDec{D.LzoLit{_, D.LzoMany{}}, acc, win, room} : D.LzoDec}
           ext_run(p, 254n, Nat.add(255n, a), acc, win, room, {==})
         case 1n+q:
-          %add_succ(p, Nat.add(Nat.sub(255n, 1n+q), a)) : {D.dec.go(B.mask(C.ext.ref(1n+p, 1n+q)), D.LzoDec{D.LzoLitExt{a}, acc, win, room}) == D.LzoDec{D.LzoLit{_, D.LzoMany{}}, acc, win, room} : D.LzoDec}
+          %UL.nat_add_succ(p, Nat.add(Nat.sub(255n, 1n+q), a)) : {D.dec.go(B.mask(C.ext.ref(1n+p, 1n+q)), D.LzoDec{D.LzoLitExt{a}, acc, win, room}) == D.LzoDec{D.LzoLit{_, D.LzoMany{}}, acc, win, room} : D.LzoDec}
           %sub_succ(255n, q, le_up(1n+q, 254n, h)) : {D.dec.go(B.mask(C.ext.ref(1n+p, 1n+q)), D.LzoDec{D.LzoLitExt{a}, acc, win, room}) == D.LzoDec{D.LzoLit{Nat.add(p, Nat.add(_, a)), D.LzoMany{}}, acc, win, room} : D.LzoDec}
           ext_run(p, q, a, acc, win, room, le_pred(254n, q, h))
 
@@ -2151,7 +2121,7 @@ def full_18(+n: Nat, +ys: List<&2, U32>, +k: Nat, +acc: List<&2, U32>, +win: W.L
       after_hdr(18n, D.LzoMany{}, ys, k, acc, win, e)
     case 1n+p:
       %ext_fast(p, 254n) : {D.dec.go(B.append(B.mask(Con{0, _}), B.append(ys, [17, 0, 0])), D.LzoDec{D.LzoIns{D.LzoFirst{}}, acc, win, Nat.add(B.len(ys), k)}) == D.LzoDec{D.LzoEnd{}, B.rev_onto(ys, acc), wpush(ys, win), k} : D.LzoDec}
-      Equal.trans(D.LzoDec, D.dec.go(B.append(B.mask(C.ext.ref(p, 254n)), B.append(ys, [17, 0, 0])), D.LzoDec{D.LzoLitExt{18n}, acc, win, Nat.add(B.len(ys), k)}), D.dec.go(B.append(ys, [17, 0, 0]), D.LzoDec{D.LzoLit{Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}}, acc, win, Nat.add(B.len(ys), k)}), D.LzoDec{D.LzoEnd{}, B.rev_onto(ys, acc), wpush(ys, win), k}, go_app(B.mask(C.ext.ref(p, 254n)), B.append(ys, [17, 0, 0]), D.LzoDec{D.LzoLitExt{18n}, acc, win, Nat.add(B.len(ys), k)}, D.LzoDec{D.LzoLit{Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}}, acc, win, Nat.add(B.len(ys), k)}, ext_run(p, 254n, 18n, acc, win, Nat.add(B.len(ys), k), {==})), after_hdr(Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}, ys, k, acc, win, Equal.trans(Nat, B.len(ys), Nat.add(19n, p), Nat.add(p, 19n), e, add_comm(19n, p))))
+      Equal.trans(D.LzoDec, D.dec.go(B.append(B.mask(C.ext.ref(p, 254n)), B.append(ys, [17, 0, 0])), D.LzoDec{D.LzoLitExt{18n}, acc, win, Nat.add(B.len(ys), k)}), D.dec.go(B.append(ys, [17, 0, 0]), D.LzoDec{D.LzoLit{Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}}, acc, win, Nat.add(B.len(ys), k)}), D.LzoDec{D.LzoEnd{}, B.rev_onto(ys, acc), wpush(ys, win), k}, go_app(B.mask(C.ext.ref(p, 254n)), B.append(ys, [17, 0, 0]), D.LzoDec{D.LzoLitExt{18n}, acc, win, Nat.add(B.len(ys), k)}, D.LzoDec{D.LzoLit{Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}}, acc, win, Nat.add(B.len(ys), k)}, ext_run(p, 254n, 18n, acc, win, Nat.add(B.len(ys), k), {==})), after_hdr(Nat.add(p, Nat.add(Nat.sub(255n, 254n), 18n)), D.LzoMany{}, ys, k, acc, win, Equal.trans(Nat, B.len(ys), Nat.add(19n, p), Nat.add(p, 19n), e, UL.nat_add_comm(19n, p))))
 
 def full_17(+n: Nat, +ys: List<&2, U32>, +k: Nat, +acc: List<&2, U32>, +win: W.LzoWin, e: {B.len(ys) == Nat.add(17n, n) : Nat}) -> {D.dec.go(B.append(B.mask(C.lit.h17(n)), B.append(ys, [17, 0, 0])), D.LzoDec{D.LzoIns{D.LzoFirst{}}, acc, win, Nat.add(B.len(ys), k)}) == D.LzoDec{D.LzoEnd{}, B.rev_onto(ys, acc), wpush(ys, win), k} : D.LzoDec}:
   match n:
@@ -2310,7 +2280,7 @@ def lit_round(+o: B.Octets, +k: Nat) -> {D.lzo1x_decompress(C.lzo1x_literals(o),
   {==}
 
 def lit_round0(+o: B.Octets) -> {D.lzo1x_decompress(C.lzo1x_literals(o), B.Octets.len(o)) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}:
-  %add_zero(B.Octets.len(o)) : {D.lzo1x_decompress(C.lzo1x_literals(o), _) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
+  %UL.nat_add_zero(B.Octets.len(o)) : {D.lzo1x_decompress(C.lzo1x_literals(o), _) == Done{o} : Result<&2, &2, E.LzoError, B.Octets>}
   lit_round(o, 0n)
 
 # The compressor's check: when it finds the same bytes, the stream decodes
@@ -2470,7 +2440,7 @@ def split_hyp(+a: B.Octets, +h: U32, +t: B.Octets, +max: Nat, -o: B.Octets, e: {
 # The laws
 
 def Laws.output_within_max(src, max):
-  fin(D.dec.go(B.Octets.to_list(src), D.dec.start(max)), max, inv_go(B.Octets.to_list(src), D.dec.start(max), max, le_refl(max)))
+  fin(D.dec.go(B.Octets.to_list(src), D.dec.start(max)), max, inv_go(B.Octets.to_list(src), D.dec.start(max), max, UL.nat_le_refl(max)))
 
 def Laws.literals_round_trip(o, k):
   lit_round(o, k)
@@ -4005,7 +3975,7 @@ def bd_ins_m4f(+c: D.LzoCls, +x: U32, +acc: List<&2, U32>, +win: W.LzoWin, +room
 # M2: the byte H gives the distance; it is more than the bytes written, so
 # the copy is refused
 def bd_m2c(+c: D.LzoCls, +acc: List<&2, U32>, +win: W.LzoWin, +room: Nat, +x: U32, +h: U32, +R: List<&2, U32>, +hnf: {bd_nf(c) == True{} : Bool}, +hc: {W.win.count(win) == B.len(acc) : Nat}, +hx: {U32.is_lt(x, 64) == False{} : Bool}, +hh: {Nat.is_lt(U32.to_nat(h), 256n) == True{} : Bool}, +hd: {Nat.is_lt(B.len(acc), Nat.add(Nat.mul(U32.to_nat(h), 8n), Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n))) == True{} : Bool}) -> {D.dec.out(D.dec.end(D.dec.go(Con{h, R}, D.dec.apply(D.dec.ins(c, x), acc, win, room)))) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}:
-  +hb = PD.ld.le_rw(1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Equal.sym(Nat, Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Equal.trans(Nat, Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), PD.ld.add_succ(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), PD.ld.succ_cong(Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), PD.ld.add_zero(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n))))), {==}, PD.ld.le_refl(1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n)))
+  +hb = PD.ld.le_rw(1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Equal.sym(Nat, Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Equal.trans(Nat, Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), 1n+Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), 1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), UL.nat_add_succ(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), PD.ld.succ_cong(Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 0n), Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), UL.nat_add_zero(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n))))), {==}, UL.nat_le_refl(1n+Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n)))
   +nb = PD.ld.not_below(B.len(acc), Nat.mul(U32.to_nat(h), 8n), Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), Nat.add(Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n), 1n), hd, hb)
   +hlt = PD.ld.ltf_rw(Nat.add(Nat.mul(U32.to_nat(h), 8n), Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n)), U32.to_nat(U32.add(0, U32.or(U32.shln(h, 3n), U32.and(U32.shrn(x, 2n), 7)))), B.len(acc), W.win.count(win), Equal.sym(Nat, U32.to_nat(U32.add(0, U32.or(U32.shln(h, 3n), U32.and(U32.shrn(x, 2n), 7)))), Nat.add(Nat.mul(U32.to_nat(h), 8n), Nat.mod(Nat.div(U32.to_nat(x), 4n), 8n)), PD.ld.m2_o(x, h, hh)), Equal.sym(Nat, W.win.count(win), B.len(acc), hc), nb)
   %Equal.sym(D.LzoDec, D.dec.apply(D.dec.ins(c, x), acc, win, room), D.LzoDec{D.LzoNear{Nat.add(1n, U32.to_nat(U32.shrn(x, 5n))), U32.and(U32.shrn(x, 2n), 7), U32.and(x, 3), 0, 3n}, acc, win, room}, bd_ins_m2(c, x, acc, win, room, hnf, hx)) : {D.dec.out(D.dec.end(D.dec.go(Con{h, R}, _))) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
@@ -4042,7 +4012,7 @@ def bd_m2(+d: D.LzoDec, +x: U32, +h: U32, +R: List<&2, U32>, +hi: {bd_ins(bd_st(
 # M3: lo and hi give D; the distance D + 1 is more than the bytes written
 def bd_m3d(+len: Nat, +acc: List<&2, U32>, +win: W.LzoWin, +room: Nat, +l0: Bool, +l1: Bool, +l2: Bool, +l3: Bool, +l4: Bool, +l5: Bool, +l6: Bool, +l7: Bool, +h0: Bool, +h1: Bool, +h2: Bool, +h3: Bool, +h4: Bool, +h5: Bool, +h6: Bool, +h7: Bool, +R: List<&2, U32>, +hc: {W.win.count(win) == B.len(acc) : Nat}, +hd: {Nat.is_lt(B.len(acc), Nat.add(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 1n)) == True{} : Bool}) -> {D.dec.out(D.dec.end(D.dec.go(Con{U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, Con{U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}, R}}, D.LzoDec{D.LzoDist{len, D.LzoM3{}}, acc, win, room}))) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}:
   +nb = PD.ld.not_below(B.len(acc), Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 0n, 1n, hd, {==})
-  +hlt = PD.ld.ltf_rw(Nat.add(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 0n), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), B.len(acc), W.win.count(win), Equal.trans(Nat, Nat.add(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 0n), Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), PD.ld.add_zero(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n)), Equal.sym(Nat, U32.to_nat(U32.shrn(U32.or(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32.shln(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}, 8n)), 2n)), Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), PD.ld.d14_v(l0, l1, l2, l3, l4, l5, l6, l7, h0, h1, h2, h3, h4, h5, h6, h7))), Equal.sym(Nat, W.win.count(win), B.len(acc), hc), nb)
+  +hlt = PD.ld.ltf_rw(Nat.add(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 0n), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), B.len(acc), W.win.count(win), Equal.trans(Nat, Nat.add(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), 0n), Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), UL.nat_add_zero(Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n)), Equal.sym(Nat, U32.to_nat(U32.shrn(U32.or(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32.shln(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}, 8n)), 2n)), Nat.div(Nat.add(U32.to_nat(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), Nat.mul(U32.to_nat(U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}}), 256n)), 4n), PD.ld.d14_v(l0, l1, l2, l3, l4, l5, l6, l7, h0, h1, h2, h3, h4, h5, h6, h7))), Equal.sym(Nat, W.win.count(win), B.len(acc), hc), nb)
   %Equal.sym(D.LzoDec, D.dec.copy.at(W.win.count(win), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), len, D.dec.s2(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), acc, win, room), D.LzoDec{D.LzoBad{E.LzoBadDistance{}}, acc, win, room}, bd_far(W.win.count(win), U32.to_nat(D.dec.d14(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}, U32{WCon{h0, WCon{h1, WCon{h2, WCon{h3, WCon{h4, WCon{h5, WCon{h6, WCon{h7, Word.zero(24n)}}}}}}}}})), len, D.dec.s2(U32{WCon{l0, WCon{l1, WCon{l2, WCon{l3, WCon{l4, WCon{l5, WCon{l6, WCon{l7, Word.zero(24n)}}}}}}}}}), acc, win, room, hlt)) : {D.dec.out(D.dec.end(D.dec.go(R, _))) == Fail{E.LzoBadDistance{}} : Result<&2, &2, E.LzoError, B.Octets>}
   absorb_out(R, E.LzoBadDistance{}, acc, win, room)
 

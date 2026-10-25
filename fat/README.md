@@ -603,6 +603,11 @@ files a piece at a time. A listing holds every entry it returns. Every FAT entry
 reader follows is a block read (there is no cache); the writer follows
 chains in its map.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (78 laws: 31 for every input,

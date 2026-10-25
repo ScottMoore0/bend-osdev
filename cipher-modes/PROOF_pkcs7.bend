@@ -5,6 +5,8 @@ import ../bytes/PROOF.bend as BP
 import ./cipher-modes.bend as M
 import ./pkcs7.bend as P
 import ./LAWS_pkcs7.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # How the proofs go. Padding m (L bytes) to blocks of bs = 1 + q bytes
 # appends p = bs - (L mod bs) bytes of value p. The arithmetic: L mod bs is
@@ -36,22 +38,6 @@ def pk.absurd(-A: Type, h: {False{} == True{} : Bool}) -> A:
 
 # Naturals
 
-def pk.add_zero(+a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pk.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def pk.add_succ(+a: Nat, +n: Nat) -> {Nat.add(a, 1n+n) == 1n+Nat.add(a, n) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %pk.add_succ(p, n) : {1n+Nat.add(p, 1n+n) == 1n+_ : Nat}
-      {==}
-
 def pk.sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
   match a:
     case 0n:
@@ -63,18 +49,11 @@ def pk.sub_zero(+a: Nat) -> {Nat.sub(a, 0n) == a : Nat}:
 def pk.add_sub(+l: Nat, +k: Nat) -> {Nat.sub(Nat.add(l, k), k) == l : Nat}:
   match k:
     case 0n:
-      %pk.add_zero(l) : {Nat.sub(Nat.add(l, 0n), 0n) == _ : Nat}
+      %UL.nat_add_zero(l) : {Nat.sub(Nat.add(l, 0n), 0n) == _ : Nat}
       pk.sub_zero(Nat.add(l, 0n))
     case 1n+kp:
-      %Equal.sym(Nat, Nat.add(l, 1n+kp), 1n+Nat.add(l, kp), pk.add_succ(l, kp)) : {Nat.sub(_, 1n+kp) == l : Nat}
+      %Equal.sym(Nat, Nat.add(l, 1n+kp), 1n+Nat.add(l, kp), UL.nat_add_succ(l, kp)) : {Nat.sub(_, 1n+kp) == l : Nat}
       pk.add_sub(l, kp)
-
-def pk.le_refl(+x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      pk.le_refl(p)
 
 def pk.le_step(+x: Nat, +y: Nat) -> {Nat.is_le(x, y) == True{} : Bool} -> {Nat.is_le(x, 1n+y) == True{} : Bool}:
   match x y:
@@ -85,21 +64,13 @@ def pk.le_step(+x: Nat, +y: Nat) -> {Nat.is_le(x, y) == True{} : Bool} -> {Nat.i
     case 1n+xp 1n+yp:
       h => pk.le_step(xp, yp)(h)
 
-# r <= m + r
-def pk.le_add_l(+m: Nat, +r: Nat) -> {Nat.is_le(r, Nat.add(m, r)) == True{} : Bool}:
-  match m:
-    case 0n:
-      pk.le_refl(r)
-    case 1n+mp:
-      pk.le_step(r, Nat.add(mp, r))(pk.le_add_l(mp, r))
-
 # q - r <= q
 def pk.le_sub(+q: Nat, +r: Nat) -> {Nat.is_le(Nat.sub(q, r), q) == True{} : Bool}:
   match q r:
     case 0n _:
       {==}
     case 1n+qp 0n:
-      pk.le_refl(qp)
+      UL.nat_le_refl(qp)
     case 1n+qp 1n+rp:
       pk.le_step(Nat.sub(qp, rp), qp)(pk.le_sub(qp, rp))
 
@@ -162,16 +133,16 @@ def pk.go_skip(+m: Nat, +x: Nat, +d: Nat, +r: Nat) -> {Nat.divmod.go(1n+Nat.add(
     case 0n:
       {==}
     case 1n+mp:
-      Equal.trans(Nat & Nat, Nat.divmod.go(1n+Nat.add(mp, x), mp, d, 1n+r), Nat.divmod.go(x, Nat.add(mp, 1n+r), 1n+d, 0n), Nat.divmod.go(x, 1n+Nat.add(mp, r), 1n+d, 0n), pk.go_skip(mp, x, d, 1n+r), Equal.cong(Nat, Nat & Nat, z => Nat.divmod.go(x, z, 1n+d, 0n), Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), pk.add_succ(mp, r)))
+      Equal.trans(Nat & Nat, Nat.divmod.go(1n+Nat.add(mp, x), mp, d, 1n+r), Nat.divmod.go(x, Nat.add(mp, 1n+r), 1n+d, 0n), Nat.divmod.go(x, 1n+Nat.add(mp, r), 1n+d, 0n), pk.go_skip(mp, x, d, 1n+r), Equal.cong(Nat, Nat & Nat, z => Nat.divmod.go(x, z, 1n+d, 0n), Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), UL.nat_add_succ(mp, r)))
 
 # (1 + m + r) - r = 1 + m
 def pk.sub_add_r(+m: Nat, +r: Nat) -> {Nat.sub(1n+Nat.add(m, r), r) == 1n+m : Nat}:
   match r:
     case 0n:
-      %pk.add_zero(m) : {Nat.sub(1n+Nat.add(m, 0n), 0n) == 1n+_ : Nat}
+      %UL.nat_add_zero(m) : {Nat.sub(1n+Nat.add(m, 0n), 0n) == 1n+_ : Nat}
       {==}
     case 1n+rp:
-      %Equal.sym(Nat, Nat.add(m, 1n+rp), 1n+Nat.add(m, rp), pk.add_succ(m, rp)) : {Nat.sub(1n+_, 1n+rp) == 1n+m : Nat}
+      %Equal.sym(Nat, Nat.add(m, 1n+rp), 1n+Nat.add(m, rp), UL.nat_add_succ(m, rp)) : {Nat.sub(1n+_, 1n+rp) == 1n+m : Nat}
       pk.sub_add_r(m, rp)
 
 # the remainder is at most q
@@ -179,13 +150,13 @@ def pk.mod_le(+a: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) == 
   match a:
     case 0n:
       inv => %inv : {Nat.is_le(r, _) == True{} : Bool}
-        pk.le_add_l(m, r)
+        UL.nat_le_add(r, m)
     case 1n+ap:
       match m:
         case 0n:
-          inv => pk.mod_le(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, pk.add_zero(r), inv))
+          inv => pk.mod_le(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, UL.nat_add_zero(r), inv))
         case 1n+mp:
-          inv => pk.mod_le(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, pk.add_succ(mp, r), inv))
+          inv => pk.mod_le(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, UL.nat_add_succ(mp, r), inv))
 
 # a + (1 + q - (a mod (1 + q))) is a multiple of 1 + q
 def pk.mod_pad(+a: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) == q : Nat} -> {Pair.snd(Nat, Nat, Nat.divmod.go(Nat.add(a, Nat.sub(1n+q, Pair.snd(Nat, Nat, Nat.divmod.go(a, m, d, r)))), m, d, r)) == 0n : Nat}:
@@ -193,15 +164,15 @@ def pk.mod_pad(+a: Nat, +m: Nat, +d: Nat, +r: Nat, +q: Nat) -> {Nat.add(m, r) ==
     case 0n:
       inv => %inv : {Pair.snd(Nat, Nat, Nat.divmod.go(Nat.sub(1n+_, r), m, d, r)) == 0n : Nat}
         %Equal.sym(Nat, Nat.sub(1n+Nat.add(m, r), r), 1n+m, pk.sub_add_r(m, r)) : {Pair.snd(Nat, Nat, Nat.divmod.go(_, m, d, r)) == 0n : Nat}
-        %pk.add_zero(m) : {Pair.snd(Nat, Nat, Nat.divmod.go(1n+_, m, d, r)) == 0n : Nat}
+        %UL.nat_add_zero(m) : {Pair.snd(Nat, Nat, Nat.divmod.go(1n+_, m, d, r)) == 0n : Nat}
         %Equal.sym(Nat & Nat, Nat.divmod.go(1n+Nat.add(m, 0n), m, d, r), Nat.divmod.go(0n, Nat.add(m, r), 1n+d, 0n), pk.go_skip(m, 0n, d, r)) : {Pair.snd(Nat, Nat, _) == 0n : Nat}
         {==}
     case 1n+ap:
       match m:
         case 0n:
-          inv => pk.mod_pad(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, pk.add_zero(r), inv))
+          inv => pk.mod_pad(ap, r, 1n+d, 0n, q)(Equal.trans(Nat, Nat.add(r, 0n), r, q, UL.nat_add_zero(r), inv))
         case 1n+mp:
-          inv => pk.mod_pad(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, pk.add_succ(mp, r), inv))
+          inv => pk.mod_pad(ap, mp, d, 1n+r, q)(Equal.trans(Nat, Nat.add(mp, 1n+r), 1n+Nat.add(mp, r), q, UL.nat_add_succ(mp, r), inv))
 
 # The padding bytes
 
@@ -1363,7 +1334,7 @@ def pk.len(+m: B.Octets, +p1: Nat) -> {B.Octets.len(B.Octets.append(m, pk.pad(p1
   %Equal.sym(Nat, B.Octets.len(B.Octets.append(m, pk.pad(p1))), Nat.add(B.Octets.len(m), B.Octets.len(pk.pad(p1))), BL.octets_len_append(m, pk.pad(p1))) : {_ == 1n+Nat.add(B.Octets.len(m), p1) : Nat}
   %Equal.sym(Nat, B.Octets.len(pk.pad(p1)), B.len(P.pkcs7.fill(1n+p1, U32.from_nat(1n+p1))), BL.octets_len_of_list(P.pkcs7.fill(1n+p1, U32.from_nat(1n+p1)))) : {Nat.add(B.Octets.len(m), _) == 1n+Nat.add(B.Octets.len(m), p1) : Nat}
   %Equal.sym(Nat, B.len(P.pkcs7.fill(1n+p1, U32.from_nat(1n+p1))), 1n+p1, pk.fill_len(1n+p1, U32.from_nat(1n+p1))) : {Nat.add(B.Octets.len(m), _) == 1n+Nat.add(B.Octets.len(m), p1) : Nat}
-  pk.add_succ(B.Octets.len(m), p1)
+  UL.nat_add_succ(B.Octets.len(m), p1)
 
 # unpad.oct on m and a padding of 1 + p1 bytes (p1 below 255) gives m
 def pk.oct(+bs: Nat, +m: B.Octets, +p1: Nat, hle: {Nat.is_le(1n+p1, bs) == True{} : Bool}, hb: {Nat.is_le(1n+p1, 255n) == True{} : Bool}) -> {P.pkcs7.unpad.oct(bs, B.Octets.append(m, pk.pad(p1)), 1n+Nat.add(B.Octets.len(m), p1)) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}:
@@ -1396,13 +1367,13 @@ def pk.main2(+q: Nat, +m: B.Octets, +p1: Nat, +hle: {Nat.is_le(p1, q) == True{} 
 
 # 1 + L + (q - L mod (1 + q)) is a multiple of 1 + q
 def pk.hm(+q: Nat, +m: B.Octets) -> {Nat.mod(1n+Nat.add(B.Octets.len(m), Nat.sub(q, Nat.mod(B.Octets.len(m), 1n+q))), 1n+q) == 0n : Nat}:
-  +hs = pk.sub_succ(Nat.mod(B.Octets.len(m), 1n+q), q)(pk.mod_le(B.Octets.len(m), q, 0n, 0n, q)(pk.add_zero(q)))
-  %pk.add_succ(B.Octets.len(m), Nat.sub(q, Nat.mod(B.Octets.len(m), 1n+q))) : {Nat.mod(_, 1n+q) == 0n : Nat}
+  +hs = pk.sub_succ(Nat.mod(B.Octets.len(m), 1n+q), q)(pk.mod_le(B.Octets.len(m), q, 0n, 0n, q)(UL.nat_add_zero(q)))
+  %UL.nat_add_succ(B.Octets.len(m), Nat.sub(q, Nat.mod(B.Octets.len(m), 1n+q))) : {Nat.mod(_, 1n+q) == 0n : Nat}
   %hs : {Nat.mod(Nat.add(B.Octets.len(m), _), 1n+q) == 0n : Nat}
-  pk.mod_pad(B.Octets.len(m), q, 0n, 0n, q)(pk.add_zero(q))
+  pk.mod_pad(B.Octets.len(m), q, 0n, 0n, q)(UL.nat_add_zero(q))
 
 def pk.main(+q: Nat, +m: B.Octets, +e: {Nat.is_lt(1n+q, 256n) == True{} : Bool}) -> {P.Pkcs7.unpad(1n+q, P.pkcs7.pad.oct(1n+q, m)) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}:
-  +hs = pk.sub_succ(Nat.mod(B.Octets.len(m), 1n+q), q)(pk.mod_le(B.Octets.len(m), q, 0n, 0n, q)(pk.add_zero(q)))
+  +hs = pk.sub_succ(Nat.mod(B.Octets.len(m), 1n+q), q)(pk.mod_le(B.Octets.len(m), q, 0n, 0n, q)(UL.nat_add_zero(q)))
   # the padding is 1 + (q - L mod (1 + q)) bytes
   %Equal.sym(Nat, Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), 1n+Nat.sub(q, Nat.mod(B.Octets.len(m), 1n+q)), hs) : {P.Pkcs7.unpad(1n+q, B.Octets.append(m, B.Octets.of_list(P.pkcs7.fill(_, U32.from_nat(_))))) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}
   # the block size is one the padding takes
@@ -1439,7 +1410,7 @@ def pk.blocks(ok: Bool, +bs: Nat, +m: B.Octets) -> {P.pkcs7.size_ok(bs) == ok : 
           e => %Equal.sym(Nat, B.Octets.len(P.pkcs7.pad.oct(1n+q, m)), Nat.add(B.Octets.len(m), B.Octets.len(B.Octets.of_list(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))))))), BL.octets_len_append(m, B.Octets.of_list(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))))))) : {Done{Nat.mod(_, 1n+q)} == Done{0n} : Result<&2, &2, M.CmError, Nat>}
             %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)))))), B.len(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))))), BL.octets_len_of_list(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)))))) : {Done{Nat.mod(Nat.add(B.Octets.len(m), _), 1n+q)} == Done{0n} : Result<&2, &2, M.CmError, Nat>}
             %Equal.sym(Nat, B.len(P.pkcs7.fill(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))))), Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), pk.fill_len(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q)), U32.from_nat(Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))))) : {Done{Nat.mod(Nat.add(B.Octets.len(m), _), 1n+q)} == Done{0n} : Result<&2, &2, M.CmError, Nat>}
-            %Equal.sym(Nat, Nat.mod(Nat.add(B.Octets.len(m), Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))), 1n+q), 0n, pk.mod_pad(B.Octets.len(m), q, 0n, 0n, q)(pk.add_zero(q))) : {Done{_} == Done{0n} : Result<&2, &2, M.CmError, Nat>}
+            %Equal.sym(Nat, Nat.mod(Nat.add(B.Octets.len(m), Nat.sub(1n+q, Nat.mod(B.Octets.len(m), 1n+q))), 1n+q), 0n, pk.mod_pad(B.Octets.len(m), q, 0n, 0n, q)(UL.nat_add_zero(q))) : {Done{_} == Done{0n} : Result<&2, &2, M.CmError, Nat>}
             {==}
 
 def Laws.pkcs7_pad_blocks(bs, m):

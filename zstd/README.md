@@ -340,6 +340,9 @@ still fails with `WindowTooLarge`, and any other frame with `BadContentSize`
 
 `bytes` (Octets) and `word64` (W64, for XXH64).
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,

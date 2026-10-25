@@ -213,6 +213,11 @@ GF(8), GF(32) and GF(2^13), with an independent model in `ref/gen.py`
 (long division instead of a shift register, and Peterson's direct method
 with Gaussian elimination instead of Berlekamp-Massey and Forney).
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` and `PROOF_errors.bend` ALL PROOFS CHECK,

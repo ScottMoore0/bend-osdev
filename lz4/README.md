@@ -348,7 +348,7 @@ in both directions.
   with LZ4HC, 30 blocks (three at each level 3 to 12: one of any kind, one of
   word text and one of prose, slices of this repository's CONVENTIONS.md,
   AGENTS.md and REVIEW.md, 2 to 8 KB), 6 blocks after a dictionary, 8 frames
-  over the writer's options at random levels, and `compress_hc(12, …)` of
+  over the writer's options at random levels, and `compress_hc(12, â€¦)` of
   6 KB of prose. Each must decode back to its input with `gen.py`'s decoder
   and with `lz4 -d` (blocks wrapped in a frame; dictionary blocks through
   `lz4 -d -D`); `block_compress` must equal `block_compress_unchecked`, and
@@ -438,6 +438,11 @@ and limits were run by hand against the lz4 tool, not in CI.
 * Block and frame sizes in the writer are `U32` counts, not `Nat`: the Lean
   kernel (`--verdict`) fails on Nat computations tens of thousands of
   successors long.
+
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
 
 ## Status
 

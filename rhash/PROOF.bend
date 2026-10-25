@@ -2,6 +2,8 @@ import Base
 import ./rhash.bend as R
 import ./model.bend as M
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # ---------------------------------------------------------------- contradictions
 
@@ -36,28 +38,10 @@ def bool.and_r(a: Bool, -b: Bool, e: {Bool.and(a, b) == True{} : Bool}) -> {b ==
 
 # ---------------------------------------------------------------- U32 equality
 
-def bool_cmp_self(b: Bool) -> {Word.cmp.fin(b, b, EQ{}) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def word_cmp_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{},
-            Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, word_cmp_self(p, t)),
-            bool_cmp_self(b))
-
 def u32_eq_self(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 def word.eq_tail(c: Cmp, x: Bool, y: Bool, e: {Cmp.is_eq(Word.cmp.fin(x, y, c)) == True{} : Bool}) -> {Cmp.is_eq(c) == True{} : Bool}:

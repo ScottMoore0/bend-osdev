@@ -4,6 +4,10 @@ import ../word64/LAWS.bend as WL
 import ../word64/PROOF.bend as WP
 import ./ratelimit.bend as R
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -19,13 +23,6 @@ def ab.ft(e: {False{} == True{} : Bool}) -> Empty:
   Unit{}
 
 # Nat
-
-def nat.le_refl(n: Nat) -> {Nat.is_le(n, n) == True{} : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      nat.le_refl(p)
 
 def nat.le_zero(n: Nat) -> {Nat.is_le(0n, n) == True{} : Bool}:
   match n:
@@ -43,17 +40,6 @@ def nat.le_succ(a: Nat, b: Nat, e: {Nat.is_le(a, b) == True{} : Bool}) -> {Nat.i
     case 1n+ap 1n+bp:
       nat.le_succ(ap, bp, e)
 
-def nat.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      nat.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, ab.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, ab.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      nat.le_trans(ap, bp, cp, e, f)
-
 # a < b: 1 + a <= b
 def nat.lt_succ_le(a: Nat, b: Nat, e: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(1n+a, b) == True{} : Bool}:
   match a b:
@@ -65,22 +51,6 @@ def nat.lt_succ_le(a: Nat, b: Nat, e: {Nat.is_lt(a, b) == True{} : Bool}) -> {Na
       Empty.absurd({Nat.is_le(2n+ap, 0n) == True{} : Bool}, ab.ft(e))
     case 1n+ap 1n+bp:
       nat.lt_succ_le(ap, bp, e)
-
-def nat.add_zero(a: Nat) -> {Nat.add(a, 0n) == a : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %nat.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
-def nat.add_succ(a: Nat, -b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      %Equal.sym(Nat, Nat.add(p, 1n+b), 1n+Nat.add(p, b), nat.add_succ(p, b)) : {1n+_ == 2n+Nat.add(p, b) : Nat}
-      {==}
 
 # What a step adds: one held event for an allowed one; one refusal for a
 # refused one
@@ -213,7 +183,7 @@ def frame.kept(inside: Bool, +i: W.W64, +b: Nat, +t: W.W64, +n: Nat, +m: Nat, +n
 def frame.recent(inside: Bool, +n: Nat) -> {Nat.is_le(R.RateLimit.recent.frame(inside, n), n) == True{} : Bool}:
   match inside:
     case True{}:
-      nat.le_refl(n)
+      UL.nat_le_refl(n)
     case False{}:
       nat.le_zero(n)
 
@@ -258,7 +228,7 @@ def held.on(off: Bool, +i: W.W64, +b: Nat, w: R.RateLimitWindow, +m: Nat, +now: 
     case False{}:
       match w:
         case R.RateLimitLog{+ts}:
-          log.held(Nat.is_lt(List.length(&2, W.W64, R.RateLimit.keep(i, now, ts)), b), i, b, R.RateLimit.keep(i, now, ts), m, now, {==}, nat.le_trans(List.length(&2, W.W64, R.RateLimit.keep(i, now, ts)), List.length(&2, W.W64, ts), b, keep.len_le(i, now, ts), h))
+          log.held(Nat.is_lt(List.length(&2, W.W64, R.RateLimit.keep(i, now, ts)), b), i, b, R.RateLimit.keep(i, now, ts), m, now, {==}, UO.nat_le_trans(List.length(&2, W.W64, R.RateLimit.keep(i, now, ts)), List.length(&2, W.W64, ts), b, keep.len_le(i, now, ts), h))
         case R.RateLimitFrame{+t, +n, +o}:
           frame.held(Bool.and(o, R.RateLimit.within(i, now, t)), i, b, t, n, m, now, h)
 
@@ -332,7 +302,7 @@ def run.arith(a: Bool, +xs: List<&2, Bool>, +m: Nat) -> {Nat.add(R.RateLimit.ref
     case True{}:
       {==}
     case False{}:
-      nat.add_succ(R.RateLimit.refusals(xs), m)
+      UL.nat_add_succ(R.RateLimit.refusals(xs), m)
 
 def run.supp(ts: List<&2, W.W64>, +s: R.RateLimit) -> {R.RateLimit.suppressed(R.RateLimitRun.state(R.RateLimit.run.go(ts, s))) == Nat.add(R.RateLimit.refusals(R.RateLimitRun.allowed(R.RateLimit.run.go(ts, s))), R.RateLimit.suppressed(s)) : Nat}:
   match ts:
@@ -429,7 +399,7 @@ def Laws.ratelimit_report_keeps(s, now):
 def Laws.ratelimit_run_suppressed(s, ts):
   match s:
     case R.RateLimit{+i, +b, +w, m}:
-      %nat.add_zero(R.RateLimit.refusals(R.RateLimitRun.allowed(R.RateLimit.run.go(ts, R.RateLimit{i, b, w, 0n})))) : {R.RateLimit.suppressed(R.RateLimitRun.state(R.RateLimit.run.go(ts, R.RateLimit{i, b, w, 0n}))) == _ : Nat}
+      %UL.nat_add_zero(R.RateLimit.refusals(R.RateLimitRun.allowed(R.RateLimit.run.go(ts, R.RateLimit{i, b, w, 0n})))) : {R.RateLimit.suppressed(R.RateLimitRun.state(R.RateLimit.run.go(ts, R.RateLimit{i, b, w, 0n}))) == _ : Nat}
       run.supp(ts, R.RateLimit{i, b, w, 0n})
 
 def Laws.ratelimit_wit():
@@ -518,32 +488,8 @@ def wd.succ_cong(-a: Nat, -b: Nat, e: {a == b : Nat}) -> {1n+a == 1n+b : Nat}:
   %e : {1n+a == 1n+_ : Nat}
   {==}
 
-def wd.add_assoc(a: Nat, -b: Nat, -c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      wd.succ_cong(Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), wd.add_assoc(p, b, c))
-
 def wd.add_one(+n: Nat) -> {Nat.add(n, 1n) == 1n+n : Nat}:
-  Equal.trans(Nat, Nat.add(n, 1n), 1n+Nat.add(n, 0n), 1n+n, nat.add_succ(n, 0n), wd.succ_cong(Nat.add(n, 0n), n, nat.add_zero(n)))
-
-def wd.le_lt(x: Nat, y: Nat, z: Nat, h1: {Nat.is_le(x, y) == True{} : Bool}, h2: {Nat.is_lt(y, z) == True{} : Bool}) -> {Nat.is_lt(x, z) == True{} : Bool}:
-  match x y z:
-    case 0n 0n 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, ab.ft(h2))
-    case 0n 0n 1n+zp:
-      {==}
-    case 0n 1n+yp 0n:
-      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, ab.ft(h2))
-    case 0n 1n+yp 1n+zp:
-      {==}
-    case 1n+xp 0n _:
-      Empty.absurd({Nat.is_lt(1n+xp, z) == True{} : Bool}, ab.ft(h1))
-    case 1n+xp 1n+yp 0n:
-      Empty.absurd({Nat.is_lt(1n+xp, 0n) == True{} : Bool}, ab.ft(h2))
-    case 1n+xp 1n+yp 1n+zp:
-      wd.le_lt(xp, yp, zp, h1, h2)
+  Equal.trans(Nat, Nat.add(n, 1n), 1n+Nat.add(n, 0n), 1n+n, UL.nat_add_succ(n, 0n), wd.succ_cong(Nat.add(n, 0n), n, UL.nat_add_zero(n)))
 
 def wd.le_rw2(-x: Nat, -y: Nat, -y2: Nat, e: {y == y2 : Nat}, h: {Nat.is_le(x, y) == True{} : Bool}) -> {Nat.is_le(x, y2) == True{} : Bool}:
   %e : {Nat.is_le(x, _) == True{} : Bool}
@@ -586,10 +532,10 @@ def wd.le_w(+a: W.W64, +b: W.W64, h: {Nat.is_le(W.W64.to_nat(a), W.W64.to_nat(b)
   Equal.trans(Bool, W.W64.is_le(a, b), Nat.is_le(W.W64.to_nat(a), W.W64.to_nat(b)), True{}, WL.le_value(a, b), h)
 
 def wd.le_trans_w(+a: W.W64, +b: W.W64, +c: W.W64, h1: {W.W64.is_le(a, b) == True{} : Bool}, h2: {W.W64.is_le(b, c) == True{} : Bool}) -> {W.W64.is_le(a, c) == True{} : Bool}:
-  wd.le_w(a, c, nat.le_trans(W.W64.to_nat(a), W.W64.to_nat(b), W.W64.to_nat(c), wd.le_nat(a, b, h1), wd.le_nat(b, c, h2)))
+  wd.le_w(a, c, UO.nat_le_trans(W.W64.to_nat(a), W.W64.to_nat(b), W.W64.to_nat(c), wd.le_nat(a, b, h1), wd.le_nat(b, c, h2)))
 
 def wd.le_refl_w(+a: W.W64) -> {W.W64.is_le(a, a) == True{} : Bool}:
-  wd.le_w(a, a, nat.le_refl(W.W64.to_nat(a)))
+  wd.le_w(a, a, UL.nat_le_refl(W.W64.to_nat(a)))
 
 # u <= now: u is within the window ending at now when now - u < interval
 def wd.within_nat(+i: W.W64, +now: W.W64, +u: W.W64, h: {Nat.is_le(W.W64.to_nat(u), W.W64.to_nat(now)) == True{} : Bool}) -> {R.RateLimit.within(i, now, u) == Nat.is_lt(Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i)) : Bool}:
@@ -599,8 +545,8 @@ def wd.within_nat(+i: W.W64, +now: W.W64, +u: W.W64, h: {Nat.is_le(W.W64.to_nat(
 def wd.mono(+i: W.W64, +u: W.W64, +t: W.W64, +now: W.W64, hu: {W.W64.is_le(u, t) == True{} : Bool}, ht: {W.W64.is_le(t, now) == True{} : Bool}, e: {R.RateLimit.within(i, now, u) == True{} : Bool}) -> {R.RateLimit.within(i, t, u) == True{} : Bool}:
   +ut = wd.le_nat(u, t, hu)
   +tn = wd.le_nat(t, now, ht)
-  +e2 = Equal.trans(Bool, Nat.is_lt(Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i)), R.RateLimit.within(i, now, u), True{}, Equal.sym(Bool, R.RateLimit.within(i, now, u), Nat.is_lt(Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i)), wd.within_nat(i, now, u, nat.le_trans(W.W64.to_nat(u), W.W64.to_nat(t), W.W64.to_nat(now), ut, tn))), e)
-  Equal.trans(Bool, R.RateLimit.within(i, t, u), Nat.is_lt(Nat.sub(W.W64.to_nat(t), W.W64.to_nat(u)), W.W64.to_nat(i)), True{}, wd.within_nat(i, t, u, ut), wd.le_lt(Nat.sub(W.W64.to_nat(t), W.W64.to_nat(u)), Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i), wd.sub_mono(W.W64.to_nat(t), W.W64.to_nat(now), W.W64.to_nat(u), tn), e2))
+  +e2 = Equal.trans(Bool, Nat.is_lt(Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i)), R.RateLimit.within(i, now, u), True{}, Equal.sym(Bool, R.RateLimit.within(i, now, u), Nat.is_lt(Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i)), wd.within_nat(i, now, u, UO.nat_le_trans(W.W64.to_nat(u), W.W64.to_nat(t), W.W64.to_nat(now), ut, tn))), e)
+  Equal.trans(Bool, R.RateLimit.within(i, t, u), Nat.is_lt(Nat.sub(W.W64.to_nat(t), W.W64.to_nat(u)), W.W64.to_nat(i)), True{}, wd.within_nat(i, t, u, ut), UO.nat_le_lt_trans(Nat.sub(W.W64.to_nat(t), W.W64.to_nat(u)), Nat.sub(W.W64.to_nat(now), W.W64.to_nat(u)), W.W64.to_nat(i), wd.sub_mono(W.W64.to_nat(t), W.W64.to_nat(now), W.W64.to_nat(u), tn), e2))
 
 # outside the window at t: outside it at now
 def wd.out.go(w: Bool, +i: W.W64, +u: W.W64, +t: W.W64, +now: W.W64, hu: {W.W64.is_le(u, t) == True{} : Bool}, ht: {W.W64.is_le(t, now) == True{} : Bool}, ew: {R.RateLimit.within(i, now, u) == w : Bool}, e: {R.RateLimit.within(i, t, u) == False{} : Bool}) -> {R.RateLimit.within(i, now, u) == False{} : Bool}:
@@ -672,20 +618,20 @@ def wd.st.w(w: Bool, -t: W.W64, +x: List<&2, W.W64>, +n: Nat, e: {List.length(&2
     case True{}:
       Equal.trans(Nat, 1n+List.length(&2, W.W64, x), 1n+n, Nat.add(n, 1n), wd.succ_cong(List.length(&2, W.W64, x), n, e), Equal.sym(Nat, Nat.add(n, 1n), 1n+n, wd.add_one(n)))
     case False{}:
-      Equal.trans(Nat, List.length(&2, W.W64, x), n, Nat.add(n, 0n), e, Equal.sym(Nat, Nat.add(n, 0n), n, nat.add_zero(n)))
+      Equal.trans(Nat, List.length(&2, W.W64, x), n, Nat.add(n, 0n), e, Equal.sym(Nat, Nat.add(n, 0n), n, UL.nat_add_zero(n)))
 
 def wd.st.room(room: Bool, +i: W.W64, +b: Nat, +ls: List<&2, W.W64>, +m: Nat, +t: W.W64, +now: W.W64, kc: {List.length(&2, W.W64, R.RateLimit.keep(i, now, R.RateLimit.keep(i, t, ls))) == List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)) : Nat}) -> {R.RateLimit.recent(R.RateLimitStep.state(R.RateLimit.check.log(room, i, b, R.RateLimit.keep(i, t, ls), m, t)), now) == Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), wd.bit(Bool.and(R.RateLimitStep.allowed(R.RateLimit.check.log(room, i, b, R.RateLimit.keep(i, t, ls), m, t)), R.RateLimit.within(i, now, t)))) : Nat}:
   match room:
     case True{}:
       wd.st.w(R.RateLimit.within(i, now, t), t, R.RateLimit.keep(i, now, R.RateLimit.keep(i, t, ls)), List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), kc)
     case False{}:
-      Equal.trans(Nat, List.length(&2, W.W64, R.RateLimit.keep(i, now, R.RateLimit.keep(i, t, ls))), List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), 0n), kc, Equal.sym(Nat, Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), 0n), List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), nat.add_zero(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)))))
+      Equal.trans(Nat, List.length(&2, W.W64, R.RateLimit.keep(i, now, R.RateLimit.keep(i, t, ls))), List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), 0n), kc, Equal.sym(Nat, Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), 0n), List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), UL.nat_add_zero(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)))))
 
 def wd.st.off(off: Bool, +i: W.W64, +b: Nat, +ls: List<&2, W.W64>, +m: Nat, +t: W.W64, +now: W.W64, e: {W.W64.is_zero(i) == off : Bool}, kc: {List.length(&2, W.W64, R.RateLimit.keep(i, now, R.RateLimit.keep(i, t, ls))) == List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)) : Nat}) -> {R.RateLimit.recent(R.RateLimitStep.state(R.RateLimit.check.on(off, R.RateLimit{i, b, R.RateLimitLog{ls}, m}, t)), now) == Nat.add(List.length(&2, W.W64, R.RateLimit.keep(i, now, ls)), wd.bit(Bool.and(R.RateLimitStep.allowed(R.RateLimit.check.on(off, R.RateLimit{i, b, R.RateLimitLog{ls}, m}, t)), R.RateLimit.within(i, now, t)))) : Nat}:
   match off:
     case True{}:
       +c = List.length(&2, W.W64, R.RateLimit.keep(i, now, ls))
-      Equal.trans(Nat, c, Nat.add(c, 0n), Nat.add(c, wd.bit(R.RateLimit.within(i, now, t))), Equal.sym(Nat, Nat.add(c, 0n), c, nat.add_zero(c)), Equal.cong(Bool, Nat, x => Nat.add(c, wd.bit(x)), False{}, R.RateLimit.within(i, now, t), Equal.sym(Bool, R.RateLimit.within(i, now, t), False{}, wd.zero_within(i, now, t, e))))
+      Equal.trans(Nat, c, Nat.add(c, 0n), Nat.add(c, wd.bit(R.RateLimit.within(i, now, t))), Equal.sym(Nat, Nat.add(c, 0n), c, UL.nat_add_zero(c)), Equal.cong(Bool, Nat, x => Nat.add(c, wd.bit(x)), False{}, R.RateLimit.within(i, now, t), Equal.sym(Bool, R.RateLimit.within(i, now, t), False{}, wd.zero_within(i, now, t, e))))
     case False{}:
       wd.st.room(Nat.is_lt(List.length(&2, W.W64, R.RateLimit.keep(i, t, ls)), b), i, b, ls, m, t, now, kc)
 
@@ -763,7 +709,7 @@ def wd.next_le(rest: List<&2, W.W64>, +now: W.W64, +hs: {R.RateLimit.sorted_upto
 def wd.run(ts: List<&2, W.W64>, +s: R.RateLimit, +now: W.W64, +hsl: {wd.sliding(s) == True{} : Bool}, +hs: {R.RateLimit.sorted_upto(ts, now) == True{} : Bool}, +ha: {wd.all_le(wd.log(s), R.RateLimit.sorted_upto.next(ts, now)) == True{} : Bool}) -> {Nat.add(R.RateLimit.recent(s, now), R.RateLimit.in_window(R.RateLimit.interval(s), now, R.RateLimit.allowed_times(ts, R.RateLimitRun.allowed(R.RateLimit.run.go(ts, s))))) == R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(ts, s)), now) : Nat}:
   match ts:
     case Nil{}:
-      nat.add_zero(R.RateLimit.recent(s, now))
+      UL.nat_add_zero(R.RateLimit.recent(s, now))
     case Con{+t, +rest}:
       +s1 = R.RateLimitStep.state(R.RateLimit.check(s, t))
       +a = R.RateLimitStep.allowed(R.RateLimit.check(s, t))
@@ -779,14 +725,14 @@ def wd.run(ts: List<&2, W.W64>, +s: R.RateLimit, +now: W.W64, +hsl: {wd.sliding(
       +bt = wd.bit(Bool.and(a, R.RateLimit.within(iv, now, t)))
       +rs = R.RateLimit.recent(s, now)
       +r1 = R.RateLimit.recent(s1, now)
-      Equal.trans(Nat, Nat.add(rs, R.RateLimit.in_window(iv, now, R.RateLimit.allowed_times.put(a, t, x))), Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(Nat, Nat, v => Nat.add(rs, v), R.RateLimit.in_window(iv, now, R.RateLimit.allowed_times.put(a, t, x)), Nat.add(bt, R.RateLimit.in_window(iv, now, x)), wd.put_w(a, iv, now, t, x)), Equal.trans(Nat, Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.sym(Nat, Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), wd.add_assoc(rs, bt, R.RateLimit.in_window(iv, now, x))), Equal.trans(Nat, Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), Nat.add(r1, R.RateLimit.in_window(iv, now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(Nat, Nat, v => Nat.add(v, R.RateLimit.in_window(iv, now, x)), Nat.add(rs, bt), r1, Equal.sym(Nat, r1, Nat.add(rs, bt), wd.st(s, t, now, hsl, ha, ht))), Equal.trans(Nat, Nat.add(r1, R.RateLimit.in_window(iv, now, x)), Nat.add(r1, R.RateLimit.in_window(R.RateLimit.interval(s1), now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(W.W64, Nat, v => Nat.add(r1, R.RateLimit.in_window(v, now, x)), iv, R.RateLimit.interval(s1), Equal.sym(W.W64, R.RateLimit.interval(s1), iv, wd.int(s, t))), wd.run(rest, s1, now, hsl1, hs1, ha1)))))
+      Equal.trans(Nat, Nat.add(rs, R.RateLimit.in_window(iv, now, R.RateLimit.allowed_times.put(a, t, x))), Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(Nat, Nat, v => Nat.add(rs, v), R.RateLimit.in_window(iv, now, R.RateLimit.allowed_times.put(a, t, x)), Nat.add(bt, R.RateLimit.in_window(iv, now, x)), wd.put_w(a, iv, now, t, x)), Equal.trans(Nat, Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.sym(Nat, Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), Nat.add(rs, Nat.add(bt, R.RateLimit.in_window(iv, now, x))), UL.nat_add_assoc(rs, bt, R.RateLimit.in_window(iv, now, x))), Equal.trans(Nat, Nat.add(Nat.add(rs, bt), R.RateLimit.in_window(iv, now, x)), Nat.add(r1, R.RateLimit.in_window(iv, now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(Nat, Nat, v => Nat.add(v, R.RateLimit.in_window(iv, now, x)), Nat.add(rs, bt), r1, Equal.sym(Nat, r1, Nat.add(rs, bt), wd.st(s, t, now, hsl, ha, ht))), Equal.trans(Nat, Nat.add(r1, R.RateLimit.in_window(iv, now, x)), Nat.add(r1, R.RateLimit.in_window(R.RateLimit.interval(s1), now, x)), R.RateLimit.recent(R.RateLimitRun.state(R.RateLimit.run.go(rest, s1)), now), Equal.cong(W.W64, Nat, v => Nat.add(r1, R.RateLimit.in_window(v, now, x)), iv, R.RateLimit.interval(s1), Equal.sym(W.W64, R.RateLimit.interval(s1), iv, wd.int(s, t))), wd.run(rest, s1, now, hsl1, hs1, ha1)))))
 
 def Laws.ratelimit_run_window(i, b, ts, now, h):
   +s0 = R.RateLimit.new(i, b)
   +fin = R.RateLimitRun.state(R.RateLimit.run.go(ts, s0))
   +e = wd.run(ts, s0, now, {==}, h, {==})
   %Equal.sym(Nat, R.RateLimit.in_window(i, now, R.RateLimit.allowed_times(ts, R.RateLimitRun.allowed(R.RateLimit.run.go(ts, s0)))), R.RateLimit.recent(fin, now), e) : {Nat.is_le(_, U32.to_nat(b)) == True{} : Bool}
-  nat.le_trans(R.RateLimit.recent(fin, now), R.RateLimit.held(fin), U32.to_nat(b), Laws.ratelimit_recent_le_held(fin, now), wd.le_rw2(R.RateLimit.held(fin), R.RateLimit.burst(fin), U32.to_nat(b), wd.run_burst(ts, s0), Laws.ratelimit_run_bound(s0, ts, nat.le_zero(U32.to_nat(b)))))
+  UO.nat_le_trans(R.RateLimit.recent(fin, now), R.RateLimit.held(fin), U32.to_nat(b), Laws.ratelimit_recent_le_held(fin, now), wd.le_rw2(R.RateLimit.held(fin), R.RateLimit.burst(fin), U32.to_nat(b), wd.run_burst(ts, s0), Laws.ratelimit_run_bound(s0, ts, nat.le_zero(U32.to_nat(b)))))
 
 def Laws.ratelimit_window_wit():
   {==}

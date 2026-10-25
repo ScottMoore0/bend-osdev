@@ -272,6 +272,11 @@ overflowed the JavaScript lane's stack ("memory fault (machine stack
 overflow?)"), and natively took 1.9 s, the instruction checks counting the
 rest of the program at every instruction.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37, `VERDICT=1 scripts/check.sh bpf` with native builds:

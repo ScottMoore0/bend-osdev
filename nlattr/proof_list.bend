@@ -6,6 +6,10 @@ import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./proof_nat.bend as NN
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 def nq.app_len(xs: List<&2, U32>, +ys: List<&2, U32>) -> {List.length(&2, U32, List.append(&2, U32, xs, ys)) == Nat.add(List.length(&2, U32, xs), List.length(&2, U32, ys)) : Nat}:
   match xs:
@@ -117,6 +121,6 @@ def nq.drop_le(xs: List<&2, U32>, k: Nat) -> {Nat.is_le(List.length(&2, U32, Lis
     case Nil{} _:
       {==}
     case Con{b, +t} 0n:
-      NN.nn.le_refl(1n+List.length(&2, U32, t))
+      UL.nat_le_refl(1n+List.length(&2, U32, t))
     case Con{b, +t} 1n+ +j:
-      NN.nn.le_trans(List.length(&2, U32, List.drop(&2, U32, t, j)), List.length(&2, U32, t), 1n+List.length(&2, U32, t), nq.drop_le(t, j), NN.nn.le_succ(List.length(&2, U32, t)))
+      UO.nat_le_trans(List.length(&2, U32, List.drop(&2, U32, t, j)), List.length(&2, U32, t), 1n+List.length(&2, U32, t), nq.drop_le(t, j), NN.nn.le_succ(List.length(&2, U32, t)))

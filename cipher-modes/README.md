@@ -409,6 +409,9 @@ InvMixColumns in `aes.bend`, and its field laws in the proof) and
 `bend-collections@1.0.0.0`, for AES encryption, as the task names it; only
 `aes.bend` (and the proof) imports it.
 
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 2 minutes, 1.6 GB),

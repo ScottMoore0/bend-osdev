@@ -29,6 +29,8 @@ import ./LAWS.bend as BL
 import ./PROOF.bend as BP
 import ./proof_pat15.bend as Pt
 import ./LAWS_errors.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions, lengths, and Done's argument
 
@@ -101,17 +103,6 @@ def bche.bxn(+a: Bool, +b: Bool) -> {Bool.not(Bool.xor(a, b)) == Bool.xor(a, Boo
     case False{} False{}:
       {==}
 
-def bche.bx_comm(+a: Bool, +b: Bool) -> {Bool.xor(a, b) == Bool.xor(b, a) : Bool}:
-  match a b:
-    case True{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case False{} False{}:
-      {==}
-
 def bche.bx_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, b), c) == Bool.xor(a, Bool.xor(b, c)) : Bool}:
   match a b c:
     case True{} True{} True{}:
@@ -145,19 +136,6 @@ def bche.bxor(+p: Bool, +q: Bool) -> {S.bch.b(Bool.xor(p, q)) == M.Gfm.add(M.Gfm
 
 # Words
 
-def bche.wx_comm(n: Nat, a: Word(n), b: Word(n)) -> {Word.xor(n, a, b) == Word.xor(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{ah, at} WCon{bh, bt}:
-          %bche.bx_comm(bh, ah) : {WCon{_, Word.xor(p, at, bt)} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          %bche.wx_comm(p, bt, at) : {WCon{Bool.xor(bh, ah), _} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          {==}
-
 def bche.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Word.xor(n, a, b), c) == Word.xor(n, a, Word.xor(n, b, c)) : Word(n)}:
   match n:
     case 0n:
@@ -171,12 +149,6 @@ def bche.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Wo
           %bche.wx_assoc(p, at, bt, ct) : {WCon{Bool.xor(Bool.xor(ah, bh), ch), Word.xor(p, Word.xor(p, at, bt), ct)} == WCon{Bool.xor(Bool.xor(ah, bh), ch), _} : Word(1n+p)}
           {==}
 
-def bche.ux_comm(a: U32, b: U32) -> {U32.xor(a, b) == U32.xor(b, a) : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      %bche.wx_comm(32n, y, x) : {U32{_} == U32{Word.xor(32n, y, x)} : U32}
-      {==}
-
 def bche.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xor(a, U32.xor(b, c)) : U32}:
   match a b c:
     case U32{x} U32{y} U32{z}:
@@ -186,7 +158,7 @@ def bche.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.x
 # GF(16) addition: a commutative, associative operation
 
 def bche.add_comm(+a: U32, +b: U32) -> {M.Gfm.add(M.Gfm.gf16(), a, b) == M.Gfm.add(M.Gfm.gf16(), b, a) : U32}:
-  %bche.ux_comm(b, a) : {M.Gfm.elt(M.Gfm.gf16(), _) == M.Gfm.elt(M.Gfm.gf16(), U32.xor(b, a)) : U32}
+  %UL.u32_xor_comm(b, a) : {M.Gfm.elt(M.Gfm.gf16(), _) == M.Gfm.elt(M.Gfm.gf16(), U32.xor(b, a)) : U32}
   {==}
 
 def bche.add_assoc(+a: U32, +b: U32, +c: U32) -> {M.Gfm.add(M.Gfm.gf16(), M.Gfm.add(M.Gfm.gf16(), a, b), c) == M.Gfm.add(M.Gfm.gf16(), a, M.Gfm.add(M.Gfm.gf16(), b, c)) : U32}:

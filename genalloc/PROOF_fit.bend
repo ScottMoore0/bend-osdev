@@ -5,6 +5,10 @@ import ./fit.bend as F
 import ./proof_nat.bend as N
 import ./proof_bits.bend as PB
 import ./LAWS_fit.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Maybe
 
@@ -131,14 +135,14 @@ def pf.scan_none(rest: List<&2, Bool>, ok: Bool, +full: List<&2, Bool>, +n: Nat,
           %N.nl.eq(s, j, hc) : {F.genpool.fit.cand(full, _, n, off, g, a) == False{} : Bool}
           hok
         case False{}:
-          Empty.absurd({F.genpool.fit.cand(full, j, n, off, g, a) == False{} : Bool}, N.nl.ft(Equal.trans(Bool, False{}, Nat.is_le(1n+s, s), True{}, Equal.sym(Bool, Nat.is_le(1n+s, s), False{}, pf.nle_succ(s)), N.nl.le_trans(1n+s, j, s, pf.le_ne(s, j, l, hc), Equal.trans(Bool, Nat.is_le(j, s), Nat.is_le(j, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(j, x), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, N.nl.add_zero(s))), m)))))
+          Empty.absurd({F.genpool.fit.cand(full, j, n, off, g, a) == False{} : Bool}, N.nl.ft(Equal.trans(Bool, False{}, Nat.is_le(1n+s, s), True{}, Equal.sym(Bool, Nat.is_le(1n+s, s), False{}, pf.nle_succ(s)), UO.nat_le_trans(1n+s, j, s, pf.le_ne(s, j, l, hc), Equal.trans(Bool, Nat.is_le(j, s), Nat.is_le(j, Nat.add(s, 0n)), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(j, x), s, Nat.add(s, 0n), Equal.sym(Nat, Nat.add(s, 0n), s, UL.nat_add_zero(s))), m)))))
     case Con{b, +t} False{}:
       match c:
         case True{}:
           %N.nl.eq(s, j, hc) : {F.genpool.fit.cand(full, _, n, off, g, a) == False{} : Bool}
           hok
         case False{}:
-          pf.scan_none(t, F.genpool.fit.cand(full, 1n+s, n, off, g, a), full, n, 1n+s, off, g, a, j, Nat.is_eq(1n+s, j), {==}, {==}, e, pf.le_ne(s, j, l, hc), Equal.trans(Bool, Nat.is_le(j, 1n+Nat.add(s, List.length(&2, Bool, t))), Nat.is_le(j, Nat.add(s, 1n+List.length(&2, Bool, t))), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(j, x), 1n+Nat.add(s, List.length(&2, Bool, t)), Nat.add(s, 1n+List.length(&2, Bool, t)), Equal.sym(Nat, Nat.add(s, 1n+List.length(&2, Bool, t)), 1n+Nat.add(s, List.length(&2, Bool, t)), N.nl.add_succ(s, List.length(&2, Bool, t)))), m))
+          pf.scan_none(t, F.genpool.fit.cand(full, 1n+s, n, off, g, a), full, n, 1n+s, off, g, a, j, Nat.is_eq(1n+s, j), {==}, {==}, e, pf.le_ne(s, j, l, hc), Equal.trans(Bool, Nat.is_le(j, 1n+Nat.add(s, List.length(&2, Bool, t))), Nat.is_le(j, Nat.add(s, 1n+List.length(&2, Bool, t))), True{}, Equal.cong(Nat, Bool, x => Nat.is_le(j, x), 1n+Nat.add(s, List.length(&2, Bool, t)), Nat.add(s, 1n+List.length(&2, Bool, t)), Equal.sym(Nat, Nat.add(s, 1n+List.length(&2, Bool, t)), 1n+Nat.add(s, List.length(&2, Bool, t)), UL.nat_add_succ(s, List.length(&2, Bool, t)))), m))
 
 # First fit
 
@@ -320,18 +324,11 @@ def bf.lt_succ(x: Nat) -> {Nat.is_lt(x, 1n+x) == True{} : Bool}:
     case 1n+p:
       bf.lt_succ(p)
 
-def bf.le_add_l(j: Nat, +n: Nat) -> {Nat.is_le(n, Nat.add(j, n)) == True{} : Bool}:
-  match j:
-    case 0n:
-      N.nl.le_refl(n)
-    case 1n+ +p:
-      N.nl.le_trans(n, Nat.add(p, n), 1n+Nat.add(p, n), bf.le_add_l(p, n), N.nl.le_succ(Nat.add(p, n)))
-
 # st <= j and j + n <= st + ln: n <= ln
 def bf.cancel(st: Nat, j: Nat, +n: Nat, +ln: Nat, h1: {Nat.is_le(st, j) == True{} : Bool}, h2: {Nat.is_le(Nat.add(j, n), Nat.add(st, ln)) == True{} : Bool}) -> {Nat.is_le(n, ln) == True{} : Bool}:
   match st j:
     case 0n +jj:
-      N.nl.le_trans(n, Nat.add(jj, n), ln, bf.le_add_l(jj, n), h2)
+      UO.nat_le_trans(n, Nat.add(jj, n), ln, UL.nat_le_add(n, jj), h2)
     case 1n+sp 0n:
       Empty.absurd({Nat.is_le(n, ln) == True{} : Bool}, N.nl.ft(h1))
     case 1n+sp 1n+jp:
@@ -509,7 +506,7 @@ def bf.u.go(q: Bool, +bits: List<&2, Bool>, +s: Nat, +a: Nat, +b: Nat, +hq: {Nat
     case True{}:
       hq
     case False{}:
-      Empty.absurd({Nat.is_le(a, b) == True{} : Bool}, N.nl.ft(Equal.trans(Bool, False{}, Laws.bf.right(bits, Nat.add(s, b)), True{}, Equal.sym(Bool, Laws.bf.right(bits, Nat.add(s, b)), False{}, bf.right_f(bits, Nat.add(s, b), bf.lt_nle(Nat.add(s, b), List.length(&2, Bool, bits), N.nl.lt_le_trans(Nat.add(s, b), Nat.add(s, a), List.length(&2, Bool, bits), N.nl.lt_add_l(s, b, a, bf.nle_lt(a, b, hq)), PB.pb.rf_len(bits, s, a, hpos, ha))), PB.pb.rf_get(bits, s, a, Nat.add(s, b), ha, N.nl.le_add(s, b), N.nl.lt_add_l(s, b, a, bf.nle_lt(a, b, hq))))), hr)))
+      Empty.absurd({Nat.is_le(a, b) == True{} : Bool}, N.nl.ft(Equal.trans(Bool, False{}, Laws.bf.right(bits, Nat.add(s, b)), True{}, Equal.sym(Bool, Laws.bf.right(bits, Nat.add(s, b)), False{}, bf.right_f(bits, Nat.add(s, b), bf.lt_nle(Nat.add(s, b), List.length(&2, Bool, bits), UO.nat_lt_le_trans(Nat.add(s, b), Nat.add(s, a), List.length(&2, Bool, bits), N.nl.lt_add_l(s, b, a, bf.nle_lt(a, b, hq)), PB.pb.rf_len(bits, s, a, hpos, ha))), PB.pb.rf_get(bits, s, a, Nat.add(s, b), ha, UO.nat_le_add_r(s, b), N.nl.lt_add_l(s, b, a, bf.nle_lt(a, b, hq))))), hr)))
 
 # a run of a free granules from s ends no sooner than any end of it
 def bf.u(+bits: List<&2, Bool>, +s: Nat, +a: Nat, +b: Nat, +ha: {Bits.genpool.bits.run_free(bits, s, a) == True{} : Bool}, +hpos: {Nat.is_lt(0n, a) == True{} : Bool}, hr: {Laws.bf.right(bits, Nat.add(s, b)) == True{} : Bool}) -> {Nat.is_le(a, b) == True{} : Bool}:
@@ -619,10 +616,10 @@ def bf.q_false(+bits: List<&2, Bool>, +st: Nat, +ln: Nat, +t: List<&2, Bool>, +q
   Equal.trans(List<&2, Bool>, List.drop(&2, Bool, bits, st), List.append(&2, Bool, List.replicate(Bool, ln, False{}), Con{False{}, t}), List.append(&2, Bool, List.replicate(Bool, 1n+ln, False{}), t), q, bf.app_rep_cons(ln, t))
 
 def bf.hi_succ(+i: Nat, +st: Nat, +ln: Nat, +hi: {i == Nat.add(st, ln) : Nat}) -> {1n+i == Nat.add(st, 1n+ln) : Nat}:
-  Equal.trans(Nat, 1n+i, 1n+Nat.add(st, ln), Nat.add(st, 1n+ln), Equal.cong(Nat, Nat, z => 1n+z, i, Nat.add(st, ln), hi), Equal.sym(Nat, Nat.add(st, 1n+ln), 1n+Nat.add(st, ln), N.nl.add_succ(st, ln)))
+  Equal.trans(Nat, 1n+i, 1n+Nat.add(st, ln), Nat.add(st, 1n+ln), Equal.cong(Nat, Nat, z => 1n+z, i, Nat.add(st, ln), hi), Equal.sym(Nat, Nat.add(st, 1n+ln), 1n+Nat.add(st, ln), UL.nat_add_succ(st, ln)))
 
 def bf.hi_zero(+i: Nat) -> {1n+i == Nat.add(1n+i, 0n) : Nat}:
-  Equal.sym(Nat, Nat.add(1n+i, 0n), 1n+i, N.nl.add_zero(1n+i))
+  Equal.sym(Nat, Nat.add(1n+i, 0n), 1n+i, UL.nat_add_zero(1n+i))
 
 def bf.rf_q(+bits: List<&2, Bool>, +st: Nat, +ln: Nat, +rest: List<&2, Bool>, +q: {List.drop(&2, Bool, bits, st) == List.append(&2, Bool, List.replicate(Bool, ln, False{}), rest) : List<&2, Bool>}) -> {Bits.genpool.bits.run_free(bits, st, ln) == True{} : Bool}:
   Equal.trans(Bool, Bits.genpool.bits.free_prefix(List.drop(&2, Bool, bits, st), ln), Bits.genpool.bits.free_prefix(List.append(&2, Bool, List.replicate(Bool, ln, False{}), rest), ln), True{}, Equal.cong(List<&2, Bool>, Bool, z => Bits.genpool.bits.free_prefix(z, ln), List.drop(&2, Bool, bits, st), List.append(&2, Bool, List.replicate(Bool, ln, False{}), rest), q), bf.fp_rep(ln, rest))
@@ -659,7 +656,7 @@ def bf.sound(+bits: List<&2, Bool>, rest: List<&2, Bool>, +i: Nat, +st: Nat, +ln
               N.nl.and_i(Laws.bf.maximal(bits, st, 1n+k), bf.allmax(bits, F.genpool.fit.runs.go(t, 1n+i, 1n+i, 0n)), bf.max_of(bits, st, k, Con{True{}, t}, q, hl, bf.end_used(bits, st, 1n+k, t, i, q, hi)), bf.sound(bits, t, 1n+i, 1n+i, 0n, bf.drop_succ(bits, i, True{}, t, bf.da(bits, st, 1n+k, Con{True{}, t}, i, q, hi)), bf.hi_zero(i), bf.drop_get(bits, i, True{}, t, bf.da(bits, st, 1n+k, Con{True{}, t}, i, q, hi))))
 
 def bf.st_i(+i: Nat, +st: Nat, +ln: Nat, +hi: {i == Nat.add(st, ln) : Nat}) -> {Nat.is_le(st, i) == True{} : Bool}:
-  Equal.trans(Bool, Nat.is_le(st, i), Nat.is_le(st, Nat.add(st, ln)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(st, z), i, Nat.add(st, ln), hi), N.nl.le_add(st, ln))
+  Equal.trans(Bool, Nat.is_le(st, i), Nat.is_le(st, Nat.add(st, ln)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(st, z), i, Nat.add(st, ln), hi), UO.nat_le_add_r(st, ln))
 
 # the scan lists its runs in order of start, from st on
 def bf.sorted(rest: List<&2, Bool>, +i: Nat, +st: Nat, +ln: Nat, +lb: Nat, +hi: {i == Nat.add(st, ln) : Nat}, +hlb: {Nat.is_le(lb, st) == True{} : Bool}) -> {bf.srt(F.genpool.fit.runs.go(rest, i, st, ln), lb) == True{} : Bool}:
@@ -677,7 +674,7 @@ def bf.sorted(rest: List<&2, Bool>, +i: Nat, +st: Nat, +ln: Nat, +lb: Nat, +hi: 
         case True{}:
           match ln:
             case 0n:
-              bf.sorted(t, 1n+i, 1n+i, 0n, lb, bf.hi_zero(i), N.nl.le_trans(lb, st, 1n+i, hlb, N.nl.le_trans(st, i, 1n+i, bf.st_i(i, st, 0n, hi), N.nl.le_succ(i))))
+              bf.sorted(t, 1n+i, 1n+i, 0n, lb, bf.hi_zero(i), UO.nat_le_trans(lb, st, 1n+i, hlb, UO.nat_le_trans(st, i, 1n+i, bf.st_i(i, st, 0n, hi), N.nl.le_succ(i))))
             case 1n+ +k:
               N.nl.and_i(Nat.is_le(lb, st), bf.srt(F.genpool.fit.runs.go(t, 1n+i, 1n+i, 0n), 1n+st), hlb, bf.sorted(t, 1n+i, 1n+i, 0n, 1n+st, bf.hi_zero(i), bf.st_i(i, st, 1n+k, hi)))
 
@@ -729,7 +726,7 @@ def bf.inside(+bits: List<&2, Bool>, +st: Nat, +ln: Nat, +rest: List<&2, Bool>, 
 def bf.cpl_b(+bits: List<&2, Bool>, rest: List<&2, Bool>, +i: Nat, +st: Nat, +ln: Nat, +s: Nat, +l: Nat, +q: {List.drop(&2, Bool, bits, st) == List.append(&2, Bool, List.replicate(Bool, ln, False{}), rest) : List<&2, Bool>}, +hi: {i == Nat.add(st, ln) : Nat}, +hm: {Laws.bf.maximal(bits, s, l) == True{} : Bool}, +hs: {Nat.is_lt(st, s) == True{} : Bool}, q1: Bool, +hq1: {Nat.is_lt(i, s) == q1 : Bool}, q2: Bool, +hq2: {Nat.is_eq(s, 1n+i) == q2 : Bool}) -> {bf.memr(F.genpool.fit.runs.go(rest, i, st, ln), s, l) == True{} : Bool}:
   match rest:
     case Nil{}:
-      Empty.absurd({bf.memr(F.genpool.fit.runs.go(Nil{}, i, st, ln), s, l) == True{} : Bool}, bf.inside(bits, st, ln, Nil{}, i, s, q, hi, hs, N.nl.lt_le(s, i, N.nl.lt_le_trans(s, Nat.add(s, l), i, N.nl.lt_add(s, l, bf.mx_pos(bits, s, l, hm)), N.nl.le_trans(Nat.add(s, l), List.length(&2, Bool, bits), i, PB.pb.rf_len(bits, s, l, bf.mx_pos(bits, s, l, hm), bf.mx_rf(bits, s, l, hm)), bf.drop_nil(bits, i, bf.da(bits, st, ln, Nil{}, i, q, hi))))), bf.mx_left(bits, s, l, hm)))
+      Empty.absurd({bf.memr(F.genpool.fit.runs.go(Nil{}, i, st, ln), s, l) == True{} : Bool}, bf.inside(bits, st, ln, Nil{}, i, s, q, hi, hs, N.nl.lt_le(s, i, UO.nat_lt_le_trans(s, Nat.add(s, l), i, N.nl.lt_add(s, l, bf.mx_pos(bits, s, l, hm)), UO.nat_le_trans(Nat.add(s, l), List.length(&2, Bool, bits), i, PB.pb.rf_len(bits, s, l, bf.mx_pos(bits, s, l, hm), bf.mx_rf(bits, s, l, hm)), bf.drop_nil(bits, i, bf.da(bits, st, ln, Nil{}, i, q, hi))))), bf.mx_left(bits, s, l, hm)))
     case Con{b, +t}:
       match b:
         case False{}:
@@ -765,7 +762,7 @@ def bf.afit_hit(c: Bool, +bits: List<&2, Bool>, +st: Nat, +ln: Nat, +t: List<&2,
 def bf.afit(+bits: List<&2, Bool>, rest: List<&2, Bool>, +i: Nat, +st: Nat, +ln: Nat, +n: Nat, +j: Nat, +q: {List.drop(&2, Bool, bits, st) == List.append(&2, Bool, List.replicate(Bool, ln, False{}), rest) : List<&2, Bool>}, +hi: {i == Nat.add(st, ln) : Nat}, +hj: {Nat.is_le(st, j) == True{} : Bool}, +hr: {Bits.genpool.bits.run_free(bits, j, n) == True{} : Bool}, +hn: {Nat.is_lt(0n, n) == True{} : Bool}, c: Bool, +hc: {Nat.is_le(j, i) == c : Bool}) -> {bf.anyfit(F.genpool.fit.runs.go(rest, i, st, ln), n) == True{} : Bool}:
   match rest:
     case Nil{}:
-      bf.afit_len(st, ln, Nil{}, n, hn, bf.cancel(st, j, n, ln, hj, N.nl.le_trans(Nat.add(j, n), List.length(&2, Bool, bits), Nat.add(st, ln), PB.pb.rf_len(bits, j, n, hn, hr), Equal.trans(Bool, Nat.is_le(List.length(&2, Bool, bits), Nat.add(st, ln)), Nat.is_le(List.length(&2, Bool, bits), i), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(List.length(&2, Bool, bits), z), Nat.add(st, ln), i, Equal.sym(Nat, i, Nat.add(st, ln), hi)), bf.drop_nil(bits, i, bf.da(bits, st, ln, Nil{}, i, q, hi))))))
+      bf.afit_len(st, ln, Nil{}, n, hn, bf.cancel(st, j, n, ln, hj, UO.nat_le_trans(Nat.add(j, n), List.length(&2, Bool, bits), Nat.add(st, ln), PB.pb.rf_len(bits, j, n, hn, hr), Equal.trans(Bool, Nat.is_le(List.length(&2, Bool, bits), Nat.add(st, ln)), Nat.is_le(List.length(&2, Bool, bits), i), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(List.length(&2, Bool, bits), z), Nat.add(st, ln), i, Equal.sym(Nat, i, Nat.add(st, ln), hi)), bf.drop_nil(bits, i, bf.da(bits, st, ln, Nil{}, i, q, hi))))))
     case Con{b, +t}:
       match b:
         case False{}:
@@ -802,7 +799,7 @@ def bf.imp_lt.go(c: Bool, +rb: F.GpRun, +r: F.GpRun, +a: F.GpRun, +hc: {Bool.and
       %Equal.sym(Nat, F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.and_r(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), hc))) : {Nat.is_lt(_, F.genpool.fit.run_len(a)) == True{} : Bool}
       hlt
     case False{}:
-      N.nl.lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), F.genpool.fit.run_len(a), Equal.trans(Bool, Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.imp(rb, r), True{}, Equal.cong(Bool, Bool, z => Bool.or(z, Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), False{}, Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), Equal.sym(Bool, Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), False{}, hc)), h), N.nl.lt_le(F.genpool.fit.run_len(r), F.genpool.fit.run_len(a), hlt))
+      UO.nat_lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), F.genpool.fit.run_len(a), Equal.trans(Bool, Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.imp(rb, r), True{}, Equal.cong(Bool, Bool, z => Bool.or(z, Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), False{}, Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), Equal.sym(Bool, Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))), False{}, hc)), h), N.nl.lt_le(F.genpool.fit.run_len(r), F.genpool.fit.run_len(a), hlt))
 
 def bf.resimp_lt(res: Maybe<&2, F.GpRun>, +r: F.GpRun, +a: F.GpRun, h: {bf.resimp(res, r) == True{} : Bool}, +hlt: {Nat.is_lt(F.genpool.fit.run_len(r), F.genpool.fit.run_len(a)) == True{} : Bool}) -> {bf.resimp(res, a) == True{} : Bool}:
   match res:
@@ -893,7 +890,7 @@ def bf.imp_r(+rb: F.GpRun, +r: F.GpRun, +hc: {Bool.and(Nat.is_eq(F.genpool.fit.r
 def bf.g_self.go(c: Bool, +n: Nat, +rb: F.GpRun, +r: F.GpRun, +hc: {Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r))) == c : Bool}, +h: {bf.imp(rb, r) == True{} : Bool}) -> {bf.good(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r)) == True{} : Bool}:
   match c:
     case True{}:
-      bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), Equal.trans(Bool, Nat.is_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), Nat.is_le(F.genpool.fit.run_len(r), F.genpool.fit.run_len(r)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, F.genpool.fit.run_len(r)), F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.and_r(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), hc))), N.nl.le_refl(F.genpool.fit.run_len(r))), bf.or_l(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.not_ft(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Equal.trans(Bool, Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(r)), False{}, Equal.cong(Nat, Bool, z => Nat.is_lt(F.genpool.fit.run_start(r), z), F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r), N.nl.eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r), N.nl.and_l(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), hc))), bf.lt_irr(F.genpool.fit.run_start(r))))))
+      bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), Equal.trans(Bool, Nat.is_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), Nat.is_le(F.genpool.fit.run_len(r), F.genpool.fit.run_len(r)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, F.genpool.fit.run_len(r)), F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.and_r(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), hc))), UL.nat_le_refl(F.genpool.fit.run_len(r))), bf.or_l(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.not_ft(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Equal.trans(Bool, Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(r)), False{}, Equal.cong(Nat, Bool, z => Nat.is_lt(F.genpool.fit.run_start(r), z), F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r), N.nl.eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r), N.nl.and_l(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(r)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), hc))), bf.lt_irr(F.genpool.fit.run_start(r))))))
     case False{}:
       bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), N.nl.lt_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), bf.imp_r(rb, r, hc, h)), bf.or_r(Bool.not(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb))), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.imp_r(rb, r, hc, h)))
 
@@ -910,7 +907,7 @@ def bf.g_kept.go(c: Bool, +n: Nat, +rb: F.GpRun, +a: F.GpRun, +r: F.GpRun, +hc: 
     case True{}:
       bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), Equal.trans(Bool, Nat.is_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), Nat.is_le(F.genpool.fit.run_len(a), F.genpool.fit.run_len(r)), True{}, Equal.cong(Nat, Bool, z => Nat.is_le(z, F.genpool.fit.run_len(r)), F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), N.nl.eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), N.nl.and_r(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(a)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a)), hc))), hle), bf.or_l(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), bf.not_ft(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Equal.trans(Bool, Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb)), Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(a)), False{}, Equal.cong(Nat, Bool, z => Nat.is_lt(F.genpool.fit.run_start(r), z), F.genpool.fit.run_start(rb), F.genpool.fit.run_start(a), N.nl.eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(a), N.nl.and_l(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(a)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a)), hc))), N.nl.le_nlt(F.genpool.fit.run_start(a), F.genpool.fit.run_start(r), N.nl.lt_le(F.genpool.fit.run_start(a), F.genpool.fit.run_start(r), hst))))))
     case False{}:
-      bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), N.nl.lt_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), N.nl.lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), F.genpool.fit.run_len(r), bf.imp_r(rb, a, hc, h), hle)), bf.or_r(Bool.not(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb))), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), N.nl.lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), F.genpool.fit.run_len(r), bf.imp_r(rb, a, hc, h), hle)))
+      bf.good_and(n, rb, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r), N.nl.lt_le(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r), UO.nat_lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), F.genpool.fit.run_len(r), bf.imp_r(rb, a, hc, h), hle)), bf.or_r(Bool.not(Nat.is_lt(F.genpool.fit.run_start(r), F.genpool.fit.run_start(rb))), Nat.is_lt(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(r)), UO.nat_lt_le_trans(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a), F.genpool.fit.run_len(r), bf.imp_r(rb, a, hc, h), hle)))
 
 def bf.rg_kept(res: Maybe<&2, F.GpRun>, +n: Nat, +a: F.GpRun, +r: F.GpRun, h: {bf.resimp(res, a) == True{} : Bool}, +hle: {Nat.is_le(F.genpool.fit.run_len(a), F.genpool.fit.run_len(r)) == True{} : Bool}, +hst: {Nat.is_lt(F.genpool.fit.run_start(a), F.genpool.fit.run_start(r)) == True{} : Bool}) -> {bf.resgood(n, res, F.genpool.fit.run_start(r), F.genpool.fit.run_len(r)) == True{} : Bool}:
   match res:
@@ -920,7 +917,7 @@ def bf.rg_kept(res: Maybe<&2, F.GpRun>, +n: Nat, +a: F.GpRun, +r: F.GpRun, h: {b
       bf.g_kept.go(Bool.and(Nat.is_eq(F.genpool.fit.run_start(rb), F.genpool.fit.run_start(a)), Nat.is_eq(F.genpool.fit.run_len(rb), F.genpool.fit.run_len(a))), n, rb, a, r, {==}, h, hle, hst)
 
 def bf.lt_s1(+a: Nat, +lb: Nat, +x: Nat, h1: {Nat.is_lt(a, lb) == True{} : Bool}, h2: {Nat.is_le(lb, x) == True{} : Bool}) -> {Nat.is_lt(a, 1n+x) == True{} : Bool}:
-  N.nl.lt_le_trans(a, lb, 1n+x, h1, N.nl.le_trans(lb, x, 1n+x, h2, N.nl.le_succ(x)))
+  UO.nat_lt_le_trans(a, lb, 1n+x, h1, UO.nat_le_trans(lb, x, 1n+x, h2, N.nl.le_succ(x)))
 
 def bf.pick_accb(c: Bool, +r: F.GpRun, +a: F.GpRun, +lb: Nat, +ha: {Nat.is_lt(F.genpool.fit.run_start(a), lb) == True{} : Bool}, +hlb: {Nat.is_le(lb, F.genpool.fit.run_start(r)) == True{} : Bool}) -> {bf.accb(Bool.pick(Maybe<&2, F.GpRun>, c, Some{r}, Some{a}), 1n+F.genpool.fit.run_start(r)) == True{} : Bool}:
   match c:
@@ -954,7 +951,7 @@ def bf.hit2(lt: Bool, +n: Nat, +r: F.GpRun, +t: List<&2, F.GpRun>, +s: Nat, +l: 
       bf.rg_imp(F.genpool.fit.best.go(t, n, Some{r}), n, r, bf.bg1s(t, n, r))
     case False{}:
       %Equal.sym(Bool, Nat.is_lt(F.genpool.fit.run_len(r), l), False{}, hlt) : {bf.resgood(n, F.genpool.fit.best.go(t, n, Bool.pick(Maybe<&2, F.GpRun>, _, Some{r}, Some{F.GpRun{s, l}})), F.genpool.fit.run_start(r), F.genpool.fit.run_len(r)) == True{} : Bool}
-      bf.rg_kept(F.genpool.fit.best.go(t, n, Some{F.GpRun{s, l}}), n, F.GpRun{s, l}, r, bf.bg1s(t, n, F.GpRun{s, l}), bf.nle(F.genpool.fit.run_len(r), l, hlt), N.nl.lt_le_trans(s, lb, F.genpool.fit.run_start(r), hacc, hlb))
+      bf.rg_kept(F.genpool.fit.best.go(t, n, Some{F.GpRun{s, l}}), n, F.GpRun{s, l}, r, bf.bg1s(t, n, F.GpRun{s, l}), bf.nle(F.genpool.fit.run_len(r), l, hlt), UO.nat_lt_le_trans(s, lb, F.genpool.fit.run_start(r), hacc, hlb))
 
 # the run r itself, as best.go meets it
 def bf.hit(fits: Bool, +n: Nat, +r: F.GpRun, +t: List<&2, F.GpRun>, acc: Maybe<&2, F.GpRun>, +lb: Nat, +hf: {Nat.is_le(n, F.genpool.fit.run_len(r)) == fits : Bool}, +hacc: {bf.accb(acc, lb) == True{} : Bool}, +hlb: {Nat.is_le(lb, F.genpool.fit.run_start(r)) == True{} : Bool}) -> {bf.resgood(n, F.genpool.fit.best.go(t, n, F.genpool.fit.better(Nat.is_le(n, F.genpool.fit.run_len(r)), r, acc)), F.genpool.fit.run_start(r), F.genpool.fit.run_len(r)) == True{} : Bool}:

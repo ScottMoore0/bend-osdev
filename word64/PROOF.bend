@@ -6,6 +6,8 @@ import ./word64.bend as W
 import ./proof_value.bend as P
 import ./proof_shift.bend as PS
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 def Laws.add_wraps():
   {==}
@@ -44,6 +46,12 @@ def Laws.hi_from_parts(h, l):
   {==}
 
 def Laws.lo_from_parts(h, l):
+  {==}
+
+def Laws.from_parts_zero_hi(a):
+  {==}
+
+def Laws.from_parts_zero():
   {==}
 
 def Laws.parts_of(v):
@@ -175,7 +183,7 @@ def Laws.sub_value(a, b, h):
   +av = W.W64.to_nat(a)
   +bv = W.W64.to_nat(b)
   +el = Equal.trans(Bool, W.W64.is_lt(a, b), Nat.is_lt(av, bv), False{}, Laws.lt_value(a, b), P.wn.le_not_lt(bv, av, h))
-  +e1 = Equal.trans(Nat, Nat.add(s, bv), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(False{}))), av, Equal.trans(Nat, Nat.add(s, bv), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(W.W64.is_lt(a, b)))), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(False{}))), Laws.sub_wrap(a, b), Equal.cong(Bool, Nat, x => Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(x))), W.W64.is_lt(a, b), False{}, el)), P.wn.add_zero(av))
+  +e1 = Equal.trans(Nat, Nat.add(s, bv), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(False{}))), av, Equal.trans(Nat, Nat.add(s, bv), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(W.W64.is_lt(a, b)))), Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(False{}))), Laws.sub_wrap(a, b), Equal.cong(Bool, Nat, x => Nat.add(av, U.U32Nat.dbl(64n, U.U32Nat.bit(x))), W.W64.is_lt(a, b), False{}, el)), UL.nat_add_zero(av))
   %e1 : {s == Nat.sub(_, bv) : Nat}
   Equal.sym(Nat, Nat.sub(Nat.add(s, bv), bv), s, P.wn.sub_add(s, bv))
 
@@ -222,7 +230,7 @@ def wq.shr_le.go(z: Bool, l32: Bool, l64: Bool, +k: Nat, +hw: Word(32n), +lw: Wo
   match z l32 l64:
     case True{} _ _:
       %Equal.sym(Nat, k, 0n, PS.ns.eq_zero(k, ez)) : {Nat.is_le(U.U32Nat.dbl(_, W.W64.to_nat(W.W64{U32{hw}, U32{lw}})), W.W64.to_nat(W.W64{U32{hw}, U32{lw}})) == True{} : Bool}
-      P.wn.le_refl(W.W64.to_nat(W.W64{U32{hw}, U32{lw}}))
+      UL.nat_le_refl(W.W64.to_nat(W.W64{U32{hw}, U32{lw}}))
     case False{} True{} _:
       %Equal.sym(U32, U32.shrn(U32{hw}, k), U32{PS.ws.shr(32n, k, hw)}, wq.shrn(hw, k)) : {Nat.is_le(U.U32Nat.dbl(k, W.W64.to_nat(W.W64{_, U32.or(U32.shrn(U32{lw}, k), U32.shln(U32{hw}, Nat.sub(32n, k)))})), W.W64.to_nat(W.W64{U32{hw}, U32{lw}})) == True{} : Bool}
       %Equal.sym(U32, U32.shrn(U32{lw}, k), U32{PS.ws.shr(32n, k, lw)}, wq.shrn(lw, k)) : {Nat.is_le(U.U32Nat.dbl(k, W.W64.to_nat(W.W64{U32{PS.ws.shr(32n, k, hw)}, U32.or(_, U32.shln(U32{hw}, Nat.sub(32n, k)))})), W.W64.to_nat(W.W64{U32{hw}, U32{lw}})) == True{} : Bool}
@@ -265,7 +273,7 @@ def wq.shlbig.go(z: Bool, l32: Bool, l64: Bool, +k: Nat, -a: W.W64, ez: {Nat.is_
     case True{} _ _:
       Empty.absurd({a == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 64n), False{}, Equal.sym(Bool, Nat.is_lt(k, 64n), Nat.is_lt(0n, 64n), Equal.cong(Nat, Bool, v => Nat.is_lt(v, 64n), k, 0n, PS.ns.eq_zero(k, ez))), P.wn.le_not_lt(64n, k, h))))
     case False{} True{} _:
-      Empty.absurd({W.W64.shl.pick(False{}, True{}, l64, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 32n), False{}, Equal.sym(Bool, Nat.is_lt(k, 32n), True{}, e32), P.wn.le_not_lt(32n, k, P.wn.le_trans(32n, 64n, k, {==}, h)))))
+      Empty.absurd({W.W64.shl.pick(False{}, True{}, l64, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 32n), False{}, Equal.sym(Bool, Nat.is_lt(k, 32n), True{}, e32), P.wn.le_not_lt(32n, k, UO.nat_le_trans(32n, 64n, k, {==}, h)))))
     case False{} False{} True{}:
       Empty.absurd({W.W64.shl.pick(False{}, False{}, True{}, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 64n), False{}, Equal.sym(Bool, Nat.is_lt(k, 64n), True{}, e64), P.wn.le_not_lt(64n, k, h))))
     case False{} False{} False{}:
@@ -279,7 +287,7 @@ def wq.shrbig.go(z: Bool, l32: Bool, l64: Bool, +k: Nat, -a: W.W64, ez: {Nat.is_
     case True{} _ _:
       Empty.absurd({a == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 64n), False{}, Equal.sym(Bool, Nat.is_lt(k, 64n), Nat.is_lt(0n, 64n), Equal.cong(Nat, Bool, v => Nat.is_lt(v, 64n), k, 0n, PS.ns.eq_zero(k, ez))), P.wn.le_not_lt(64n, k, h))))
     case False{} True{} _:
-      Empty.absurd({W.W64.shr.pick(False{}, True{}, l64, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 32n), False{}, Equal.sym(Bool, Nat.is_lt(k, 32n), True{}, e32), P.wn.le_not_lt(32n, k, P.wn.le_trans(32n, 64n, k, {==}, h)))))
+      Empty.absurd({W.W64.shr.pick(False{}, True{}, l64, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 32n), False{}, Equal.sym(Bool, Nat.is_lt(k, 32n), True{}, e32), P.wn.le_not_lt(32n, k, UO.nat_le_trans(32n, 64n, k, {==}, h)))))
     case False{} False{} True{}:
       Empty.absurd({W.W64.shr.pick(False{}, False{}, True{}, k, a) == W.W64.zero() : W.W64}, PS.ns.tf(Equal.trans(Bool, True{}, Nat.is_lt(k, 64n), False{}, Equal.sym(Bool, Nat.is_lt(k, 64n), True{}, e64), P.wn.le_not_lt(64n, k, h))))
     case False{} False{} False{}:

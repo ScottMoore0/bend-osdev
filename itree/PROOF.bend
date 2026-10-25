@@ -23,6 +23,8 @@ import Base
 import ./itree.bend as T
 import ./model.bend as M
 import ./LAWS.bend as Laws
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions
 
@@ -61,11 +63,6 @@ def absurd.is_gt(c: Cmp) -> Type:
       Unit
     case o:
       Empty
-
-# x == LT for x another constructor
-def absurd.eq_lt(e: {EQ{} == LT{} : Cmp}) -> Empty:
-  %e : absurd.is_eq(_)
-  Unit{}
 
 def absurd.gt_lt(e: {GT{} == LT{} : Cmp}) -> Empty:
   %e : absurd.is_gt(_)
@@ -189,65 +186,6 @@ def cmp.flip_flip(c: Cmp) -> {cmp.flip(cmp.flip(c)) == c : Cmp}:
 
 # Words: Base's order on Word(n), compared from the top bit down
 
-def word.fin_refl(x: Bool) -> {Word.cmp.fin(x, x, EQ{}) == EQ{} : Cmp}:
-  match x:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def word.refl(n: Nat, a: Word(n)) -> {Word.cmp(n, a, a) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+ +p:
-      match a:
-        case WCon{+x, +at}:
-          %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{}, word.refl(p, at)) : {Word.cmp.fin(x, x, _) == EQ{} : Cmp}
-          word.fin_refl(x)
-
-def word.fin_eq_tail(c: Cmp, -x: Bool, -y: Bool, e: {Word.cmp.fin(x, y, c) == EQ{} : Cmp}) -> {c == EQ{} : Cmp}:
-  match c:
-    case LT{}:
-      Empty.absurd({LT{} == EQ{} : Cmp}, absurd.lt_eq(e))
-    case EQ{}:
-      {==}
-    case GT{}:
-      Empty.absurd({GT{} == EQ{} : Cmp}, absurd.gt_eq(e))
-
-def word.bool_eq(x: Bool, y: Bool, e: {Bool.cmp(x, y) == EQ{} : Cmp}) -> {x == y : Bool}:
-  match x y:
-    case False{} False{}:
-      {==}
-    case False{} True{}:
-      Empty.absurd({False{} == True{} : Bool}, absurd.lt_eq(e))
-    case True{} False{}:
-      Empty.absurd({True{} == False{} : Bool}, absurd.gt_eq(e))
-    case True{} True{}:
-      {==}
-
-def word.fin_eq_head(c: Cmp, x: Bool, y: Bool, e: {Word.cmp.fin(x, y, c) == EQ{} : Cmp}) -> {x == y : Bool}:
-  match c:
-    case LT{}:
-      Empty.absurd({x == y : Bool}, absurd.lt_eq(e))
-    case EQ{}:
-      word.bool_eq(x, y, e)
-    case GT{}:
-      Empty.absurd({x == y : Bool}, absurd.gt_eq(e))
-
-def word.eq(n: Nat, a: Word(n), b: Word(n), +e: {Word.cmp(n, a, b) == EQ{} : Cmp}) -> {a == b : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+ +p:
-      match a b:
-        case WCon{+x, +at} WCon{+y, +bt}:
-          %word.eq(p, at, bt, word.fin_eq_tail(Word.cmp(p, at, bt), x, y, e)) : {WCon{x, at} == WCon{y, _} : Word(1n+p)}
-          %word.fin_eq_head(Word.cmp(p, at, bt), x, y, e) : {WCon{x, at} == WCon{_, at} : Word(1n+p)}
-          {==}
-
 def word.bool_flip(x: Bool, y: Bool) -> {Bool.cmp(y, x) == cmp.flip(Bool.cmp(x, y)) : Cmp}:
   match x y:
     case False{} False{}:
@@ -278,73 +216,12 @@ def word.flip(n: Nat, a: Word(n), b: Word(n)) -> {Word.cmp(n, b, a) == cmp.flip(
           %Equal.sym(Cmp, Word.cmp(p, bt, at), cmp.flip(Word.cmp(p, at, bt)), word.flip(p, at, bt)) : {Word.cmp.fin(y, x, _) == cmp.flip(Word.cmp.fin(x, y, Word.cmp(p, at, bt))) : Cmp}
           word.fin_flip(Word.cmp(p, at, bt), x, y)
 
-def word.bool_trans(x: Bool, y: Bool, z: Bool, h1: {Bool.cmp(x, y) == LT{} : Cmp}, h2: {Bool.cmp(y, z) == LT{} : Cmp}) -> {Bool.cmp(x, z) == LT{} : Cmp}:
-  match x y z:
-    case False{} False{} z:
-      Empty.absurd({Bool.cmp(False{}, z) == LT{} : Cmp}, absurd.eq_lt(h1))
-    case False{} True{} False{}:
-      Empty.absurd({EQ{} == LT{} : Cmp}, absurd.gt_lt(h2))
-    case False{} True{} True{}:
-      Empty.absurd({LT{} == LT{} : Cmp}, absurd.eq_lt(h2))
-    case True{} False{} z:
-      Empty.absurd({Bool.cmp(True{}, z) == LT{} : Cmp}, absurd.gt_lt(h1))
-    case True{} True{} z:
-      Empty.absurd({Bool.cmp(True{}, z) == LT{} : Cmp}, absurd.eq_lt(h1))
-
-# the transitivity step: the tails compare c1 and c2
-def word.fin_trans(c1: Cmp, c2: Cmp, +p: Nat, +x: Bool, +y: Bool, +z: Bool, +at: Word(p), +bt: Word(p), +ct: Word(p), e1: {Word.cmp(p, at, bt) == c1 : Cmp}, e2: {Word.cmp(p, bt, ct) == c2 : Cmp}, h1: {Word.cmp.fin(x, y, c1) == LT{} : Cmp}, h2: {Word.cmp.fin(y, z, c2) == LT{} : Cmp}, ih: {Word.cmp(p, at, bt) == LT{} : Cmp} -> {Word.cmp(p, bt, ct) == LT{} : Cmp} -> {Word.cmp(p, at, ct) == LT{} : Cmp}) -> {Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}:
-  match c1 c2:
-    case LT{} LT{}:
-      %Equal.sym(Cmp, Word.cmp(p, at, ct), LT{}, ih(e1, e2)) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case LT{} EQ{}:
-      %word.eq(p, bt, ct, e2) : {Word.cmp.fin(x, z, Word.cmp(p, at, _)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, at, bt), LT{}, e1) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case EQ{} LT{}:
-      %Equal.sym(Word(p), at, bt, word.eq(p, at, bt, e1)) : {Word.cmp.fin(x, z, Word.cmp(p, _, ct)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, bt, ct), LT{}, e2) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      {==}
-    case EQ{} EQ{}:
-      %Equal.trans(Word(p), at, bt, ct, word.eq(p, at, bt, e1), word.eq(p, bt, ct, e2)) : {Word.cmp.fin(x, z, Word.cmp(p, at, _)) == LT{} : Cmp}
-      %Equal.sym(Cmp, Word.cmp(p, at, at), EQ{}, word.refl(p, at)) : {Word.cmp.fin(x, z, _) == LT{} : Cmp}
-      word.bool_trans(x, y, z, h1, h2)
-    case GT{} c2:
-      Empty.absurd({Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}, absurd.gt_lt(h1))
-    case c1 GT{}:
-      Empty.absurd({Word.cmp.fin(x, z, Word.cmp(p, at, ct)) == LT{} : Cmp}, absurd.gt_lt(h2))
-
-def word.lt_trans(n: Nat, a: Word(n), b: Word(n), c: Word(n), h1: {Word.cmp(n, a, b) == LT{} : Cmp}, h2: {Word.cmp(n, b, c) == LT{} : Cmp}) -> {Word.cmp(n, a, c) == LT{} : Cmp}:
-  match n:
-    case 0n:
-      Empty.absurd({Word.cmp(0n, a, c) == LT{} : Cmp}, absurd.eq_lt(h1))
-    case 1n+ +p:
-      match a b c:
-        case WCon{+x, +at} WCon{+y, +bt} WCon{+z, +ct}:
-          word.fin_trans(Word.cmp(p, at, bt), Word.cmp(p, bt, ct), p, x, y, z, at, bt, ct, {==}, {==}, h1, h2, u => w => word.lt_trans(p, at, bt, ct, u, w))
-
 # U32
-
-def u32.refl(a: U32) -> {U32.cmp(a, a) == EQ{} : Cmp}:
-  match a:
-    case U32{+w}:
-      word.refl(32n, w)
-
-def u32.eq(a: U32, b: U32, e: {U32.cmp(a, b) == EQ{} : Cmp}) -> {a == b : U32}:
-  match a b:
-    case U32{+x} U32{+y}:
-      %word.eq(32n, x, y, e) : {U32{x} == U32{_} : U32}
-      {==}
 
 def u32.flip(a: U32, b: U32) -> {U32.cmp(b, a) == cmp.flip(U32.cmp(a, b)) : Cmp}:
   match a b:
     case U32{+x} U32{+y}:
       word.flip(32n, x, y)
-
-def u32.lt_trans(a: U32, b: U32, c: U32, h1: {U32.cmp(a, b) == LT{} : Cmp}, h2: {U32.cmp(b, c) == LT{} : Cmp}) -> {U32.cmp(a, c) == LT{} : Cmp}:
-  match a b c:
-    case U32{+x} U32{+y} U32{+z}:
-      word.lt_trans(32n, x, y, z, h1, h2)
 
 def u32.flip_of(+a: U32, +b: U32, c: Cmp, h: {U32.cmp(a, b) == c : Cmp}) -> {U32.cmp(b, a) == cmp.flip(c) : Cmp}:
   %h : {U32.cmp(b, a) == cmp.flip(_) : Cmp}
@@ -353,9 +230,9 @@ def u32.flip_of(+a: U32, +b: U32, c: Cmp, h: {U32.cmp(a, b) == c : Cmp}) -> {U32
 def u32.le_lt.go(c1: Cmp, +a: U32, +b: U32, +c: U32, e1: {U32.cmp(a, b) == c1 : Cmp}, h1: {Cmp.is_le(c1) == True{} : Bool}, h2: {U32.cmp(b, c) == LT{} : Cmp}) -> {U32.cmp(a, c) == LT{} : Cmp}:
   match c1:
     case LT{}:
-      u32.lt_trans(a, b, c, e1, h2)
+      UO.u32_cmp_lt_trans(a, b, c, e1, h2)
     case EQ{}:
-      %Equal.sym(U32, a, b, u32.eq(a, b, e1)) : {U32.cmp(_, c) == LT{} : Cmp}
+      %Equal.sym(U32, a, b, UO.u32_cmp_eq(a, b, e1)) : {U32.cmp(_, c) == LT{} : Cmp}
       h2
     case GT{}:
       Empty.absurd({U32.cmp(a, c) == LT{} : Cmp}, absurd.ft(h1))
@@ -367,9 +244,9 @@ def u32.le_lt(+a: U32, +b: U32, +c: U32, h1: {Cmp.is_le(U32.cmp(a, b)) == True{}
 def u32.lt_le.go(c2: Cmp, +a: U32, +b: U32, +c: U32, e2: {U32.cmp(b, c) == c2 : Cmp}, h1: {U32.cmp(a, b) == LT{} : Cmp}, h2: {Cmp.is_le(c2) == True{} : Bool}) -> {U32.cmp(a, c) == LT{} : Cmp}:
   match c2:
     case LT{}:
-      u32.lt_trans(a, b, c, h1, e2)
+      UO.u32_cmp_lt_trans(a, b, c, h1, e2)
     case EQ{}:
-      %u32.eq(b, c, e2) : {U32.cmp(a, _) == LT{} : Cmp}
+      %UO.u32_cmp_eq(b, c, e2) : {U32.cmp(a, _) == LT{} : Cmp}
       h1
     case GT{}:
       Empty.absurd({U32.cmp(a, c) == LT{} : Cmp}, absurd.ft(h2))
@@ -384,7 +261,7 @@ def u32.le_le.go(c1: Cmp, +a: U32, +b: U32, +c: U32, e1: {U32.cmp(a, b) == c1 : 
       %Equal.sym(Cmp, U32.cmp(a, c), LT{}, u32.lt_le(a, b, c, e1, h2)) : {Cmp.is_le(_) == True{} : Bool}
       {==}
     case EQ{}:
-      %Equal.sym(U32, a, b, u32.eq(a, b, e1)) : {Cmp.is_le(U32.cmp(_, c)) == True{} : Bool}
+      %Equal.sym(U32, a, b, UO.u32_cmp_eq(a, b, e1)) : {Cmp.is_le(U32.cmp(_, c)) == True{} : Bool}
       h2
     case GT{}:
       Empty.absurd({Cmp.is_le(U32.cmp(a, c)) == True{} : Bool}, absurd.ft(h1))
@@ -402,15 +279,15 @@ def kgo(c: Cmp, +l1: U32, +l2: U32) -> Cmp:
   T.ITree.key_cmp.go(~U32, ~U32.cmp, c, l1, l2)
 
 def kc.refl(+s: U32, +l: U32) -> {kc(s, l, s, l) == EQ{} : Cmp}:
-  %Equal.sym(Cmp, U32.cmp(s, s), EQ{}, u32.refl(s)) : {kgo(_, l, l) == EQ{} : Cmp}
-  u32.refl(l)
+  %Equal.sym(Cmp, U32.cmp(s, s), EQ{}, UO.u32_cmp_refl(s)) : {kgo(_, l, l) == EQ{} : Cmp}
+  UO.u32_cmp_refl(l)
 
 def kc.eq_s.go(c: Cmp, +s1: U32, -l1: U32, +s2: U32, -l2: U32, e: {U32.cmp(s1, s2) == c : Cmp}, h: {kgo(c, l1, l2) == EQ{} : Cmp}) -> {s1 == s2 : U32}:
   match c:
     case LT{}:
       Empty.absurd({s1 == s2 : U32}, absurd.lt_eq(h))
     case EQ{}:
-      u32.eq(s1, s2, e)
+      UO.u32_cmp_eq(s1, s2, e)
     case GT{}:
       Empty.absurd({s1 == s2 : U32}, absurd.gt_eq(h))
 
@@ -422,7 +299,7 @@ def kc.eq_l.go(c: Cmp, +l1: U32, +l2: U32, h: {kgo(c, l1, l2) == EQ{} : Cmp}) ->
     case LT{}:
       Empty.absurd({l1 == l2 : U32}, absurd.lt_eq(h))
     case EQ{}:
-      u32.eq(l1, l2, h)
+      UO.u32_cmp_eq(l1, l2, h)
     case GT{}:
       Empty.absurd({l1 == l2 : U32}, absurd.gt_eq(h))
 
@@ -449,20 +326,20 @@ def kc.flip_of(+s1: U32, +l1: U32, +s2: U32, +l2: U32, c: Cmp, h: {kc(s1, l1, s2
 def kc.lt_trans.go(c1: Cmp, c2: Cmp, +s1: U32, +l1: U32, +s2: U32, +l2: U32, +s3: U32, +l3: U32, e1: {U32.cmp(s1, s2) == c1 : Cmp}, e2: {U32.cmp(s2, s3) == c2 : Cmp}, h1: {kgo(c1, l1, l2) == LT{} : Cmp}, h2: {kgo(c2, l2, l3) == LT{} : Cmp}) -> {kgo(U32.cmp(s1, s3), l1, l3) == LT{} : Cmp}:
   match c1 c2:
     case LT{} LT{}:
-      %Equal.sym(Cmp, U32.cmp(s1, s3), LT{}, u32.lt_trans(s1, s2, s3, e1, e2)) : {kgo(_, l1, l3) == LT{} : Cmp}
+      %Equal.sym(Cmp, U32.cmp(s1, s3), LT{}, UO.u32_cmp_lt_trans(s1, s2, s3, e1, e2)) : {kgo(_, l1, l3) == LT{} : Cmp}
       {==}
     case LT{} EQ{}:
-      %u32.eq(s2, s3, e2) : {kgo(U32.cmp(s1, _), l1, l3) == LT{} : Cmp}
+      %UO.u32_cmp_eq(s2, s3, e2) : {kgo(U32.cmp(s1, _), l1, l3) == LT{} : Cmp}
       %Equal.sym(Cmp, U32.cmp(s1, s2), LT{}, e1) : {kgo(_, l1, l3) == LT{} : Cmp}
       {==}
     case EQ{} LT{}:
-      %Equal.sym(U32, s1, s2, u32.eq(s1, s2, e1)) : {kgo(U32.cmp(_, s3), l1, l3) == LT{} : Cmp}
+      %Equal.sym(U32, s1, s2, UO.u32_cmp_eq(s1, s2, e1)) : {kgo(U32.cmp(_, s3), l1, l3) == LT{} : Cmp}
       %Equal.sym(Cmp, U32.cmp(s2, s3), LT{}, e2) : {kgo(_, l1, l3) == LT{} : Cmp}
       {==}
     case EQ{} EQ{}:
-      %Equal.trans(U32, s1, s2, s3, u32.eq(s1, s2, e1), u32.eq(s2, s3, e2)) : {kgo(U32.cmp(s1, _), l1, l3) == LT{} : Cmp}
-      %Equal.sym(Cmp, U32.cmp(s1, s1), EQ{}, u32.refl(s1)) : {kgo(_, l1, l3) == LT{} : Cmp}
-      u32.lt_trans(l1, l2, l3, h1, h2)
+      %Equal.trans(U32, s1, s2, s3, UO.u32_cmp_eq(s1, s2, e1), UO.u32_cmp_eq(s2, s3, e2)) : {kgo(U32.cmp(s1, _), l1, l3) == LT{} : Cmp}
+      %Equal.sym(Cmp, U32.cmp(s1, s1), EQ{}, UO.u32_cmp_refl(s1)) : {kgo(_, l1, l3) == LT{} : Cmp}
+      UO.u32_cmp_lt_trans(l1, l2, l3, h1, h2)
     case GT{} c2:
       Empty.absurd({kgo(U32.cmp(s1, s3), l1, l3) == LT{} : Cmp}, absurd.gt_lt(h1))
     case c1 GT{}:
@@ -980,10 +857,10 @@ def kmax.ge_l.go(c: Cmp, +a: U32, +b: U32, e: {U32.cmp(a, b) == c : Cmp}) -> {Cm
       %Equal.sym(Cmp, U32.cmp(a, b), LT{}, e) : {Cmp.is_le(_) == True{} : Bool}
       {==}
     case EQ{}:
-      %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, u32.refl(a)) : {Cmp.is_le(_) == True{} : Bool}
+      %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, UO.u32_cmp_refl(a)) : {Cmp.is_le(_) == True{} : Bool}
       {==}
     case GT{}:
-      %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, u32.refl(a)) : {Cmp.is_le(_) == True{} : Bool}
+      %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, UO.u32_cmp_refl(a)) : {Cmp.is_le(_) == True{} : Bool}
       {==}
 
 def kmax.ge_l(+a: U32, +b: U32) -> {Cmp.is_le(U32.cmp(a, kmax(a, b))) == True{} : Bool}:
@@ -992,7 +869,7 @@ def kmax.ge_l(+a: U32, +b: U32) -> {Cmp.is_le(U32.cmp(a, kmax(a, b))) == True{} 
 def kmax.ge_r.go(c: Cmp, +a: U32, +b: U32, e: {U32.cmp(a, b) == c : Cmp}) -> {Cmp.is_le(U32.cmp(b, T.ITree.kmax.pick(U32, c, a, b))) == True{} : Bool}:
   match c:
     case LT{}:
-      %Equal.sym(Cmp, U32.cmp(b, b), EQ{}, u32.refl(b)) : {Cmp.is_le(_) == True{} : Bool}
+      %Equal.sym(Cmp, U32.cmp(b, b), EQ{}, UO.u32_cmp_refl(b)) : {Cmp.is_le(_) == True{} : Bool}
       {==}
     case EQ{}:
       %Equal.sym(Cmp, U32.cmp(b, a), EQ{}, u32.flip_of(a, b, EQ{}, e)) : {Cmp.is_le(_) == True{} : Bool}
@@ -1007,7 +884,7 @@ def kmax.ge_r(+a: U32, +b: U32) -> {Cmp.is_le(U32.cmp(b, kmax(a, b))) == True{} 
 def bnd.ge(-V: Data, t: Tr(V), +x: U32) -> {Cmp.is_le(U32.cmp(x, bnd(V, t, x))) == True{} : Bool}:
   match t:
     case T.ITreeLeaf{}:
-      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, u32.refl(x)) : {Cmp.is_le(_) == True{} : Bool}
+      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {Cmp.is_le(_) == True{} : Bool}
       {==}
     case T.ITreeNode{h, +m, l, e, r}:
       kmax.ge_r(m, x)
@@ -1054,7 +931,7 @@ def maxlt(-V: Data, t: Tr(V), +a: U32, hm: {mok(V, t) == True{} : Bool}, h: {rea
       {==}
     case T.ITreeNode{+hh, +m, +l, +e, +r}:
       +hm = hm
-      +meq = u32.eq(m, bnd(V, l, bnd(V, r, la(V, e))), cmp.eq_of(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e)))), bool.and_l(Cmp.is_eq(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e))))), Bool.and(mok(V, l), mok(V, r)), hm)))
+      +meq = UO.u32_cmp_eq(m, bnd(V, l, bnd(V, r, la(V, e))), cmp.eq_of(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e)))), bool.and_l(Cmp.is_eq(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e))))), Bool.and(mok(V, l), mok(V, r)), hm)))
       +hmr = bool.and_r(Cmp.is_eq(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e))))), Bool.and(mok(V, l), mok(V, r)), hm)
       +hlt = cmp.lt_of_not_ge(U32.cmp(m, a), h)
       +hM = Equal.trans(Cmp, U32.cmp(bnd(V, l, bnd(V, r, la(V, e))), a), U32.cmp(m, a), LT{}, Equal.cong(U32, Cmp, w => U32.cmp(w, a), bnd(V, l, bnd(V, r, la(V, e))), m, Equal.sym(U32, m, bnd(V, l, bnd(V, r, la(V, e))), meq)), hlt)
@@ -1276,7 +1153,7 @@ def mk(-V: Data, +l: Tr(V), +e: Ent(V), +r: Tr(V)) -> Tr(V):
   T.ITree.mk(~U32, ~U32.cmp, V, l, e, r)
 
 def mk.mok(-V: Data, +l: Tr(V), +e: Ent(V), +r: Tr(V), +hl: {mok(V, l) == True{} : Bool}, +hr: {mok(V, r) == True{} : Bool}) -> {mok(V, mk(V, l, e, r)) == True{} : Bool}:
-  %Equal.sym(Cmp, U32.cmp(bnd(V, l, bnd(V, r, la(V, e))), bnd(V, l, bnd(V, r, la(V, e)))), EQ{}, u32.refl(bnd(V, l, bnd(V, r, la(V, e))))) : {Bool.and(Cmp.is_eq(_), Bool.and(mok(V, l), mok(V, r))) == True{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(bnd(V, l, bnd(V, r, la(V, e))), bnd(V, l, bnd(V, r, la(V, e)))), EQ{}, UO.u32_cmp_refl(bnd(V, l, bnd(V, r, la(V, e))))) : {Bool.and(Cmp.is_eq(_), Bool.and(mok(V, l), mok(V, r))) == True{} : Bool}
   bool.and_intro(mok(V, l), mok(V, r), hl, hr)
 
 def mok.l(-V: Data, +h: Nat, +m: U32, +l: Tr(V), +e: Ent(V), +r: Tr(V), +hm: {mok(V, T.ITreeNode{h, m, l, e, r}) == True{} : Bool}) -> {mok(V, l) == True{} : Bool}:
@@ -1582,11 +1459,11 @@ def le.subst_l(-a: U32, -b: U32, -c: U32, e: {a == b : U32}, h: {Cmp.is_le(U32.c
 
 def eq.is_eq(+a: U32, -b: U32, e: {a == b : U32}) -> {Cmp.is_eq(U32.cmp(a, b)) == True{} : Bool}:
   %e : {Cmp.is_eq(U32.cmp(a, _)) == True{} : Bool}
-  %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, u32.refl(a)) : {Cmp.is_eq(_) == True{} : Bool}
+  %Equal.sym(Cmp, U32.cmp(a, a), EQ{}, UO.u32_cmp_refl(a)) : {Cmp.is_eq(_) == True{} : Bool}
   {==}
 
 def kmax.idem(+m: U32) -> {kmax(m, m) == m : U32}:
-  %Equal.sym(Cmp, U32.cmp(m, m), EQ{}, u32.refl(m)) : {T.ITree.kmax.pick(U32, _, m, m) == m : U32}
+  %Equal.sym(Cmp, U32.cmp(m, m), EQ{}, UO.u32_cmp_refl(m)) : {T.ITree.kmax.pick(U32, _, m, m) == m : U32}
   {==}
 
 def lle.app(-V: Data, xs: Es(V), +ys: Es(V), +m: U32, hx: {lle(V, xs, m) == True{} : Bool}, hy: {lle(V, ys, m) == True{} : Bool}) -> {lle(V, app(V, xs, ys), m) == True{} : Bool}:
@@ -1624,7 +1501,7 @@ def hasl.app_r(-V: Data, xs: Es(V), +ys: Es(V), +m: U32, h: {hasl(V, ys, m) == T
       bool.or_r(Cmp.is_eq(U32.cmp(la(V, x), m)), hasl(V, app(V, r, ys), m), hasl.app_r(V, r, ys, m, h))
 
 def node.meq(-V: Data, +h: Nat, +m: U32, +l: Tr(V), +e: Ent(V), +r: Tr(V), hm: {mok(V, T.ITreeNode{h, m, l, e, r}) == True{} : Bool}) -> {m == bnd(V, l, bnd(V, r, la(V, e))) : U32}:
-  u32.eq(m, bnd(V, l, bnd(V, r, la(V, e))), cmp.eq_of(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e)))), bool.and_l(Cmp.is_eq(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e))))), Bool.and(mok(V, l), mok(V, r)), hm)))
+  UO.u32_cmp_eq(m, bnd(V, l, bnd(V, r, la(V, e))), cmp.eq_of(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e)))), bool.and_l(Cmp.is_eq(U32.cmp(m, bnd(V, l, bnd(V, r, la(V, e))))), Bool.and(mok(V, l), mok(V, r)), hm)))
 
 # every last in t is at most the larger of x and t's largest last
 def maxle(-V: Data, t: Tr(V), +x: U32, hm: {mok(V, t) == True{} : Bool}) -> {lle(V, L(V, t), bnd(V, t, x)) == True{} : Bool}:

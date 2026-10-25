@@ -148,6 +148,11 @@ check, once.
   if one was unseen then), and is told the latest. There is no external
   implementation to compare with outside the kernel.
 
+## Dependencies
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`).
+
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (19 laws), `--verdict` ALL

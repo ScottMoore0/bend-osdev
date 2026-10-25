@@ -70,12 +70,12 @@ def more(emit0):
     emit(f"def gm.sub(+y: Nat, +x: Nat, +d: Nat, +R: Nat, e: {eq('Nat.add(R, Nat.mul(y, d))', 'Nat.mul(x, d)')}) -> {goal}:")
     emit("  match y x:")
     emit("    case 0n 0n:")
-    emit(f"      {sym('R', '0n', trans('R', 'Nat.add(R, 0n)', '0n', sym('Nat.add(R, 0n)', 'R', 'add_zero_r(R)'), 'e'))}")
+    emit(f"      {sym('R', '0n', trans('R', 'Nat.add(R, 0n)', '0n', sym('Nat.add(R, 0n)', 'R', 'UL.nat_add_zero(R)'), 'e'))}")
     emit("    case 0n 1n+xp:")
-    emit(f"      {sym('R', 'Nat.mul(1n+xp, d)', trans('R', 'Nat.add(R, 0n)', 'Nat.mul(1n+xp, d)', sym('Nat.add(R, 0n)', 'R', 'add_zero_r(R)'), 'e'))}")
+    emit(f"      {sym('R', 'Nat.mul(1n+xp, d)', trans('R', 'Nat.add(R, 0n)', 'Nat.mul(1n+xp, d)', sym('Nat.add(R, 0n)', 'R', 'UL.nat_add_zero(R)'), 'e'))}")
     emit("    case 1n+yp 0n:")
     M = "Nat.mul(1n+yp, d)"
-    emit(f"      {sym('R', '0n', f'add_eq_zero({M}, R, ' + trans(f'Nat.add({M}, R)', f'Nat.add(R, {M})', '0n', f'add_comm({M}, R)', 'e') + ')')}")
+    emit(f"      {sym('R', '0n', f'add_eq_zero({M}, R, ' + trans(f'Nat.add({M}, R)', f'Nat.add(R, {M})', '0n', f'UL.nat_add_comm({M}, R)', 'e') + ')')}")
     emit("    case 1n+yp 1n+xp:")
     E = hyp("e", "Nat.add(R, Nat.mul(1n+yp, d))", "Nat.mul(1n+xp, d)")
     pf = calc("Nat.add(d, Nat.add(R, Nat.mul(yp, d)))",
@@ -89,7 +89,7 @@ def more(emit0):
     pf = calc(f"Nat.add({R}, Nat.mul(Nat.mul({D}, v), d))",
               (f"Nat.add(Nat.mul({D}, Nat.mul(v, d)), {R})", "ring"),
               (f"Nat.add(Nat.mul({D}, 1n+q), {R})", hyp("ev", "Nat.mul(v, d)", "1n+q")),
-              ("a", hyp("dm_eq(a, q)", f"Nat.add(Nat.mul({D}, 1n+q), {R})", "a")),
+              ("a", hyp("UD.nat_div_mod(a, q)", f"Nat.add(Nat.mul({D}, 1n+q), {R})", "a")),
               ("Nat.mul(u, d)", N.sym(hyp("eu", "Nat.mul(u, d)", "a"))))
     emit(f"def gm.mod(+a: Nat, +q: Nat, +d: Nat, +u: Nat, +v: Nat, eu: {eq('Nat.mul(u, d)', 'a')}, ev: {eq('Nat.mul(v, d)', '1n+q')}) -> {DV(R, 'd')}:")
     emit(f"  (Nat.sub(u, Nat.mul({D}, v)), gm.sub(Nat.mul({D}, v), u, d, {R}, {pf.text}))")
@@ -133,8 +133,8 @@ def more(emit0):
     Q = f"Nat.add(q, Nat.mul(p, 1n+q))"
     D2, R2 = f"Nat.div({ma}, {B})", f"Nat.mod({ma}, {B})"
     pf = calc(f"Nat.add(Nat.mul({D2}, {B}), {R2})",
-              (ma, hyp(f"dm_eq({ma}, {Q})", f"Nat.add(Nat.mul({D2}, {B}), {R2})", ma)),
-              (f"Nat.mul({m}, Nat.add(Nat.mul({D}, 1n+q), {R}))", N.sym(hyp("dm_eq(a, q)", f"Nat.add(Nat.mul({D}, 1n+q), {R})", "a"))),
+              (ma, hyp(f"UD.nat_div_mod({ma}, {Q})", f"Nat.add(Nat.mul({D2}, {B}), {R2})", ma)),
+              (f"Nat.mul({m}, Nat.add(Nat.mul({D}, 1n+q), {R}))", N.sym(hyp("UD.nat_div_mod(a, q)", f"Nat.add(Nat.mul({D}, 1n+q), {R})", "a"))),
               (f"Nat.add(Nat.mul({D}, {B}), Nat.mul({m}, {R}))", "ring"))
     emit(f"def gm.mh(+a: Nat, +q: Nat, +p: Nat) -> {eq(R2, f'Nat.mul({m}, {R})')}:")
     emit(f"  UL.nat_mod_unique({B}, {D2}, {R2}, {D}, Nat.mul({m}, {R}), {pf.text}, gm.slt({R2}, {Q}, dm_le({ma}, {Q})), gm.mlt(p, {R}, q, dm_le(a, q)))")
@@ -225,7 +225,7 @@ def lcm(emit):
     g = "1n+gp"
     D, R = f"Nat.div(a, {g})", f"Nat.mod(a, {g})"
     pf = calc(f"Nat.add(Nat.mul({D}, {g}), {R})",
-              ("a", hyp("dm_eq(a, gp)", f"Nat.add(Nat.mul({D}, {g}), {R})", "a")),
+              ("a", hyp("UD.nat_div_mod(a, gp)", f"Nat.add(Nat.mul({D}, {g}), {R})", "a")),
               (f"Nat.mul(k1, {g})", N.sym(hyp("e1", f"Nat.mul(k1, {g})", "a"))),
               (f"Nat.add(Nat.mul(k1, {g}), 0n)", "ring"))
     emit(f"      (UL.nat_div_unique({g}, {D}, {R}, k1, 0n, {pf.text}, gm.slt({R}, gp, dm_le(a, gp)), {{==}}), {{==}})")

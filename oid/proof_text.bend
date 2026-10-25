@@ -7,6 +7,12 @@ import ./oid.bend as O
 import ./text.bend as T
 import ./proof_nat.bend as ON
 import ./proof_digit.bend as OG
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
+import ../u32/LAWS_div.bend as UD
+import ../u32/PROOF_div.bend as UDP
 
 # Decimal digits
 
@@ -49,7 +55,7 @@ def ot.horner_digits(fuel: Nat, lt: Bool, +n: Nat) -> {ot.horner(O.oid.dg.go(fue
       +ds = O.oid.dg.go(f, Nat.is_lt(q, 10n), q)
       %Equal.sym(Nat, ot.horner(List.append(&2, Nat, ds, [Nat.mod(n, 10n)]), 0n), Nat.add(Nat.mul(ot.horner(ds, 0n), 10n), Nat.mod(n, 10n)), ot.horner_snoc(ds, 0n, Nat.mod(n, 10n))) : {_ == n : Nat}
       %Equal.sym(Nat, ot.horner(ds, 0n), q, ot.horner_digits(f, Nat.is_lt(q, 10n), q)) : {Nat.add(Nat.mul(_, 10n), Nat.mod(n, 10n)) == n : Nat}
-      ON.on.recon(n, 9n)
+      UD.nat_div_mod(n, 9n)
 
 def ot.le_not_lt(+a: Nat, +b: Nat) -> {Nat.is_le(a, b) == Bool.not(Nat.is_lt(b, a)) : Bool}:
   match a b:
@@ -76,12 +82,12 @@ def ot.digits_lt(fuel: Nat, lt: Bool, +n: Nat, +hl: {Nat.is_lt(n, 10n) == lt : B
     case 1n+ +f False{}:
       +q = Nat.div(n, 10n)
       +hb = Equal.trans(Bool, Nat.is_le(10n, n), Bool.not(Nat.is_lt(n, 10n)), True{}, ot.le_not_lt(10n, n), Equal.cong(Bool, Bool, z => Bool.not(z), Nat.is_lt(n, 10n), False{}, hl))
-      +hq = ON.on.lt_succ_le(q, f, ON.on.lt_le_trans(q, n, 1n+f, ON.on.div_lt(n, 8n, hb), hf))
+      +hq = ON.on.lt_succ_le(q, f, UO.nat_lt_le_trans(q, n, 1n+f, ON.on.div_lt(n, 8n, hb), hf))
       +ih = ot.digits_lt(f, Nat.is_lt(q, 10n), q, {==}, hq)
-      ot.all_lt_app(O.oid.dg.go(f, Nat.is_lt(q, 10n), q), [Nat.mod(n, 10n)], 10n, ih, ON.on.and_i(Nat.is_lt(Nat.mod(n, 10n), 10n), True{}, ON.on.mod_lt(n, 9n), {==}))
+      ot.all_lt_app(O.oid.dg.go(f, Nat.is_lt(q, 10n), q), [Nat.mod(n, 10n)], 10n, ih, ON.on.and_i(Nat.is_lt(Nat.mod(n, 10n), 10n), True{}, UD.nat_mod_lt(n, 9n), {==}))
 
 def ot.digits_lt_top(+n: Nat) -> {ot.all_lt(O.oid.digits(n), 10n) == True{} : Bool}:
-  ot.digits_lt(n, Nat.is_lt(n, 10n), n, {==}, ON.on.le_refl(n))
+  ot.digits_lt(n, Nat.is_lt(n, 10n), n, {==}, UL.nat_le_refl(n))
 
 def ot.head(ds: List<&2, Nat>) -> Nat:
   match ds:
@@ -133,7 +139,7 @@ def ot.q_pos.go(q: Nat, +r: Nat, +n: Nat, +hr: {Nat.add(Nat.mul(q, 10n), r) == n
 
 # n >= 10 implies n / 10 >= 1
 def ot.q_pos(+n: Nat, +h: {Nat.is_le(10n, n) == True{} : Bool}) -> {Nat.is_le(1n, Nat.div(n, 10n)) == True{} : Bool}:
-  ot.q_pos.go(Nat.div(n, 10n), Nat.mod(n, 10n), n, ON.on.recon(n, 9n), ON.on.mod_lt(n, 9n), h)
+  ot.q_pos.go(Nat.div(n, 10n), Nat.mod(n, 10n), n, UD.nat_div_mod(n, 9n), UD.nat_mod_lt(n, 9n), h)
 
 # the leading digit of an arc above 0 is not 0
 def ot.head_pos(fuel: Nat, lt: Bool, +n: Nat, +hl: {Nat.is_lt(n, 10n) == lt : Bool}, +hn: {Nat.is_le(1n, n) == True{} : Bool}) -> {Nat.is_le(1n, ot.head(O.oid.dg.go(fuel, lt, n))) == True{} : Bool}:

@@ -17,6 +17,8 @@ import ./rsdt.bend as R
 import ./mcfg.bend as Mc
 import ./dsdt.bend as Ds
 import ./LAWS_tables.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Lemmas are mostly stated as {value == expression}, the direction a rewrite
 # needs: %e : P replaces the expression (marked _ in P) by the value.
@@ -26,14 +28,6 @@ import ./LAWS_tables.bend as Laws
 # into its bits, by computing (as bytes' own proofs do); a W64 is split
 # through word64's parts_of (from_parts of its halves), and from_parts and
 # le64 then compute through word64's definitions.
-
-def tb.add0(+x: Nat) -> {Nat.add(x, 0n) == x : Nat}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      %tb.add0(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
 
 # The Generic Address Structure: its byte fields from the 4 bytes in front,
 # its address from the le64 after them
@@ -50,7 +44,7 @@ def tb.gas_a(+a: B.Octets, +s: U32, +w: U32, +off: U32, +acc: U32, +addr: W.W64,
 
 def Laws.gas_round_trip(a, s, w, off, acc, addr, b, s8, w8, off8, acc8):
   %Equal.sym(B.Octets, B.Octets.append(B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.le64(addr)), b), B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b)), BL.octets_append_assoc(B.Octets.of_list([s, w, off, acc]), B.Octets.le64(addr), b)) : {G.AcpiGas.at(B.Octets.append(a, _), B.Octets.len(a)) == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
-  %tb.add0(B.Octets.len(a)) : {G.AcpiGas{F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), _), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 1n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 2n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 3n)), F.AcpiF.u64(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 4n))} == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
+  %UL.nat_add_zero(B.Octets.len(a)) : {G.AcpiGas{F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), _), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 1n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 2n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 3n)), F.AcpiF.u64(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 4n))} == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
   %tb.gas_b(a, B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b), 0n, {==}) : {G.AcpiGas{Maybe.default(&2, U32, _, 0), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 1n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 2n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 3n)), F.AcpiF.u64(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 4n))} == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
   %tb.gas_b(a, B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b), 1n, {==}) : {G.AcpiGas{B.byte(s), Maybe.default(&2, U32, _, 0), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 2n)), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 3n)), F.AcpiF.u64(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 4n))} == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
   %tb.gas_b(a, B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b), 2n, {==}) : {G.AcpiGas{B.byte(s), B.byte(w), Maybe.default(&2, U32, _, 0), F.AcpiF.u8(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 3n)), F.AcpiF.u64(B.Octets.append(a, B.Octets.append(B.Octets.of_list([s, w, off, acc]), B.Octets.append(B.Octets.le64(addr), b))), Nat.add(B.Octets.len(a), 4n))} == G.AcpiGas{s, w, off, acc, addr} : G.AcpiGas}
@@ -384,7 +378,7 @@ def Laws.xsdt_round_trip(h, h0, oem6b, tid8b, cid4b, xs):
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.mul(List.length(&2, W.W64, xs), 8n), 7n, 0n, 0n), (Nat.add(List.length(&2, W.W64, xs), 0n), 0n), tb.dm8(List.length(&2, W.W64, xs), 0n)) : {R.sl.body(Nat.is_eq(Pair.snd(Nat, Nat, _), 0n), True{}, h, B.Octets.concat(R.sl.enc(xs, True{}))) == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %tb.xlen(xs) : {Done{R.AcpiSdtList{h, R.sl.read(Nat.div(_, 8n), True{}, B.Octets.concat(R.sl.enc(xs, True{})), Nil{})}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.mul(List.length(&2, W.W64, xs), 8n), 7n, 0n, 0n), (Nat.add(List.length(&2, W.W64, xs), 0n), 0n), tb.dm8(List.length(&2, W.W64, xs), 0n)) : {Done{R.AcpiSdtList{h, R.sl.read(Pair.fst(Nat, Nat, _), True{}, B.Octets.concat(R.sl.enc(xs, True{})), Nil{})}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
-      %Equal.sym(Nat, Nat.add(List.length(&2, W.W64, xs), 0n), List.length(&2, W.W64, xs), tb.add0(List.length(&2, W.W64, xs))) : {Done{R.AcpiSdtList{h, R.sl.read(_, True{}, B.Octets.concat(R.sl.enc(xs, True{})), Nil{})}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
+      %Equal.sym(Nat, Nat.add(List.length(&2, W.W64, xs), 0n), List.length(&2, W.W64, xs), UL.nat_add_zero(List.length(&2, W.W64, xs))) : {Done{R.AcpiSdtList{h, R.sl.read(_, True{}, B.Octets.concat(R.sl.enc(xs, True{})), Nil{})}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %Equal.sym(List<&2, W.W64>, R.sl.read(List.length(&2, W.W64, xs), True{}, B.Octets.concat(R.sl.enc(xs, True{})), Nil{}), R.sl.rev(R.sl.rev(xs, Nil{}), Nil{}), tb.xread(xs, Nil{})) : {Done{R.AcpiSdtList{h, _}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %tb.srev(xs) : {Done{R.AcpiSdtList{h, _}} == Done{R.AcpiSdtList{h, xs}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       {==}
@@ -397,7 +391,7 @@ def Laws.rsdt_round_trip(h, h0, oem6b, tid8b, cid4b, xs):
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.mul(List.length(&2, W.W64, xs), 4n), 3n, 0n, 0n), (Nat.add(List.length(&2, W.W64, xs), 0n), 0n), tb.dm4(List.length(&2, W.W64, xs), 0n)) : {R.sl.body(Nat.is_eq(Pair.snd(Nat, Nat, _), 0n), False{}, h, B.Octets.concat(R.sl.enc(xs, False{}))) == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %tb.rlen(xs) : {Done{R.AcpiSdtList{h, R.sl.read(Nat.div(_, 4n), False{}, B.Octets.concat(R.sl.enc(xs, False{})), Nil{})}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.mul(List.length(&2, W.W64, xs), 4n), 3n, 0n, 0n), (Nat.add(List.length(&2, W.W64, xs), 0n), 0n), tb.dm4(List.length(&2, W.W64, xs), 0n)) : {Done{R.AcpiSdtList{h, R.sl.read(Pair.fst(Nat, Nat, _), False{}, B.Octets.concat(R.sl.enc(xs, False{})), Nil{})}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
-      %Equal.sym(Nat, Nat.add(List.length(&2, W.W64, xs), 0n), List.length(&2, W.W64, xs), tb.add0(List.length(&2, W.W64, xs))) : {Done{R.AcpiSdtList{h, R.sl.read(_, False{}, B.Octets.concat(R.sl.enc(xs, False{})), Nil{})}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
+      %Equal.sym(Nat, Nat.add(List.length(&2, W.W64, xs), 0n), List.length(&2, W.W64, xs), UL.nat_add_zero(List.length(&2, W.W64, xs))) : {Done{R.AcpiSdtList{h, R.sl.read(_, False{}, B.Octets.concat(R.sl.enc(xs, False{})), Nil{})}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %Equal.sym(List<&2, W.W64>, R.sl.read(List.length(&2, W.W64, xs), False{}, B.Octets.concat(R.sl.enc(xs, False{})), Nil{}), R.sl.rev(R.sl.rev(Laws.acpilaw.low32(xs), Nil{}), Nil{}), tb.rread(xs, Nil{})) : {Done{R.AcpiSdtList{h, _}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       %tb.srev(Laws.acpilaw.low32(xs)) : {Done{R.AcpiSdtList{h, _}} == Done{R.AcpiSdtList{h, Laws.acpilaw.low32(xs)}} : Result<&2, &2, E.AcpiError, R.AcpiSdtList>}
       {==}
@@ -436,7 +430,7 @@ def tb.c8(+c: B.Octets, +rest: B.Octets, +k: Nat, +hk: {Nat.is_lt(k, B.Octets.le
   {==}
 
 def tb.cdrop(+c: B.Octets, +rest: B.Octets, +h16: {16n == B.Octets.len(c) : Nat}) -> {rest == B.Octets.drop(16n, B.Octets.append(c, rest)) : B.Octets}:
-  %Equal.sym(Nat, 16n, Nat.add(B.Octets.len(c), 0n), Equal.trans(Nat, 16n, B.Octets.len(c), Nat.add(B.Octets.len(c), 0n), h16, Equal.sym(Nat, Nat.add(B.Octets.len(c), 0n), B.Octets.len(c), tb.add0(B.Octets.len(c))))) : {rest == B.Octets.drop(_, B.Octets.append(c, rest)) : B.Octets}
+  %Equal.sym(Nat, 16n, Nat.add(B.Octets.len(c), 0n), Equal.trans(Nat, 16n, B.Octets.len(c), Nat.add(B.Octets.len(c), 0n), h16, Equal.sym(Nat, Nat.add(B.Octets.len(c), 0n), B.Octets.len(c), UL.nat_add_zero(B.Octets.len(c))))) : {rest == B.Octets.drop(_, B.Octets.append(c, rest)) : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(Nat.add(B.Octets.len(c), 0n), B.Octets.append(c, rest)), B.Octets.drop(0n, rest), BL.octets_drop_append_add(c, 0n, rest)) : {rest == _ : B.Octets}
   %Equal.sym(B.Octets, B.Octets.drop(0n, rest), rest, BL.octets_drop_zero(rest)) : {rest == _ : B.Octets}
   {==}
@@ -516,7 +510,7 @@ def Laws.mcfg_round_trip(h, h0, oem6b, tid8b, cid4b, es):
       %tb.z8(B.Octets.concat(Mc.mcfg.enc(es))) : {Done{Mc.AcpiMcfg{h, Mc.mcfg.read(Nat.div(B.Octets.len(_), 16n), _)}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
       %tb.mlen(es) : {Done{Mc.AcpiMcfg{h, Mc.mcfg.read(Nat.div(_, 16n), B.Octets.concat(Mc.mcfg.enc(es)))}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
       %Equal.sym(Nat & Nat, Nat.divmod.go(Nat.mul(List.length(&2, Mc.AcpiMcfgEntry, es), 16n), 15n, 0n, 0n), (Nat.add(List.length(&2, Mc.AcpiMcfgEntry, es), 0n), 0n), tb.dm16(List.length(&2, Mc.AcpiMcfgEntry, es), 0n)) : {Done{Mc.AcpiMcfg{h, Mc.mcfg.read(Pair.fst(Nat, Nat, _), B.Octets.concat(Mc.mcfg.enc(es)))}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
-      %Equal.sym(Nat, Nat.add(List.length(&2, Mc.AcpiMcfgEntry, es), 0n), List.length(&2, Mc.AcpiMcfgEntry, es), tb.add0(List.length(&2, Mc.AcpiMcfgEntry, es))) : {Done{Mc.AcpiMcfg{h, Mc.mcfg.read(_, B.Octets.concat(Mc.mcfg.enc(es)))}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
+      %Equal.sym(Nat, Nat.add(List.length(&2, Mc.AcpiMcfgEntry, es), 0n), List.length(&2, Mc.AcpiMcfgEntry, es), UL.nat_add_zero(List.length(&2, Mc.AcpiMcfgEntry, es))) : {Done{Mc.AcpiMcfg{h, Mc.mcfg.read(_, B.Octets.concat(Mc.mcfg.enc(es)))}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
       %tb.mread(es) : {Done{Mc.AcpiMcfg{h, _}} == Done{Mc.AcpiMcfg{h, Laws.acpilaw.mcfg_fit(es)}} : Result<&2, &2, E.AcpiError, Mc.AcpiMcfg>}
       {==}
 

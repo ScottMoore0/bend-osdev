@@ -16,6 +16,10 @@ import ./bwt.bend as W
 import ./stream.bend as S
 import ./bzip2.bend as Z
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Bytes: masking twice is masking once (B.byte reads only the low 8 bits)
 def byte_idem(b: U32) -> {B.byte(b) == B.byte(B.byte(b)) : U32}:
@@ -81,26 +85,10 @@ def not_true(b: Bool, e: {Bool.not(b) == True{} : Bool}) -> {False{} == b : Bool
 
 # Words: is_eq is equality
 
-def bool_cmp_self(b: Bool) -> {Bool.cmp(b, b) == EQ{} : Cmp}:
-  match b:
-    case True{}:
-      {==}
-    case False{}:
-      {==}
-
-def word_cmp_self(n: Nat, w: Word(n)) -> {Word.cmp(n, w, w) == EQ{} : Cmp}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      match w:
-        case WCon{+b, t}:
-          Equal.trans(Cmp, Word.cmp.fin(b, b, Word.cmp(p, t, t)), Word.cmp.fin(b, b, EQ{}), EQ{}, Equal.cong(Cmp, Cmp, x => Word.cmp.fin(b, b, x), Word.cmp(p, t, t), EQ{}, word_cmp_self(p, t)), bool_cmp_self(b))
-
 def u32_eq_self(a: U32) -> {U32.is_eq(a, a) == True{} : Bool}:
   match a:
     case U32{+w}:
-      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, word_cmp_self(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
+      %Equal.sym(Cmp, Word.cmp(32n, w, w), EQ{}, UO.word_cmp_refl(32n, w)) : {Cmp.is_eq(_) == True{} : Bool}
       {==}
 
 # rewriting form: is_eq(a, a) becomes True
@@ -4084,27 +4072,6 @@ def Laws.rle1_round_trip(o):
 #
 # Nat arithmetic
 
-def add_zero(n: Nat) -> {Nat.add(n, 0n) == n : Nat}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(p, 0n), p, add_zero(p))
-
-def add_succ_r(a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(p, 1n+b), 1n+Nat.add(p, b), add_succ_r(p, b))
-
-def add_assoc(a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      Equal.cong(Nat, Nat, x => 1n+x, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), add_assoc(p, b, c))
-
 def sub_add(a: Nat, +x: Nat) -> {Nat.sub(Nat.add(a, x), a) == x : Nat}:
   match a:
     case 0n:
@@ -4115,24 +4082,6 @@ def sub_add(a: Nat, +x: Nat) -> {Nat.sub(Nat.add(a, x), a) == x : Nat}:
           {==}
     case 1n+p:
       sub_add(p, x)
-
-def le_add(a: Nat, +x: Nat) -> {Nat.is_le(a, Nat.add(a, x)) == True{} : Bool}:
-  match a:
-    case 0n:
-      match x:
-        case 0n:
-          {==}
-        case 1n+q:
-          {==}
-    case 1n+p:
-      le_add(p, x)
-
-def le_self(a: Nat) -> {Nat.is_le(a, a) == True{} : Bool}:
-  match a:
-    case 0n:
-      {==}
-    case 1n+p:
-      le_self(p)
 
 def nat_eq_self(a: Nat) -> {Nat.is_eq(a, a) == True{} : Bool}:
   match a:
@@ -4221,7 +4170,7 @@ def len_push(p: List<&2, U32>, +ys: List<&2, U32>) -> {B.len(L.bz.push(p, ys)) =
     case Nil{}:
       {==}
     case Con{+h, +t}:
-      Equal.trans(Nat, B.len(L.bz.push(t, Con{h, ys})), Nat.add(B.len(t), 1n+B.len(ys)), 1n+Nat.add(B.len(t), B.len(ys)), len_push(t, Con{h, ys}), add_succ_r(B.len(t), B.len(ys)))
+      Equal.trans(Nat, B.len(L.bz.push(t, Con{h, ys})), Nat.add(B.len(t), 1n+B.len(ys)), 1n+Nat.add(B.len(t), B.len(ys)), len_push(t, Con{h, ys}), UL.nat_add_succ(B.len(t), B.len(ys)))
 
 # Membership, and its order not mattering
 
@@ -4360,7 +4309,7 @@ def tk_len(alpha: List<&2, U32>, here: Bool, +i: Nat, +pre: List<&2, U32>, +j: N
     case Con{+h, +t}:
       match here:
         case True{}:
-          Equal.trans(Nat, 1n+B.len(L.bz.push(pre, t)), 1n+Nat.add(B.len(pre), B.len(t)), B.len(L.bz.push(pre, Con{h, t})), Equal.cong(Nat, Nat, v => 1n+v, B.len(L.bz.push(pre, t)), Nat.add(B.len(pre), B.len(t)), len_push(pre, t)), Equal.sym(Nat, B.len(L.bz.push(pre, Con{h, t})), 1n+Nat.add(B.len(pre), B.len(t)), Equal.trans(Nat, B.len(L.bz.push(pre, Con{h, t})), Nat.add(B.len(pre), 1n+B.len(t)), 1n+Nat.add(B.len(pre), B.len(t)), len_push(pre, Con{h, t}), add_succ_r(B.len(pre), B.len(t)))))
+          Equal.trans(Nat, 1n+B.len(L.bz.push(pre, t)), 1n+Nat.add(B.len(pre), B.len(t)), B.len(L.bz.push(pre, Con{h, t})), Equal.cong(Nat, Nat, v => 1n+v, B.len(L.bz.push(pre, t)), Nat.add(B.len(pre), B.len(t)), len_push(pre, t)), Equal.sym(Nat, B.len(L.bz.push(pre, Con{h, t})), 1n+Nat.add(B.len(pre), B.len(t)), Equal.trans(Nat, B.len(L.bz.push(pre, Con{h, t})), Nat.add(B.len(pre), 1n+B.len(t)), 1n+Nat.add(B.len(pre), B.len(t)), len_push(pre, Con{h, t}), UL.nat_add_succ(B.len(pre), B.len(t)))))
         case False{}:
           tk_len(t, Nat.is_eq(1n+i, j), 1n+i, Con{h, pre}, j)
 
@@ -4407,7 +4356,7 @@ def ge_q(q: Bool, +t: List<&2, U32>, +i: Nat, +x: U32, ih: {idxge(M.mtf.idx.go(t
   match q:
     case True{}:
       %idx_hit(t, i, x) : {idxge(_, i) == True{} : Bool}
-      le_self(i)
+      UL.nat_le_refl(i)
     case False{}:
       ge_shift(M.mtf.idx.go(t, M.Bzip2MtfLook{1n+i}, x), i, ih)
 
@@ -4424,7 +4373,7 @@ def lt_q(q: Bool, +t: List<&2, U32>, +i: Nat, +x: U32, ih: {idxlt(M.mtf.idx.go(t
       %idx_hit(t, i, x) : {idxlt(_, Nat.add(i, 1n+B.len(t))) == True{} : Bool}
       lt_add_succ(i, B.len(t))
     case False{}:
-      %Equal.sym(Nat, Nat.add(i, 1n+B.len(t)), 1n+Nat.add(i, B.len(t)), add_succ_r(i, B.len(t))) : {idxlt(M.mtf.idx.go(t, M.Bzip2MtfLook{1n+i}, x), _) == True{} : Bool}
+      %Equal.sym(Nat, Nat.add(i, 1n+B.len(t)), 1n+Nat.add(i, B.len(t)), UL.nat_add_succ(i, B.len(t))) : {idxlt(M.mtf.idx.go(t, M.Bzip2MtfLook{1n+i}, x), _) == True{} : Bool}
       ih
 
 def lt_ok(alpha: List<&2, U32>, +i: Nat, +x: U32) -> {idxlt(M.mtf.idx.go(alpha, M.Bzip2MtfLook{i}, x), Nat.add(i, B.len(alpha))) == True{} : Bool}:
@@ -4489,7 +4438,7 @@ def mv_inc(ds: List<&2, M.Bzip2Digit>, +w: Nat) -> {mv(M.mtf.inc(ds), w) == Nat.
     case Con{d, +t}:
       match d:
         case M.Bzip2RunA{}:
-          add_assoc(w, w, mv(t, Nat.add(w, w)))
+          UL.nat_add_assoc(w, w, mv(t, Nat.add(w, w)))
         case M.Bzip2RunB{}:
           Equal.cong(Nat, Nat, v => Nat.add(w, v), mv(M.mtf.inc(t), Nat.add(w, w)), Nat.add(Nat.add(w, w), mv(t, Nat.add(w, w))), mv_inc(t, Nat.add(w, w)))
 
@@ -4504,7 +4453,7 @@ def res_app_nil(r: Result<&2, &2, E.Bzip2Error, List<&2, U32>>) -> {M.mtf.res.ap
 def digits(ds: List<&2, M.Bzip2Digit>, +rs: List<&2, U32>, +alpha: List<&2, U32>, +cnt: Nat, +w: Nat, +room: Nat) -> {M.mtf.dec(L.bz.app(M.mtf.syms(ds), rs), M.Bzip2MtfDec{alpha, cnt, w, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, Nat.add(cnt, mv(ds, w)), wafter(ds, w), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}:
   match ds:
     case Nil{}:
-      %Equal.sym(Nat, Nat.add(cnt, 0n), cnt, add_zero(cnt)) : {M.mtf.dec(rs, M.Bzip2MtfDec{alpha, cnt, w, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, w, room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
+      %Equal.sym(Nat, Nat.add(cnt, 0n), cnt, UL.nat_add_zero(cnt)) : {M.mtf.dec(rs, M.Bzip2MtfDec{alpha, cnt, w, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, w, room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
       {==}
     case Con{d, +t}:
       match d:
@@ -4512,22 +4461,22 @@ def digits(ds: List<&2, M.Bzip2Digit>, +rs: List<&2, U32>, +alpha: List<&2, U32>
           +c2 = Nat.add(cnt, w)
           +w2 = Nat.add(w, w)
           %Equal.sym(Result<&2, &2, E.Bzip2Error, List<&2, U32>>, M.mtf.res.app(Nil{}, M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room})), M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}), res_app_nil(M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}))) : {_ == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, Nat.add(cnt, Nat.add(w, mv(t, w2))), wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
-          %add_assoc(cnt, w, mv(t, w2)) : {M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
+          %UL.nat_add_assoc(cnt, w, mv(t, w2)) : {M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
           digits(t, rs, alpha, c2, w2, room)
         case M.Bzip2RunB{}:
           +w2 = Nat.add(w, w)
           +c2 = Nat.add(cnt, w2)
           %Equal.sym(Result<&2, &2, E.Bzip2Error, List<&2, U32>>, M.mtf.res.app(Nil{}, M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room})), M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}), res_app_nil(M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}))) : {_ == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, Nat.add(cnt, Nat.add(w2, mv(t, w2))), wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
-          %add_assoc(cnt, w2, mv(t, w2)) : {M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
+          %UL.nat_add_assoc(cnt, w2, mv(t, w2)) : {M.mtf.dec(L.bz.app(M.mtf.syms(t), rs), M.Bzip2MtfDec{alpha, c2, w2, room}) == M.mtf.dec(rs, M.Bzip2MtfDec{alpha, _, wafter(t, w2), room}) : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
           digits(t, rs, alpha, c2, w2, room)
 
 # the run of c zeros, with room for it and l + k more
 def le_room(+c: Nat, +l: Nat, +k: Nat) -> {True{} == Nat.is_le(c, Nat.add(Nat.add(c, l), k)) : Bool}:
-  %Equal.sym(Nat, Nat.add(Nat.add(c, l), k), Nat.add(c, Nat.add(l, k)), add_assoc(c, l, k)) : {True{} == Nat.is_le(c, _) : Bool}
-  Equal.sym(Bool, Nat.is_le(c, Nat.add(c, Nat.add(l, k))), True{}, le_add(c, Nat.add(l, k)))
+  %Equal.sym(Nat, Nat.add(Nat.add(c, l), k), Nat.add(c, Nat.add(l, k)), UL.nat_add_assoc(c, l, k)) : {True{} == Nat.is_le(c, _) : Bool}
+  Equal.sym(Bool, Nat.is_le(c, Nat.add(c, Nat.add(l, k))), True{}, UO.nat_le_add_r(c, Nat.add(l, k)))
 
 def sub_room(+c: Nat, +l: Nat, +k: Nat) -> {Nat.add(l, k) == Nat.sub(Nat.add(Nat.add(c, l), k), c) : Nat}:
-  %Equal.sym(Nat, Nat.add(Nat.add(c, l), k), Nat.add(c, Nat.add(l, k)), add_assoc(c, l, k)) : {Nat.add(l, k) == Nat.sub(_, c) : Nat}
+  %Equal.sym(Nat, Nat.add(Nat.add(c, l), k), Nat.add(c, Nat.add(l, k)), UL.nat_add_assoc(c, l, k)) : {Nat.add(l, k) == Nat.sub(_, c) : Nat}
   Equal.sym(Nat, Nat.sub(Nat.add(c, Nat.add(l, k)), c), Nat.add(l, k), sub_add(c, Nat.add(l, k)))
 
 def flush_ok(c: Nat, +a0: U32, +at: List<&2, U32>, +l: Nat, +k: Nat) -> {M.mtf.flush(c, Con{a0, at}, Nat.add(Nat.add(c, l), k)) == M.Bzip2MtfOut{L.bz.rep(c, a0), M.Bzip2MtfDec{Con{a0, at}, 0n, 1n, Nat.add(l, k)}} : M.Bzip2MtfOut}:
@@ -4650,7 +4599,7 @@ def mm_zero(+y: U32, +t: List<&2, U32>, +a0: U32, +at: List<&2, U32>, +ds: List<
   +e1 = M.mtf.enc(t, alpha, M.mtf.inc(ds))
   %head_is(a0, at, B.byte(y), eqm) : {M.mtf.dec(e1, M.Bzip2MtfDec{alpha, 0n, 1n, Nat.add(Nat.add(m1, 1n+B.len(t)), k)}) == Done{L.bz.app(L.bz.rep(m1, a0), Con{_, B.mask(t)})} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
   %Equal.sym(List<&2, U32>, L.bz.app(L.bz.rep(m1, a0), Con{a0, B.mask(t)}), Con{a0, L.bz.app(L.bz.rep(m1, a0), B.mask(t))}, rep_snoc(m1, a0, B.mask(t))) : {M.mtf.dec(e1, M.Bzip2MtfDec{alpha, 0n, 1n, Nat.add(Nat.add(m1, 1n+B.len(t)), k)}) == Done{_} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
-  %Equal.sym(Nat, Nat.add(m1, 1n+B.len(t)), 1n+Nat.add(m1, B.len(t)), add_succ_r(m1, B.len(t))) : {M.mtf.dec(e1, M.Bzip2MtfDec{alpha, 0n, 1n, Nat.add(_, k)}) == Done{Con{a0, L.bz.app(L.bz.rep(m1, a0), B.mask(t))}} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
+  %Equal.sym(Nat, Nat.add(m1, 1n+B.len(t)), 1n+Nat.add(m1, B.len(t)), UL.nat_add_succ(m1, B.len(t))) : {M.mtf.dec(e1, M.Bzip2MtfDec{alpha, 0n, 1n, Nat.add(_, k)}) == Done{Con{a0, L.bz.app(L.bz.rep(m1, a0), B.mask(t))}} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
   %mv_inc(ds, 1n) : {M.mtf.dec(e1, M.Bzip2MtfDec{alpha, 0n, 1n, Nat.add(Nat.add(_, B.len(t)), k)}) == Done{L.bz.app(L.bz.rep(_, a0), B.mask(t))} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
   ih0(cvt)
 
@@ -4771,17 +4720,12 @@ def rot_rep(i: Nat, n: Nat, +c: U32) -> {W.bwt.rot(i, L.bz.rep(n, c)) == L.bz.re
           %drop_rep(j, p, c) : {Con{c, L.bz.app(_, tk)} == L.bz.rep(1n+p, c) : List<&2, U32>}
           Equal.cong(List<&2, U32>, List<&2, U32>, v => Con{c, v}, L.bz.app(d, tk), L.bz.rep(p, c), rot_rep(j, p, c))
 
-def u32_cmp_self(a: U32) -> {U32.cmp(a, a) == EQ{} : Cmp}:
-  match a:
-    case U32{+w}:
-      word_cmp_self(32n, w)
-
 def cmp_self_list(xs: List<&2, U32>) -> {W.bwt.cmp(xs, xs) == EQ{} : Cmp}:
   match xs:
     case Nil{}:
       {==}
     case Con{+x, +t}:
-      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, u32_cmp_self(x)) : {W.bwt.cmp.fin(_, W.bwt.cmp(t, t)) == EQ{} : Cmp}
+      %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {W.bwt.cmp.fin(_, W.bwt.cmp(t, t)) == EQ{} : Cmp}
       cmp_self_list(t)
 
 def le_self_list(+xs: List<&2, U32>) -> {True{} == W.bwt.le(xs, xs) : Bool}:
@@ -4830,10 +4774,10 @@ def len_rep(n: Nat, +c: U32, +a: Nat) -> {L.bz.len.go(L.bz.rep(n, c), a) == Nat.
     case 0n:
       {==}
     case 1n+(+p):
-      Equal.trans(Nat, L.bz.len.go(L.bz.rep(p, c), 1n+a), Nat.add(p, 1n+a), 1n+Nat.add(p, a), len_rep(p, c, 1n+a), add_succ_r(p, a))
+      Equal.trans(Nat, L.bz.len.go(L.bz.rep(p, c), 1n+a), Nat.add(p, 1n+a), 1n+Nat.add(p, a), len_rep(p, c, 1n+a), UL.nat_add_succ(p, a))
 
 def len_rep_r(+n: Nat, +c: U32) -> {n == L.bz.len(L.bz.rep(n, c)) : Nat}:
-  Equal.sym(Nat, L.bz.len(L.bz.rep(n, c)), n, Equal.trans(Nat, L.bz.len.go(L.bz.rep(n, c), 0n), Nat.add(n, 0n), n, len_rep(n, c, 0n), add_zero(n)))
+  Equal.sym(Nat, L.bz.len(L.bz.rep(n, c)), n, Equal.trans(Nat, L.bz.len.go(L.bz.rep(n, c), 0n), Nat.add(n, 0n), n, len_rep(n, c, 0n), UL.nat_add_zero(n)))
 
 def fwd_const(n: Nat, +c: U32) -> {W.ref.forward(L.bz.rep(n, c)) == W.Bzip2BwtList{L.bz.rep(n, c), 0} : W.Bzip2BwtList}:
   match n:
@@ -4892,7 +4836,7 @@ def rounds_const(k: Nat, +n: Nat, +c: U32, +j: Nat) -> {W.ref.rounds(k, L.bz.rep
     case 1n+(+p):
       %Equal.sym(List<&2, List<&2, U32>>, W.ref.cons(L.bz.rep(n, c), reps(n, L.bz.rep(j, c))), reps(n, L.bz.rep(1n+j, c)), cons_reps(n, c, L.bz.rep(j, c))) : {W.ref.rounds(p, L.bz.rep(n, c), W.ref.rsort(_)) == reps(n, L.bz.rep(1n+Nat.add(p, j), c)) : List<&2, List<&2, U32>>}
       %Equal.sym(List<&2, List<&2, U32>>, W.ref.rsort(reps(n, L.bz.rep(1n+j, c))), reps(n, L.bz.rep(1n+j, c)), rsort_reps(n, L.bz.rep(1n+j, c))) : {W.ref.rounds(p, L.bz.rep(n, c), _) == reps(n, L.bz.rep(1n+Nat.add(p, j), c)) : List<&2, List<&2, U32>>}
-      %add_succ_r(p, j) : {W.ref.rounds(p, L.bz.rep(n, c), reps(n, L.bz.rep(1n+j, c))) == reps(n, L.bz.rep(_, c)) : List<&2, List<&2, U32>>}
+      %UL.nat_add_succ(p, j) : {W.ref.rounds(p, L.bz.rep(n, c), reps(n, L.bz.rep(1n+j, c))) == reps(n, L.bz.rep(_, c)) : List<&2, List<&2, U32>>}
       rounds_const(p, n, c, 1n+j)
 
 def inv_const(n: Nat, +c: U32) -> {W.ref.inverse(L.bz.rep(n, c), 0) == Done{L.bz.rep(n, c)} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}:
@@ -4904,7 +4848,7 @@ def inv_const(n: Nat, +c: U32) -> {W.ref.inverse(L.bz.rep(n, c), 0) == Done{L.bz
       %len_rep_r(1n+m, c) : {W.ref.inverse.n(_, xs, 0) == Done{xs} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
       %Equal.sym(List<&2, List<&2, U32>>, W.ref.empties(1n+m), reps(1n+m, Nil{}), empties_reps(1n+m)) : {W.ref.row(List.get(&2, List<&2, U32>, W.ref.rounds(1n+m, xs, _), 0n)) == Done{xs} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
       %Equal.sym(List<&2, List<&2, U32>>, W.ref.rounds(1n+m, xs, reps(1n+m, L.bz.rep(0n, c))), reps(1n+m, L.bz.rep(Nat.add(1n+m, 0n), c)), rounds_const(1n+m, 1n+m, c, 0n)) : {W.ref.row(List.get(&2, List<&2, U32>, _, 0n)) == Done{xs} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
-      %Equal.sym(Nat, Nat.add(1n+m, 0n), 1n+m, add_zero(1n+m)) : {W.ref.row(List.get(&2, List<&2, U32>, reps(1n+m, L.bz.rep(_, c)), 0n)) == Done{xs} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
+      %Equal.sym(Nat, Nat.add(1n+m, 0n), 1n+m, UL.nat_add_zero(1n+m)) : {W.ref.row(List.get(&2, List<&2, U32>, reps(1n+m, L.bz.rep(_, c)), 0n)) == Done{xs} : Result<&2, &2, E.Bzip2Error, List<&2, U32>>}
       {==}
 
 # Octets: a list of copies, masked; a list masked makes the same Octets

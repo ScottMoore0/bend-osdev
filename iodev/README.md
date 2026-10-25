@@ -262,8 +262,8 @@ block `n`, `i` bytes in), `blocks_cover` (`blocks(bs, size) * bs` is `size`
 plus less than a block), `span_within` (a range inside the first `n` blocks,
 `off + len <= n * bs`, has its span inside them: `first + count <= n`) and
 `span_past` (a range that passes their end has a span that does too).
-Proved from Base's definitions of `Nat.divmod` (the division lemmas are
-ext2's).
+Proved with bend-osdev-u32's laws of Base's `Nat` division
+(`LAWS_div.bend`).
 
 **The adapters, for every pure device (`~D: Data` and its operations),
 continuation, device and range:** `io_read_blocks` and `io_read_bytes`: the
@@ -418,6 +418,10 @@ their helpers, `MemDev`, `ImgDev`, and its laws in the proofs); `xarray`
 64-bit offsets and sizes in `FileRW`'s template types, so that fileio's
 effects fit them). No other: fileio is imported only by the tests in
 `ref/`, not by the package.
+
+bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
+values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
+`Nat` and words (`LAWS_order.bend`).
 
 ## Status
 

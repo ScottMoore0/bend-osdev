@@ -7,6 +7,10 @@ import ../array/LAWS.bend as AL
 import ../array/PROOF.bend as APF
 import ./proof_heap.bend as HM
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/LAWS_order.bend as UO
+import ../u32/PROOF.bend as UP
+import ../u32/PROOF_order.bend as UOP
 
 # Contradictions and Bool
 
@@ -44,38 +48,12 @@ def kp.and_i(a: Bool, -b: Bool, ea: {a == True{} : Bool}, eb: {b == True{} : Boo
 
 # Nat
 
-def kp.add_zero(m: Nat) -> {Nat.add(m, 0n) == m : Nat}:
-  match m:
-    case 0n:
-      {==}
-    case 1n+p:
-      %kp.add_zero(p) : {1n+Nat.add(p, 0n) == 1n+_ : Nat}
-      {==}
-
 def kp.le_zero(x: Nat) -> {Nat.is_le(0n, x) == True{} : Bool}:
   match x:
     case 0n:
       {==}
     case 1n+p:
       {==}
-
-def kp.le_refl(x: Nat) -> {Nat.is_le(x, x) == True{} : Bool}:
-  match x:
-    case 0n:
-      {==}
-    case 1n+p:
-      kp.le_refl(p)
-
-def kp.le_trans(a: Nat, b: Nat, c: Nat, e: {Nat.is_le(a, b) == True{} : Bool}, f: {Nat.is_le(b, c) == True{} : Bool}) -> {Nat.is_le(a, c) == True{} : Bool}:
-  match a b c:
-    case 0n _ _:
-      kp.le_zero(c)
-    case 1n+ap 0n _:
-      Empty.absurd({Nat.is_le(1n+ap, c) == True{} : Bool}, kp.ft(e))
-    case 1n+ap 1n+bp 0n:
-      Empty.absurd({Nat.is_le(1n+ap, 0n) == True{} : Bool}, kp.ft(f))
-    case 1n+ap 1n+bp 1n+cp:
-      kp.le_trans(ap, bp, cp, e, f)
 
 def kp.le_succ(x: Nat) -> {Nat.is_le(x, 1n+x) == True{} : Bool}:
   match x:
@@ -95,7 +73,7 @@ def kp.nle(a: Nat, b: Nat, e: {Nat.is_le(a, b) == False{} : Bool}) -> {Nat.is_le
       kp.nle(ap, bp, e)
 
 def kp.le_of_lt(+a: Nat, b: Nat, e: {Nat.is_le(1n+a, b) == True{} : Bool}) -> {Nat.is_le(a, b) == True{} : Bool}:
-  kp.le_trans(a, 1n+a, b, kp.le_succ(a), e)
+  UO.nat_le_trans(a, 1n+a, b, kp.le_succ(a), e)
 
 # 1 + k <= z: z is not k
 def kp.neq(z: Nat, k: Nat, e: {Nat.is_le(1n+k, z) == True{} : Bool}) -> {Nat.is_eq(z, k) == False{} : Bool}:
@@ -128,7 +106,7 @@ def kp.half_le(+n: Nat) -> {Nat.is_le(K.ksort.half(n), n) == True{} : Bool}:
         case 0n:
           {==}
         case 1n+q:
-          kp.le_trans(K.ksort.half(q), q, 1n+q, kp.half_le(q), kp.le_succ(q))
+          UO.nat_le_trans(K.ksort.half(q), q, 1n+q, kp.half_le(q), kp.le_succ(q))
 
 # Lists
 
@@ -146,9 +124,9 @@ def kp.drop_len(-A: Data, +xs: List<&2, A>, +n: Nat) -> {Nat.is_le(List.length(&
     case Nil{} m:
       {==}
     case Con{h, t} 0n:
-      kp.le_refl(1n+List.length(&2, A, t))
+      UL.nat_le_refl(1n+List.length(&2, A, t))
     case Con{h, +t} 1n+p:
-      kp.le_trans(List.length(&2, A, List.drop(&2, A, t, p)), List.length(&2, A, t), 1n+List.length(&2, A, t), kp.drop_len(A, t, p), kp.le_succ(List.length(&2, A, t)))
+      UO.nat_le_trans(List.length(&2, A, List.drop(&2, A, t, p)), List.length(&2, A, t), 1n+List.length(&2, A, t), kp.drop_len(A, t, p), kp.le_succ(List.length(&2, A, t)))
 
 def kp.append_nil(-A: Data, xs: List<&2, A>) -> {List.append(&2, A, xs, Nil{}) == xs : List<&2, A>}:
   match xs:
@@ -202,7 +180,7 @@ def kp.count_go(~A: Data, ~le: A -> A -> Bool, ~f: A -> Bool, +xt: List<&2, A>, 
       {==}
     case xs Nil{} False{}:
       %Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), S.ksort.count.add(f(y), 0n)), S.ksort.count.add(f(y), Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), 0n)), kp.cadd_r(S.ksort.count(~A, ~f, Con{x, xs}), f(y), 0n)) : {S.ksort.count.add(f(y), S.ksort.count(~A, ~f, Con{x, xs})) == _ : Nat}
-      %Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), 0n), S.ksort.count(~A, ~f, Con{x, xs}), kp.add_zero(S.ksort.count(~A, ~f, Con{x, xs}))) : {S.ksort.count.add(f(y), S.ksort.count(~A, ~f, Con{x, xs})) == S.ksort.count.add(f(y), _) : Nat}
+      %Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), 0n), S.ksort.count(~A, ~f, Con{x, xs}), UL.nat_add_zero(S.ksort.count(~A, ~f, Con{x, xs}))) : {S.ksort.count.add(f(y), S.ksort.count(~A, ~f, Con{x, xs})) == S.ksort.count.add(f(y), _) : Nat}
       {==}
     case xs Con{+y2, yt2} False{}:
       %Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), S.ksort.count.add(f(y), S.ksort.count(~A, ~f, Con{y2, yt2}))), S.ksort.count.add(f(y), Nat.add(S.ksort.count(~A, ~f, Con{x, xs}), S.ksort.count(~A, ~f, Con{y2, yt2}))), kp.cadd_r(S.ksort.count(~A, ~f, Con{x, xs}), f(y), S.ksort.count(~A, ~f, Con{y2, yt2}))) : {S.ksort.count.add(f(y), S.ksort.count(~A, ~f, K.ksort.merge.go(~A, ~le, xs, yt2, le(x, y2), x, y2))) == _ : Nat}
@@ -214,7 +192,7 @@ def kp.count_merge(~A: Data, ~le: A -> A -> Bool, ~f: A -> Bool, +xs: List<&2, A
     case Nil{} b:
       {==}
     case Con{+x, +xt} Nil{}:
-      Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xt}), 0n), S.ksort.count(~A, ~f, Con{x, xt}), kp.add_zero(S.ksort.count(~A, ~f, Con{x, xt})))
+      Equal.sym(Nat, Nat.add(S.ksort.count(~A, ~f, Con{x, xt}), 0n), S.ksort.count(~A, ~f, Con{x, xt}), UL.nat_add_zero(S.ksort.count(~A, ~f, Con{x, xt})))
     case Con{+x, xt} Con{+y, yt}:
       kp.count_go(~A, ~le, ~f, xt, yt, le(x, y), x, y)
 
@@ -296,10 +274,10 @@ def kp.sorted_merge(~A: Data, ~key: A -> Nat, +xs: List<&2, A>, +ys: List<&2, A>
 # most g each
 
 def kp.bound_take(-A: Data, +x: A, +y: A, +t: List<&2, A>, +g: Nat, h: {Nat.is_le(List.length(&2, A, Con{x, Con{y, t}}), 1n+g) == True{} : Bool}) -> {Nat.is_le(List.length(&2, A, List.take(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), g) == True{} : Bool}:
-  kp.le_trans(List.length(&2, A, List.take(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), 1n+K.ksort.half(List.length(&2, A, t)), g, kp.take_len(A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t))), kp.le_trans(1n+K.ksort.half(List.length(&2, A, t)), 1n+List.length(&2, A, t), g, kp.half_le(List.length(&2, A, t)), h))
+  UO.nat_le_trans(List.length(&2, A, List.take(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), 1n+K.ksort.half(List.length(&2, A, t)), g, kp.take_len(A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t))), UO.nat_le_trans(1n+K.ksort.half(List.length(&2, A, t)), 1n+List.length(&2, A, t), g, kp.half_le(List.length(&2, A, t)), h))
 
 def kp.bound_drop(-A: Data, -x: A, +y: A, +t: List<&2, A>, +g: Nat, h: {Nat.is_le(List.length(&2, A, Con{x, Con{y, t}}), 1n+g) == True{} : Bool}) -> {Nat.is_le(List.length(&2, A, List.drop(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), g) == True{} : Bool}:
-  kp.le_trans(List.length(&2, A, List.drop(&2, A, Con{y, t}, K.ksort.half(List.length(&2, A, t)))), 1n+List.length(&2, A, t), g, kp.drop_len(A, Con{y, t}, K.ksort.half(List.length(&2, A, t))), h)
+  UO.nat_le_trans(List.length(&2, A, List.drop(&2, A, Con{y, t}, K.ksort.half(List.length(&2, A, t)))), 1n+List.length(&2, A, t), g, kp.drop_len(A, Con{y, t}, K.ksort.half(List.length(&2, A, t))), h)
 
 def kp.sorted_msort(~A: Data, ~key: A -> Nat, +fuel: Nat, +xs: List<&2, A>, +h: {Nat.is_le(List.length(&2, A, xs), fuel) == True{} : Bool}) -> {S.ksort.sorted_by.from(~A, ~key, K.ksort.msort(~A, ~(a => b => Nat.is_le(key(a), key(b))), fuel, xs), 0n) == True{} : Bool}:
   match fuel xs:
@@ -315,7 +293,7 @@ def kp.sorted_msort(~A: Data, ~key: A -> Nat, +fuel: Nat, +xs: List<&2, A>, +h: 
       kp.sorted_merge(~A, ~key, K.ksort.msort(~A, ~(a => b => Nat.is_le(key(a), key(b))), g, List.take(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), K.ksort.msort(~A, ~(a => b => Nat.is_le(key(a), key(b))), g, List.drop(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t)))), kp.sorted_msort(~A, ~key, g, List.take(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t))), kp.bound_take(A, x, y, t, g, h)), kp.sorted_msort(~A, ~key, g, List.drop(&2, A, Con{x, Con{y, t}}, 1n+K.ksort.half(List.length(&2, A, t))), kp.bound_drop(A, x, y, t, g, h)))
 
 def Laws.list_sort_by_sorted(A, key, xs):
-  kp.sorted_msort(~A, ~key, List.length(&2, A, xs), xs, kp.le_refl(List.length(&2, A, xs)))
+  kp.sorted_msort(~A, ~key, List.length(&2, A, xs), xs, UL.nat_le_refl(List.length(&2, A, xs)))
 
 # Stable, for a sort by key: keeping the elements of one key commutes with
 # the merge of sorted lists
@@ -336,7 +314,7 @@ def kp.kput_app(-A: Data, b: Bool, -x: A, -l: List<&2, A>, -m: List<&2, A>) -> {
 
 def kp.le_of_eq(+a: Nat, -b: Nat, e: {a == b : Nat}) -> {Nat.is_le(b, a) == True{} : Bool}:
   %e : {Nat.is_le(_, a) == True{} : Bool}
-  kp.le_refl(a)
+  UL.nat_le_refl(a)
 
 # a list sorted from above k holds no element of key k
 def kp.keep_none(~A: Data, ~key: A -> Nat, +l: List<&2, A>, +m: Nat, +k: Nat, +hs: {S.ksort.sorted_by.from(~A, ~key, l, m) == True{} : Bool}, +hl: {Nat.is_le(1n+k, m) == True{} : Bool}) -> {S.ksort.keep(~A, ~key, k, l) == Nil{} : List<&2, A>}:
@@ -344,8 +322,8 @@ def kp.keep_none(~A: Data, ~key: A -> Nat, +l: List<&2, A>, +m: Nat, +k: Nat, +h
     case Nil{}:
       {==}
     case Con{+z, +t}:
-      %Equal.sym(Bool, Nat.is_eq(key(z), k), False{}, kp.neq(key(z), k, kp.le_trans(1n+k, m, key(z), hl, kp.and_l(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs)))) : {S.ksort.keep.put(A, _, z, S.ksort.keep(~A, ~key, k, t)) == Nil{} : List<&2, A>}
-      kp.keep_none(~A, ~key, t, key(z), k, kp.and_r(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs), kp.le_trans(1n+k, m, key(z), hl, kp.and_l(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs)))
+      %Equal.sym(Bool, Nat.is_eq(key(z), k), False{}, kp.neq(key(z), k, UO.nat_le_trans(1n+k, m, key(z), hl, kp.and_l(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs)))) : {S.ksort.keep.put(A, _, z, S.ksort.keep(~A, ~key, k, t)) == Nil{} : List<&2, A>}
+      kp.keep_none(~A, ~key, t, key(z), k, kp.and_r(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs), UO.nat_le_trans(1n+k, m, key(z), hl, kp.and_l(Nat.is_le(m, key(z)), S.ksort.sorted_by.from(~A, ~key, t, key(z)), hs)))
 
 # key(y) < key(x), x <> xs sorted: when key(y) is k, x <> xs holds no key k
 def kp.keep_above(~A: Data, ~key: A -> Nat, +x: A, +xs: List<&2, A>, +y: A, +k: Nat, eb: {Nat.is_eq(key(y), k) == True{} : Bool}, e: {Nat.is_le(key(x), key(y)) == False{} : Bool}, hx: {S.ksort.sorted_by.from(~A, ~key, xs, key(x)) == True{} : Bool}) -> {S.ksort.keep(~A, ~key, k, Con{x, xs}) == Nil{} : List<&2, A>}:
@@ -416,7 +394,7 @@ def kp.keep_msort(~A: Data, ~key: A -> Nat, +fuel: Nat, +xs: List<&2, A>, +k: Na
       {==}
 
 def Laws.list_sort_by_stable(A, key, k, xs):
-  kp.keep_msort(~A, ~key, List.length(&2, A, xs), xs, k, kp.le_refl(List.length(&2, A, xs)))
+  kp.keep_msort(~A, ~key, List.length(&2, A, xs), xs, k, UL.nat_le_refl(List.length(&2, A, xs)))
 
 # Vectors
 

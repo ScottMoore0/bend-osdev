@@ -9,6 +9,8 @@ import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ./xorblocks.bend as X
 import ./LAWS.bend as Laws
+import ../u32/LAWS.bend as UL
+import ../u32/PROOF.bend as UP
 
 # Contradictions
 
@@ -47,17 +49,6 @@ def xb.succ_inj(-a: Nat, -b: Nat, e: {1n+a == 1n+b : Nat}) -> {a == b : Nat}:
 
 # XOR on bits and words
 
-def xb.bx_comm(+a: Bool, +b: Bool) -> {Bool.xor(a, b) == Bool.xor(b, a) : Bool}:
-  match a b:
-    case True{} True{}:
-      {==}
-    case True{} False{}:
-      {==}
-    case False{} True{}:
-      {==}
-    case False{} False{}:
-      {==}
-
 def xb.bx_assoc(+a: Bool, +b: Bool, +c: Bool) -> {Bool.xor(Bool.xor(a, b), c) == Bool.xor(a, Bool.xor(b, c)) : Bool}:
   match a b c:
     case True{} True{} True{}:
@@ -90,19 +81,6 @@ def xb.bx_zero(+a: Bool) -> {Bool.xor(a, False{}) == a : Bool}:
       {==}
     case False{}:
       {==}
-
-def xb.wx_comm(n: Nat, a: Word(n), b: Word(n)) -> {Word.xor(n, a, b) == Word.xor(n, b, a) : Word(n)}:
-  match n:
-    case 0n:
-      match a b:
-        case WNil{} WNil{}:
-          {==}
-    case 1n+p:
-      match a b:
-        case WCon{ah, at} WCon{bh, bt}:
-          %xb.bx_comm(bh, ah) : {WCon{_, Word.xor(p, at, bt)} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          %xb.wx_comm(p, bt, at) : {WCon{Bool.xor(bh, ah), _} == WCon{Bool.xor(bh, ah), Word.xor(p, bt, at)} : Word(1n+p)}
-          {==}
 
 def xb.wx_assoc(n: Nat, a: Word(n), b: Word(n), c: Word(n)) -> {Word.xor(n, Word.xor(n, a, b), c) == Word.xor(n, a, Word.xor(n, b, c)) : Word(n)}:
   match n:
@@ -142,12 +120,6 @@ def xb.wx_zero(n: Nat, a: Word(n)) -> {Word.xor(n, a, Word.zero(n)) == a : Word(
           %xb.bx_zero(ah) : {WCon{Bool.xor(ah, False{}), Word.xor(p, at, Word.zero(p))} == WCon{_, at} : Word(1n+p)}
           %xb.wx_zero(p, at) : {WCon{Bool.xor(ah, False{}), Word.xor(p, at, Word.zero(p))} == WCon{Bool.xor(ah, False{}), _} : Word(1n+p)}
           {==}
-
-def xb.ux_comm(a: U32, b: U32) -> {U32.xor(a, b) == U32.xor(b, a) : U32}:
-  match a b:
-    case U32{x} U32{y}:
-      %xb.wx_comm(32n, y, x) : {U32{_} == U32{Word.xor(32n, y, x)} : U32}
-      {==}
 
 def xb.ux_assoc(a: U32, b: U32, c: U32) -> {U32.xor(U32.xor(a, b), c) == U32.xor(a, U32.xor(b, c)) : U32}:
   match a b c:
@@ -244,7 +216,7 @@ def xb.pad_comm(a: List<&2, U32>, b: List<&2, U32>) -> {X.Xorb.xor_list(a, b) ==
     case Con{x, s} Nil{}:
       {==}
     case Con{+x, s} Con{+y, t}:
-      %xb.ux_comm(x, y) : {Con{U32.xor(x, y), X.Xorb.xor_list(s, t)} == Con{_, X.Xorb.xor_list(t, s)} : List<&2, U32>}
+      %UL.u32_xor_comm(x, y) : {Con{U32.xor(x, y), X.Xorb.xor_list(s, t)} == Con{_, X.Xorb.xor_list(t, s)} : List<&2, U32>}
       %xb.pad_comm(s, t) : {Con{U32.xor(x, y), X.Xorb.xor_list(s, t)} == Con{U32.xor(x, y), _} : List<&2, U32>}
       {==}
 
@@ -321,7 +293,7 @@ def xb.cut_comm(a: List<&2, U32>, b: List<&2, U32>) -> {X.Xorb.xor_cut_list(a, b
     case Con{x, s} Nil{}:
       {==}
     case Con{+x, s} Con{+y, t}:
-      %xb.ux_comm(x, y) : {Con{U32.xor(x, y), X.Xorb.xor_cut_list(s, t)} == Con{_, X.Xorb.xor_cut_list(t, s)} : List<&2, U32>}
+      %UL.u32_xor_comm(x, y) : {Con{U32.xor(x, y), X.Xorb.xor_cut_list(s, t)} == Con{_, X.Xorb.xor_cut_list(t, s)} : List<&2, U32>}
       %xb.cut_comm(s, t) : {Con{U32.xor(x, y), X.Xorb.xor_cut_list(s, t)} == Con{U32.xor(x, y), _} : List<&2, U32>}
       {==}
 
