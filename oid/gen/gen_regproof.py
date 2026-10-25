@@ -133,25 +133,20 @@ def rp.ns(-y: R.OidEntry, e: {None{} == Some{y} : Maybe<&2, R.OidEntry>}) -> Emp
 
 # ---------------------------------------------------------------- equality with itself
 
-def rp.rec_snd(a: Char, b: Char, rr: (String & String) & Cmp) -> {Pair.snd(String & String, Cmp, String.cmp.rec(a, b, rr)) == Pair.snd(String & String, Cmp, rr) : Cmp}:
-  match rr:
-    case (p, r):
-      match p:
-        case (u, v):
-          {==}
-
-def rp.str_self(s: String) -> {Pair.snd(String & String, Cmp, String.cmp(s, s)) == EQ{} : Cmp}:
+# Base's String.eq is Cmp.is_eq(String.order(a, b)), and String.order walks
+# both strings with String.order.go, comparing a char at a time (Bend 2.0.39)
+def rp.ord_self(s: String) -> {String.order.go(s, s, EQ{}) == EQ{} : Cmp}:
   match s:
     case SNil{}:
       {==}
     case SCon{h, +t}:
       match h:
         case Chr{+x}:
-          %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {Pair.snd(String & String, Cmp, String.cmp.fin(t, t, ((Chr{x}, Chr{x}), _))) == EQ{} : Cmp}
-          Equal.trans(Cmp, Pair.snd(String & String, Cmp, String.cmp.rec(Chr{x}, Chr{x}, String.cmp(t, t))), Pair.snd(String & String, Cmp, String.cmp(t, t)), EQ{}, rp.rec_snd(Chr{x}, Chr{x}, String.cmp(t, t)), rp.str_self(t))
+          %Equal.sym(Cmp, U32.cmp(x, x), EQ{}, UO.u32_cmp_refl(x)) : {String.order.go(t, t, _) == EQ{} : Cmp}
+          rp.ord_self(t)
 
 def rp.seq_self(+s: String) -> {String.eq(s, s) == True{} : Bool}:
-  %Equal.sym(Cmp, Pair.snd(String & String, Cmp, String.cmp(s, s)), EQ{}, rp.str_self(s)) : {Cmp.is_eq(_) == True{} : Bool}
+  %Equal.sym(Cmp, String.order.go(s, s, EQ{}), EQ{}, rp.ord_self(s)) : {Cmp.is_eq(_) == True{} : Bool}
   {==}
 
 def rp.nat_self(a: Nat) -> {Nat.is_eq(a, a) == True{} : Bool}:
