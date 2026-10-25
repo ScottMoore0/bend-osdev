@@ -3,14 +3,14 @@
 # and A. Degtyarev, 2013) sets it out, sections 6.1 (generation) and 6.2
 # (verification), over any curve of the ecc package (RFC 4357's CryptoPro
 # parameter sets are named there) and any hash (~digest; Streebog-256 and
-# Streebog-512 from the hashes package, the named defaults):
+# Streebog-512 from the streebog package, the named defaults):
 #   e = alpha mod q, alpha the integer whose binary representation is the
 #       hash vector h (e = 1 if that is 0),
 #   sign: C = k P, r = x_C mod q != 0, s = (r d + k e) mod q != 0,
 #   verify: 0 < r < q, 0 < s < q, v = e^-1 mod q, z1 = s v mod q,
 #       z2 = -r v mod q, C = z1 P + z2 Q, accept iff x_C mod q = r.
 # A hash vector's components are numbered from the right (RFC 6986, section
-# 4.2), and the hashes package outputs them from component 0: alpha is the
+# 4.2), and the streebog package outputs them from component 0: alpha is the
 # digest's bytes read least significant first.
 #
 # Keys and signatures travel as RFC 4491 ("Using the GOST R 34.10-94,
@@ -25,7 +25,7 @@ import ../bignum/modular.bend as Md
 import ../ecc/ecc.bend as E
 import ../ecc/ecdsa.bend as S
 import ../ecc/rfc6979.bend as R
-import ../hashes/streebog.bend as Stb
+import ../streebog/streebog.bend as Stb
 
 # Every failure
 type EcrdsaError is Data:
@@ -40,7 +40,7 @@ def EcrdsaError.check(ok: Bool, e: EcrdsaError) -> Result<&2, &2, EcrdsaError, U
     case False{}:
       Fail{e}
 
-# Streebog-256 and Streebog-512 (RFC 6986, the hashes package), the named
+# Streebog-256 and Streebog-512 (RFC 6986, the streebog package), the named
 # defaults for 256- and 512-bit curves
 def Ecrdsa.streebog256(o: B.Octets) -> B.Octets:
   Stb.HsStreebog.digest256(o)

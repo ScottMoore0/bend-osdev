@@ -16,7 +16,9 @@ GPL source was read.
 - **Laws reviewed.** The maintainer reviews every package's laws as they
   are written. They are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
   all.
-- **Bend 2.0.37**, pinned in `BEND_VERSION`.
+- **Bend 2.0.39**, pinned in `BEND_VERSION`. Every package passes its full
+  check, `--verdict` included, on 2.0.39 (2026-10-25). The times and memory
+  peaks in the packages' Status lines were measured on 2.0.37.
 - **Publishing on BendHub**, every package at version 0.1.0.0, as
   `bend-osdev-<package>`: so far acpi, aead, algo, apparmor, array, bpf,
   bytes, caps, cipher-modes, crc, crypto, gf, hashes, legacy-ciphers and
@@ -25,6 +27,16 @@ GPL source was read.
   the coming days. File names with a `-` are published with a `_`
   (`bend-osdev-cipher-modes@0.1.0.0/cipher_modes.bend`), since the hub
   refuses `-` in a path.
+- **bend-osdev-legacy-ciphers@0.1.0.0 is superseded** by cipher-core and the
+  cipher packages des, sm4, camellia, serpent, twofish, aria, cast6, blowfish,
+  cast5, tea, xtea, fcrypt and rc4 (one package per cipher); it stays on the
+  hub as it was.
+- **bend-osdev-hashes@0.1.0.0 is superseded** by md-engine and the hash
+  packages md4, md5, sha1, ripemd160, sm3, streebog and michael (one package
+  per hash); it stays on the hub as it was.
+- **bend-osdev-cipher-modes@0.1.0.0 is superseded** by mode-core, the mode
+  packages cbc, xts, ccm, cmac and pkcs7 (one package per mode), aes and
+  aes-modes; it stays on the hub as it was.
 
 ## Packages
 
@@ -85,12 +97,39 @@ GPL source was read.
 | [iso9660](iso9660/) | ISO 9660 with Rock Ridge, Joliet and El Torito, read-only |
 | [ext2](ext2/) | ext2, ext3 and ext4 (extents, checksums), read and write: mkfs, files, directories, links, rename, write and truncate, fsck |
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
-| [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES (128, 192, 256; decryption proved to undo encryption for every key and block) by default |
-| [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
-| [cm-instances](cm-instances/) | cipher-modes' CBC and XTS round-trip laws written out and proved for AES and each of legacy-ciphers' 128-bit ciphers, for every key and input |
-| [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
+| [mode-core](mode-core/) | What the 128-bit block-cipher modes below share: the block `CmBlock`, the cipher interface they take as template arguments, their error type and byte layer, with laws the modes' proofs use |
+| [pkcs7](pkcs7/) | PKCS #7 padding for any block size from 1 to 255, unpadding proved to undo padding |
+| [cbc](cbc/) | CBC over any 128-bit block cipher, with and without PKCS #7 padding, decryption proved to undo encryption |
+| [xts](xts/) | XTS, with ciphertext stealing, over any 128-bit block cipher, decryption proved to undo encryption |
+| [ccm](ccm/) | CCM authenticated encryption over any 128-bit block cipher, decryption proved to accept what encryption produced |
+| [cmac](cmac/) | CMAC over any 128-bit block cipher, streaming proved to give the MAC of the whole |
+| [aes](aes/) | AES-128, -192 and -256 as a block cipher for the modes (decryption proved to undo encryption for every key and block) |
+| [aes-modes](aes-modes/) | The modes with AES as the named default, taking raw keys, and the specifications' vectors |
+| [cipher-core](cipher-core/) | What the cipher packages below share: their error type, the 64-bit block, word helpers, tables and Feistel rounds over any round function, with laws the ciphers' proofs use; and ECB and CBC for any 64-bit block cipher |
+| [des](des/) | DES and Triple DES (for compatibility), with cipher-core's 64-bit ECB/CBC proved to undo themselves over both |
+| [sm4](sm4/) | SM4, a 128-bit block cipher that plugs into the modes above |
+| [camellia](camellia/) | Camellia-128, -192 and -256, plugging into the modes above |
+| [serpent](serpent/) | Serpent (keys of up to 256 bits), plugging into the modes above |
+| [twofish](twofish/) | Twofish (128-, 192- and 256-bit keys), plugging into the modes above |
+| [aria](aria/) | ARIA-128, -192 and -256, plugging into the modes above |
+| [cast6](cast6/) | CAST-256, plugging into the modes above |
+| [blowfish](blowfish/) | Blowfish, a 64-bit block cipher (for compatibility) |
+| [cast5](cast5/) | CAST-128, a 64-bit block cipher (for compatibility), and the S-boxes and round functions CAST-256 shares |
+| [tea](tea/) | TEA (for compatibility), and the steps TEA and XTEA share |
+| [xtea](xtea/) | XTEA (for compatibility) |
+| [fcrypt](fcrypt/) | FCrypt, AFS's rxkad cipher (for compatibility) |
+| [rc4](rc4/) | RC4 and RC4-drop[n], streaming (for compatibility only: RFC 7465 forbids it in TLS) |
+| [cm-instances](cm-instances/) | The CBC and XTS round-trip laws (cbc's and xts') written out and proved for AES and each 128-bit cipher above (sm4, camellia, serpent, twofish, aria, cast6), for every key and input |
+| [md-engine](md-engine/) | The Merkle–Damgård engine the hash packages below stream through, for any chaining value and compression function (its streaming law proved once for all of them), and what they share: the chaining-value types and their digest bytes, word helpers, length fields |
+| [md4](md4/) | MD4 (for compatibility), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [md5](md5/) | MD5 (for compatibility), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [sha1](sha1/) | SHA-1 (for compatibility, HMAC-SHA-1 and PBKDF2-HMAC-SHA-1), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [ripemd160](ripemd160/) | RIPEMD-160, streaming and one-shot (streaming, split and digest length proved for every input) |
+| [sm3](sm3/) | SM3 (GB/T 32905), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [streebog](streebog/) | Streebog-256 and Streebog-512 (GOST R 34.11-2012, RFC 6986), streaming and one-shot, and its LPS and g_N (streaming, split and digest length proved for every input) |
+| [michael](michael/) | Michael, TKIP's MIC (for TKIP only), streaming and in one call (streaming, split and tag length proved for every key and input; IEEE 802.11's vectors) |
 | [siphash](siphash/) | SipHash-c-d (64- and 128-bit output) and HalfSipHash-c-d (32- and 64-bit) for any number of rounds, streaming and one-shot, with Linux's SipHash-2-4, SipHash-1-3 and HalfSipHash-1-3 named; streaming, split and output length proved for every input; all 256 published vectors, checked against openssl |
-| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hash packages' hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
 | [aead](aead/) | AEGIS-128, encrypt-then-MAC over any cipher and MAC (the kernel's authenc), and the IV generators ESSIV, seqiv and echainiv over any AEAD, as instances of crypto's AEAD interface |
 | [bignum](bignum/) | Natural numbers of any size for public-key cryptography: bytes (OS2IP/I2OSP), arithmetic, Montgomery multiplication, modular exponentiation and inverse, Miller-Rabin, the Jacobi symbol |
 | [rsa](rsa/) | RSA (RFC 8017): the primitives with the CRT, RSASSA-PKCS1-v1_5 and RSASSA-PSS, RSAES-OAEP and RSAES-PKCS1-v1_5, MGF1 over any hash, key generation, a raw key form (encoding round trips proved) |

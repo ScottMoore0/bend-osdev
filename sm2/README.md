@@ -24,7 +24,7 @@ bend-osdev-pubkey (`pubkey/sm2.bend`).
   of `Sm2.sign_det` (through ecc's `rfc6979.bend`, with e in place of the
   message hash). This is not part of SM2, which asks for a random k; a
   verifier cannot tell the difference.
-* SM3 is the hashes package's (`hashes/sm3.bend`, GB/T 32905-2016 as that
+* SM3 is the sm3 package's (`sm3/sm3.bend`, GB/T 32905-2016 as that
   package's README cites it).
 
 ## Files
@@ -107,7 +107,7 @@ random source (this package has none).
 ## Dependencies
 
 `DEPS`: `bytes` (`Octets`), `bignum` (the integers), `ecc` (the curves,
-points, signatures and RFC 6979), `hashes` (SM3).
+points, signatures and RFC 6979), `sm3` (SM3).
 
 ## Status
 

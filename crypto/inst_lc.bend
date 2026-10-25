@@ -1,8 +1,9 @@
-# The adapter for legacy-ciphers: its error type mapped onto CrError, its
-# key schedules as the block-cipher interface's ~key, and the XOR of its
-# 64-bit block LcBlock64 (an open type). The 64-bit block format is
-# legacy-ciphers' own LcBlock64.of_octets and LcBlock64.to_octets, whose law
-# it proves (block64_octets_round_trip); the 128-bit ciphers use
+# The adapter for the cipher packages (des, sm4, ..., rc4) and their shared
+# cipher-core: cipher-core's error type mapped onto CrError, the ciphers' key
+# schedules as the block-cipher interface's ~key, and the XOR of
+# cipher-core's 64-bit block LcBlock64 (an open type). The 64-bit block
+# format is cipher-core's own LcBlock64.of_octets and LcBlock64.to_octets,
+# whose law it proves (block64_octets_round_trip); the 128-bit ciphers use
 # inst_cm.bend's format.
 #
 # Each cipher is then an instance with no code of its own, for example SM4:
@@ -12,7 +13,7 @@
 # (README.md lists every instance).
 import Base
 import ../bytes/bytes.bend as B
-import ../legacy-ciphers/legacy-ciphers.bend as L
+import ../cipher-core/cipher-core.bend as L
 import ./crypto.bend as Cr
 
 def CrLc.err(e: L.LcError) -> Cr.CrError:
@@ -24,11 +25,11 @@ def CrLc.err(e: L.LcError) -> Cr.CrError:
     case L.LcNotBlockMultiple{n}:
       Cr.CrNotBlockMultiple{n}
 
-# a legacy-ciphers result as an interface result
+# a cipher package's result (cipher-core's LcError) as an interface result
 def CrLc.lift(~A: Data, r: Result<&2, &2, L.LcError, A>) -> Result<&2, &2, Cr.CrError, A>:
   Cr.CrError.lift(~L.LcError, ~A, ~CrLc.err, r)
 
-# a legacy-ciphers key schedule as the interface's ~key
+# a cipher package's key schedule as the interface's ~key
 def CrLc.key(~K: Data, ~key: B.Octets -> Result<&2, &2, L.LcError, K>, o: B.Octets) -> Result<&2, &2, Cr.CrError, K>:
   CrLc.lift(~K, key(o))
 

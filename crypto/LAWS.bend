@@ -11,13 +11,14 @@
 # (all of them in one file outgrew a check process's memory under
 # --verdict; README.md, Laws). A proof elsewhere that uses a law imports
 # the pair that holds it:
-#   LAWS_cm.bend   cipher-modes' AES, CMAC and CCM, and its 128-bit block
-#   LAWS_lc.bend   legacy-ciphers' block ciphers and RC4, and its 64-bit block
+#   LAWS_cm.bend   AES, CMAC and CCM (the aes, cmac and ccm packages), and mode-core's 128-bit block
+#   LAWS_lc.bend   the cipher packages' block ciphers and RC4, and cipher-core's
+#                  64-bit block
 #   LAWS_crc.bend  crc's CRCs as hashes, and HMAC and HKDF over them
 #   LAWS_sha.bend  bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC,
 #                  HKDF, PBKDF2 and the SP 800-108 KDFs over them
-#   LAWS_hs.bend   the hashes package's hashes and Michael, and HMAC and
-#                  PBKDF2 over them
+#   LAWS_hs.bend   the hash packages' hashes (md4, md5, sha1, ripemd160,
+#                  sm3, streebog) and Michael, and HMAC and PBKDF2 over them
 #   LAWS_bytes.bend  the byte layer of ECB, CBC, PCBC and LRW
 #   LAWS_cts.bend  the CBC-CS3 round trip
 #   LAWS_hkdf.bend HKDF's length and prefix laws

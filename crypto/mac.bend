@@ -17,7 +17,7 @@
 # tag with every byte of the given one (no early exit; Octets.is_eq), and
 # satisfies both laws for every ~compute (LAWS.bend: mac_verify_tag_*). The
 # instances: HMAC over any hash (hmac.bend), CMAC over any 128-bit block
-# cipher (cipher-modes' Cmac.mac) and Michael (inst_michael.bend). PBKDF2
+# cipher (cmac's Cmac.mac) and Michael (inst_michael.bend). PBKDF2
 # (pbkdf2.bend) takes any MAC as its PRF.
 import Base
 import ../bytes/bytes.bend as B

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The block ciphers cipher-modes runs over, and the laws written per cipher.
+"""The block ciphers the 128-bit modes run over, and the laws written per cipher.
 
   python3 gen/instances.py           rewrite LAWS.bend, PROOF.bend and check.bend
   python3 gen/instances.py --check   only check that they are up to date
 
-cipher-modes states its four round-trip laws (cbc_blocks_round_trip,
-cbc_round_trip, xts_blocks_round_trip, xts_round_trip) once, for every
-cipher, with the hypothesis inv: for every list of blocks xs,
+bend-osdev-cbc and bend-osdev-xts state their four round-trip laws
+(cbc_blocks_round_trip, cbc_round_trip, xts_blocks_round_trip,
+xts_round_trip) once, for every cipher, with the hypothesis inv: for every list of blocks xs,
 CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs, at the law's key. That
 hypothesis is an ordinary one, used once, which --verdict models. For a
 cipher whose own package proves dec(k, enc(k, b)) == b for every key and
@@ -16,8 +16,8 @@ block, this script writes:
     on xs that uses the cipher's law at every block: a global law may be used
     any number of times);
   * <c>_cbc_blocks_round_trip, <c>_cbc_round_trip, <c>_xts_blocks_round_trip,
-    <c>_xts_round_trip: cipher-modes' laws at the cipher's template
-    arguments, each proved by cipher-modes' law with <c>_dec_enc as inv.
+    <c>_xts_round_trip: cbc's and xts' laws at the cipher's template
+    arguments, each proved by that law with <c>_dec_enc as inv.
 
 Adding a cipher: a row in CIPHERS (its import, its key type, its encryption
 and decryption, the law of its package that decryption undoes encryption,
@@ -36,21 +36,21 @@ def row(name, title, alias, path, K, key, enc, dec, rt, tkey, err="LC.LcError"):
 
 K16 = "000102030405060708090a0b0c0d0e0f"
 CIPHERS = [
-    row("sm4", "SM4 (legacy-ciphers)", "S", "../legacy-ciphers/sm4.bend", "S.LcSm4Key", "S.LcSm4.key",
-        "S.LcSm4.encrypt", "S.LcSm4.decrypt", "LL.sm4_round_trip", K16),
-    row("camellia", "Camellia (legacy-ciphers)", "Ca", "../legacy-ciphers/camellia.bend", "Ca.LcCamelliaKey", "Ca.LcCamellia.key",
-        "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt", "LL.camellia_round_trip", K16),
-    row("serpent", "Serpent (legacy-ciphers)", "Sp", "../legacy-ciphers/serpent.bend", "Sp.LcSerpentKey", "Sp.LcSerpent.key",
-        "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt", "LL.serpent_round_trip", K16),
-    row("twofish", "Twofish (legacy-ciphers)", "Tf", "../legacy-ciphers/twofish.bend", "Tf.LcTwofishKey", "Tf.LcTwofish.key",
-        "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt", "LL.twofish_round_trip", K16),
-    row("aria", "ARIA (legacy-ciphers)", "Ar", "../legacy-ciphers/aria.bend", "Ar.LcAriaKey", "Ar.LcAria.key",
-        "Ar.LcAria.encrypt", "Ar.LcAria.decrypt", "LL.aria_round_trip", K16),
-    row("cast6", "CAST-256 (legacy-ciphers)", "C6", "../legacy-ciphers/cast6.bend", "C6.LcCast6Key", "C6.LcCast6.key",
-        "C6.LcCast6.encrypt", "C6.LcCast6.decrypt", "LL.cast6_round_trip", K16),
-    # cipher-modes' own default: its round trip is cipher-modes' aes_round_trip
-    row("aes", "AES-128, AES-192 and AES-256 (cipher-modes)", "X", "../cipher-modes/aes.bend", "X.CmAesKey", "X.CmAes.key",
-        "X.CmAes.encrypt", "X.CmAes.decrypt", "CML.aes_round_trip", K16, "M.CmError"),
+    row("sm4", "SM4 (the sm4 package)", "S", "../sm4/sm4.bend", "S.LcSm4Key", "S.LcSm4.key",
+        "S.LcSm4.encrypt", "S.LcSm4.decrypt", "Sm4L.sm4_round_trip", K16),
+    row("camellia", "Camellia (the camellia package)", "Ca", "../camellia/camellia.bend", "Ca.LcCamelliaKey", "Ca.LcCamellia.key",
+        "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt", "CamL.camellia_round_trip", K16),
+    row("serpent", "Serpent (the serpent package)", "Sp", "../serpent/serpent.bend", "Sp.LcSerpentKey", "Sp.LcSerpent.key",
+        "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt", "SerpL.serpent_round_trip", K16),
+    row("twofish", "Twofish (the twofish package)", "Tf", "../twofish/twofish.bend", "Tf.LcTwofishKey", "Tf.LcTwofish.key",
+        "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt", "TwofL.twofish_round_trip", K16),
+    row("aria", "ARIA (the aria package)", "Ar", "../aria/aria.bend", "Ar.LcAriaKey", "Ar.LcAria.key",
+        "Ar.LcAria.encrypt", "Ar.LcAria.decrypt", "AriaL.aria_round_trip", K16),
+    row("cast6", "CAST-256 (the cast6 package)", "C6", "../cast6/cast6.bend", "C6.LcCast6Key", "C6.LcCast6.key",
+        "C6.LcCast6.encrypt", "C6.LcCast6.decrypt", "Cast6L.cast6_round_trip", K16),
+    # the modes' named default: its round trip is the aes package's aes_round_trip
+    row("aes", "AES-128, AES-192 and AES-256 (the aes package)", "X", "../aes/aes.bend", "X.CmAesKey", "X.CmAes.key",
+        "X.CmAes.encrypt", "X.CmAes.decrypt", "AesL.aes_round_trip", K16, "M.CmError"),
 ]
 
 L = "List<&2, M.CmBlock>"
@@ -64,7 +64,7 @@ def tpl(c):
 def laws_of(c):
     K, enc, dec, t = c["K"], c["enc"], c["dec"], c["title"]
     out = ["# %s\n" % t]
-    out.append("# meets cipher-modes' round-trip hypothesis at every key\n"
+    out.append("# meets the modes' round-trip hypothesis at every key\n"
                "law %s_dec_enc:\n  for +k: %s\n  for xs: %s\n  {M.CmBlock.dec_enc(%s, k, xs) == xs : %s}\n"
                % (c["name"], K, L, tpl(c), L))
     out.append("law %s_cbc_blocks_round_trip:\n  for +k: %s\n  for iv: M.CmBlock\n  for bs: %s\n"
@@ -97,13 +97,13 @@ def proofs_of(c):
                "      %%Equal.sym(M.CmBlock, %s(k, %s(k, x)), x, %s(k, x)) : {Con{_, %s} == Con{x, t} : %s}\n"
                "      %%Equal.sym(%s, %s, t, Laws.%s_dec_enc(k, t)) : {Con{x, _} == Con{x, t} : %s}\n"
                "      {==}\n" % (n, dec, enc, c["rt"], DE("t"), L, L, DE("t"), n, L))
-    out.append("def Laws.%s_cbc_blocks_round_trip(k, iv, bs):\n  CML.cbc_blocks_round_trip(%s, k, %s, iv, bs)\n"
+    out.append("def Laws.%s_cbc_blocks_round_trip(k, iv, bs):\n  CbcL.cbc_blocks_round_trip(%s, k, %s, iv, bs)\n"
                % (n, tpl(c), inv % (n, "k")))
-    out.append("def Laws.%s_cbc_round_trip(k, iv, m, hi, hm):\n  CML.cbc_round_trip(%s, k, %s, iv, m, hi, hm)\n"
+    out.append("def Laws.%s_cbc_round_trip(k, iv, m, hi, hm):\n  CbcL.cbc_round_trip(%s, k, %s, iv, m, hi, hm)\n"
                % (n, tpl(c), inv % (n, "k")))
-    out.append("def Laws.%s_xts_blocks_round_trip(k1, t, bs):\n  CML.xts_blocks_round_trip(%s, k1, %s, t, bs)\n"
+    out.append("def Laws.%s_xts_blocks_round_trip(k1, t, bs):\n  XtsL.xts_blocks_round_trip(%s, k1, %s, t, bs)\n"
                % (n, tpl(c), inv % (n, "k1")))
-    out.append("def Laws.%s_xts_round_trip(k1, k2, i, p, hi, hp):\n  CML.xts_round_trip(%s, k1, k2, %s, i, p, hi, hp)\n"
+    out.append("def Laws.%s_xts_round_trip(k1, k2, i, p, hi, hp):\n  XtsL.xts_round_trip(%s, k1, k2, %s, i, p, hi, hp)\n"
                % (n, tpl(c), inv % (n, "k1")))
     return "\n".join(out)
 
@@ -112,13 +112,14 @@ def imports():
     return "".join("import %s as %s\n" % (c["path"], c["alias"]) for c in CIPHERS)
 
 
-LAWS_HEAD = '''# Laws of cipher-modes' modes over each block cipher it runs over, written
+LAWS_HEAD = '''# Laws of the CBC and XTS modes (bend-osdev-cbc, bend-osdev-xts) over each
+# 128-bit block cipher they run over, written
 # out per cipher by gen/instances.py (do not edit by hand: change the script
 # and run it).
 #
-# For each cipher c: c_dec_enc, the cipher meets cipher-modes' round-trip
+# For each cipher c: c_dec_enc, the cipher meets the modes' round-trip
 # hypothesis (CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs) at every key and
-# list of blocks; and cipher-modes' four round-trip laws at c's template
+# list of blocks; and cbc's and xts' four round-trip laws at c's template
 # arguments, with no hypothesis: CBC on blocks for every key, IV and list of
 # blocks; CBC on bytes for every key, 16-byte IV and message of whole blocks;
 # XTS on blocks for every data key and starting tweak; XTS on bytes, with
@@ -126,23 +127,25 @@ LAWS_HEAD = '''# Laws of cipher-modes' modes over each block cipher it runs over
 # data unit of at least 16 bytes.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 '''
 
 PROOF_HEAD = '''# Proofs of LAWS.bend, written by gen/instances.py: each c_dec_enc by
-# induction on the list, with the cipher's own round-trip law (legacy-ciphers'
-# LAWS.bend, or cipher-modes' aes_round_trip) at every block; each mode law is
-# cipher-modes' law at the cipher's template arguments, with c_dec_enc as its
+# induction on the list, with the cipher's own round-trip law (its package's
+# LAWS.bend: aes_round_trip for AES) at every block; each mode law is
+# cbc's or xts' law at the cipher's template arguments, with c_dec_enc as its
 # hypothesis.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
-import ../cipher-modes/LAWS.bend as CML
-import ../cipher-modes/PROOF.bend as CMP
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
+import ../cbc/LAWS.bend as CbcL
+import ../cbc/PROOF.bend as CbcP
+import ../xts/LAWS.bend as XtsL
+import ../xts/PROOF.bend as XtsP
 '''
 
 
@@ -150,24 +153,35 @@ def laws_file():
     return (LAWS_HEAD + imports() + "\n" + "\n".join(laws_of(c) for c in CIPHERS))
 
 
+def law_imports():
+    """the laws and proofs of each cipher's own package"""
+    out = []
+    for c in CIPHERS:
+        alias = c["rt"].split(".")[0]
+        pkg = c["path"].split("/")[1]
+        out.append("import ../%s/LAWS.bend as %s\nimport ../%s/PROOF.bend as %sP\n" % (pkg, alias, pkg, alias[:-1]))
+    return "".join(out)
+
+
 def proof_file():
-    return (PROOF_HEAD + imports() + "import ../legacy-ciphers/LAWS.bend as LL\nimport ../legacy-ciphers/PROOF.bend as LP\n"
+    return (PROOF_HEAD + imports() + law_imports()
             + "import ./LAWS.bend as Laws\n\n" + "\n".join(proofs_of(c) for c in CIPHERS))
 
 
-CHECK_HEAD = '''# Every cipher through cipher-modes' four round trips, at run time: a key
+CHECK_HEAD = '''# Every cipher through the four round trips of CBC and XTS, at run time: a key
 # the cipher accepts, a 16-byte IV or sequence number, and data of 64 bytes
 # (CBC, and XTS on whole blocks) and 61 bytes (XTS with ciphertext
 # stealing), encrypted and decrypted back. Written by gen/instances.py. The
-# ciphers' own values are tested in legacy-ciphers (its vectors, and CBC
-# against cryptography and the openssl command) and in cipher-modes (AES:
-# FIPS 197's vectors, and against cryptography), the modes' in cipher-modes.
+# ciphers' own values are tested in their packages (sm4, camellia, serpent,
+# twofish, aria, cast6: their vectors, and CBC against cryptography, the
+# openssl command or their models) and in aes (AES: FIPS 197's vectors, and
+# against cryptography), the modes' in cbc and xts, and over AES in aes-modes.
 import Base
 import ../bytes/bytes.bend as B
-import ../legacy-ciphers/legacy-ciphers.bend as LC
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../cipher-core/cipher-core.bend as LC
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 '''
 
 CHECK_DEFS = '''

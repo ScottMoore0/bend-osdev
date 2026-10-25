@@ -12,8 +12,8 @@ Its files are staged in a temporary directory first:
     ref/ and gen/ stays out;
   * each import of a sibling package, `import ../y/f.bend as Y`, becomes the
     hub import `import bend-osdev-y@<y/VERSION>/f.bend as Y`;
-  * a - in a file's path becomes a _ (cipher-modes.bend is staged as
-    cipher_modes.bend), in the file's name and in every import of it, since
+  * a - in a file's path becomes a _ (mode-core.bend is staged as
+    mode_core.bend), in the file's name and in every import of it, since
     the hub refuses a path segment that is not letters, digits and _;
   * a generated entry, package.bend, imports every staged file, because
     `bend --publish` sends the file it is given and what that file imports,
@@ -141,7 +141,7 @@ def order(want):
 
 def hub_path(path):
     """a file path as the hub accepts it: the hub refuses a path segment that
-    is not letters, digits and _ (cipher-modes.bend), so a - becomes a _ in
+    is not letters, digits and _ (mode-core.bend), so a - becomes a _ in
     every segment; . and .. are kept"""
     return "/".join(s if s in (".", "..") else s.replace("-", "_") for s in path.split("/"))
 

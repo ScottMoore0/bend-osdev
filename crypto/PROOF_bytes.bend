@@ -1,13 +1,13 @@
-# Proofs of LAWS_bytes.bend, from bytes' laws and legacy-ciphers'
+# Proofs of LAWS_bytes.bend, from bytes' laws and cipher-core's
 # block64_octets_round_trip (and proof_bits.bend's 128-bit format lemma).
 import Base
 import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
-import ../cipher-modes/cipher-modes.bend as M
-import ../legacy-ciphers/legacy-ciphers.bend as L
-import ../legacy-ciphers/LAWS.bend as LL
-import ../legacy-ciphers/PROOF.bend as LP
+import ../mode-core/mode-core.bend as M
+import ../cipher-core/cipher-core.bend as L
+import ../cipher-core/LAWS.bend as CoreL
+import ../cipher-core/PROOF.bend as CoreP
 import ../gf/gf128.bend as G
 import ./crypto.bend as Cr
 import ./stream.bend as St
@@ -363,7 +363,7 @@ def pb.lc_reads(bs: List<&2, L.LcBlock64>) -> {Laws.crbl.reads(~L.LcBlock64, ~L.
     case Nil{}:
       {==}
     case Con{+b, t}:
-      %LL.block64_octets_round_trip(b) : {Con{L.LcBlock64.of_octets(L.LcBlock64.to_octets(b)), Laws.crbl.reads(~L.LcBlock64, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, t)} == Con{_, Laws.crbl.somes(~L.LcBlock64, t)} : List<&2, Maybe<&2, L.LcBlock64>>}
+      %CoreL.block64_octets_round_trip(b) : {Con{L.LcBlock64.of_octets(L.LcBlock64.to_octets(b)), Laws.crbl.reads(~L.LcBlock64, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, t)} == Con{_, Laws.crbl.somes(~L.LcBlock64, t)} : List<&2, Maybe<&2, L.LcBlock64>>}
       %pb.lc_reads(t) : {Con{L.LcBlock64.of_octets(L.LcBlock64.to_octets(b)), Laws.crbl.reads(~L.LcBlock64, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, t)} == Con{L.LcBlock64.of_octets(L.LcBlock64.to_octets(b)), _} : List<&2, Maybe<&2, L.LcBlock64>>}
       {==}
 
@@ -458,13 +458,13 @@ def Laws.cmblock_cbc_octets_round_trip(K, enc, dec, k, v, bs, h):
   pb.cbc(~K, ~M.CmBlock, ~16n, ~enc, ~dec, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets, k, v, bs, pb.cm_fmt(v), Laws.cmblock_blocks_of_octets_of(bs), Laws.cmblock_blocks_of_octets_of(Md.CrCbc.encrypt_blocks(~K, ~M.CmBlock, ~enc, ~CM.CrBlk128.xor, k, v, bs)), h)
 
 def Laws.lcblock64_cbc_octets_round_trip(K, enc, dec, k, v, bs, h):
-  pb.cbc(~K, ~L.LcBlock64, ~8n, ~enc, ~dec, ~LC.CrBlk64.xor, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, v, bs, LL.block64_octets_round_trip(v), Laws.lcblock64_blocks_of_octets_of(bs), Laws.lcblock64_blocks_of_octets_of(Md.CrCbc.encrypt_blocks(~K, ~L.LcBlock64, ~enc, ~LC.CrBlk64.xor, k, v, bs)), h)
+  pb.cbc(~K, ~L.LcBlock64, ~8n, ~enc, ~dec, ~LC.CrBlk64.xor, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, v, bs, CoreL.block64_octets_round_trip(v), Laws.lcblock64_blocks_of_octets_of(bs), Laws.lcblock64_blocks_of_octets_of(Md.CrCbc.encrypt_blocks(~K, ~L.LcBlock64, ~enc, ~LC.CrBlk64.xor, k, v, bs)), h)
 
 def Laws.cmblock_pcbc_octets_round_trip(K, enc, dec, k, v, bs, h):
   pb.pcbc(~K, ~M.CmBlock, ~16n, ~enc, ~dec, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets, k, v, bs, pb.cm_fmt(v), Laws.cmblock_blocks_of_octets_of(bs), Laws.cmblock_blocks_of_octets_of(Pc.CrPcbc.encrypt_blocks(~K, ~M.CmBlock, ~enc, ~CM.CrBlk128.xor, k, v, bs)), h)
 
 def Laws.lcblock64_pcbc_octets_round_trip(K, enc, dec, k, v, bs, h):
-  pb.pcbc(~K, ~L.LcBlock64, ~8n, ~enc, ~dec, ~LC.CrBlk64.xor, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, v, bs, LL.block64_octets_round_trip(v), Laws.lcblock64_blocks_of_octets_of(bs), Laws.lcblock64_blocks_of_octets_of(Pc.CrPcbc.encrypt_blocks(~K, ~L.LcBlock64, ~enc, ~LC.CrBlk64.xor, k, v, bs)), h)
+  pb.pcbc(~K, ~L.LcBlock64, ~8n, ~enc, ~dec, ~LC.CrBlk64.xor, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, v, bs, CoreL.block64_octets_round_trip(v), Laws.lcblock64_blocks_of_octets_of(bs), Laws.lcblock64_blocks_of_octets_of(Pc.CrPcbc.encrypt_blocks(~K, ~L.LcBlock64, ~enc, ~LC.CrBlk64.xor, k, v, bs)), h)
 
 def Laws.cmblock_lrw_octets_round_trip(K, enc, dec, k, k2, i, iv, hi, bs, h):
   pb.lrw(~K, ~M.CmBlock, ~16n, ~enc, ~dec, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets, k, k2, i, iv, hi, bs, Laws.cmblock_blocks_of_octets_of(bs), Laws.cmblock_blocks_of_octets_of(Lw.CrLrw.encrypt_blocks(~K, ~M.CmBlock, ~enc, ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, k, k2, i, bs)), h)

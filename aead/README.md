@@ -48,7 +48,7 @@ Written from the public specifications only:
   encryption of a nonce); the IV travels in front of the ciphertext, as
   ESP's explicit IV does (RFC 4303).
 * **CBC and PKCS #7 padding:** through bend-osdev-crypto's `modes.bend` (SP
-  800-38A) and cipher-modes' `pkcs7.bend` (RFC 5652, section 6.3).
+  800-38A) and bend-osdev-pkcs7's `pkcs7.bend` (RFC 5652, section 6.3).
 
 No GPL source was read: the kernel served only as a black box through
 AF_ALG, in the differential test.
@@ -179,7 +179,7 @@ as `{==}` laws the checker (`--check-only`) accepts them, but `--verdict`
 does not: one vector is 18 to 20 state updates (90 to 100 AES rounds), and the
 kernel's fuel for one def (400,000,000 steps) runs out after six updates
 (measured: six check, seven do not), so they are in `check.bend` rather
-than `LAWS.bend`, as hashes' Streebog digests are; the
+than `LAWS.bend`, as streebog's whole digests are; the
 round trips of the generic constructions unconditionally (they hold where
 the wrapped algorithm's do: for a crypto instance with a proved round trip
 the hypothesis is that law at the arguments used).
@@ -243,8 +243,8 @@ AES-CBC over 64 KB both ways, 17 s and 620 MB. `check.bend` takes about
 ## Dependencies
 
 `DEPS`: `bytes` (Octets, and its laws in the proofs), `word64` (the 64-bit
-lengths of AEGIS and the McGrew input), `cipher-modes` (PKCS #7 padding; AES
-and its block type for `check.bend`), `crypto` (the interfaces, `CrError`, CBC,
+lengths of AEGIS and the McGrew input), `pkcs7` (PKCS #7 padding), `aes` and `mode-core` (AES
+and its block type, for `check.bend`), `crypto` (the interfaces, `CrError`, CBC,
 `octets.bend`; the AES, CCM, SHA-256 and HMAC instances for `check.bend`).
 
 ## Status

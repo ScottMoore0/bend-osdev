@@ -28,8 +28,8 @@
 #   xor              bxor(bxor(a, b), b) == a
 #   key_length       a key of a length the cipher does not take is refused
 #
-# The formats of the existing ciphers: inst_cm.bend (cipher-modes' 128-bit
-# CmBlock) and inst_lc.bend (legacy-ciphers' 64-bit LcBlock64). Modes over
+# The formats of the existing ciphers: inst_cm.bend (mode-core's 128-bit
+# CmBlock) and inst_lc.bend (cipher-core's 64-bit LcBlock64). Modes over
 # any block cipher are in modes.bend.
 import Base
 import ../bytes/bytes.bend as B

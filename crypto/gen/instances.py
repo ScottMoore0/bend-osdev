@@ -28,8 +28,9 @@ arguments, the names of the laws its own package proves, and its part: the
 pair of files for the package it comes from), then run this script. An
 instance from a package with no pair yet gets a new part: a LAWS_<part>.bend
 and PROOF_<part>.bend with the two regions, importing that package's laws
-and proofs, and its name in PARTS. A hash of the hashes package is a
-hs_row: its interface laws are written here too, each its own package's law.
+and proofs, and its name in PARTS. A hash of a hash package on md-engine
+(md4, md5, sha1, ripemd160, sm3, streebog) is a hs_row: its interface laws
+are written here too, each its own package's law.
 A new schema: a function below, and its rows.
 """
 import os, sys
@@ -64,46 +65,46 @@ def lc_key(K, fn):
 
 
 BLOCK = [
-    block("des", "DES (legacy-ciphers)", "D.LcDesKey", lc_key("D.LcDesKey", "D.LcDes.key"), "D.LcDes.encrypt", "D.LcDes.decrypt",
-          F64, "LL.des_round_trip", "LL.des_round_trip_dual", 7),
-    block("tdes", "Triple DES (legacy-ciphers)", "T.LcTdesKey", lc_key("T.LcTdesKey", "T.LcTdes.key"), "T.LcTdes.encrypt", "T.LcTdes.decrypt",
-          F64, "LL.tdes_round_trip", "LL.tdes_round_trip_dual", 8),
-    block("sm4", "SM4 (legacy-ciphers)", "S.LcSm4Key", lc_key("S.LcSm4Key", "S.LcSm4.key"), "S.LcSm4.encrypt", "S.LcSm4.decrypt",
-          F128, "LL.sm4_round_trip", "LL.sm4_round_trip_dual", 15),
-    block("camellia", "Camellia (legacy-ciphers)", "Ca.LcCamelliaKey", lc_key("Ca.LcCamelliaKey", "Ca.LcCamellia.key"), "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt",
-          F128, "LL.camellia_round_trip", "LL.camellia_round_trip_dual", 20),
-    block("serpent", "Serpent (legacy-ciphers)", "Sp.LcSerpentKey", lc_key("Sp.LcSerpentKey", "Sp.LcSerpent.key"), "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt",
-          F128, "LL.serpent_round_trip", "LL.serpent_round_trip_dual", 33),
-    block("twofish", "Twofish (legacy-ciphers)", "Tf.LcTwofishKey", lc_key("Tf.LcTwofishKey", "Tf.LcTwofish.key"), "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt",
-          F128, "LL.twofish_round_trip", "LL.twofish_round_trip_dual", 20),
-    block("aria", "ARIA (legacy-ciphers)", "Ar.LcAriaKey", lc_key("Ar.LcAriaKey", "Ar.LcAria.key"), "Ar.LcAria.encrypt", "Ar.LcAria.decrypt",
-          F128, "LL.aria_round_trip", "LL.aria_round_trip_dual", 20),
-    block("cast6", "CAST-256 (legacy-ciphers)", "C6.LcCast6Key", lc_key("C6.LcCast6Key", "C6.LcCast6.key"), "C6.LcCast6.encrypt", "C6.LcCast6.decrypt",
-          F128, "LL.cast6_round_trip", "LL.cast6_round_trip_dual", 18),
-    block("blowfish", "Blowfish (legacy-ciphers)", "Bf.LcBlowfishKey", lc_key("Bf.LcBlowfishKey", "Bf.LcBlowfish.key"), "Bf.LcBlowfish.encrypt", "Bf.LcBlowfish.decrypt",
-          F64, "LL.blowfish_round_trip", "LL.blowfish_round_trip_dual", 3),
-    block("cast5", "CAST-128 (legacy-ciphers)", "C5.LcCast5Key", lc_key("C5.LcCast5Key", "C5.LcCast5.key"), "C5.LcCast5.encrypt", "C5.LcCast5.decrypt",
-          F64, "LL.cast5_round_trip", "LL.cast5_round_trip_dual", 4),
-    block("tea", "TEA, little-endian words (legacy-ciphers)", "Te.LcTeaKey", lc_key("Te.LcTeaKey", "Te.LcTea.key"), "Te.LcTea.encrypt", "Te.LcTea.decrypt",
-          F64, "LL.tea_round_trip", "LL.tea_round_trip_dual", 15),
-    block("xtea", "XTEA, little-endian words (legacy-ciphers)", "Xt.LcXteaKey", lc_key("Xt.LcXteaKey", "Xt.LcXtea.key"), "Xt.LcXtea.encrypt", "Xt.LcXtea.decrypt",
-          F64, "LL.xtea_round_trip", "LL.xtea_round_trip_dual", 17),
-    block("fcrypt", "FCrypt (legacy-ciphers)", "Fc.LcFcryptKey", lc_key("Fc.LcFcryptKey", "Fc.LcFcrypt.key"), "Fc.LcFcrypt.encrypt", "Fc.LcFcrypt.decrypt",
-          F64, "LL.fcrypt_round_trip", "LL.fcrypt_round_trip_dual", 7),
-    # cipher-modes proves decryption undoes encryption for every key
+    block("des", "DES (the des package)", "D.LcDesKey", lc_key("D.LcDesKey", "D.LcDes.key"), "D.LcDes.encrypt", "D.LcDes.decrypt",
+          F64, "DesL.des_round_trip", "DesL.des_round_trip_dual", 7),
+    block("tdes", "Triple DES (the des package)", "T.LcTdesKey", lc_key("T.LcTdesKey", "T.LcTdes.key"), "T.LcTdes.encrypt", "T.LcTdes.decrypt",
+          F64, "DesL.tdes_round_trip", "DesL.tdes_round_trip_dual", 8),
+    block("sm4", "SM4 (the sm4 package)", "S.LcSm4Key", lc_key("S.LcSm4Key", "S.LcSm4.key"), "S.LcSm4.encrypt", "S.LcSm4.decrypt",
+          F128, "Sm4L.sm4_round_trip", "Sm4L.sm4_round_trip_dual", 15),
+    block("camellia", "Camellia (the camellia package)", "Ca.LcCamelliaKey", lc_key("Ca.LcCamelliaKey", "Ca.LcCamellia.key"), "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt",
+          F128, "CamL.camellia_round_trip", "CamL.camellia_round_trip_dual", 20),
+    block("serpent", "Serpent (the serpent package)", "Sp.LcSerpentKey", lc_key("Sp.LcSerpentKey", "Sp.LcSerpent.key"), "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt",
+          F128, "SerpL.serpent_round_trip", "SerpL.serpent_round_trip_dual", 33),
+    block("twofish", "Twofish (the twofish package)", "Tf.LcTwofishKey", lc_key("Tf.LcTwofishKey", "Tf.LcTwofish.key"), "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt",
+          F128, "TwofL.twofish_round_trip", "TwofL.twofish_round_trip_dual", 20),
+    block("aria", "ARIA (the aria package)", "Ar.LcAriaKey", lc_key("Ar.LcAriaKey", "Ar.LcAria.key"), "Ar.LcAria.encrypt", "Ar.LcAria.decrypt",
+          F128, "AriaL.aria_round_trip", "AriaL.aria_round_trip_dual", 20),
+    block("cast6", "CAST-256 (the cast6 package)", "C6.LcCast6Key", lc_key("C6.LcCast6Key", "C6.LcCast6.key"), "C6.LcCast6.encrypt", "C6.LcCast6.decrypt",
+          F128, "Cast6L.cast6_round_trip", "Cast6L.cast6_round_trip_dual", 18),
+    block("blowfish", "Blowfish (the blowfish package)", "Bf.LcBlowfishKey", lc_key("Bf.LcBlowfishKey", "Bf.LcBlowfish.key"), "Bf.LcBlowfish.encrypt", "Bf.LcBlowfish.decrypt",
+          F64, "BfL.blowfish_round_trip", "BfL.blowfish_round_trip_dual", 3),
+    block("cast5", "CAST-128 (the cast5 package)", "C5.LcCast5Key", lc_key("C5.LcCast5Key", "C5.LcCast5.key"), "C5.LcCast5.encrypt", "C5.LcCast5.decrypt",
+          F64, "Cast5L.cast5_round_trip", "Cast5L.cast5_round_trip_dual", 4),
+    block("tea", "TEA, little-endian words (the tea package)", "Te.LcTeaKey", lc_key("Te.LcTeaKey", "Te.LcTea.key"), "Te.LcTea.encrypt", "Te.LcTea.decrypt",
+          F64, "TeaL.tea_round_trip", "TeaL.tea_round_trip_dual", 15),
+    block("xtea", "XTEA, little-endian words (the xtea package)", "Xt.LcXteaKey", lc_key("Xt.LcXteaKey", "Xt.LcXtea.key"), "Xt.LcXtea.encrypt", "Xt.LcXtea.decrypt",
+          F64, "XteaL.xtea_round_trip", "XteaL.xtea_round_trip_dual", 17),
+    block("fcrypt", "FCrypt (the fcrypt package)", "Fc.LcFcryptKey", lc_key("Fc.LcFcryptKey", "Fc.LcFcrypt.key"), "Fc.LcFcrypt.encrypt", "Fc.LcFcrypt.decrypt",
+          F64, "FcL.fcrypt_round_trip", "FcL.fcrypt_round_trip_dual", 7),
+    # the aes package proves decryption undoes encryption for every key
     # (aes_round_trip); the reverse it does not prove
-    block("aes", "AES-128 and AES-256 (cipher-modes)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
-          F128, "CML.aes_round_trip", None, 24, part="cm"),
-    block("aes_enc", "AES, encryption key schedule only (cipher-modes)", "X.CmAesKey", "A.CrAes.key_enc", "X.CmAes.encrypt", "X.CmAes.decrypt",
+    block("aes", "AES-128 and AES-256 (the aes package)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
+          F128, "AesL.aes_round_trip", None, 24, part="cm"),
+    block("aes_enc", "AES, encryption key schedule only (the aes package)", "X.CmAesKey", "A.CrAes.key_enc", "X.CmAes.encrypt", "X.CmAes.decrypt",
           F128, None, None, 20, part="cm"),
 ]
 
 # stream ciphers that satisfy the interface directly (CTR over every block
 # cipher is covered by the generic laws ctr_*)
 STREAM = [
-    dict(name="rc4", title="RC4 (legacy-ciphers)", part="lc", S="R.LcRc4State", update="R.LcRc4.update",
+    dict(name="rc4", title="RC4 (the rc4 package)", part="lc", S="R.LcRc4State", update="R.LcRc4.update",
          out_state="R.LcRc4.out_state", out_data="R.LcRc4.out_data",
-         involution="LL.rc4_involution", sdata="LL.rc4_streaming_data", sstate="LL.rc4_streaming_state"),
+         involution="Rc4L.rc4_involution", sdata="Rc4L.rc4_streaming_data", sstate="Rc4L.rc4_streaming_state"),
 ]
 
 # hashes: tparams are the template parameters an instance's defs share (a
@@ -134,27 +135,27 @@ HASH = [
 ]
 
 
-def hs_row(name, title, H, mod, init, final, digest, dsize, upd=None, laws=None):
-    """a hash of the hashes package: its interface laws (streaming for every
-    state, split, split3, length) are written here from that package's own
-    laws (iface: HSL.<laws>_streaming and so on), and the HMAC laws from
-    them"""
-    return dict(name=name, title=title + " (hashes)", part="hs", tparams=[], H=H, init=init, update=upd or mod + ".update",
-                final=final, digest=digest, dsize=dsize, iface=laws or name,
+def hs_row(name, title, pkg, H, mod, init, final, digest, dsize, upd=None, laws=None):
+    """a hash of a hash package on md-engine: its interface laws (streaming
+    for every state, split, split3, length) are written here from that
+    package's own laws (iface: <alias>L.<laws>_streaming and so on, the
+    alias of mod with L), and the HMAC laws from them"""
+    return dict(name=name, title=title + " (%s)" % pkg, part="hs", tparams=[], H=H, init=init, update=upd or mod + ".update",
+                final=final, digest=digest, dsize=dsize, iface=laws or name, lawmod=mod.split(".")[0] + "L",
                 streaming="Laws.%s_hash_streaming(%%s, %%s, %%s)" % name, split="Laws.%s_hash_split(%%s, %%s)" % name,
                 split3="Laws.%s_hash_split3(%%s, %%s, %%s)" % name)
 
 
 HASH += [
-    hs_row("md4", "MD4", "Hs.HsMdState<Hs.HsW4>", "HM4.HsMd4", "HM4.HsMd4.init()", "HM4.HsMd4.final", "HM4.HsMd4.digest", 16),
-    hs_row("md5", "MD5", "Hs.HsMdState<Hs.HsW4>", "HM5.HsMd5", "HM5.HsMd5.init()", "HM5.HsMd5.final", "HM5.HsMd5.digest", 16),
-    hs_row("sha1", "SHA-1", "Hs.HsMdState<Hs.HsW5>", "HS1.HsSha1", "HS1.HsSha1.init()", "HS1.HsSha1.final", "HS1.HsSha1.digest", 20),
-    hs_row("ripemd160", "RIPEMD-160", "Hs.HsMdState<Hs.HsW5>", "HRM.HsRipemd160", "HRM.HsRipemd160.init()", "HRM.HsRipemd160.final",
+    hs_row("md4", "MD4", "md4", "Hs.HsMdState<Hs.HsW4>", "HM4.HsMd4", "HM4.HsMd4.init()", "HM4.HsMd4.final", "HM4.HsMd4.digest", 16),
+    hs_row("md5", "MD5", "md5", "Hs.HsMdState<Hs.HsW4>", "HM5.HsMd5", "HM5.HsMd5.init()", "HM5.HsMd5.final", "HM5.HsMd5.digest", 16),
+    hs_row("sha1", "SHA-1", "sha1", "Hs.HsMdState<Hs.HsW5>", "HS1.HsSha1", "HS1.HsSha1.init()", "HS1.HsSha1.final", "HS1.HsSha1.digest", 20),
+    hs_row("ripemd160", "RIPEMD-160", "ripemd160", "Hs.HsMdState<Hs.HsW5>", "HRM.HsRipemd160", "HRM.HsRipemd160.init()", "HRM.HsRipemd160.final",
            "HRM.HsRipemd160.digest", 20),
-    hs_row("sm3", "SM3", "Hs.HsMdState<Hs.HsW8>", "HSM.HsSm3", "HSM.HsSm3.init()", "HSM.HsSm3.final", "HSM.HsSm3.digest", 32),
-    hs_row("streebog256", "Streebog-256", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init256()",
+    hs_row("sm3", "SM3", "sm3", "Hs.HsMdState<Hs.HsW8>", "HSM.HsSm3", "HSM.HsSm3.init()", "HSM.HsSm3.final", "HSM.HsSm3.digest", 32),
+    hs_row("streebog256", "Streebog-256", "streebog", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init256()",
            "HST.HsStreebog.final256", "HST.HsStreebog.digest256", 32),
-    hs_row("streebog512", "Streebog-512", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init512()",
+    hs_row("streebog512", "Streebog-512", "streebog", "Hs.HsMdState<HST.HsStbCv>", "HST.HsStreebog", "HST.HsStreebog.init512()",
            "HST.HsStreebog.final512", "HST.HsStreebog.digest512", 64),
 ]
 
@@ -329,25 +330,25 @@ def stream_laws(c):
 
 
 def hash_iface_laws(h):
-    """the hash interface's laws for a hash of the hashes package, each its
-    own package's law (HSL) at the instance's defs"""
-    n, H, t, src = h["name"], h["H"], h["title"], h["iface"]
+    """the hash interface's laws for a hash of a hash package, each its own
+    package's law (h["lawmod"]) at the instance's defs"""
+    n, H, t, src, L = h["name"], h["H"], h["title"], h["iface"], h["lawmod"]
     U = lambda s, m: call(h["update"], s, m)
     F = lambda s: call(h["final"], s)
     D = lambda m: call(h["digest"], m)
     I = h["init"]
     law("%s_hash_streaming" % n, "%s: update over a ++ b is update over a, then b, for every state" % t,
         ["s: %s" % H, "+a: B.Octets", "+b: B.Octets"], "{%s == %s : %s}" % (U("s", "B.Octets.append(a, b)"), U(U("s", "a"), "b"), H))
-    proof("def Laws.%s_hash_streaming(s, a, b):\n  HSL.%s_streaming(s, a, b)\n" % (n, src))
+    proof("def Laws.%s_hash_streaming(s, a, b):\n  %s.%s_streaming(s, a, b)\n" % (n, L, src))
     law("%s_hash_split" % n, "%s: streaming equals one-shot, for every split" % t, ["+a: B.Octets", "+b: B.Octets"],
         "{%s == %s : B.Octets}" % (F(U(U(I, "a"), "b")), D("B.Octets.append(a, b)")))
-    proof("def Laws.%s_hash_split(a, b):\n  HSL.%s_split(a, b)\n" % (n, src))
+    proof("def Laws.%s_hash_split(a, b):\n  %s.%s_split(a, b)\n" % (n, L, src))
     law("%s_hash_split3" % n, "%s: and for every split into three" % t, ["+a: B.Octets", "+b: B.Octets", "+c: B.Octets"],
         "{%s == %s : B.Octets}" % (F(U(U(U(I, "a"), "b"), "c")), D("B.Octets.append(a, B.Octets.append(b, c))")))
-    proof("def Laws.%s_hash_split3(a, b, c):\n  HSL.%s_split3(a, b, c)\n" % (n, src))
+    proof("def Laws.%s_hash_split3(a, b, c):\n  %s.%s_split3(a, b, c)\n" % (n, L, src))
     law("%s_hash_length" % n, "%s: final(s) has %d bytes, for every state" % (t, h["dsize"]), ["+s: %s" % H],
         "{B.Octets.len(%s) == %dn : Nat}" % (F("s"), h["dsize"]))
-    proof("def Laws.%s_hash_length(s):\n  HSL.%s_length(s)\n" % (n, src))
+    proof("def Laws.%s_hash_length(s):\n  %s.%s_length(s)\n" % (n, L, src))
 
 
 def hash_laws(h):

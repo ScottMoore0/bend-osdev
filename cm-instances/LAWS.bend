@@ -1,10 +1,11 @@
-# Laws of cipher-modes' modes over each block cipher it runs over, written
+# Laws of the CBC and XTS modes (bend-osdev-cbc, bend-osdev-xts) over each
+# 128-bit block cipher they run over, written
 # out per cipher by gen/instances.py (do not edit by hand: change the script
 # and run it).
 #
-# For each cipher c: c_dec_enc, the cipher meets cipher-modes' round-trip
+# For each cipher c: c_dec_enc, the cipher meets the modes' round-trip
 # hypothesis (CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs) at every key and
-# list of blocks; and cipher-modes' four round-trip laws at c's template
+# list of blocks; and cbc's and xts' four round-trip laws at c's template
 # arguments, with no hypothesis: CBC on blocks for every key, IV and list of
 # blocks; CBC on bytes for every key, 16-byte IV and message of whole blocks;
 # XTS on blocks for every data key and starting tweak; XTS on bytes, with
@@ -12,20 +13,20 @@
 # data unit of at least 16 bytes.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
-import ../legacy-ciphers/sm4.bend as S
-import ../legacy-ciphers/camellia.bend as Ca
-import ../legacy-ciphers/serpent.bend as Sp
-import ../legacy-ciphers/twofish.bend as Tf
-import ../legacy-ciphers/aria.bend as Ar
-import ../legacy-ciphers/cast6.bend as C6
-import ../cipher-modes/aes.bend as X
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
+import ../sm4/sm4.bend as S
+import ../camellia/camellia.bend as Ca
+import ../serpent/serpent.bend as Sp
+import ../twofish/twofish.bend as Tf
+import ../aria/aria.bend as Ar
+import ../cast6/cast6.bend as C6
+import ../aes/aes.bend as X
 
-# SM4 (legacy-ciphers)
+# SM4 (the sm4 package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law sm4_dec_enc:
   for +k: S.LcSm4Key
   for xs: List<&2, M.CmBlock>
@@ -60,9 +61,9 @@ law sm4_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~S.LcSm4Key, ~S.LcSm4.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~S.LcSm4Key, ~S.LcSm4.encrypt, ~S.LcSm4.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# Camellia (legacy-ciphers)
+# Camellia (the camellia package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law camellia_dec_enc:
   for +k: Ca.LcCamelliaKey
   for xs: List<&2, M.CmBlock>
@@ -97,9 +98,9 @@ law camellia_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~Ca.LcCamelliaKey, ~Ca.LcCamellia.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~Ca.LcCamelliaKey, ~Ca.LcCamellia.encrypt, ~Ca.LcCamellia.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# Serpent (legacy-ciphers)
+# Serpent (the serpent package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law serpent_dec_enc:
   for +k: Sp.LcSerpentKey
   for xs: List<&2, M.CmBlock>
@@ -134,9 +135,9 @@ law serpent_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~Sp.LcSerpentKey, ~Sp.LcSerpent.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~Sp.LcSerpentKey, ~Sp.LcSerpent.encrypt, ~Sp.LcSerpent.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# Twofish (legacy-ciphers)
+# Twofish (the twofish package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law twofish_dec_enc:
   for +k: Tf.LcTwofishKey
   for xs: List<&2, M.CmBlock>
@@ -171,9 +172,9 @@ law twofish_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~Tf.LcTwofishKey, ~Tf.LcTwofish.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~Tf.LcTwofishKey, ~Tf.LcTwofish.encrypt, ~Tf.LcTwofish.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# ARIA (legacy-ciphers)
+# ARIA (the aria package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law aria_dec_enc:
   for +k: Ar.LcAriaKey
   for xs: List<&2, M.CmBlock>
@@ -208,9 +209,9 @@ law aria_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~Ar.LcAriaKey, ~Ar.LcAria.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~Ar.LcAriaKey, ~Ar.LcAria.encrypt, ~Ar.LcAria.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# CAST-256 (legacy-ciphers)
+# CAST-256 (the cast6 package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law cast6_dec_enc:
   for +k: C6.LcCast6Key
   for xs: List<&2, M.CmBlock>
@@ -245,9 +246,9 @@ law cast6_xts_round_trip:
   for hp: {Nat.is_le(16n, B.Octets.len(p)) == True{} : Bool}
   {Result.bind(&2, &2, M.CmError, B.Octets, B.Octets, XT.Xts.encrypt(~C6.LcCast6Key, ~C6.LcCast6.encrypt, k1, k2, i, p), c => XT.Xts.decrypt(~C6.LcCast6Key, ~C6.LcCast6.encrypt, ~C6.LcCast6.decrypt, k1, k2, i, c)) == Done{p} : Result<&2, &2, M.CmError, B.Octets>}
 
-# AES-128, AES-192 and AES-256 (cipher-modes)
+# AES-128, AES-192 and AES-256 (the aes package)
 
-# meets cipher-modes' round-trip hypothesis at every key
+# meets the modes' round-trip hypothesis at every key
 law aes_dec_enc:
   for +k: X.CmAesKey
   for xs: List<&2, M.CmBlock>

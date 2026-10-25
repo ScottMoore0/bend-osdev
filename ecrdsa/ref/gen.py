@@ -7,7 +7,7 @@ No implementation of GOST R 34.10-2012 outside this repository is installed
 here (Python's cryptography and the openssl command have none without the
 GOST engine), so the reference is this file's model of RFC 7091 sections 6.1
 and 6.2, on ecc's affine model (gen/curves.py), with Streebog from the
-hashes package's model (hashes/ref/model.py). Both share an author with
+streebog package's model (streebog/ref/model.py). Both share an author with
 this package; the model checks itself first on RFC 7091's example (section
 7: Q = d P, and the signature r, s from e and k), which check.bend also
 runs through this package.
@@ -21,7 +21,7 @@ import os, random, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'ecc', 'gen'))
-sys.path.insert(0, os.path.join(HERE, '..', '..', 'hashes', 'ref'))
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'streebog', 'ref'))
 import curves as CV  # noqa: E402
 import model as HM  # noqa: E402
 

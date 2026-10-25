@@ -15,8 +15,8 @@
 # kernel's authenc and cryptography's AES), with a changed IV byte refused.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/aes.bend as X
+import ../mode-core/mode-core.bend as M
+import ../aes/aes.bend as X
 import ../crypto/crypto.bend as Cr
 import ../crypto/inst_cm.bend as CM
 import ../crypto/inst_aes.bend as A

@@ -1,4 +1,4 @@
-# RC4 as a stream cipher: legacy-ciphers' RC4 (RFC 6229's description), and
+# RC4 as a stream cipher: the rc4 package's RC4 (RFC 6229's description), and
 # RC4-drop[n] (RFC 4345). RC4 is broken (RFC 7465 forbids it in TLS): it is
 # here to read and write what already uses it. The instance:
 #   ~R.LcRc4State, ~R.LcRc4Out, ~CrRc4.start, ~R.LcRc4.update,
@@ -7,8 +7,8 @@
 # place of ~CrRc4.start.
 import Base
 import ../bytes/bytes.bend as B
-import ../legacy-ciphers/legacy-ciphers.bend as L
-import ../legacy-ciphers/rc4.bend as R
+import ../cipher-core/cipher-core.bend as L
+import ../rc4/rc4.bend as R
 import ./crypto.bend as Cr
 import ./inst_lc.bend as LC
 

@@ -8,8 +8,8 @@ runs within a check process's memory) and ref/expected.txt (the same values
 from Python, in the same order):
   * block ciphers, one block both ways: AES, DES, 3DES, SM4, Camellia through
     Python's cryptography (OpenSSL; DES as TripleDES with three equal keys);
-    Serpent and Twofish through legacy-ciphers' ref/model.py (written from
-    the specifications by that package's author: cryptography has neither);
+    Serpent and Twofish through their packages' ref/model.py (written from
+    the specifications by those packages' author: cryptography has neither);
   * the modes over the interface (modes.bend): ECB, CBC and CTR, for those
     ciphers; ECB and CBC through cryptography where it has the cipher, CTR
     through this file's CTR (SP 800-38A) over cryptography's or the model's
@@ -42,8 +42,8 @@ from Python, in the same order):
     SHA-256 on RFC 5869's test case 1;
   * the newer block ciphers, one block both ways and through ECB, CBC and
     CTR: Blowfish and CAST-128 through cryptography, ARIA through the
-    openssl command (legacy-ciphers' model when it is missing), CAST-256,
-    TEA, XTEA and FCrypt through legacy-ciphers' model;
+    openssl command (aria's model when it is missing), CAST-256,
+    TEA, XTEA and FCrypt through their packages' models;
   * PCBC over every cipher, through this file's PCBC over the cipher's block
     function (checked first on the FCrypt specification's PCBC vector);
   * LRW over every 16-byte-block cipher: for AES the Linux kernel's
@@ -58,13 +58,14 @@ from Python, in the same order):
     interface, against this file's XCBC (checked on RFC 3566's vectors) and
     VMAC (checked on draft-krovetz-vmac-01's) over the cipher's block
     function, with verify accepting the tag and refusing it changed.
-  * the hashes package's hashes through the hash interface, one-shot and in
+  * the hash packages' hashes through the hash interface, one-shot and in
     pieces, and HMAC over them: MD5, SHA-1, RIPEMD-160 and SM3 against
-    hashlib and hmac; MD4 and Streebog against hashes/ref/model.py (Python
-    lacks them here; that model shares an author with the package and is
-    checked against the specifications' vectors first) under Python's hmac;
+    hashlib and hmac; MD4 and Streebog against md4/ref/model.py and
+    streebog/ref/model.py (Python lacks them here; each model shares an
+    author with its package and is checked against the specifications'
+    vectors first) under Python's hmac;
   * Michael through the MAC interface (the tag, verify of it and of it
-    changed) against hashes/ref/model.py;
+    changed) against michael/ref/model.py;
   * PBKDF2 over HMAC over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3 against
     hashlib.pbkdf2_hmac, and over SHA-1 and SHA-256 against cryptography's
     PBKDF2HMAC too, with iteration counts of 1 to 40 and outputs of 1 to
@@ -85,12 +86,42 @@ import binascii, hashlib, hmac, os, random, socket, subprocess, sys, warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.join(HERE, "..", "..", "legacy-ciphers", "ref"))
-import model as lcm  # noqa: E402
 import importlib.util  # noqa: E402
-_spec = importlib.util.spec_from_file_location("hsmodel", os.path.join(HERE, "..", "..", "hashes", "ref", "model.py"))
-hsm = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(hsm)
+import types  # noqa: E402
+
+
+def _model(pkg):
+    """the ref/model.py of a sibling cipher package"""
+    spec = importlib.util.spec_from_file_location("model_" + pkg, os.path.join(HERE, "..", "..", pkg, "ref", "model.py"))
+    mod = importlib.util.module_from_spec(spec)
+    # each model imports its own package's gen/tables.py as "tables"
+    sys.modules.pop("tables", None)
+    spec.loader.exec_module(mod)
+    sys.modules.pop("tables", None)
+    return mod
+
+
+# the ciphers' models, one per cipher package, under one name
+lcm = types.SimpleNamespace(**{k: v for p in ("serpent", "twofish", "aria", "cast6", "blowfish", "cast5", "tea", "xtea", "fcrypt", "rc4")
+                               for k, v in vars(_model(p)).items() if not k.startswith("__")})
+
+
+def _hsmodel(pkg):
+    """the ref/model.py of a hash package (each imports its own package's
+    gen/spec.py as "spec")"""
+    spec = importlib.util.spec_from_file_location("hsmodel_" + pkg, os.path.join(HERE, "..", "..", pkg, "ref", "model.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules.pop("spec", None)
+    spec.loader.exec_module(mod)
+    sys.modules.pop("spec", None)
+    return mod
+
+
+# the hash packages' models, under one name
+_hsms = {p: _hsmodel(p) for p in ("md4", "ripemd160", "sm3", "streebog", "michael")}
+hsm = types.SimpleNamespace(md4=_hsms["md4"].md4, ripemd160=_hsms["ripemd160"].ripemd160, sm3=_hsms["sm3"].sm3,
+                            streebog256=_hsms["streebog"].streebog256, streebog512=_hsms["streebog"].streebog512,
+                            michael=_hsms["michael"].michael, check_vectors=lambda: [m.check_vectors() for m in _hsms.values()])
 
 warnings.simplefilter("ignore")
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # noqa: E402
@@ -470,7 +501,7 @@ SHA = {"sha256": hashes.SHA256, "sha512": hashes.SHA512, "sha3_256": hashes.SHA3
 
 
 def whole(fn, dsize, name):
-    """a hash of hashes/ref/model.py as a Python hash object (for hmac)"""
+    """a hash of a hash package's ref/model.py as a Python hash object (for hmac)"""
     class Whole:
         digest_size, block_size = dsize, 64
 
@@ -493,7 +524,7 @@ def lib(name):
     return lambda data=b"": hashlib.new(name, data)
 
 
-# the hashes package's hashes: (Python hash object, its source, Bend template
+# the hash packages' hashes: (Python hash object, its source, Bend template
 # arguments)
 HS = {
     "md4": (whole(hsm.md4, 16, "md4"), "hsmodel", "~Hs.HsMdState<Hs.HsW4>, ~64n, ~16n, ~HM4.HsMd4.init(), ~HM4.HsMd4.update, ~HM4.HsMd4.final, ~HM4.HsMd4.digest"),
@@ -597,16 +628,16 @@ HEADER = '''# Generated by ref/gen.py; do not edit. Every instance through its i
 import Base
 import ../../bytes/bytes.bend as B
 import ../../word64/word64.bend as W
-import ../../cipher-modes/cipher-modes.bend as M
-import ../../cipher-modes/aes.bend as X
-import ../../legacy-ciphers/legacy-ciphers.bend as L
-import ../../legacy-ciphers/des.bend as D
-import ../../legacy-ciphers/tdes.bend as T
-import ../../legacy-ciphers/sm4.bend as S
-import ../../legacy-ciphers/camellia.bend as Ca
-import ../../legacy-ciphers/serpent.bend as Sp
-import ../../legacy-ciphers/twofish.bend as Tf
-import ../../legacy-ciphers/rc4.bend as R
+import ../../mode-core/mode-core.bend as M
+import ../../aes/aes.bend as X
+import ../../cipher-core/cipher-core.bend as L
+import ../../des/des.bend as D
+import ../../des/tdes.bend as T
+import ../../sm4/sm4.bend as S
+import ../../camellia/camellia.bend as Ca
+import ../../serpent/serpent.bend as Sp
+import ../../twofish/twofish.bend as Tf
+import ../../rc4/rc4.bend as R
 import ../../crc/crc.bend as C
 import ../crypto.bend as Cr
 import ../stream.bend as St
@@ -631,24 +662,24 @@ import ../lrw.bend as Lw
 import ../cts.bend as Ct
 import ../xcbc.bend as Xc
 import ../vmac.bend as Vm
-import ../../legacy-ciphers/aria.bend as Ar
-import ../../legacy-ciphers/cast6.bend as C6
-import ../../legacy-ciphers/blowfish.bend as Bf
-import ../../legacy-ciphers/cast5.bend as C5
-import ../../legacy-ciphers/tea.bend as Te
-import ../../legacy-ciphers/xtea.bend as Xt
-import ../../legacy-ciphers/fcrypt.bend as Fc
+import ../../aria/aria.bend as Ar
+import ../../cast6/cast6.bend as C6
+import ../../blowfish/blowfish.bend as Bf
+import ../../cast5/cast5.bend as C5
+import ../../tea/tea.bend as Te
+import ../../xtea/xtea.bend as Xt
+import ../../fcrypt/fcrypt.bend as Fc
 import ../inst_michael.bend as MIC
 import ../pbkdf2.bend as Pb
 import ../kbkdf.bend as Kb
-import ../../hashes/hashes.bend as Hs
-import ../../hashes/md4.bend as HM4
-import ../../hashes/md5.bend as HM5
-import ../../hashes/sha1.bend as HS1
-import ../../hashes/ripemd160.bend as HRM
-import ../../hashes/sm3.bend as HSM
-import ../../hashes/streebog.bend as HST
-import ../../hashes/michael.bend as HMI
+import ../../md-engine/md-engine.bend as Hs
+import ../../md4/md4.bend as HM4
+import ../../md5/md5.bend as HM5
+import ../../sha1/sha1.bend as HS1
+import ../../ripemd160/ripemd160.bend as HRM
+import ../../sm3/sm3.bend as HSM
+import ../../streebog/streebog.bend as HST
+import ../../michael/michael.bend as HMI
 
 def res(r: Result<&2, &2, Cr.CrError, B.Octets>) -> String:
   match r:
@@ -918,7 +949,7 @@ def main():
                 want, src = hkdf(Hc, ikm, salt, info, n), "python"
             case("%s_hkdf" % name, i, "hkdf(%s, %s, %s, %s, %dn)" % (ht, o(ikm), o(salt), o(info), n), want.hex(), src)
 
-    for name, (Hc, src, ht) in HS.items():  # the hashes package's hashes, and HMAC over them
+    for name, (Hc, src, ht) in HS.items():  # the hash packages' hashes, and HMAC over them
         for i in range(4):
             a, b = rb(rng.randrange(0, 90)), rb(rng.randrange(0, 90))
             d = Hc(a + b).digest().hex()
@@ -973,7 +1004,7 @@ def main():
             f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines[j:j + CHUNK]) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from the cipher packages' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from the hash packages' models)"
           % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"], counts["hsmodel"]))
 
 

@@ -101,7 +101,7 @@ helpers are internal.
 
 **What the proofs rely on.** Beyond bytes' laws (`octets_to_of`,
 `octets_len_list`) and word64's `parts_of`, the proofs compute through
-bytes' public `byte` and `mask` on symbolic bits (as cipher-modes' and
+bytes' public `byte` and `mask` on symbolic bits (as mode-core's and
 acpi's proofs do): `mask` keeps a byte's low 8 bits. bytes has no law saying
 so; if bytes changed how it computes `byte`, `proof_view.bend` and
 `proof_list.bend` would need those lemmas proved again.

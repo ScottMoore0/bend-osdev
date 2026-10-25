@@ -1,13 +1,13 @@
-# Proofs of LAWS_cts.bend, from bytes' laws, legacy-ciphers'
+# Proofs of LAWS_cts.bend, from bytes' laws, cipher-core's
 # block64_octets_round_trip and PROOF_bytes.bend's lemmas.
 import Base
 import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
-import ../cipher-modes/cipher-modes.bend as M
-import ../legacy-ciphers/legacy-ciphers.bend as L
-import ../legacy-ciphers/LAWS.bend as LL
-import ../legacy-ciphers/PROOF.bend as LP
+import ../mode-core/mode-core.bend as M
+import ../cipher-core/cipher-core.bend as L
+import ../cipher-core/LAWS.bend as CoreL
+import ../cipher-core/PROOF.bend as CoreP
 import ./crypto.bend as Cr
 import ./octets.bend as O
 import ./cts.bend as Ct
@@ -1194,7 +1194,7 @@ def Laws.cmblock_cts_round_trip(K, enc, dec, k, inv, iv, m):
   pc.cm_fin(~K, ~enc, ~dec, k, iv, m, pc.cm_inner(~K, ~enc, ~dec, k, inv, iv, m), pc.cm_len(~K, ~enc, k, iv, m), Ct.cr.cts.check(16n, iv, B.Octets.len(m)))({==})
 
 
-# The 64-bit block format (legacy-ciphers' LcBlock64): the format's byte strings are the blocks' (LL.block64_octets_dual), so a
+# The 64-bit block format (cipher-core's LcBlock64): the format's byte strings are the blocks' (CoreL.block64_octets_dual), so a
 # block of bytes encrypted and decrypted is itself where the cipher's block
 # is (pc.lc_br), and keeps its length (pc.lc_bl)
 
@@ -1216,9 +1216,9 @@ def pc.lc_br.go(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, ~dec: K -> L.Lc
         {==}
     case Some{+bl}:
       +em => hi => %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(o), Some{bl}, em) : {Ct.cr.cts.b(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.to_octets, k, _, o)) == o : B.Octets}
-        %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(L.LcBlock64.to_octets(enc(k, bl))), Some{enc(k, bl)}, LL.block64_octets_round_trip(enc(k, bl))) : {Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.to_octets, k, _, L.LcBlock64.to_octets(enc(k, bl))) == o : B.Octets}
+        %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(L.LcBlock64.to_octets(enc(k, bl))), Some{enc(k, bl)}, CoreL.block64_octets_round_trip(enc(k, bl))) : {Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.to_octets, k, _, L.LcBlock64.to_octets(enc(k, bl))) == o : B.Octets}
         %Equal.sym(L.LcBlock64, dec(k, enc(k, bl)), bl, hi) : {L.LcBlock64.to_octets(_) == o : B.Octets}
-        LL.block64_octets_dual(o, bl, em)
+        CoreL.block64_octets_dual(o, bl, em)
 
 def pc.lc_br(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, ~dec: K -> L.LcBlock64 -> L.LcBlock64, +k: K, +o: B.Octets, hi: {dec(k, enc(k, pc.lc_ebl(o))) == pc.lc_ebl(o) : L.LcBlock64}) -> {Ct.cr.cts.b(~K, ~L.LcBlock64, ~dec, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, Ct.cr.cts.b(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, o)) == o : B.Octets}:
   pc.lc_br.go(~K, ~enc, ~dec, k, L.LcBlock64.of_octets(o), o)({==})(hi)
@@ -1230,7 +1230,7 @@ def pc.lc_bl.go(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, +k: K, m: Maybe
         {==}
     case Some{+bl}:
       +em => %Equal.sym(Maybe<&2, L.LcBlock64>, L.LcBlock64.of_octets(o), Some{bl}, em) : {B.Octets.len(Ct.cr.cts.b.go(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.to_octets, k, _, o)) == B.Octets.len(o) : Nat}
-        Equal.trans(Nat, B.Octets.len(L.LcBlock64.to_octets(enc(k, bl))), 8n, B.Octets.len(o), PB.pb.lc_len(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), 8n, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(L.LcBlock64.to_octets(bl)), 8n, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, L.LcBlock64.to_octets(bl), Equal.sym(B.Octets, L.LcBlock64.to_octets(bl), o, LL.block64_octets_dual(o, bl, em))), PB.pb.lc_len(bl))))
+        Equal.trans(Nat, B.Octets.len(L.LcBlock64.to_octets(enc(k, bl))), 8n, B.Octets.len(o), PB.pb.lc_len(enc(k, bl)), Equal.sym(Nat, B.Octets.len(o), 8n, Equal.trans(Nat, B.Octets.len(o), B.Octets.len(L.LcBlock64.to_octets(bl)), 8n, Equal.cong(B.Octets, Nat, y => B.Octets.len(y), o, L.LcBlock64.to_octets(bl), Equal.sym(B.Octets, L.LcBlock64.to_octets(bl), o, CoreL.block64_octets_dual(o, bl, em))), PB.pb.lc_len(bl))))
 
 def pc.lc_bl(~K: Data, ~enc: K -> L.LcBlock64 -> L.LcBlock64, +k: K, +o: B.Octets) -> {B.Octets.len(Ct.cr.cts.b(~K, ~L.LcBlock64, ~enc, ~L.LcBlock64.of_octets, ~L.LcBlock64.to_octets, k, o)) == B.Octets.len(o) : Nat}:
   pc.lc_bl.go(~K, ~enc, k, L.LcBlock64.of_octets(o), o)({==})
