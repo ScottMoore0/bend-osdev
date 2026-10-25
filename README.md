@@ -25,9 +25,10 @@ GPL source was read.
   legacy-ciphers and word64 (`import bend-osdev-bytes@0.1.0.0/bytes.bend as
   B`). Ten of them have changed since and are bumped (crypto to 0.2.0.0 for
   its laws moved between files; acpi, bytes, crc, gf and word64 to 0.1.1.0
-  for added laws; aead, algo, array and bpf to 0.1.0.1); their new versions
-  and the other packages follow. The hub registers about five new names a
-  day. File names with a `-` are published with a `_`
+  for added laws; aead, algo, array and bpf to 0.1.0.1). Published on
+  2026-10-25: u32, mode-core, aes, pkcs7 and cbc at 0.1.0.0, word64, bytes,
+  acpi and gf at 0.1.1.0, and array at 0.1.0.1. The rest follow: the hub
+  registers about five new names a day. File names with a `-` are published with a `_`
   (`bend-osdev-mode-core@0.1.0.0/mode_core.bend`), since the hub refuses
   `-` in a path.
 - **bend-osdev-legacy-ciphers@0.1.0.0 is superseded** by cipher-core and the
