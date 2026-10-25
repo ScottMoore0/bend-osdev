@@ -16,7 +16,7 @@
 # LcBlock64) satisfy them for every list, so their laws take none.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ../gf/gf128.bend as G
 import ./crypto.bend as Cr

@@ -1,10 +1,10 @@
 # Twofish: the paper's three vectors, both ways (the ciphertext, then the
-# plaintext decrypted back), and Twofish through cipher-modes' CBC over
+# plaintext decrypted back), and Twofish through cbc's CBC over
 # 32 KB both ways.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
 import ../cipher-core/cipher-core.bend as L
 import ./twofish.bend as F
 

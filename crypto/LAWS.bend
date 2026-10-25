@@ -11,7 +11,7 @@
 # (all of them in one file outgrew a check process's memory under
 # --verdict; README.md, Laws). A proof elsewhere that uses a law imports
 # the pair that holds it:
-#   LAWS_cm.bend   cipher-modes' AES, CMAC and CCM, and its 128-bit block
+#   LAWS_cm.bend   AES, CMAC and CCM (the aes, cmac and ccm packages), and mode-core's 128-bit block
 #   LAWS_lc.bend   the cipher packages' block ciphers and RC4, and cipher-core's
 #                  64-bit block
 #   LAWS_crc.bend  crc's CRCs as hashes, and HMAC and HKDF over them

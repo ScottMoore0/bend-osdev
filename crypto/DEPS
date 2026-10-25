@@ -1,6 +1,9 @@
 bytes
 word64
-cipher-modes
+mode-core
+aes
+ccm
+cmac
 cipher-core
 des
 sm4

@@ -1,17 +1,17 @@
-# The adapter for cipher-modes: its error type mapped onto CrError, and the
+# The adapter for the 128-bit modes: mode-core's error type mapped onto CrError, and the
 # block format of its 128-bit block CmBlock (an open type: four big-endian
-# 32-bit words), for every 128-bit cipher that uses it (cipher-modes' AES,
+# 32-bit words), for every 128-bit cipher that uses it (the aes package's AES,
 # and the sm4, camellia, serpent, twofish, aria and cast6 packages' ciphers).
 #
 # The format's conversions are written here, on the open type, so that its
 # law (format: blk_of(blk_to(b)) == Some{b}) is proved in this package:
-# cipher-modes proves the same of its own CmBlock.of_octets and
+# mode-core proves the same of its own CmBlock.of_octets and
 # CmBlock.to_octets, but its PROOF.bend cannot be imported by a proof that
 # passes --verdict (README.md, "Laws").
 import Base
 import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ./crypto.bend as Cr
 
 # Errors
@@ -41,11 +41,11 @@ def CrCm.err(e: M.CmError) -> Cr.CrError:
     case M.CmTagMismatch{}:
       Cr.CrTagMismatch{}
 
-# a cipher-modes result as an interface result
+# a mode-core result as an interface result
 def CrCm.lift(~A: Data, r: Result<&2, &2, M.CmError, A>) -> Result<&2, &2, Cr.CrError, A>:
   Cr.CrError.lift(~M.CmError, ~A, ~CrCm.err, r)
 
-# a cipher-modes key schedule as the interface's ~key
+# a 128-bit cipher's key schedule as the interface's ~key
 def CrCm.key(~K: Data, ~key: B.Octets -> Result<&2, &2, M.CmError, K>, o: B.Octets) -> Result<&2, &2, Cr.CrError, K>:
   CrCm.lift(~K, key(o))
 

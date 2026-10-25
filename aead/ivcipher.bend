@@ -2,7 +2,7 @@
 # schedule, an IV and bytes): any block cipher of the crypto package's
 # block-cipher interface in CBC (crypto's modes.bend, NIST SP 800-38A),
 # whole blocks only (the kernel's cbc) or PKCS #7 padded (RFC 5652, section
-# 6.3; cipher-modes' pkcs7.bend), as draft-mcgrew-aead-aes-cbc-hmac-sha2
+# 6.3; the pkcs7 package), as draft-mcgrew-aead-aes-cbc-hmac-sha2
 # uses it.
 #
 # Each is ~enc and ~dec for those files, for example AES-CBC:
@@ -10,7 +10,7 @@
 #     ~CM.CrBlk128.xor, ~CM.CrBlk128.of_octets, ~CM.CrBlk128.to_octets)
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/pkcs7.bend as P7
+import ../pkcs7/pkcs7.bend as P7
 import ../crypto/crypto.bend as Cr
 import ../crypto/modes.bend as Md
 import ../crypto/inst_cm.bend as CM

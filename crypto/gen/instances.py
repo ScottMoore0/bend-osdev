@@ -91,11 +91,11 @@ BLOCK = [
           F64, "XteaL.xtea_round_trip", "XteaL.xtea_round_trip_dual", 17),
     block("fcrypt", "FCrypt (the fcrypt package)", "Fc.LcFcryptKey", lc_key("Fc.LcFcryptKey", "Fc.LcFcrypt.key"), "Fc.LcFcrypt.encrypt", "Fc.LcFcrypt.decrypt",
           F64, "FcL.fcrypt_round_trip", "FcL.fcrypt_round_trip_dual", 7),
-    # cipher-modes proves decryption undoes encryption for every key
+    # the aes package proves decryption undoes encryption for every key
     # (aes_round_trip); the reverse it does not prove
-    block("aes", "AES-128 and AES-256 (cipher-modes)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
-          F128, "CML.aes_round_trip", None, 24, part="cm"),
-    block("aes_enc", "AES, encryption key schedule only (cipher-modes)", "X.CmAesKey", "A.CrAes.key_enc", "X.CmAes.encrypt", "X.CmAes.decrypt",
+    block("aes", "AES-128 and AES-256 (the aes package)", "X.CmAesKey", "A.CrAes.key", "X.CmAes.encrypt", "X.CmAes.decrypt",
+          F128, "AesL.aes_round_trip", None, 24, part="cm"),
+    block("aes_enc", "AES, encryption key schedule only (the aes package)", "X.CmAesKey", "A.CrAes.key_enc", "X.CmAes.encrypt", "X.CmAes.decrypt",
           F128, None, None, 20, part="cm"),
 ]
 

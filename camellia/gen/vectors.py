@@ -91,7 +91,7 @@ def check_region():
     for key in ["0123456789abcdeffedcba9876543210", "0123456789abcdeffedcba98765432100011223344556677",
                 "0123456789abcdeffedcba987654321000112233445566778899aabbccddeeff"]:
         out("camellia(%s, %s)" % (lst(h(key)), lst(k)), "%s %s" % (m.camellia_encrypt(h(key), k).hex(), k.hex()))
-    # in cipher-modes' CBC over 32 KB, both ways
+    # in cbc's CBC over 32 KB, both ways
     big = bytes((i * 7 + 3) & 255 for i in range(32768))
     c = cbc(m.camellia_encrypt, k, bytes(range(16)), big, 16)
     out("camellia_cbc(%s, 32768n)" % lst(k), "%s ok" % c[-16:].hex())

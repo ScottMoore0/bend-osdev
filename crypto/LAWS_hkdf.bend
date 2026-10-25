@@ -5,7 +5,7 @@
 # HKDF's output is T(1) .. T(N) cut to the length asked for, N the ceiling
 # of len / dsize, each T(i) an HMAC tag, so how long it is depends on how
 # long the hash's digests are. The laws take that property of the hash as
-# the hypothesis hd on lists of inputs, as cipher-modes' laws take a
+# the hypothesis hd on lists of inputs, as the modes' laws take a
 # cipher's (README.md, "How the laws are stated"): for every list of byte
 # strings, each one's digest has dsize bytes. A hash whose digest has dsize
 # bytes for every input (its length law) gives it for every list by

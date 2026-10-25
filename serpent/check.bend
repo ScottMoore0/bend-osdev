@@ -1,10 +1,10 @@
 # Serpent: NESSIE's two vectors, both ways (the ciphertext, then the
-# plaintext decrypted back), and Serpent through cipher-modes' CBC over 4 KB
+# plaintext decrypted back), and Serpent through cbc's CBC over 4 KB
 # both ways.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
 import ../cipher-core/cipher-core.bend as L
 import ./serpent.bend as P
 

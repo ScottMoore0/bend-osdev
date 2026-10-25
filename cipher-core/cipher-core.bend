@@ -4,7 +4,7 @@
 # 64-bit block, word helpers, tables, and Feistel rounds over any round
 # function. The 64-bit modes are in modes64.bend.
 #
-# The 128-bit block ciphers work on cipher-modes' CmBlock, so they plug into
+# The 128-bit block ciphers work on mode-core's CmBlock, so they plug into
 # every mode there as the template arguments ~K, ~enc, ~dec. The 64-bit ones
 # (des, blowfish, cast5, tea, xtea, fcrypt) work on LcBlock64 below, and the
 # 64-bit modes in modes64.bend.

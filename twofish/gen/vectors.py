@@ -54,7 +54,7 @@ def check_region():
     for key in ["00" * 16, "0123456789ABCDEFFEDCBA98765432100011223344556677",
                 "0123456789ABCDEFFEDCBA987654321000112233445566778899AABBCCDDEEFF"]:
         out("twofish(%s, %s)" % (lst(h(key)), lst(bytes(16))), "%s %s" % (m.twofish_encrypt(h(key), bytes(16)).hex(), bytes(16).hex()))
-    # in cipher-modes' CBC over 32 KB, both ways
+    # in cbc's CBC over 32 KB, both ways
     k = h("0123456789abcdeffedcba9876543210")
     big = bytes((i * 7 + 3) & 255 for i in range(32768))
     c = cbc(m.twofish_encrypt, k, bytes(range(16)), big, 16)

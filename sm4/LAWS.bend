@@ -3,7 +3,7 @@
 # proved by computation.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ./sm4.bend as S
 

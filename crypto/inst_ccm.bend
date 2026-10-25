@@ -1,4 +1,4 @@
-# CCM as an AEAD: cipher-modes' CCM (NIST SP 800-38C, RFC 3610) over any
+# CCM as an AEAD: ccm's CCM (NIST SP 800-38C, RFC 3610) over any
 # 128-bit block cipher, with a tag of tlen bytes (4, 6, ..., 16) and a nonce
 # of 7 to 13 bytes. The instance over a block cipher (~K, ~key, ~enc):
 #   ~K, ~key, ~CrCcm.seal(~K, ~enc, ~tlen), ~CrCcm.open(~K, ~enc, ~tlen)
@@ -7,8 +7,8 @@
 #   ~CrCcm.open(~X.CmAesKey, ~X.CmAes.encrypt, ~16n)
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/ccm.bend as CC
+import ../mode-core/mode-core.bend as M
+import ../ccm/ccm.bend as CC
 import ./crypto.bend as Cr
 import ./inst_cm.bend as CM
 

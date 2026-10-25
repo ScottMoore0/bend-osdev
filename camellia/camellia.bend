@@ -1,6 +1,6 @@
 # Camellia (RFC 3713, A Description of the Camellia Encryption Algorithm,
 # 2004): a 128-bit block cipher with 128-, 192- or 256-bit keys, as a cipher
-# for cipher-modes' modes (~LcCamelliaKey, ~LcCamellia.encrypt,
+# for the 128-bit modes (~LcCamelliaKey, ~LcCamellia.encrypt,
 # ~LcCamellia.decrypt).
 #
 # The state is the block as a CmBlock: D1 is its first two words, D2 its last
@@ -13,7 +13,7 @@
 # key and block: each step is undone whatever F is.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 
 # SBOX1 (RFC 3713, 2.4.4); SBOX2, SBOX3 and SBOX4 are derived from it

@@ -3,7 +3,7 @@
 # RFC 3713's Camellia-128 vector and a refused key, proved by computation.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ./camellia.bend as C
 

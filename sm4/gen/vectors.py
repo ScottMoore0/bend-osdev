@@ -88,7 +88,7 @@ def check_region():
 
     k = h("0123456789abcdeffedcba9876543210")
     out("sm4(%s, %s)" % (lst(k), lst(k)), "%s %s" % (m.sm4_encrypt(k, k).hex(), k.hex()))
-    # in cipher-modes' CBC over 32 KB, both ways
+    # in cbc's CBC over 32 KB, both ways
     big = bytes((i * 7 + 3) & 255 for i in range(32768))
     c = cbc(m.sm4_encrypt, k, bytes(range(16)), big, 16)
     out("sm4_cbc(%s, 32768n)" % lst(k), "%s ok" % c[-16:].hex())

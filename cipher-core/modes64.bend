@@ -1,14 +1,14 @@
 # Modes of operation for 64-bit block ciphers (DES, 3DES, Blowfish, ...): ECB and CBC
 # (NIST SP 800-38A, sections 6.1 and 6.2), over any cipher on LcBlock64.
 #
-# cipher-modes' modes are written for 128-bit blocks (CmBlock), so a 64-bit
+# the 128-bit modes are written for 128-bit blocks (CmBlock), so a 64-bit
 # cipher cannot use them; these are the same modes on LcBlock64, with the
-# cipher as template arguments in cipher-modes' style:
+# cipher as template arguments in the 128-bit modes' style:
 #   ~K: Data                                  the cipher's (expanded) key
 #   ~enc: K -> LcBlock64 -> LcBlock64         encrypt one block
 #   ~dec: K -> LcBlock64 -> LcBlock64         decrypt one block
 # for instance ~D.LcDesKey, ~D.LcDes.encrypt, ~D.LcDes.decrypt. For padding,
-# cipher-modes' Pkcs7.pad(8n, m) and Pkcs7.unpad(8n, m) take any block size.
+# pkcs7's Pkcs7.pad(8n, m) and Pkcs7.unpad(8n, m) take any block size.
 #
 # The block layer works on lists of blocks: chaining one call's last
 # ciphertext block into the next call's IV encrypts a long message in pieces.

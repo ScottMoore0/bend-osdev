@@ -1,4 +1,5 @@
 bytes
 word64
-cipher-modes
+mode-core
+cbc
 cipher-core

@@ -1,24 +1,24 @@
-# Every cipher through cipher-modes' four round trips, at run time: a key
+# Every cipher through the four round trips of CBC and XTS, at run time: a key
 # the cipher accepts, a 16-byte IV or sequence number, and data of 64 bytes
 # (CBC, and XTS on whole blocks) and 61 bytes (XTS with ciphertext
 # stealing), encrypted and decrypted back. Written by gen/instances.py. The
 # ciphers' own values are tested in their packages (sm4, camellia, serpent,
 # twofish, aria, cast6: their vectors, and CBC against cryptography, the
-# openssl command or their models) and in cipher-modes (AES: FIPS 197's
-# vectors, and against cryptography), the modes' in cipher-modes.
+# openssl command or their models) and in aes (AES: FIPS 197's vectors, and
+# against cryptography), the modes' in cbc and xts, and over AES in aes-modes.
 import Base
 import ../bytes/bytes.bend as B
 import ../cipher-core/cipher-core.bend as LC
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 import ../sm4/sm4.bend as S
 import ../camellia/camellia.bend as Ca
 import ../serpent/serpent.bend as Sp
 import ../twofish/twofish.bend as Tf
 import ../aria/aria.bend as Ar
 import ../cast6/cast6.bend as C6
-import ../cipher-modes/aes.bend as X
+import ../aes/aes.bend as X
 
 def hx.digit(+c: U32) -> U32:
   U32.sub(c, U32.add(48, U32.mul(39, U32.shrn(c, 6n))))

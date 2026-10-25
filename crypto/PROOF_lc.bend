@@ -1,6 +1,6 @@
 # Proofs of LAWS_lc.bend, from the cipher packages' and cipher-core's laws.
 import Base
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ../des/des.bend as D
 import ../des/tdes.bend as T

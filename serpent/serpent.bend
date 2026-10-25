@@ -1,7 +1,7 @@
 # Serpent (R. Anderson, E. Biham, L. Knudsen, "Serpent: A Proposal for the
 # Advanced Encryption Standard", AES submission, 1998), in its bitslice
 # description: a 128-bit block cipher with keys of up to 256 bits, as a
-# cipher for cipher-modes' modes (~LcSerpentKey, ~LcSerpent.encrypt,
+# cipher for the 128-bit modes (~LcSerpentKey, ~LcSerpent.encrypt,
 # ~LcSerpent.decrypt).
 #
 # Serpent reads the block as four little-endian words X0..X3 (byte 0 is the
@@ -20,7 +20,7 @@
 # key schedule's arithmetic is native.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 
 # The eight S-boxes (section 2, "the S-boxes"): entry v is S_i(v)

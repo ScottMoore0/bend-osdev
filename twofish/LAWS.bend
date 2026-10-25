@@ -2,7 +2,7 @@
 # block, decryption undoes encryption and encryption undoes decryption. The
 # paper's vectors run in check.bend (README.md, Laws).
 import Base
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ./twofish.bend as F
 
 # Twofish (Schneier et al.), every key size

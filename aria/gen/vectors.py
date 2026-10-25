@@ -92,7 +92,7 @@ def check_region():
     for key in ["000102030405060708090a0b0c0d0e0f", "000102030405060708090a0b0c0d0e0f1011121314151617",
                 "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"]:
         out("aria(%s, %s)" % (lst(h(key)), lst(pa)), "%s %s" % (m.aria_encrypt(h(key), pa).hex(), pa.hex()))
-    # in cipher-modes' CBC over 32 KB, both ways
+    # in cbc's CBC over 32 KB, both ways
     k = h("0123456789abcdeffedcba9876543210")
     big = bytes((i * 7 + 3) & 255 for i in range(32768))
     c = cbc(m.aria_encrypt, k, bytes(range(16)), big, 16)

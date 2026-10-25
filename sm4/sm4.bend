@@ -1,6 +1,6 @@
 # SM4 (GB/T 32907-2016, Information security technology - SM4 block cipher
 # algorithm; in English, draft-ribose-cfrg-sm4 and RFC 8998, section 2.1):
-# a 128-bit block cipher with a 128-bit key, as a cipher for cipher-modes'
+# a 128-bit block cipher with a 128-bit key, as a cipher for the 128-bit
 # modes (~LcSm4Key, ~LcSm4.encrypt, ~LcSm4.decrypt).
 #
 # The state is four 32-bit words X0..X3, big-endian from the block, which is
@@ -13,7 +13,7 @@
 # undone whatever T is.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 
 # The S-box (GB/T 32907-2016, 6.2: row i, column j is entry 16i + j)

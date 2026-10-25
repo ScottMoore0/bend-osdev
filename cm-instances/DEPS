@@ -1,5 +1,8 @@
 bytes
-cipher-modes
+mode-core
+cbc
+xts
+aes
 cipher-core
 sm4
 camellia

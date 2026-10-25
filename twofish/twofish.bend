@@ -1,7 +1,7 @@
 # Twofish (B. Schneier, J. Kelsey, D. Whiting, D. Wagner, C. Hall, N.
 # Ferguson, "Twofish: A 128-Bit Block Cipher", AES submission, 1998): a
 # 128-bit block cipher with 128-, 192- or 256-bit keys, as a cipher for
-# cipher-modes' modes (~LcTwofishKey, ~LcTwofish.encrypt, ~LcTwofish.decrypt).
+# the 128-bit modes (~LcTwofishKey, ~LcTwofish.encrypt, ~LcTwofish.decrypt).
 #
 # Twofish reads the block as four little-endian words; a CmBlock holds
 # big-endian words, so the cipher swaps each word's bytes on the way in and
@@ -18,7 +18,7 @@
 # schedule use native word operations.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 
 # The permutations q0 and q1 (section 4.3.5): their 4-bit tables t0 .. t3

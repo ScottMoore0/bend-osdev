@@ -1,4 +1,5 @@
 bytes
-cipher-modes
+mode-core
+cbc
 cipher-core
 cast5

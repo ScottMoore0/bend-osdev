@@ -1,10 +1,10 @@
 # ARIA: RFC 5794's three vectors, both ways (the ciphertext, then the
-# plaintext decrypted back), and ARIA-128 through cipher-modes' CBC over
+# plaintext decrypted back), and ARIA-128 through cbc's CBC over
 # 32 KB both ways.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
-import ../cipher-modes/cbc.bend as CB
+import ../mode-core/mode-core.bend as M
+import ../cbc/cbc.bend as CB
 import ../cipher-core/cipher-core.bend as L
 import ./aria.bend as A
 

@@ -1,6 +1,6 @@
 # CAST-256 (RFC 2612, The CAST-256 Encryption Algorithm, 1999), also called
 # CAST6: a 128-bit block cipher with keys of 128, 160, 192, 224 or 256 bits,
-# as a cipher for cipher-modes' modes (~LcCast6Key, ~LcCast6.encrypt,
+# as a cipher for the 128-bit modes (~LcCast6Key, ~LcCast6.encrypt,
 # ~LcCast6.decrypt).
 #
 # The block is four big-endian words A, B, C, D (a CmBlock). The forward
@@ -21,7 +21,7 @@
 # whatever the S-boxes hold.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ../cast5/cast5.bend as C5
 

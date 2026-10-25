@@ -88,7 +88,7 @@ def check_region():
     for key in ["2342bb9efa38542c0af75647f29f615d", "2342bb9efa38542cbed0ac83940ac298bac77a7717942863",
                 "2342bb9efa38542cbed0ac83940ac2988d7c47ce264908461cc1b5137ae6b604"]:
         out("cast6(%s, %s)" % (lst(h(key)), lst(bytes(16))), "%s %s" % (m.cast6_encrypt(h(key), bytes(16)).hex(), bytes(16).hex()))
-    # in cipher-modes' CBC over 32 KB, both ways
+    # in cbc's CBC over 32 KB, both ways
     k = h("0123456789abcdeffedcba9876543210")
     big = bytes((i * 7 + 3) & 255 for i in range(32768))
     c = cbc(m.cast6_encrypt, k, bytes(range(16)), big, 16)

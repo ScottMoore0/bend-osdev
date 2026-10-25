@@ -89,7 +89,7 @@ def check_region():
 
     for key in ["00" * 16, "80" + "00" * 15]:
         out("serpent(%s, %s)" % (lst(h(key)), lst(bytes(16))), "%s %s" % (m.serpent_encrypt(h(key), bytes(16)).hex(), bytes(16).hex()))
-    # in cipher-modes' CBC over 4 KB, both ways
+    # in cbc's CBC over 4 KB, both ways
     k = h("0123456789abcdeffedcba9876543210")
     big = bytes((i * 7 + 3) & 255 for i in range(4096))
     c = cbc(m.serpent_encrypt, k, bytes(range(16)), big, 16)

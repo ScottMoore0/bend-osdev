@@ -2,7 +2,7 @@
 # twofish, aria, cast6, blowfish, cast5, tea, xtea, fcrypt, rc4, and
 # cipher-core's 64-bit block) through crypto's interfaces: the 64-bit
 # block format (inst_lc.bend), each block cipher as a block cipher and in
-# ECB, CBC, PCBC and (the 128-bit ones, in cipher-modes' block format) LRW,
+# ECB, CBC, PCBC and (the 128-bit ones, in mode-core's block format) LRW,
 # RC4 as a stream cipher (inst_rc4.bend), and refusals of the modes over
 # them. The generic laws are in LAWS.bend.
 #
@@ -15,7 +15,7 @@
 # regions here and in the proof file).
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ../des/des.bend as D
 import ../des/tdes.bend as T

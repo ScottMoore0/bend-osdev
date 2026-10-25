@@ -3,7 +3,7 @@
 # 6.2) on lists of blocks and on bytes, and CTR (SP 800-38A, 6.5) as a stream
 # cipher.
 #
-# cipher-modes keeps its own modes for 128-bit ciphers (CBC, XTS, CCM, CMAC);
+# the 128-bit ciphers have the modes of their own packages too (cbc, xts, ccm, cmac);
 # these are the ones every block size shares, so a 64-bit cipher (DES, 3DES)
 # and a 128-bit one run through the same code.
 #

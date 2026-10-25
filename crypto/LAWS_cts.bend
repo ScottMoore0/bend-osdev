@@ -6,13 +6,13 @@
 # proofs) and PROOF_bytes.bend's lemmas, and on no other package's.
 #
 # The cipher's property is the hypothesis inv on lists of blocks (as
-# cipher-modes' laws take it: README.md, "How the laws are stated"): each
+# the modes' laws take it: README.md, "How the laws are stated"): each
 # block encrypted and decrypted back is itself. An instance whose package
 # proves dec(k, enc(k, b)) == b for every block (its <c>_block_round_trip)
 # gives it for every list by induction.
 import Base
 import ../bytes/bytes.bend as B
-import ../cipher-modes/cipher-modes.bend as M
+import ../mode-core/mode-core.bend as M
 import ../cipher-core/cipher-core.bend as L
 import ./crypto.bend as Cr
 import ./cts.bend as Ct

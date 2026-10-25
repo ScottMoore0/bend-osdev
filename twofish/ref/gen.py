@@ -9,7 +9,7 @@ package):
     author as the package; it is first checked against the specification's
     published vectors.
 The cipher is run both ways, on single blocks and in CBC through
-cipher-modes.
+the cbc package.
 """
 import os, random, sys
 
@@ -47,8 +47,8 @@ def octets(data):
 
 HEADER = """import Base
 import ../../bytes/bytes.bend as B
-import ../../cipher-modes/cipher-modes.bend as M
-import ../../cipher-modes/cbc.bend as CB
+import ../../mode-core/mode-core.bend as M
+import ../../cbc/cbc.bend as CB
 import ../../cipher-core/cipher-core.bend as L
 import ../twofish.bend as F
 
