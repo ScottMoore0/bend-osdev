@@ -133,7 +133,8 @@ package: copy its shape.
   generated proof or case file to a few hundred KB. A proof file's check
   takes in the proofs of every package it imports, checked again in each
   file that imports them, so under `--verdict` its peak is about the sum of
-  theirs (alone: cipher-modes' about 1.2 GB, crc's 0.7 GB, hashes' 0.6 GB,
+  theirs (alone: cipher-modes' about 1.2 GB, crc's 0.7 GB, each hash package's (md4,
+  streebog, ...) 0.4 to 0.6 GB with md-engine's,
   bend-collections-laws-crypto's hash proofs 0.5 GB, each cipher package's
   (des, aria, ...) 0.4 to 0.5 GB with cipher-core's, bytes' 0.25 GB). Import only the proofs a file's laws rest on, and split a
   package's laws into pairs of files when one proof file nears 2 GB

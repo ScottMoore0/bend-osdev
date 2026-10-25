@@ -29,6 +29,9 @@ GPL source was read.
   cipher packages des, sm4, camellia, serpent, twofish, aria, cast6, blowfish,
   cast5, tea, xtea, fcrypt and rc4 (one package per cipher); it stays on the
   hub as it was.
+- **bend-osdev-hashes@0.1.0.0 is superseded** by md-engine and the hash
+  packages md4, md5, sha1, ripemd160, sm3, streebog and michael (one package
+  per hash); it stays on the hub as it was.
 
 ## Packages
 
@@ -105,9 +108,16 @@ GPL source was read.
 | [fcrypt](fcrypt/) | FCrypt, AFS's rxkad cipher (for compatibility) |
 | [rc4](rc4/) | RC4 and RC4-drop[n], streaming (for compatibility only: RFC 7465 forbids it in TLS) |
 | [cm-instances](cm-instances/) | cipher-modes' CBC and XTS round-trip laws written out and proved for AES and each 128-bit cipher above (sm4, camellia, serpent, twofish, aria, cast6), for every key and input |
-| [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
+| [md-engine](md-engine/) | The Merkle–Damgård engine the hash packages below stream through, for any chaining value and compression function (its streaming law proved once for all of them), and what they share: the chaining-value types and their digest bytes, word helpers, length fields |
+| [md4](md4/) | MD4 (for compatibility), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [md5](md5/) | MD5 (for compatibility), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [sha1](sha1/) | SHA-1 (for compatibility, HMAC-SHA-1 and PBKDF2-HMAC-SHA-1), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [ripemd160](ripemd160/) | RIPEMD-160, streaming and one-shot (streaming, split and digest length proved for every input) |
+| [sm3](sm3/) | SM3 (GB/T 32905), streaming and one-shot (streaming, split and digest length proved for every input) |
+| [streebog](streebog/) | Streebog-256 and Streebog-512 (GOST R 34.11-2012, RFC 6986), streaming and one-shot, and its LPS and g_N (streaming, split and digest length proved for every input) |
+| [michael](michael/) | Michael, TKIP's MIC (for TKIP only), streaming and in one call (streaming, split and tag length proved for every key and input; IEEE 802.11's vectors) |
 | [siphash](siphash/) | SipHash-c-d (64- and 128-bit output) and HalfSipHash-c-d (32- and 64-bit) for any number of rounds, streaming and one-shot, with Linux's SipHash-2-4, SipHash-1-3 and HalfSipHash-1-3 named; streaming, split and output length proved for every input; all 256 published vectors, checked against openssl |
-| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
+| [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hash packages' hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
 | [aead](aead/) | AEGIS-128, encrypt-then-MAC over any cipher and MAC (the kernel's authenc), and the IV generators ESSIV, seqiv and echainiv over any AEAD, as instances of crypto's AEAD interface |
 | [bignum](bignum/) | Natural numbers of any size for public-key cryptography: bytes (OS2IP/I2OSP), arithmetic, Montgomery multiplication, modular exponentiation and inverse, Miller-Rabin, the Jacobi symbol |
 | [rsa](rsa/) | RSA (RFC 8017): the primitives with the CRT, RSASSA-PKCS1-v1_5 and RSASSA-PSS, RSAES-OAEP and RSAES-PKCS1-v1_5, MGF1 over any hash, key generation, a raw key form (encoding round trips proved) |

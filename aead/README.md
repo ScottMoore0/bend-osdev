@@ -179,7 +179,7 @@ as `{==}` laws the checker (`--check-only`) accepts them, but `--verdict`
 does not: one vector is 18 to 20 state updates (90 to 100 AES rounds), and the
 kernel's fuel for one def (400,000,000 steps) runs out after six updates
 (measured: six check, seven do not), so they are in `check.bend` rather
-than `LAWS.bend`, as hashes' Streebog digests are; the
+than `LAWS.bend`, as streebog's whole digests are; the
 round trips of the generic constructions unconditionally (they hold where
 the wrapped algorithm's do: for a crypto instance with a proved round trip
 the hypothesis is that law at the arguments used).

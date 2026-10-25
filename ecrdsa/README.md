@@ -30,7 +30,7 @@ interface, it is in bend-osdev-pubkey (`pubkey/ecrdsa.bend`).
 * RFC 6986 (V. Dolmatov, A. Degtyarev, *GOST R 34.11-2012: Hash Function*,
   August 2013), section 4.2: the numbering of a hash vector's components,
   which fixes how the digest's bytes become alpha (least significant
-  first). Streebog itself is the hashes package's.
+  first). Streebog itself is the streebog package's.
 * RFC 6979 (T. Pornin, August 2013), section 3.2, for `Ecrdsa.sign_det`
   (through ecc's `rfc6979.bend`, with e in place of the message hash): not
   part of GOST R 34.10-2012, which asks for a random k; a verifier cannot
@@ -100,7 +100,7 @@ every curve (the group law: ecc's README).
   R 34.10-2012 is installed here (cryptography and the openssl command have
   none without the GOST engine), so the reference is `gen.py`'s model of RFC
   7091 sections 6.1 and 6.2 on ecc's affine model, with Streebog from the
-  hashes package's model. **That model shares an author with this
+  streebog package's model. **That model shares an author with this
   package**; it checks itself first on RFC 7091's example. For CryptoPro
   A, B and C and the example curve: Bend's signature with a given k equals
   the model's (for e given, and for messages through Streebog-256); Bend
@@ -122,7 +122,7 @@ random source (this package has none).
 
 `DEPS`: `bytes` (`Octets`, and its laws in the proofs), `bignum` (the
 integers, and its `octets_round_trip` in the proofs), `ecc` (the curves,
-points, signatures and RFC 6979), `hashes` (Streebog).
+points, signatures and RFC 6979), `streebog` (Streebog).
 
 bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
 values (`LAWS.bend`).
