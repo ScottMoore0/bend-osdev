@@ -90,7 +90,7 @@ package: copy its shape.
   Name lemma files for their lemmas (`proof_counts.bend`), never after a
   proof pair.
 
-## Runtime and checker limits (Bend 2.0.37)
+## Runtime and checker limits (found on Bend 2.0.37; the packages pass on 2.0.39 with the same workarounds)
 
 - **Two lanes:** `bend file.bend` checks the file and runs `main` on its
   JavaScript lane, in the bend process; `bend file.bend -o prog` builds a
@@ -141,7 +141,7 @@ package: copy its shape.
   package's laws into pairs of files when one proof file nears 2 GB
   (CONVENTIONS.md, Laws).
 
-## Proof limits documented in package READMEs (Bend 2.0.37)
+## Proof limits documented in package READMEs (found on Bend 2.0.37)
 
 Each is explained where it was met; read that section before working
 around it.

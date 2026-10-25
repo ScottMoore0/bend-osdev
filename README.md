@@ -16,7 +16,9 @@ GPL source was read.
 - **Laws reviewed.** The maintainer reviews every package's laws as they
   are written. They are proved, and `--verdict` (Bend's Lean-formalised kernel) accepts them
   all.
-- **Bend 2.0.37**, pinned in `BEND_VERSION`.
+- **Bend 2.0.39**, pinned in `BEND_VERSION`. Every package passes its full
+  check, `--verdict` included, on 2.0.39 (2026-10-25). The times and memory
+  peaks in the packages' Status lines were measured on 2.0.37.
 - **Publishing on BendHub**, every package at version 0.1.0.0, as
   `bend-osdev-<package>`: so far acpi, aead, algo, apparmor, array, bpf,
   bytes, caps, cipher-modes, crc, crypto, gf, hashes, legacy-ciphers and
