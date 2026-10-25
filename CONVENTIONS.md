@@ -149,7 +149,10 @@ A change to one of these rules is a change to every package.
   new laws). The fourth rises for anything else that changes a published file.
   After 1.0 the first number takes the second's role.
 - A publish is permanent, so a published package's directory is never renamed
-  or moved.
+  or moved. A published package that is split or retired leaves the
+  repository instead: its published versions stay on the hub as they are,
+  and the top-level README names the packages that supersede it (as for
+  legacy-ciphers, hashes and cipher-modes).
 
 ## Dependencies
 

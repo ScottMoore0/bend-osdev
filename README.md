@@ -19,14 +19,17 @@ GPL source was read.
 - **Bend 2.0.39**, pinned in `BEND_VERSION`. Every package passes its full
   check, `--verdict` included, on 2.0.39 (2026-10-25). The times and memory
   peaks in the packages' Status lines were measured on 2.0.37.
-- **Publishing on BendHub**, every package at version 0.1.0.0, as
-  `bend-osdev-<package>`: so far acpi, aead, algo, apparmor, array, bpf,
-  bytes, caps, cipher-modes, crc, crypto, gf, hashes, legacy-ciphers and
-  word64 (`import bend-osdev-bytes@0.1.0.0/bytes.bend as B`). The hub
-  registers about five new package names a day, so the others follow over
-  the coming days. File names with a `-` are published with a `_`
-  (`bend-osdev-cipher-modes@0.1.0.0/cipher_modes.bend`), since the hub
-  refuses `-` in a path.
+- **Publishing on BendHub**, each package at the version in its `VERSION`
+  file, as `bend-osdev-<package>`: so far at 0.1.0.0 acpi, aead, algo,
+  apparmor, array, bpf, bytes, caps, cipher-modes, crc, crypto, gf, hashes,
+  legacy-ciphers and word64 (`import bend-osdev-bytes@0.1.0.0/bytes.bend as
+  B`). Ten of them have changed since and are bumped (crypto to 0.2.0.0 for
+  its laws moved between files; acpi, bytes, crc, gf and word64 to 0.1.1.0
+  for added laws; aead, algo, array and bpf to 0.1.0.1); their new versions
+  and the other packages follow. The hub registers about five new names a
+  day. File names with a `-` are published with a `_`
+  (`bend-osdev-mode-core@0.1.0.0/mode_core.bend`), since the hub refuses
+  `-` in a path.
 - **bend-osdev-legacy-ciphers@0.1.0.0 is superseded** by cipher-core and the
   cipher packages des, sm4, camellia, serpent, twofish, aria, cast6, blowfish,
   cast5, tea, xtea, fcrypt and rc4 (one package per cipher); it stays on the
