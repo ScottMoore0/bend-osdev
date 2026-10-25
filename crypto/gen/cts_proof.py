@@ -7,10 +7,10 @@
   python3 gen/cts_proof.py --check   only check that it is up to date
 
 The region holds, for each of the two block formats (inst_cm.bend's 128-bit
-CmBlock, legacy-ciphers' 64-bit LcBlock64), the same proof with the
+CmBlock, cipher-core's 64-bit LcBlock64), the same proof with the
 format's defs filled in: its bytes read back are the block's (for
 CmBlock, a lemma on the bytes' bits, pc.cm_dbits, and one reading them off
-a list, pc.cm_dualL; for LcBlock64, legacy-ciphers' law
+a list, pc.cm_dualL; for LcBlock64, cipher-core's law
 block64_octets_dual), a block of bytes encrypted and decrypted is itself where the
 cipher's block is (pc.<f>_br), the two facts on every list of block inputs
 that PROOF_cts.bend's generic lemmas take as hypotheses (pc.<f>_brs_all,
@@ -180,8 +180,8 @@ def pc.@F@_dual(+o: B.Octets, +bl: @BLK@, em: {@OF@(o) == Some{bl} : Maybe<&2, @
 FORMATS = [
     dict(F='cm', SUF='', NAME='The 128-bit block format (inst_cm.bend)', BLK='M.CmBlock', OF='CM.CrBlk128.of_octets', TO='CM.CrBlk128.to_octets',
          N='16n', Q='15n', NB=16, ZERO='M.CmBlock{0, 0, 0, 0}', FMT='PB.pb.cm_fmt', LEN='PB.pb.cm_len', BLOCK='CM.cr.f128.block', DUAL='pc.cm_dual'),
-    dict(F='lc', SUF='64', NAME="The 64-bit block format (legacy-ciphers' LcBlock64)", BLK='L.LcBlock64', OF='L.LcBlock64.of_octets', TO='L.LcBlock64.to_octets',
-         N='8n', Q='7n', NB=8, ZERO='L.LcBlock64{0, 0}', FMT='LL.block64_octets_round_trip', LEN='PB.pb.lc_len', DUAL='LL.block64_octets_dual'),
+    dict(F='lc', SUF='64', NAME="The 64-bit block format (cipher-core's LcBlock64)", BLK='L.LcBlock64', OF='L.LcBlock64.of_octets', TO='L.LcBlock64.to_octets',
+         N='8n', Q='7n', NB=8, ZERO='L.LcBlock64{0, 0}', FMT='CoreL.block64_octets_round_trip', LEN='PB.pb.lc_len', DUAL='CoreL.block64_octets_dual'),
 ]
 
 def u32(p):

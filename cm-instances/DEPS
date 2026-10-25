@@ -1,3 +1,9 @@
 bytes
 cipher-modes
-legacy-ciphers
+cipher-core
+sm4
+camellia
+serpent
+twofish
+aria
+cast6

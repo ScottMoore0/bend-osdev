@@ -8,8 +8,8 @@ runs within a check process's memory) and ref/expected.txt (the same values
 from Python, in the same order):
   * block ciphers, one block both ways: AES, DES, 3DES, SM4, Camellia through
     Python's cryptography (OpenSSL; DES as TripleDES with three equal keys);
-    Serpent and Twofish through legacy-ciphers' ref/model.py (written from
-    the specifications by that package's author: cryptography has neither);
+    Serpent and Twofish through their packages' ref/model.py (written from
+    the specifications by those packages' author: cryptography has neither);
   * the modes over the interface (modes.bend): ECB, CBC and CTR, for those
     ciphers; ECB and CBC through cryptography where it has the cipher, CTR
     through this file's CTR (SP 800-38A) over cryptography's or the model's
@@ -42,8 +42,8 @@ from Python, in the same order):
     SHA-256 on RFC 5869's test case 1;
   * the newer block ciphers, one block both ways and through ECB, CBC and
     CTR: Blowfish and CAST-128 through cryptography, ARIA through the
-    openssl command (legacy-ciphers' model when it is missing), CAST-256,
-    TEA, XTEA and FCrypt through legacy-ciphers' model;
+    openssl command (aria's model when it is missing), CAST-256,
+    TEA, XTEA and FCrypt through their packages' models;
   * PCBC over every cipher, through this file's PCBC over the cipher's block
     function (checked first on the FCrypt specification's PCBC vector);
   * LRW over every 16-byte-block cipher: for AES the Linux kernel's
@@ -85,9 +85,24 @@ import binascii, hashlib, hmac, os, random, socket, subprocess, sys, warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.join(HERE, "..", "..", "legacy-ciphers", "ref"))
-import model as lcm  # noqa: E402
 import importlib.util  # noqa: E402
+import types  # noqa: E402
+
+
+def _model(pkg):
+    """the ref/model.py of a sibling cipher package"""
+    spec = importlib.util.spec_from_file_location("model_" + pkg, os.path.join(HERE, "..", "..", pkg, "ref", "model.py"))
+    mod = importlib.util.module_from_spec(spec)
+    # each model imports its own package's gen/tables.py as "tables"
+    sys.modules.pop("tables", None)
+    spec.loader.exec_module(mod)
+    sys.modules.pop("tables", None)
+    return mod
+
+
+# the ciphers' models, one per cipher package, under one name
+lcm = types.SimpleNamespace(**{k: v for p in ("serpent", "twofish", "aria", "cast6", "blowfish", "cast5", "tea", "xtea", "fcrypt", "rc4")
+                               for k, v in vars(_model(p)).items() if not k.startswith("__")})
 _spec = importlib.util.spec_from_file_location("hsmodel", os.path.join(HERE, "..", "..", "hashes", "ref", "model.py"))
 hsm = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hsm)
@@ -599,14 +614,14 @@ import ../../bytes/bytes.bend as B
 import ../../word64/word64.bend as W
 import ../../cipher-modes/cipher-modes.bend as M
 import ../../cipher-modes/aes.bend as X
-import ../../legacy-ciphers/legacy-ciphers.bend as L
-import ../../legacy-ciphers/des.bend as D
-import ../../legacy-ciphers/tdes.bend as T
-import ../../legacy-ciphers/sm4.bend as S
-import ../../legacy-ciphers/camellia.bend as Ca
-import ../../legacy-ciphers/serpent.bend as Sp
-import ../../legacy-ciphers/twofish.bend as Tf
-import ../../legacy-ciphers/rc4.bend as R
+import ../../cipher-core/cipher-core.bend as L
+import ../../des/des.bend as D
+import ../../des/tdes.bend as T
+import ../../sm4/sm4.bend as S
+import ../../camellia/camellia.bend as Ca
+import ../../serpent/serpent.bend as Sp
+import ../../twofish/twofish.bend as Tf
+import ../../rc4/rc4.bend as R
 import ../../crc/crc.bend as C
 import ../crypto.bend as Cr
 import ../stream.bend as St
@@ -631,13 +646,13 @@ import ../lrw.bend as Lw
 import ../cts.bend as Ct
 import ../xcbc.bend as Xc
 import ../vmac.bend as Vm
-import ../../legacy-ciphers/aria.bend as Ar
-import ../../legacy-ciphers/cast6.bend as C6
-import ../../legacy-ciphers/blowfish.bend as Bf
-import ../../legacy-ciphers/cast5.bend as C5
-import ../../legacy-ciphers/tea.bend as Te
-import ../../legacy-ciphers/xtea.bend as Xt
-import ../../legacy-ciphers/fcrypt.bend as Fc
+import ../../aria/aria.bend as Ar
+import ../../cast6/cast6.bend as C6
+import ../../blowfish/blowfish.bend as Bf
+import ../../cast5/cast5.bend as C5
+import ../../tea/tea.bend as Te
+import ../../xtea/xtea.bend as Xt
+import ../../fcrypt/fcrypt.bend as Fc
 import ../inst_michael.bend as MIC
 import ../pbkdf2.bend as Pb
 import ../kbkdf.bend as Kb
@@ -973,7 +988,7 @@ def main():
             f.write(HEADER + "\ndef main() -> IO(Unit):\n  do IO<Unit>:\n" + "\n".join(lines[j:j + CHUNK]) + "\n")
     with open(os.path.join(HERE, "expected.txt"), "w", newline="\n") as f:
         f.write("\n".join(expect) + "\n")
-    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from legacy-ciphers' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
+    print("%d cases (%d from cryptography or this file's modes over its ciphers, %d from the openssl command's ARIA, %d from the Linux kernel's lrw(aes) and cts(cbc(aes)), %d from the cipher packages' models, %d from Python's hashlib, hmac and binascii and this file's CRCs, %d from hashes' models)"
           % (len(lines), counts["cryptography"], counts["openssl"], counts["kernel"], counts["model"], counts["python"], counts["hsmodel"]))
 
 

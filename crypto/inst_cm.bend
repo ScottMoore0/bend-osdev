@@ -1,7 +1,7 @@
 # The adapter for cipher-modes: its error type mapped onto CrError, and the
 # block format of its 128-bit block CmBlock (an open type: four big-endian
 # 32-bit words), for every 128-bit cipher that uses it (cipher-modes' AES,
-# legacy-ciphers' SM4, Camellia, Serpent and Twofish).
+# and the sm4, camellia, serpent, twofish, aria and cast6 packages' ciphers).
 #
 # The format's conversions are written here, on the open type, so that its
 # law (format: blk_of(blk_to(b)) == Some{b}) is proved in this package:

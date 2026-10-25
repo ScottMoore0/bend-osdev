@@ -6,7 +6,7 @@ import ../bytes/bytes.bend as B
 import ../bytes/LAWS.bend as BL
 import ../bytes/PROOF.bend as BP
 import ../cipher-modes/cipher-modes.bend as M
-import ../legacy-ciphers/legacy-ciphers.bend as L
+import ../cipher-core/cipher-core.bend as L
 import ./inst_cm.bend as CM
 import ./inst_lc.bend as LC
 

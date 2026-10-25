@@ -36,18 +36,18 @@ def row(name, title, alias, path, K, key, enc, dec, rt, tkey, err="LC.LcError"):
 
 K16 = "000102030405060708090a0b0c0d0e0f"
 CIPHERS = [
-    row("sm4", "SM4 (legacy-ciphers)", "S", "../legacy-ciphers/sm4.bend", "S.LcSm4Key", "S.LcSm4.key",
-        "S.LcSm4.encrypt", "S.LcSm4.decrypt", "LL.sm4_round_trip", K16),
-    row("camellia", "Camellia (legacy-ciphers)", "Ca", "../legacy-ciphers/camellia.bend", "Ca.LcCamelliaKey", "Ca.LcCamellia.key",
-        "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt", "LL.camellia_round_trip", K16),
-    row("serpent", "Serpent (legacy-ciphers)", "Sp", "../legacy-ciphers/serpent.bend", "Sp.LcSerpentKey", "Sp.LcSerpent.key",
-        "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt", "LL.serpent_round_trip", K16),
-    row("twofish", "Twofish (legacy-ciphers)", "Tf", "../legacy-ciphers/twofish.bend", "Tf.LcTwofishKey", "Tf.LcTwofish.key",
-        "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt", "LL.twofish_round_trip", K16),
-    row("aria", "ARIA (legacy-ciphers)", "Ar", "../legacy-ciphers/aria.bend", "Ar.LcAriaKey", "Ar.LcAria.key",
-        "Ar.LcAria.encrypt", "Ar.LcAria.decrypt", "LL.aria_round_trip", K16),
-    row("cast6", "CAST-256 (legacy-ciphers)", "C6", "../legacy-ciphers/cast6.bend", "C6.LcCast6Key", "C6.LcCast6.key",
-        "C6.LcCast6.encrypt", "C6.LcCast6.decrypt", "LL.cast6_round_trip", K16),
+    row("sm4", "SM4 (the sm4 package)", "S", "../sm4/sm4.bend", "S.LcSm4Key", "S.LcSm4.key",
+        "S.LcSm4.encrypt", "S.LcSm4.decrypt", "Sm4L.sm4_round_trip", K16),
+    row("camellia", "Camellia (the camellia package)", "Ca", "../camellia/camellia.bend", "Ca.LcCamelliaKey", "Ca.LcCamellia.key",
+        "Ca.LcCamellia.encrypt", "Ca.LcCamellia.decrypt", "CamL.camellia_round_trip", K16),
+    row("serpent", "Serpent (the serpent package)", "Sp", "../serpent/serpent.bend", "Sp.LcSerpentKey", "Sp.LcSerpent.key",
+        "Sp.LcSerpent.encrypt", "Sp.LcSerpent.decrypt", "SerpL.serpent_round_trip", K16),
+    row("twofish", "Twofish (the twofish package)", "Tf", "../twofish/twofish.bend", "Tf.LcTwofishKey", "Tf.LcTwofish.key",
+        "Tf.LcTwofish.encrypt", "Tf.LcTwofish.decrypt", "TwofL.twofish_round_trip", K16),
+    row("aria", "ARIA (the aria package)", "Ar", "../aria/aria.bend", "Ar.LcAriaKey", "Ar.LcAria.key",
+        "Ar.LcAria.encrypt", "Ar.LcAria.decrypt", "AriaL.aria_round_trip", K16),
+    row("cast6", "CAST-256 (the cast6 package)", "C6", "../cast6/cast6.bend", "C6.LcCast6Key", "C6.LcCast6.key",
+        "C6.LcCast6.encrypt", "C6.LcCast6.decrypt", "Cast6L.cast6_round_trip", K16),
     # cipher-modes' own default: its round trip is cipher-modes' aes_round_trip
     row("aes", "AES-128, AES-192 and AES-256 (cipher-modes)", "X", "../cipher-modes/aes.bend", "X.CmAesKey", "X.CmAes.key",
         "X.CmAes.encrypt", "X.CmAes.decrypt", "CML.aes_round_trip", K16, "M.CmError"),
@@ -132,7 +132,7 @@ import ../cipher-modes/xts.bend as XT
 '''
 
 PROOF_HEAD = '''# Proofs of LAWS.bend, written by gen/instances.py: each c_dec_enc by
-# induction on the list, with the cipher's own round-trip law (legacy-ciphers'
+# induction on the list, with the cipher's own round-trip law (its package's
 # LAWS.bend, or cipher-modes' aes_round_trip) at every block; each mode law is
 # cipher-modes' law at the cipher's template arguments, with c_dec_enc as its
 # hypothesis.
@@ -150,8 +150,20 @@ def laws_file():
     return (LAWS_HEAD + imports() + "\n" + "\n".join(laws_of(c) for c in CIPHERS))
 
 
+def law_imports():
+    """the laws and proofs of each cipher's own package (cipher-modes' are
+    imported above, for AES)"""
+    out = []
+    for c in CIPHERS:
+        alias = c["rt"].split(".")[0]
+        if alias != "CML":
+            pkg = c["path"].split("/")[1]
+            out.append("import ../%s/LAWS.bend as %s\nimport ../%s/PROOF.bend as %sP\n" % (pkg, alias, pkg, alias[:-1]))
+    return "".join(out)
+
+
 def proof_file():
-    return (PROOF_HEAD + imports() + "import ../legacy-ciphers/LAWS.bend as LL\nimport ../legacy-ciphers/PROOF.bend as LP\n"
+    return (PROOF_HEAD + imports() + law_imports()
             + "import ./LAWS.bend as Laws\n\n" + "\n".join(proofs_of(c) for c in CIPHERS))
 
 
@@ -159,12 +171,13 @@ CHECK_HEAD = '''# Every cipher through cipher-modes' four round trips, at run ti
 # the cipher accepts, a 16-byte IV or sequence number, and data of 64 bytes
 # (CBC, and XTS on whole blocks) and 61 bytes (XTS with ciphertext
 # stealing), encrypted and decrypted back. Written by gen/instances.py. The
-# ciphers' own values are tested in legacy-ciphers (its vectors, and CBC
-# against cryptography and the openssl command) and in cipher-modes (AES:
-# FIPS 197's vectors, and against cryptography), the modes' in cipher-modes.
+# ciphers' own values are tested in their packages (sm4, camellia, serpent,
+# twofish, aria, cast6: their vectors, and CBC against cryptography, the
+# openssl command or their models) and in cipher-modes (AES: FIPS 197's
+# vectors, and against cryptography), the modes' in cipher-modes.
 import Base
 import ../bytes/bytes.bend as B
-import ../legacy-ciphers/legacy-ciphers.bend as LC
+import ../cipher-core/cipher-core.bend as LC
 import ../cipher-modes/cipher-modes.bend as M
 import ../cipher-modes/cbc.bend as CB
 import ../cipher-modes/xts.bend as XT

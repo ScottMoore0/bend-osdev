@@ -3,8 +3,8 @@
 # wrote, for every block size, and so ECB, CBC, PCBC and LRW on bytes undo
 # themselves wherever they do on blocks. In a pair of their own
 # (CONVENTIONS.md, Laws): their proofs rest on bytes' laws and on
-# legacy-ciphers' 64-bit block format (block64_octets_round_trip, so they
-# take in legacy-ciphers' proofs), and on no other package's.
+# cipher-core's 64-bit block format (block64_octets_round_trip, so they
+# take in cipher-core's proofs), and on no other package's.
 #
 # The byte layer cuts a byte string into pieces of the block size and reads
 # each through the block format (~blk_of), and writes blocks back through
@@ -12,12 +12,12 @@
 # at the blocks it is used on, as ordinary hypotheses on the list of
 # blocks (README.md, "How the laws are stated"): every block's bytes are
 # bsize bytes (hl), and read back as the block (hf). The two block formats
-# of the instances (inst_cm.bend's 128-bit CmBlock, legacy-ciphers' 64-bit
+# of the instances (inst_cm.bend's 128-bit CmBlock, cipher-core's 64-bit
 # LcBlock64) satisfy them for every list, so their laws take none.
 import Base
 import ../bytes/bytes.bend as B
 import ../cipher-modes/cipher-modes.bend as M
-import ../legacy-ciphers/legacy-ciphers.bend as L
+import ../cipher-core/cipher-core.bend as L
 import ../gf/gf128.bend as G
 import ./crypto.bend as Cr
 import ./modes.bend as Md

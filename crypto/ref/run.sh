@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Differential test: every instance through its interface against Python's
-# cryptography, hmac and binascii, and legacy-ciphers' models where
+# cryptography, hmac and binascii, and the cipher packages' models where
 # cryptography lacks a cipher (see gen.py). Exit 77 skips.
 set -uo pipefail
 cd "$(dirname "$0")"

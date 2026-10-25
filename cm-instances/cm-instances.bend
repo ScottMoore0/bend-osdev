@@ -3,7 +3,7 @@
 # (LAWS.bend, by gen/instances.py).
 #
 # Each cipher plugs into cipher-modes as its template arguments, unchanged:
-#   SM4        ~LcSm4Key, ~LcSm4.encrypt, ~LcSm4.decrypt            (legacy-ciphers/sm4.bend)
+#   SM4        ~LcSm4Key, ~LcSm4.encrypt, ~LcSm4.decrypt            (sm4/sm4.bend)
 #   Camellia   ~LcCamelliaKey, ~LcCamellia.encrypt, ~LcCamellia.decrypt
 #   Serpent    ~LcSerpentKey, ~LcSerpent.encrypt, ~LcSerpent.decrypt
 #   Twofish    ~LcTwofishKey, ~LcTwofish.encrypt, ~LcTwofish.decrypt
@@ -14,6 +14,7 @@
 # content is the laws, which hold of exactly those calls.
 #
 # The laws are in a package of their own because their proofs take in both
-# cipher-modes' and legacy-ciphers' proofs, and a package that imports
-# legacy-ciphers' proofs (crypto does) need not carry cipher-modes' too.
+# cipher-modes' proofs and the ciphers' own (sm4, camellia, serpent, twofish,
+# aria, cast6), and a package that imports the ciphers' proofs (crypto does)
+# need not carry cipher-modes' too.
 import Base

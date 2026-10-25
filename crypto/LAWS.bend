@@ -12,7 +12,8 @@
 # --verdict; README.md, Laws). A proof elsewhere that uses a law imports
 # the pair that holds it:
 #   LAWS_cm.bend   cipher-modes' AES, CMAC and CCM, and its 128-bit block
-#   LAWS_lc.bend   legacy-ciphers' block ciphers and RC4, and its 64-bit block
+#   LAWS_lc.bend   the cipher packages' block ciphers and RC4, and cipher-core's
+#                  64-bit block
 #   LAWS_crc.bend  crc's CRCs as hashes, and HMAC and HKDF over them
 #   LAWS_sha.bend  bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC,
 #                  HKDF, PBKDF2 and the SP 800-108 KDFs over them

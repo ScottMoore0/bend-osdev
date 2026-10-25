@@ -12,7 +12,7 @@
 # and HMAC-SHA3-256 (the value of Python's hmac over hashlib); then the
 # newer instances (ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt)
 # on their specifications' vectors both ways (TEA and XTEA on
-# legacy-ciphers' model values: their papers give none), PCBC (the FCrypt
+# their packages' model values: their papers give none), PCBC (the FCrypt
 # specification's PCBC vector), LRW-AES (the IEEE P1619 draft's Annex B),
 # CBC-CS3 (RFC 3962's AES vectors, both ways, and a refused short message),
 # AES-XCBC-MAC (RFC 3566's seven) and VMAC-AES (draft-krovetz-vmac-01's,
@@ -22,14 +22,14 @@ import ../bytes/bytes.bend as B
 import ../word64/word64.bend as W
 import ../cipher-modes/cipher-modes.bend as M
 import ../cipher-modes/aes.bend as X
-import ../legacy-ciphers/legacy-ciphers.bend as L
-import ../legacy-ciphers/des.bend as D
-import ../legacy-ciphers/tdes.bend as T
-import ../legacy-ciphers/sm4.bend as S
-import ../legacy-ciphers/camellia.bend as Ca
-import ../legacy-ciphers/serpent.bend as Sp
-import ../legacy-ciphers/twofish.bend as Tf
-import ../legacy-ciphers/rc4.bend as R
+import ../cipher-core/cipher-core.bend as L
+import ../des/des.bend as D
+import ../des/tdes.bend as T
+import ../sm4/sm4.bend as S
+import ../camellia/camellia.bend as Ca
+import ../serpent/serpent.bend as Sp
+import ../twofish/twofish.bend as Tf
+import ../rc4/rc4.bend as R
 import ../crc/crc.bend as C
 import ./crypto.bend as Cr
 import ./stream.bend as St
@@ -54,13 +54,13 @@ import ./lrw.bend as Lw
 import ./cts.bend as Ct
 import ./xcbc.bend as Xc
 import ./vmac.bend as Vm
-import ../legacy-ciphers/aria.bend as Ar
-import ../legacy-ciphers/cast6.bend as C6
-import ../legacy-ciphers/blowfish.bend as Bf
-import ../legacy-ciphers/cast5.bend as C5
-import ../legacy-ciphers/tea.bend as Te
-import ../legacy-ciphers/xtea.bend as Xt
-import ../legacy-ciphers/fcrypt.bend as Fc
+import ../aria/aria.bend as Ar
+import ../cast6/cast6.bend as C6
+import ../blowfish/blowfish.bend as Bf
+import ../cast5/cast5.bend as C5
+import ../tea/tea.bend as Te
+import ../xtea/xtea.bend as Xt
+import ../fcrypt/fcrypt.bend as Fc
 import ./inst_michael.bend as MIC
 import ./pbkdf2.bend as Pb
 import ./inst_pbkdf2.bend as PbI
