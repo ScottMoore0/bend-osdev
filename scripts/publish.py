@@ -44,8 +44,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMPORT = re.compile(r"^(import\s+)(\S+\.bend)(\s+as\s+\S+)", re.M)
 # a foreign def's sources, in its body: import "./effs/x.c"
 FOREIGN = re.compile(r'^\s+import\s+"([^"]+\.(?:c|js))"', re.M)
-# the verdict on a file that type-checks but relies on foreign code
-FOREIGN_VERDICT = re.compile(r"SOME PROOFS FAIL\nError: (\d+) defs? rel(?:y|ies) on unsafe or foreign code:\n(?:- \S+\n)+\s*$")
+# the verdict on a file that type-checks but relies on foreign code: Bend
+# 2.0.37 lists the defs one per line ("- name"); 2.0.39 lists them on one
+# "defs that depend on foreign effects:" line and may add a "Hint:" line
+FOREIGN_VERDICT = re.compile(r"SOME PROOFS FAIL\nError: (\d+) defs? rel(?:y|ies) on unsafe or foreign code:\n"
+                             r"(?:(?:- \S+\n)+|defs that depend on foreign effects: [^\n]+\n(?:Hint: [^\n]*\n)?)\s*$")
 HUB = os.environ.get("BEND_HUB", "https://hub.bend-lang.com")
 
 
