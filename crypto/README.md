@@ -6,7 +6,7 @@ hash, MAC, AEAD, KDF, signature and key agreement, each with its laws; the
 generic algorithms built on them (HMAC and HKDF over any hash; PBKDF2 and
 the SP 800-108 KDFs in counter and feedback mode over any MAC; ECB, CBC, CTR, PCBC and CBC-CS3 ciphertext stealing over any block
 cipher of any block size; LRW over any 128-bit one; the MACs XCBC and VMAC
-over any block cipher); and the existing algorithms (cipher-modes' AES,
+over any block cipher); and the existing algorithms (the aes package's AES,
 CMAC and CCM; the cipher packages' DES, 3DES, SM4, Camellia, Serpent,
 Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (des,
 sm4, camellia, serpent, twofish, aria, cast6, blowfish, cast5, tea, xtea,
@@ -120,8 +120,8 @@ Written from the public specifications only:
 | `vmac.bend` | VMAC (64- and 128-bit tags) over any 128-bit block cipher as a MAC |
 | `hmac.bend` | HMAC over any hash: one call, or in pieces |
 | `hkdf.bend` | HKDF over any hash: extract, expand, derive |
-| `inst_cm.bend` | the adapter for cipher-modes: `CmError` onto `CrError`, and the format of its 128-bit block `CmBlock` |
-| `inst_aes.bend` | AES as a block cipher (the only file importing cipher-modes' `aes.bend`, and so bend-collections) |
+| `inst_cm.bend` | the adapter for the 128-bit modes: mode-core's `CmError` onto `CrError`, and the format of its 128-bit block `CmBlock` |
+| `inst_aes.bend` | AES as a block cipher (the only file importing the aes package, and so bend-collections) |
 | `inst_cmac.bend` | CMAC over any 128-bit block cipher as a MAC |
 | `inst_ccm.bend` | CCM over any 128-bit block cipher as an AEAD |
 | `inst_lc.bend` | the adapter for the cipher packages: cipher-core's `LcError` onto `CrError`, the ciphers' key schedules as `~key`, the XOR of cipher-core's 64-bit block |
@@ -135,7 +135,7 @@ Written from the public specifications only:
 | `inst_kbkdf.bend` | KBKDF-HMAC-SHA-256 in counter and feedback mode (32-bit counter and [L]_2) |
 | `inst_michael.bend` | Michael (michael/michael.bend) as a MAC: its key error (md-engine's `HsError`) mapped onto `CrError` |
 | `LAWS.bend`, `PROOF.bend` | the generic laws (for every algorithm of an interface's shape) and the conditional ones, and their proofs |
-| `LAWS_cm.bend`, `PROOF_cm.bend` | the laws of cipher-modes' algorithms through the interfaces (AES, CMAC, CCM, the 128-bit block format), and their proofs, from cipher-modes' laws |
+| `LAWS_cm.bend`, `PROOF_cm.bend` | the laws of AES, CMAC and CCM (the aes, cmac and ccm packages) and of mode-core's 128-bit block format through the interfaces, and their proofs, from aes' and ccm's laws |
 | `LAWS_lc.bend`, `PROOF_lc.bend` | the same for the cipher packages' (their block ciphers, RC4, cipher-core's 64-bit block format), from their laws and cipher-core's |
 | `LAWS_crc.bend`, `PROOF_crc.bend` | the same for crc's CRCs as hashes, and HMAC and HKDF over them, from crc's laws |
 | `LAWS_sha.bend`, `PROOF_sha.bend` | the same for bend-collections' SHA-256, SHA-512 and SHA3-256, and HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs over them, from bend-collections-laws-crypto's laws |
@@ -262,8 +262,9 @@ The interface laws, as each file's header states them:
 A law cannot take an algorithm's property as a template hypothesis: the
 BendTT kernel behind `--verdict` has no model of a template whose type is a
 proposition (`~inv: @k -> @b -> {dec(k, enc(k, b)) == b}`), which is why
-cipher-modes' four round-trip laws failed `--verdict` until they took their
-hypothesis as an ordinary one, used once (cipher-modes/README.md). An ordinary hypothesis
+the four CBC and XTS round-trip laws (then cipher-modes', now cbc's and xts')
+failed `--verdict` until they took their hypothesis as an ordinary one, used
+once (cbc/README.md). An ordinary hypothesis
 (`inv: ...`) is modelled, but it is affine: a function value is not `Data`,
 so it cannot be `+inv`, and an induction cannot use it at every step. So the
 laws come in three forms:
@@ -282,7 +283,7 @@ laws come in three forms:
   `CrError`), `ccm_round_trip_if`, `sign_verify_bytes_if`, `kex_agree_if`,
   and the byte layer's mode round trips (`<f>_ecb_octets_round_trip` ..., at
   the blocks used). A property needed at every step of an induction is taken
-  on lists, as cipher-modes' `inv` is: used once, on the list the proof
+  on lists, as cbc's and xts' `inv` is: used once, on the list the proof
   builds, then taken apart an element at a time (an equation is `Data`):
   `modes_blocks_of_octets_of` (the format at a list of blocks),
   `<f>_cts_round_trip` (the cipher, `inv`), `hkdf_length` and
@@ -340,11 +341,11 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | CBC-CS3 over every block cipher | (mode) | the round trip, `cmblock_cts_round_trip` and `lcblock64_cts_round_trip`, for every cipher over the format with `inv` (every instance's block round trip gives `inv` for every list), every key, IV and message | RFC 3962 B's four vectors both ways and a short message refused; vs the kernel's cts(cbc(aes)), and `ref/gen.py`'s CS3 over the others |
 | XCBC-MAC over every block cipher | MAC | `xcbc_accepts` (every cipher) | RFC 3566 test cases 1 to 7; vs `ref/gen.py`'s XCBC over AES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256; a changed tag refused |
 | VMAC over every 128-bit block cipher | MAC | `vmac_accepts` (every cipher and nonce length) | draft-krovetz-vmac-01's vectors (64- and 128-bit tags); vs `ref/gen.py`'s VMAC over the 128-bit ciphers, nonces of 1 to 15 bytes; a changed tag refused |
-| AES-128, AES-256 (`CrAes.key`; `CrAes.key_enc`, the same key now: cipher-modes decrypts with the encryption schedule) | block cipher | round_trip (from cipher-modes' `aes_round_trip`), format, xor, key_length; ECB, CBC, PCBC and LRW round trips over it; FIPS 197 C.1 through the interface | C.1 and C.3 both ways; ECB/CBC/CTR vs cryptography |
+| AES-128, AES-256 (`CrAes.key`; `CrAes.key_enc`, the same key now: aes decrypts with the encryption schedule) | block cipher | round_trip (from aes' `aes_round_trip`), format, xor, key_length; ECB, CBC, PCBC and LRW round trips over it; FIPS 197 C.1 through the interface | C.1 and C.3 both ways; ECB/CBC/CTR vs cryptography |
 | CTR over every block cipher above | stream cipher | involution, streaming_data, streaming_state, for every block cipher; the counter's increment, +1 mod 2^(8n) (`ctr_counter_increment`) | SP 800-38A F.5.1; in two pieces vs cryptography / models, a counter wrapping |
 | RC4, RC4-drop[n] | stream cipher | involution, streaming_data, streaming_state (from rc4); key and IV refusals | RFC 6229 whole and in pieces, drop[1536]; vs cryptography's ARC4 and the model |
 | CMAC over every 128-bit cipher above | MAC | accepts, agrees (for every cipher) | RFC 4493 examples 1 to 4; vs cryptography (AES, SM4, Camellia) and RFC 4493 over the models; a changed tag refused |
-| CCM over every 128-bit cipher above, any tag length | AEAD | round_trip (`ccm_aead_round_trip`, from cipher-modes' `ccm_round_trip`: below) | RFC 3610 packets 1 to 3; vs cryptography's AESCCM, and RFC 3610 over the others; changed tag, ciphertext and associated data refused |
+| CCM over every 128-bit cipher above, any tag length | AEAD | round_trip (`ccm_aead_round_trip`, from ccm's `ccm_round_trip`: below) | RFC 3610 packets 1 to 3; vs cryptography's AESCCM, and RFC 3610 over the others; changed tag, ciphertext and associated data refused |
 | CRC-32 of any parameter set (CRC-32, CRC-32C, ...) | hash | streaming, split (for every parameter set), length; check values | vs binascii.crc32 and a Rocksoft-model CRC-32C, in pieces |
 | CRC-64 of any parameter set (CRC-64/XZ, ...) | hash | streaming, split (for every parameter set), length; check value | vs a Rocksoft-model CRC-64/XZ, in pieces |
 | SHA-256, SHA-512 (bend-collections; `CrSha2State`) | hash | the one-shot digest is FIPS 180-4's executable specification (bend-collections-laws-crypto's spec); split into two and three pieces equals one-shot; length; SHA-256 of "abc" | streaming for every state (bend-collections proves pieces only from the start); FIPS 180-4's examples whole and in pieces; vs hashlib, in pieces |
@@ -357,14 +358,14 @@ iterations, as a KDF, is `~Pb.CrPbkdf2.derive(~Hm.CrHmacKey,
 | PBKDF2 over any MAC (`CrPbkdf2.pbkdf2`, `.derive`; PBKDF2-HMAC-SHA-256 and -SHA-1 the named ones) | KDF | length (a derivation that succeeds has the length asked, for every MAC and input); the stream's length and prefix laws (for every MAC and input); the refusal of 0 iterations; RFC 6070 test cases 1 and 2, the first 32 bytes of RFC 7914's c = 1 | RFC 6070 cases 1 to 3, 5 and 6 and RFC 7914's two in full (c = 80000 among them); PBKDF2 over HMAC-MD5 through the KDF interface; vs hashlib.pbkdf2_hmac over SHA-1, SHA-256, MD5, RIPEMD-160 and SM3, and cryptography's PBKDF2HMAC for SHA-1 and SHA-256 |
 | SP 800-108 KDFs over any MAC (`CrKbkdf.counter_kdf`, `.feedback_kdf`, `.derive`; KBKDF-HMAC-SHA-256 in counter and feedback mode the named ones) | KDF | length (a derivation that succeeds has the length asked, for every MAC and input, both modes); the streams' length and prefix laws (both modes, for every MAC and input); KBKDF-HMAC-SHA-256 in counter mode on a cryptography value | counter and feedback mode over HMAC-SHA-256, and a refusal (check.bend); vs cryptography's KBKDFHMAC (counter mode, SHA-1 and SHA-256) and `ref/gen.py`'s SP 800-108 (feedback mode, and SM3) |
 
-**CCM.** cipher-modes proves `ccm_round_trip` for every cipher, key, tag
+**CCM.** The ccm package proves `ccm_round_trip` for every cipher, key, tag
 length, nonce, associated data and message; `ccm_round_trip_if` here proves
 the AEAD round trip of `CrCcm.seal` and `CrCcm.open` from it, at the same
 arguments, and `ccm_aead_round_trip` joins the two: the AEAD round trip for
 every CCM instance, with no hypothesis. (They were kept apart while
-cipher-modes' `PROOF.bend` failed `--verdict`; since its round-trip laws
-take an ordinary hypothesis, `PROOF_cm.bend` here imports it, and `--verdict`
-passes with it.)
+cipher-modes' `PROOF.bend`, where the law was then, failed `--verdict`;
+`PROOF_cm.bend` here imports ccm's proofs and aes', and `--verdict` passes
+with them.)
 
 **Not instances.** XXH64 (zstd) fits the hash interface's shape, but zstd
 proves no streaming law for it, and one would need zstd's internals, so it
@@ -388,11 +389,11 @@ it comes from, so those laws hold of that package's copy and not of
 bend-collections@1.0.0.0's: importing the copy they are about is what lets
 `LAWS_sha.bend` cite them.
 
-**Why the cipher-modes adapter is here.** `inst_cm.bend`, `inst_aes.bend`,
-`inst_cmac.bend` and `inst_ccm.bend` adapt cipher-modes to the interfaces
-from this package, not from cipher-modes: the dependency then runs one way
-(crypto on the algorithm packages, never back), cipher-modes and the
-cipher packages are unchanged, and the interface files themselves import
+**Why the adapters for the 128-bit modes are here.** `inst_cm.bend`,
+`inst_aes.bend`, `inst_cmac.bend` and `inst_ccm.bend` adapt mode-core, aes,
+cmac and ccm to the interfaces from this package, not from those packages:
+the dependency then runs one way (crypto on the algorithm packages, never
+back), the algorithm and cipher packages are unchanged, and the interface files themselves import
 only bytes.
 
 ## Public interface
@@ -495,7 +496,7 @@ in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 | Pair | Laws | Its proofs rest on (and import) |
 |---|---|---|
 | `LAWS.bend`, `PROOF.bend` | 23: the generic laws `xor_*`, `ctr_*`, `mac_verify_tag_*`, `hmac_accepts`, `xcbc_accepts`, `vmac_accepts`, `pbkdf2_length`, `pbkdf2_stream_*`, `kbkdf_*` (but `kbkdf_hmac_sha256_vector`), and the conditional `lift_round_trip`, `sign_verify_bytes_if`, `kex_agree_if` | bytes' laws |
-| `LAWS_cm.bend`, `PROOF_cm.bend` | 13: `cmblock_*`, `cmac_accepts`, `ccm_round_trip_if`, `ccm_aead_round_trip`, `aes_fips197_c1`, and the AES rows (`aes_*`, `aes_enc_key_length`) | cipher-modes' laws (and through them gf's), the generic laws |
+| `LAWS_cm.bend`, `PROOF_cm.bend` | 13: `cmblock_*`, `cmac_accepts`, `ccm_round_trip_if`, `ccm_aead_round_trip`, `aes_fips197_c1`, and the AES rows (`aes_*`, `aes_enc_key_length`) | aes' and ccm's laws (and through aes' gf's and mode-core's), the generic laws |
 | `LAWS_lc.bend`, `PROOF_lc.bend` | 93: `lcblock64_*`, the refusals `rc4_empty_key`, `rc4_iv_refused`, `ctr_bad_iv`, `blocks_of_not_whole`, and the rows of DES to FCrypt and of RC4 | the cipher packages' laws (des, sm4, camellia, serpent, twofish, aria, cast6, blowfish, cast5, tea, xtea, fcrypt, rc4) and cipher-core's |
 | `LAWS_crc.bend`, `PROOF_crc.bend` | 17: `crc32_*`, `crc32c_hash_check`, `crc64_*`, `hkdf_too_long`, `hmac_crc32_vector`, and the CRC rows (`hmac_crc32_*`, `hmac_crc64_*`) | crc's laws |
 | `LAWS_sha.bend`, `PROOF_sha.bend` | 21: `sha256_*`, `sha512_*`, `sha3_256_*`, `hkdf_sha256_too_long`, `hmac_sha256_rfc4231_2`, `pbkdf2_hmac_sha256_rfc7914_1`, `kbkdf_hmac_sha256_vector`, and the SHA rows (`hmac_sha256_split`, `hmac_sha512_split`, `hmac_sha3_256_split`) | bend-collections-laws-crypto's laws, bytes' laws |
@@ -510,7 +511,7 @@ pkcs use `sign_verify_bytes_if` through `../crypto/LAWS.bend` and
 `../crypto/PROOF.bend`, which take in none of the algorithm packages'
 proofs. **Why several pairs:** a check takes in the proofs of every package
 the proof file imports (under `--verdict` alone, on the machine of the
-Status line: cipher-modes' about 1.2 GB, crc's 0.68 GB, each hash package's 0.43 to 0.63 GB
+Status line: aes' about 1.24 GB with gf's and mode-core's, ccm's 0.43 GB with mode-core's, crc's 0.68 GB, each hash package's 0.43 to 0.63 GB
 with md-engine's,
 bend-collections-laws-crypto's 0.50 GB, each cipher package's 0.35 to 0.48
 GB with cipher-core's (all thirteen together, in `PROOF_lc.bend`, 0.72 GB
@@ -579,7 +580,7 @@ instance, its `<c>_ecb_round_trip`, `<c>_cbc_round_trip`,
 **CBC-CS3** (`LAWS_cts.bend`): `cmblock_cts_round_trip`,
 `lcblock64_cts_round_trip`: for every block cipher over the format, every
 key with `inv` (each block encrypted and decrypted back is itself, as
-cipher-modes' laws take it), every IV and every message, `bind(encrypt(m),
+the modes' laws take it), every IV and every message, `bind(encrypt(m),
 decrypt) == map(c => m, encrypt(m))`: decryption gives the message back,
 and when encryption refuses (an IV of another length, a message shorter
 than a block) both refuse alike. The proof (`PROOF_cts.bend`'s comment)
@@ -596,7 +597,7 @@ cipher-core's laws `block64_octets_round_trip` and
 interface's length and prefix laws for `CrHkdf.derive`, for every hash
 (`~bsize`, `~dsize`, `~digest`) whose digest has `dsize` bytes on the inputs
 it is used on (the hypothesis `hd`, for every list of byte strings each
-one's digest has `dsize` bytes, as cipher-modes' laws take a cipher's
+one's digest has `dsize` bytes, as the modes' laws take a cipher's
 property: a hash whose one-shot digest has `dsize` bytes for every input,
 such as SHA-256, SHA-512 and SHA3-256 by `sha256_hash_length`,
 `sha512_hash_length` and `sha3_256_hash_length`, gives it for every list
@@ -630,7 +631,7 @@ lists or at the blocks used: `modes_blocks_of_octets_of`, the
 `<c>_block_round_trip_dual`, `<c>_ecb_round_trip`, `<c>_cbc_round_trip`,
 `<c>_pcbc_round_trip` for c = des, tdes, sm4, camellia, serpent, twofish,
 aria, cast6, blowfish, cast5, tea, xtea, fcrypt, and aes (all but the dual:
-cipher-modes proves decryption undoes encryption, not the reverse);
+the aes package proves decryption undoes encryption, not the reverse);
 `<c>_lrw_round_trip` for the 128-bit ones among them (sm4, camellia,
 serpent, twofish, aria, cast6, aes);
 `<c>_key_length` for those and aes, aes_enc; `rc4_stream_involution`,
@@ -806,9 +807,10 @@ shared with other checks).
 
 `DEPS`: `bytes` (Octets, and its laws in the proofs), `word64` (the bit
 slicing of the 128-bit format, `W64` for CRC-64 and VMAC), `gf` (GF(2^128)
-for LRW's tweaks), `cipher-modes` (AES,
-CMAC, CCM and the `CmBlock` type, for the instances, and its laws and
-proofs for `ccm_aead_round_trip` and the AES rows, in `PROOF_cm.bend`),
+for LRW's tweaks), `mode-core` (the `CmBlock` type and its error type),
+`aes`, `cmac` and `ccm` (AES, CMAC and CCM, for the instances, and aes' and
+ccm's laws and proofs for the AES rows and `ccm_aead_round_trip`, in
+`PROOF_cm.bend`),
 `cipher-core`, `des`, `sm4`, `camellia`, `serpent`, `twofish`, `aria`,
 `cast6`, `blowfish`, `cast5`, `tea`, `xtea`, `fcrypt` and `rc4` (the ciphers
 and RC4, cipher-core's 64-bit block and error type, and their laws: the
@@ -823,7 +825,7 @@ SHA3-256 and their laws, above; MIT). The interface and generic files
 (`crypto.bend` to `hkdf.bend`, `pbkdf2.bend` and `kbkdf.bend`) import only `bytes`; only
 `inst_sha2.bend`, `inst_sha3.bend` (and `LAWS_sha.bend` and
 `PROOF_sha.bend`) import bend-collections-laws-crypto, and only
-`inst_aes.bend` reaches bend-collections, through cipher-modes' `aes.bend`.
+`inst_aes.bend` reaches bend-collections, through the aes package.
 `LAWS.bend` and `PROOF.bend` import none of the algorithm packages (only
 bytes and its proofs, and this package's interface and generic files), so a
 proof elsewhere that uses a generic law takes in none of their proofs.
@@ -841,7 +843,8 @@ cipher-core and one package per cipher: `PROOF.bend` 4 s and 0.40 GB peak,
 split of hashes into md-engine and one package per hash; it takes in six
 hash packages' proofs, each with md-engine's),
 `PROOF_sha.bend` 58 s and 0.96 GB, `PROOF_crc.bend` 130 s and 0.79 GB,
-`PROOF_cm.bend` 7.3 min and 1.29 GB, nearly all of it cipher-modes' proofs,
+`PROOF_cm.bend` 7.2 min and 1.44 GB (after the split of cipher-modes: it takes in aes'
+and ccm's proofs, each with mode-core's, and gf's; nearly all of it AES's),
 `PROOF_bytes.bend` 4 s and 0.38 GB, `PROOF_cts.bend` 5 s and 0.41 GB (both
 take in cipher-core's proofs only, no longer every cipher's),
 `PROOF_hkdf.bend` 4 s and 0.37 GB, `PROOF_ctr.bend` 5 s and 0.39 GB; in one

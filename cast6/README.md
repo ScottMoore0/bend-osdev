@@ -1,6 +1,6 @@
 # bend-osdev-cast6
 
-CAST-256 (CAST6, RFC 2612), a 128-bit block cipher with keys of 128 to 256 bits, on cipher-modes' `CmBlock`, so it plugs into every mode of cipher-modes (CBC, XTS, CCM, CMAC) as their template arguments. It uses CAST-128's S-boxes and round functions from the cast5 package.
+CAST-256 (CAST6, RFC 2612), a 128-bit block cipher with keys of 128 to 256 bits, on mode-core's `CmBlock`, so it plugs into every 128-bit mode (the cbc, xts, ccm and cmac packages) as their template arguments. It uses CAST-128's S-boxes and round functions from the cast5 package.
 
 The directory is `cast6` and the entry file `cast6/cast6.bend`; the hub name is `bend-osdev-cast6`. It is one of the packages split from bend-osdev-legacy-ciphers@0.1.0.0, which they supersede (that version stays on the hub as it was): cipher-core (what the ciphers share, and the 64-bit modes) and one package per cipher.
 
@@ -42,32 +42,32 @@ The key type is opaque: built by the cipher's `key` functions from the raw key, 
 Everything else (`c6.*`, `LcCast6Ks`, `LcCast6Op`, `LcCast6Kst`) is
 internal.
 
-## With cipher-modes
+## With the modes
 
-The cipher has exactly the shape cipher-modes' modes take (see cipher-modes'
+The cipher has exactly the shape the 128-bit modes take (see mode-core's
 README): a key type, and `encrypt` and `decrypt` from key and `CmBlock` to
 `CmBlock`. So every mode there runs over it unchanged:
 
 ```
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 import ../cast6/cast6.bend as C
 
 CB.Cbc.encrypt(~C.LcCast6Key, ~C.LcCast6.encrypt, k, iv, m)
 XT.Xts.decrypt(~C.LcCast6Key, ~C.LcCast6.encrypt, ~C.LcCast6.decrypt, k1, k2, i, c)
 ```
 
-and likewise CCM and CMAC. cipher-modes' round-trip laws take the cipher's
+and likewise CCM and CMAC. The modes' round-trip laws take the cipher's
 inversion at the law's key as a hypothesis; this package's `cast6_round_trip`
 gives it for every key, and bend-osdev-cm-instances states and proves those
 mode laws at this cipher (`cast6_cbc_round_trip`, `cast6_xts_round_trip`, ...),
 in a package of its own so that importing this package's proofs (crypto
-does) does not take in cipher-modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
+does) does not take in the modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
 and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 ## Extension points
 
-* **Any mode over the cipher:** it is cipher-modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
+* **Any mode over the cipher:** it is the modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
 * **Key sizes and options are parameters** where the specification gives a choice: any key of 128 to 256 bits in 32-bit steps.
 * **Replaceable internals:** the key type is opaque, so the cipher's representation (its round keys, its tables) can change without touching a caller. The cipher is a list of invertible steps, decryption the steps undone in reverse order; a faster implementation (bit-sliced S-boxes, combined tables, hardware instructions) can go behind the same defs, tied to these by the vectors and the differential test.
 
@@ -81,13 +81,13 @@ and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 **Vectors** (proved by computation): the refusal of an 18-byte key. RFC 2612's vectors run compiled in `check.bend` instead: they run past the `--verdict` kernel's evaluation budget.
 
-How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here each step of a quad-round is undone by itself (by XOR, cipher-core's `u32_xor_cancel`), so QBAR undoes Q, whatever f1, f2 and f3 are. cm-instances turns `cast6_round_trip` into cipher-modes' CBC and XTS round trips at this cipher.
+How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here each step of a quad-round is undone by itself (by XOR, cipher-core's `u32_xor_cancel`), so QBAR undoes Q, whatever f1, f2 and f3 are. cm-instances turns `cast6_round_trip` into cbc's CBC and XTS round trips at this cipher.
 
 The proofs need nothing from another package beyond its public interface and laws: cipher-core's laws (above).
 
 ## Tests
 
-* `check.bend` runs RFC 2612's three vectors both ways (encryption, then decryption back), and the cipher through cipher-modes' CBC over 32 KB both ways.
+* `check.bend` runs RFC 2612's three vectors both ways (encryption, then decryption back), and the cipher through cbc's CBC over 32 KB both ways.
 * `ref/run.sh` compares CAST-256 against `ref/model.py` alone (neither `cryptography` nor `openssl` has it), on random keys, blocks and messages, each a block both ways and a CBC message both ways. **`ref/model.py` was written here from the specification, by the same author as this package**, and is first checked against the specification's published vectors. `run.sh` exits 77 when `python3` is missing.
 
 ## Speed
@@ -96,7 +96,7 @@ Measured on Bend 2.0.37, native builds (`bend file.bend -o prog`), WSL2, before 
 
 | Run | Time | Notes |
 |---|---|---|
-| CAST-256 (128-bit key), CBC through cipher-modes, 256 KB both ways | 1.8 s, 58 MB peak |  |
+| CAST-256 (128-bit key), CBC through cbc, 256 KB both ways | 1.8 s, 58 MB peak |  |
 
 The cipher builds its lookup tables when its key is made and keeps them in the key (Bend 2.0.37 recomputes a table def at every call). Messages have no length limit beyond memory: every loop over blocks or bytes is a tail call.
 
@@ -106,7 +106,7 @@ The S-boxes are table lookups (trees walked by the bits of a secret index). None
 
 ## Dependencies
 
-`DEPS`: `bytes` (`Octets`); `cipher-modes` (its open 128-bit block `CmBlock`, so the cipher plugs into its modes; the tests use its CBC). Only `cipher-modes.bend` and `cbc.bend` are imported, not cipher-modes' AES, so this package does not pull in bend-collections; `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest); `cast5` (CAST-128's S-boxes S1 to S4 and round functions f1, f2, f3, which CAST-256 uses).
+`DEPS`: `bytes` (`Octets`); `mode-core` (its open 128-bit block `CmBlock`, so the cipher plugs into the modes); `cbc` (the tests only: CBC over the cipher); `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest); `cast5` (CAST-128's S-boxes S1 to S4 and round functions f1, f2, f3, which CAST-256 uses).
 
 ## Status
 

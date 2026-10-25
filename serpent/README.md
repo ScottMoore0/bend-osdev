@@ -1,6 +1,6 @@
 # bend-osdev-serpent
 
-Serpent (the AES submission), a 128-bit block cipher with keys of up to 256 bits, on cipher-modes' `CmBlock`, so it plugs into every mode of cipher-modes (CBC, XTS, CCM, CMAC) as their template arguments.
+Serpent (the AES submission), a 128-bit block cipher with keys of up to 256 bits, on mode-core's `CmBlock`, so it plugs into every 128-bit mode (the cbc, xts, ccm and cmac packages) as their template arguments.
 
 The directory is `serpent` and the entry file `serpent/serpent.bend`; the hub name is `bend-osdev-serpent`. It is one of the packages split from bend-osdev-legacy-ciphers@0.1.0.0, which they supersede (that version stays on the hub as it was): cipher-core (what the ciphers share, and the 64-bit modes) and one package per cipher.
 
@@ -47,32 +47,32 @@ The key type is opaque: built by the cipher's `key` functions from the raw key, 
 Everything else (`sp.*`, `LcSpBox`, `LcSpNib`, `LcSpQ`, `LcSpOp`) is
 internal.
 
-## With cipher-modes
+## With the modes
 
-The cipher has exactly the shape cipher-modes' modes take (see cipher-modes'
+The cipher has exactly the shape the 128-bit modes take (see mode-core's
 README): a key type, and `encrypt` and `decrypt` from key and `CmBlock` to
 `CmBlock`. So every mode there runs over it unchanged:
 
 ```
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 import ../serpent/serpent.bend as C
 
 CB.Cbc.encrypt(~C.LcSerpentKey, ~C.LcSerpent.encrypt, k, iv, m)
 XT.Xts.decrypt(~C.LcSerpentKey, ~C.LcSerpent.encrypt, ~C.LcSerpent.decrypt, k1, k2, i, c)
 ```
 
-and likewise CCM and CMAC. cipher-modes' round-trip laws take the cipher's
+and likewise CCM and CMAC. The modes' round-trip laws take the cipher's
 inversion at the law's key as a hypothesis; this package's `serpent_round_trip`
 gives it for every key, and bend-osdev-cm-instances states and proves those
 mode laws at this cipher (`serpent_cbc_round_trip`, `serpent_xts_round_trip`, ...),
 in a package of its own so that importing this package's proofs (crypto
-does) does not take in cipher-modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
+does) does not take in the modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
 and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 ## Extension points
 
-* **Any mode over the cipher:** it is cipher-modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
+* **Any mode over the cipher:** it is the modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
 * **Key sizes and options are parameters** where the specification gives a choice: any key of up to 256 bits.
 * **Replaceable internals:** the key type is opaque, so the cipher's representation (its round keys, its tables) can change without touching a caller. The cipher is a list of invertible steps, decryption the steps undone in reverse order; a faster implementation (bit-sliced S-boxes, combined tables, hardware instructions) can go behind the same defs, tied to these by the vectors and the differential test.
 
@@ -86,13 +86,13 @@ and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 **Vectors** (proved by computation): NESSIE's zero key and block (`serpent_nessie`) and the refusal of a 33-byte key. NESSIE's second vector runs in `check.bend`.
 
-How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here each step is undone: an S-box layer one bit position at a time (each S-box and its inverse checked on all 16 inputs, `gen/proof.py`), the linear transformation step by step (its rotations undone on symbolic bits, with cipher-core's `rotl1_rotl31` and `rotl31_rotl1`), the byte swaps (`bswap_bswap`) and the round keys by XOR (`u32_xor_cancel`). cm-instances turns `serpent_round_trip` into cipher-modes' CBC and XTS round trips at this cipher.
+How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here each step is undone: an S-box layer one bit position at a time (each S-box and its inverse checked on all 16 inputs, `gen/proof.py`), the linear transformation step by step (its rotations undone on symbolic bits, with cipher-core's `rotl1_rotl31` and `rotl31_rotl1`), the byte swaps (`bswap_bswap`) and the round keys by XOR (`u32_xor_cancel`). cm-instances turns `serpent_round_trip` into cbc's CBC and XTS round trips at this cipher.
 
 The proofs need nothing from another package beyond its public interface and laws: cipher-core's laws (above).
 
 ## Tests
 
-* `check.bend` runs NESSIE's two vectors both ways (encryption, then decryption back), and the cipher through cipher-modes' CBC over 4 KB both ways.
+* `check.bend` runs NESSIE's two vectors both ways (encryption, then decryption back), and the cipher through cbc's CBC over 4 KB both ways.
 * `ref/run.sh` compares Serpent against `ref/model.py` alone (neither `cryptography` nor `openssl` has it), on random keys, blocks and messages, each a block both ways and a CBC message both ways. **`ref/model.py` was written here from the specification, by the same author as this package**, and is first checked against the specification's published vectors. `run.sh` exits 77 when `python3` is missing.
 
 ## Speed
@@ -102,7 +102,7 @@ Measured on Bend 2.0.37, native builds (`bend file.bend -o prog`), WSL2, before 
 | Run | Time | Notes |
 |---|---|---|
 | Serpent-128 | 360 us per 16-byte block | the S-box layers and rotations are computed on bits |
-| Serpent-128, CBC through cipher-modes, 256 KB both ways | 14.4 s, 58 MB peak |  |
+| Serpent-128, CBC through cbc, 256 KB both ways | 14.4 s, 58 MB peak |  |
 
 Messages have no length limit beyond memory: every loop over blocks or bytes is a tail call.
 
@@ -112,7 +112,7 @@ Serpent's S-box layers branch on secret bits. None of this is constant-time, and
 
 ## Dependencies
 
-`DEPS`: `bytes` (`Octets`); `cipher-modes` (its open 128-bit block `CmBlock`, so the cipher plugs into its modes; the tests use its CBC). Only `cipher-modes.bend` and `cbc.bend` are imported, not cipher-modes' AES, so this package does not pull in bend-collections; `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest).
+`DEPS`: `bytes` (`Octets`); `mode-core` (its open 128-bit block `CmBlock`, so the cipher plugs into the modes); `cbc` (the tests only: CBC over the cipher); `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest).
 
 ## Status
 

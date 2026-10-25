@@ -133,10 +133,11 @@ package: copy its shape.
   generated proof or case file to a few hundred KB. A proof file's check
   takes in the proofs of every package it imports, checked again in each
   file that imports them, so under `--verdict` its peak is about the sum of
-  theirs (alone: cipher-modes' about 1.2 GB, crc's 0.7 GB, each hash package's (md4,
+  theirs (alone: aes' about 1.24 GB with gf's and mode-core's, crc's 0.7 GB, each hash package's (md4,
   streebog, ...) 0.4 to 0.6 GB with md-engine's,
   bend-collections-laws-crypto's hash proofs 0.5 GB, each cipher package's
-  (des, aria, ...) 0.4 to 0.5 GB with cipher-core's, bytes' 0.25 GB). Import only the proofs a file's laws rest on, and split a
+  (des, aria, ...) 0.4 to 0.5 GB with cipher-core's, each mode package's
+  (cbc, xts, ccm, ...) about 0.4 GB with mode-core's, bytes' 0.25 GB). Import only the proofs a file's laws rest on, and split a
   package's laws into pairs of files when one proof file nears 2 GB
   (CONVENTIONS.md, Laws).
 
@@ -167,7 +168,7 @@ around it.
   bounds"; word64 `README.md`, Laws).
 - **The kernel is slow on computation with free variables:** a large
   computation on symbolic bits (AES rounds, GF(2^128) multiplication) is
-  out of reach even when it would terminate (cipher-modes `README.md`,
+  out of reach even when it would terminate (aes `README.md`,
   "AES and bend-collections"; gf `README.md`, Laws).
 - **`--verdict` memory:** crypto's laws are in ten pairs of law and proof
   files, each checked on its own (under `--verdict`, 0.3 to 1.3 GB peak;

@@ -1,6 +1,6 @@
 # bend-osdev-aria
 
-ARIA (RFC 5794), a 128-bit block cipher with 128-, 192- or 256-bit keys, on cipher-modes' `CmBlock`, so it plugs into every mode of cipher-modes (CBC, XTS, CCM, CMAC) as their template arguments.
+ARIA (RFC 5794), a 128-bit block cipher with 128-, 192- or 256-bit keys, on mode-core's `CmBlock`, so it plugs into every 128-bit mode (the cbc, xts, ccm and cmac packages) as their template arguments.
 
 The directory is `aria` and the entry file `aria/aria.bend`; the hub name is `bend-osdev-aria`. It is one of the packages split from bend-osdev-legacy-ciphers@0.1.0.0, which they supersede (that version stays on the hub as it was): cipher-core (what the ciphers share, and the 64-bit modes) and one package per cipher.
 
@@ -45,32 +45,32 @@ The key type is opaque: built by the cipher's `key` functions from the raw key, 
 
 Everything else (`aria.*`, `LcAria*` other than the key type) is internal.
 
-## With cipher-modes
+## With the modes
 
-The cipher has exactly the shape cipher-modes' modes take (see cipher-modes'
+The cipher has exactly the shape the 128-bit modes take (see mode-core's
 README): a key type, and `encrypt` and `decrypt` from key and `CmBlock` to
 `CmBlock`. So every mode there runs over it unchanged:
 
 ```
-import ../cipher-modes/cbc.bend as CB
-import ../cipher-modes/xts.bend as XT
+import ../cbc/cbc.bend as CB
+import ../xts/xts.bend as XT
 import ../aria/aria.bend as C
 
 CB.Cbc.encrypt(~C.LcAriaKey, ~C.LcAria.encrypt, k, iv, m)
 XT.Xts.decrypt(~C.LcAriaKey, ~C.LcAria.encrypt, ~C.LcAria.decrypt, k1, k2, i, c)
 ```
 
-and likewise CCM and CMAC. cipher-modes' round-trip laws take the cipher's
+and likewise CCM and CMAC. The modes' round-trip laws take the cipher's
 inversion at the law's key as a hypothesis; this package's `aria_round_trip`
 gives it for every key, and bend-osdev-cm-instances states and proves those
 mode laws at this cipher (`aria_cbc_round_trip`, `aria_xts_round_trip`, ...),
 in a package of its own so that importing this package's proofs (crypto
-does) does not take in cipher-modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
+does) does not take in the modes' too. crypto's ECB, CBC, CTR, PCBC, LRW
 and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 ## Extension points
 
-* **Any mode over the cipher:** it is cipher-modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
+* **Any mode over the cipher:** it is the modes' template arguments (and crypto's); a new mode takes `~K`, `~enc`, `~dec` and never looks inside the key.
 * **Key sizes and options are parameters** where the specification gives a choice: the key's length picks ARIA-128, -192 or -256.
 * **Replaceable internals:** the key type is opaque, so the cipher's representation (its round keys, its tables) can change without touching a caller. The cipher is a list of invertible steps, decryption the steps undone in reverse order; a faster implementation (bit-sliced S-boxes, combined tables, hardware instructions) can go behind the same defs, tied to these by the vectors and the differential test.
 
@@ -84,13 +84,13 @@ and CBC-CS3 run over it as well (crypto's `LAWS_lc.bend`).
 
 **Vectors** (proved by computation): RFC 5794 A.1 (`aria_rfc5794`, ARIA-128) and the refusal of a 20-byte key. RFC 5794 A.2 and A.3 run in `check.bend`.
 
-How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here ARIA's S-boxes and their inverses are checked on all 256 bytes (as decision trees on a byte's bits), the round keys undone by XOR (cipher-core's `word_xor_cancel` on bytes), and the diffusion layer A step by step (`gen/proof.py`). cm-instances turns `aria_round_trip` into cipher-modes' CBC and XTS round trips at this cipher.
+How the round trips are proved: the cipher is a list of steps, each undone by its inverse whatever its round function or key is, so no proof evaluates the cipher. Here ARIA's S-boxes and their inverses are checked on all 256 bytes (as decision trees on a byte's bits), the round keys undone by XOR (cipher-core's `word_xor_cancel` on bytes), and the diffusion layer A step by step (`gen/proof.py`). cm-instances turns `aria_round_trip` into cbc's CBC and XTS round trips at this cipher.
 
 The proofs need nothing from another package beyond its public interface and laws: cipher-core's laws (above).
 
 ## Tests
 
-* `check.bend` runs RFC 5794 A.1 to A.3 both ways (encryption, then decryption back), and the cipher through cipher-modes' CBC over 32 KB both ways.
+* `check.bend` runs RFC 5794 A.1 to A.3 both ways (encryption, then decryption back), and the cipher through cbc's CBC over 32 KB both ways.
 * `ref/run.sh` compares ARIA (all key sizes) against the `openssl` command and `ref/model.py`, on random keys, blocks and messages, each a block both ways and a CBC message both ways. **`ref/model.py` was written here from the specification, by the same author as this package**, and is first checked against the specification's published vectors. When `openssl` is missing, `run.sh` compares with the model alone and says so; it exits 77 only when `python3` is missing.
 
 ## Speed
@@ -99,7 +99,7 @@ Measured on Bend 2.0.37, native builds (`bend file.bend -o prog`), WSL2, before 
 
 | Run | Time | Notes |
 |---|---|---|
-| ARIA-128, CBC through cipher-modes, 256 KB both ways | 20 s, 60 MB peak | its state is sixteen bytes of eight bits each, so that each S-box is a decision tree its proofs can check on all 256 inputs |
+| ARIA-128, CBC through cbc, 256 KB both ways | 20 s, 60 MB peak | its state is sixteen bytes of eight bits each, so that each S-box is a decision tree its proofs can check on all 256 inputs |
 
 Messages have no length limit beyond memory: every loop over blocks or bytes is a tail call.
 
@@ -109,7 +109,7 @@ ARIA's S-box layers branch on secret bits (decision trees on a byte's bits). Non
 
 ## Dependencies
 
-`DEPS`: `bytes` (`Octets`); `word64` (the bit slicing the bit-level steps are built from); `cipher-modes` (its open 128-bit block `CmBlock`, so the cipher plugs into its modes; the tests use its CBC). Only `cipher-modes.bend` and `cbc.bend` are imported, not cipher-modes' AES, so this package does not pull in bend-collections; `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest).
+`DEPS`: `bytes` (`Octets`); `word64` (the bit slicing the bit-level steps are built from); `mode-core` (its open 128-bit block `CmBlock`, so the cipher plugs into the modes); `cbc` (the tests only: CBC over the cipher); `cipher-core` (the error type `LcError`, the word helpers and tables the cipher is built from, and its laws in the proofs: XOR undone and the rest).
 
 ## Status
 

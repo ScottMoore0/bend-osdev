@@ -225,7 +225,7 @@ ordinary hypothesis used once):
   every input (its `roundtrip`, and `encrypt.invalid` for other lengths),
   but in a proof file that fails `--verdict` (AUDIT.md), so the two are not
   joined in `PROOF.bend`, as crypto's `ccm_round_trip_if` is not joined to
-  cipher-modes'; joined, they are the round trip given h. h is needed
+  ccm's; joined, they are the round trip given h. h is needed
   because `Octets` masks every element to 8 bits and bend-collections
   proves no law that its ciphertext elements are below 256 (AUDIT.md); it
   holds on every vector and differential case (`check.bend` prints it);
@@ -321,7 +321,7 @@ the refusal of a 31-byte ChaCha20 key, a 32-byte AES-128-GCM key and a
   key-derivation and extended-output modes, AES-192-GCM, GCM with IVs other
   than 96 bits or tags shorter than 128 bits.
 * **Already in crypto:** HMAC and HKDF over any hash (bend-collections' are
-  HMAC-SHA-256 and HKDF-SHA-256 only), and AES (through cipher-modes).
+  HMAC-SHA-256 and HKDF-SHA-256 only), and AES (through bend-osdev-aes).
 * **Not asked for here:** secp256k1 ECDSA and Schnorr (a signature-interface
   instance), Argon2 (a KDF-interface instance); both would plug in as the
   others do.

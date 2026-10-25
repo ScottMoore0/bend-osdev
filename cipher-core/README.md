@@ -78,7 +78,7 @@ Every fallible function answers `Result<&2, &2, LcError, A>`.
 | `lc.swap(b)` | the two halves exchanged |
 
 **`modes64.bend`** (the cipher as template arguments `~K`, `~enc`, `~dec`,
-as in cipher-modes)
+as in the 128-bit modes)
 
 | Def | Meaning |
 |---|---|
@@ -97,7 +97,7 @@ Everything else (`lc.block_bytes`, `lc.block8`, `lc.block_of`, the
 * **Any 64-bit cipher in the modes:** `modes64.bend` takes the cipher as
   template arguments (`~K`, `~enc`, `~dec`) and never looks inside the key;
   other 64-bit modes (CFB, OFB, CTR, CBC-MAC) can be added beside ECB and CBC
-  the same way. For padding, cipher-modes' `Pkcs7.pad(8n, m)` and
+  the same way. For padding, pkcs7's `Pkcs7.pad(8n, m)` and
   `Pkcs7.unpad(8n, m)` take an 8-byte block size.
 * **Any round function:** the Feistel rounds take the round function and the
   round-key type as templates, with laws (`feistel_unrun_run`,

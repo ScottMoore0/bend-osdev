@@ -44,7 +44,7 @@ Everything else (`fc.*`, `LcFc*` other than the key type) is internal.
 
 ## With the 64-bit modes
 
-cipher-modes' modes are written for 128-bit blocks, so a 64-bit cipher uses
+the 128-bit modes are written for 128-bit blocks, so a 64-bit cipher uses
 cipher-core's `modes64.bend` instead: ECB and CBC on `LcBlock64`, the cipher
 as template arguments:
 
@@ -56,7 +56,7 @@ X.Lc64.cbc_encrypt(~C.LcFcryptKey, ~C.LcFcrypt.encrypt, k, iv, m)
 X.Lc64.cbc_decrypt(~C.LcFcryptKey, ~C.LcFcrypt.decrypt, k, iv, c)
 ```
 
-For padding, cipher-modes' `Pkcs7.pad(8n, m)` and `Pkcs7.unpad(8n, m)` take
+For padding, pkcs7's `Pkcs7.pad(8n, m)` and `Pkcs7.unpad(8n, m)` take
 an 8-byte block size. crypto's ECB, CBC, CTR, PCBC and CBC-CS3 run over the
 cipher too (crypto proves the ECB, CBC and PCBC round trips over it).
 
