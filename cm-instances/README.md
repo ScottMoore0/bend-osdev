@@ -4,8 +4,8 @@ cipher-modes' modes over each 128-bit block cipher of bend-osdev, with
 cipher-modes' round-trip laws written out and proved per cipher: CBC on
 blocks and on bytes, and XTS on blocks and on bytes (ciphertext stealing
 included), over SM4, Camellia, Serpent, Twofish, ARIA and CAST-256 (the
-legacy-ciphers package) and AES (cipher-modes' own), each for every key and
-input with no hypothesis.
+sm4, camellia, serpent, twofish, aria and cast6 packages) and AES
+(cipher-modes' own), each for every key and input with no hypothesis.
 
 The directory is `cm-instances` and the entry file
 `cm-instances/cm-instances.bend`; the hub name is `bend-osdev-cm-instances`.
@@ -13,7 +13,7 @@ The directory is `cm-instances` and the entry file
 ## Specifications
 
 None of its own: the modes' are cipher-modes' (NIST SP 800-38A, IEEE Std
-1619-2007) and the ciphers' are legacy-ciphers' and cipher-modes' (their
+1619-2007) and the ciphers' are their packages' and cipher-modes' (their
 READMEs cite them).
 No GPL source was read.
 
@@ -45,7 +45,7 @@ twofish, aria, cast6 and aes, all proved, all accepted by `--verdict`:
 * `c_dec_enc`: for every key and list of blocks,
   `CmBlock.dec_enc(~K, ~enc, ~dec, k, xs) == xs`: the cipher meets
   cipher-modes' round-trip hypothesis at every key. By induction on the
-  list, with the cipher's own law (`c_round_trip` in legacy-ciphers, and
+  list, with the cipher's own law (`c_round_trip` in the cipher's package, and
   `aes_round_trip` in cipher-modes: `dec(k, enc(k, b)) == b` for every key
   and block) at every block.
 * `c_cbc_blocks_round_trip`, `c_cbc_round_trip`, `c_xts_blocks_round_trip`,
@@ -64,16 +64,18 @@ induction; a cipher's own law can, as a global name. So the induction that
 turns the cipher's law into the hypothesis is written out per cipher, as
 crypto's `gen/instances.py` does for its interfaces.
 
-**Why a package of its own.** The proofs take in cipher-modes' and
-legacy-ciphers' proofs. cipher-modes cannot hold them (legacy-ciphers
-depends on it, for `CmBlock`); legacy-ciphers could, but its `--verdict`
-would grow from about 40 s and 0.7 GB to about 6 minutes and 1.9 GB, for
-every user of its ciphers alone, and it would hold laws about cipher-modes'
-AES. Here they are one component, the instances of one package's laws over
-the others' ciphers, which a user takes or leaves.
+**Why a package of its own.** The proofs take in cipher-modes' proofs and
+the ciphers' own. cipher-modes cannot hold them (the cipher packages depend
+on it, for `CmBlock`); each cipher package could hold its own, but its
+`--verdict` would grow from seconds and about 0.5 GB to minutes and well
+over 1 GB (nearly all of it cipher-modes' proofs), for every user of the
+cipher alone, and AES's would have no cipher package to go in. Here they
+are one component, the instances of one package's laws over the others'
+ciphers, which a user takes or leaves.
 
-**Not here.** The 64-bit ciphers: cipher-modes' modes are 128-bit; legacy-ciphers'
-`modes64.bend` has their ECB and CBC, with laws there. CCM and CMAC need no
+**Not here.** The 64-bit ciphers: cipher-modes' modes are 128-bit;
+cipher-core's `modes64.bend` has their ECB and CBC, with laws in the cipher
+packages (des: DES's and 3DES's mode round trips). CCM and CMAC need no
 hypothesis (cipher-modes' laws hold for every cipher already).
 
 ## Extension points
@@ -91,7 +93,7 @@ hypothesis (cipher-modes' laws hold for every cipher already).
 16-byte key (and, for XTS, a second one): a list of four blocks (CBC and XTS
 on blocks), 64 bytes (CBC and XTS on bytes) and 61 bytes (XTS with
 ciphertext stealing), each decrypted back and compared. Its expected lines
-are "ok". The ciphers' values are tested in legacy-ciphers (the
+are "ok". The ciphers' values are tested in their packages (the
 specifications' vectors, and CBC against Python's `cryptography` and the
 `openssl` command) and in cipher-modes (AES: FIPS 197's vectors and
 `cryptography`), and the modes' in cipher-modes (the specifications'
@@ -102,12 +104,14 @@ here beyond those for a differential test to compare, so there is no
 ## Dependencies
 
 `DEPS`: `bytes` (Octets), `cipher-modes` (the modes, `CmBlock`, AES, and its
-laws and proofs), `legacy-ciphers` (the ciphers, their round-trip laws and
-proofs).
+laws and proofs), `cipher-core` (the ciphers' error type `LcError`, which
+`check.bend` names), and `sm4`, `camellia`, `serpent`, `twofish`, `aria` and
+`cast6` (the ciphers, their round-trip laws and proofs).
 
 ## Status
 
-Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
-(about 6 minutes, 1.9 GB peak, nearly all of it cipher-modes' proofs, which
-include bend-osdev-gf's), `check.bend` passes, `gen/instances.py --check` up
+Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (3.6 minutes, 1.23 GB peak),
+`--verdict` ALL PROOFS CHECK (7.9 minutes, 1.27 GB peak, nearly all of it
+cipher-modes' proofs, which include bend-osdev-gf's; measured after the
+split of legacy-ciphers into one package per cipher), `check.bend` passes, `gen/instances.py --check` up
 to date, `scripts/deps.sh` passes.

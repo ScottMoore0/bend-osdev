@@ -219,8 +219,9 @@ answer `Maybe`.
   the template arguments; nothing in the modes changes. A cipher that also
   proves `dec(k, enc(k, b)) == b` gets the round-trip laws below: an
   induction on the list turns that law into their hypothesis, and
-  bend-osdev-cm-instances writes it, and the four laws, out for each of
-  legacy-ciphers' 128-bit ciphers (its `gen/instances.py` takes a new row).
+  bend-osdev-cm-instances writes it, and the four laws, out for each
+  128-bit cipher package (sm4, camellia, serpent, twofish, aria, cast6; its
+  `gen/instances.py` takes a new row).
 * **The default cipher:** `aes.bend` can be replaced (for instance by a
   table-driven or hardware AES) without touching the modes; `aes_modes.bend`
   is the only file that names it.
@@ -259,7 +260,7 @@ For a cipher whose package proves `dec(k, enc(k, b)) == b` for every key and
 block as a law, `bend-osdev-cm-instances` proves the hypothesis for every key
 and list (by induction, using that law at every block) and states the four
 laws at that cipher with no hypothesis: SM4, Camellia, Serpent, Twofish, ARIA
-and CAST-256 (legacy-ciphers).
+and CAST-256 (the sm4, camellia, serpent, twofish, aria and cast6 packages).
 
 **For every input:**
 

@@ -25,6 +25,10 @@ GPL source was read.
   the coming days. File names with a `-` are published with a `_`
   (`bend-osdev-cipher-modes@0.1.0.0/cipher_modes.bend`), since the hub
   refuses `-` in a path.
+- **bend-osdev-legacy-ciphers@0.1.0.0 is superseded** by cipher-core and the
+  cipher packages des, sm4, camellia, serpent, twofish, aria, cast6, blowfish,
+  cast5, tea, xtea, fcrypt and rc4 (one package per cipher); it stays on the
+  hub as it was.
 
 ## Packages
 
@@ -86,8 +90,21 @@ GPL source was read.
 | [ext2](ext2/) | ext2, ext3 and ext4 (extents, checksums), read and write: mkfs, files, directories, links, rename, write and truncate, fsck |
 | [ext4](ext4/) | ext4 beyond ext2: hashed directories (htree, with a writer), the jbd2 journal (recovery, commits, transactions), inline data and extended attributes |
 | [cipher-modes](cipher-modes/) | CBC, PKCS #7, XTS, CCM and CMAC over any block cipher, AES (128, 192, 256; decryption proved to undo encryption for every key and block) by default |
-| [legacy-ciphers](legacy-ciphers/) | DES, 3DES, SM4, Camellia, Serpent, Twofish, ARIA, CAST-256, Blowfish, CAST-128, TEA, XTEA, FCrypt and RC4 (for compatibility); the 128-bit ciphers plug into cipher-modes, with 64-bit ECB/CBC |
-| [cm-instances](cm-instances/) | cipher-modes' CBC and XTS round-trip laws written out and proved for AES and each of legacy-ciphers' 128-bit ciphers, for every key and input |
+| [cipher-core](cipher-core/) | What the cipher packages below share: their error type, the 64-bit block, word helpers, tables and Feistel rounds over any round function, with laws the ciphers' proofs use; and ECB and CBC for any 64-bit block cipher |
+| [des](des/) | DES and Triple DES (for compatibility), with cipher-core's 64-bit ECB/CBC proved to undo themselves over both |
+| [sm4](sm4/) | SM4, a 128-bit block cipher that plugs into cipher-modes |
+| [camellia](camellia/) | Camellia-128, -192 and -256, plugging into cipher-modes |
+| [serpent](serpent/) | Serpent (keys of up to 256 bits), plugging into cipher-modes |
+| [twofish](twofish/) | Twofish (128-, 192- and 256-bit keys), plugging into cipher-modes |
+| [aria](aria/) | ARIA-128, -192 and -256, plugging into cipher-modes |
+| [cast6](cast6/) | CAST-256, plugging into cipher-modes |
+| [blowfish](blowfish/) | Blowfish, a 64-bit block cipher (for compatibility) |
+| [cast5](cast5/) | CAST-128, a 64-bit block cipher (for compatibility), and the S-boxes and round functions CAST-256 shares |
+| [tea](tea/) | TEA (for compatibility), and the steps TEA and XTEA share |
+| [xtea](xtea/) | XTEA (for compatibility) |
+| [fcrypt](fcrypt/) | FCrypt, AFS's rxkad cipher (for compatibility) |
+| [rc4](rc4/) | RC4 and RC4-drop[n], streaming (for compatibility only: RFC 7465 forbids it in TLS) |
+| [cm-instances](cm-instances/) | cipher-modes' CBC and XTS round-trip laws written out and proved for AES and each 128-bit cipher above (sm4, camellia, serpent, twofish, aria, cast6), for every key and input |
 | [hashes](hashes/) | MD4, MD5, SHA-1, RIPEMD-160, SM3, Streebog-256/512 and Michael (TKIP's MIC), streaming and one-shot, through one Merkle–Damgård engine (streaming, split and digest length proved for every input) |
 | [siphash](siphash/) | SipHash-c-d (64- and 128-bit output) and HalfSipHash-c-d (32- and 64-bit) for any number of rounds, streaming and one-shot, with Linux's SipHash-2-4, SipHash-1-3 and HalfSipHash-1-3 named; streaming, split and output length proved for every input; all 256 published vectors, checked against openssl |
 | [crypto](crypto/) | The crypto interfaces (block and stream cipher, hash, MAC, AEAD, KDF, signature, key agreement) with their laws; HMAC, HKDF, PBKDF2 and the SP 800-108 KDFs (counter and feedback), ECB, CBC, CTR, PCBC, CBC-CS3 ciphertext stealing, LRW, XCBC-MAC and VMAC over any instance; the existing ciphers, MACs, AEADs and CRCs, the hashes package's hashes and Michael, and SHA-256, SHA-512 and SHA3-256 (from bend-collections), as instances |
