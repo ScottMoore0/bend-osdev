@@ -277,9 +277,9 @@ p = 2, d mod 1 = 0 and m1 = 1, which is why `rsa`'s keys have an odd n); a
 number with an inverse modulo p is not p (`mod_inv_ne`: q t = 1 mod p
 rules out q = p, since p t mod p = 0), so a CRT key's qInv makes p and q
 distinct; a congruence modulo lcm(a, b) is one modulo a and modulo b
-(`mod_lcm_l`,
-`mod_lcm_r`: x mod c = (x mod k c) mod c), so a d = e^-1 mod lcm(p - 1, q -
-1) (FIPS 186-5's, `rsa`'s key generation) meets the hypotheses. With them,
+(`mod_lcm_l`, `mod_lcm_r`: x mod c = (x mod k c) mod c), so a d = e^-1
+mod lcm(p - 1, q - 1) (FIPS 186-5's, `rsa`'s key generation) meets the
+hypotheses. With them,
 the Nat facts the RSA laws of other packages are stated through, which
 otherwise are lemmas: (x^a)^b = x^(a b), (x mod m)^e mod m = x^e mod m, a
 mod m = a for a < m, and a mod m < m (`nat_pow_pow`, `nat_pow_mod`,
