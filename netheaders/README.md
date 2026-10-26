@@ -64,7 +64,7 @@ shorter than its header), `NetBadChecksum`.
 | `Ipv4Header{version, ihl, dscp, ecn, total_length, ident, flags, frag_offset, ttl, protocol, checksum, src, dst, options}` | `options: Octets`, raw | `build_checksum(h)`, `verify(o)`, `parse_verified(o)`, `payload(h, packet)`, `ipv4_pseudo(src, dst, proto, len)`, `PROTO_ICMP/TCP/UDP()` |
 | `Ipv6Header{version, traffic_class, flow_label, payload_length, next_header, hop_limit, src, dst}` | `Ipv6Addr{w0, w1, w2, w3}`, most significant word first | `payload(h, packet)`, `ipv6_pseudo(src, dst, len, next)`, `Ipv6Addr.bytes` |
 | `IcmpHeader{msg_type, code, checksum, rest_of_header}` | `rest_of_header`: the 4 bytes after the checksum | `build_checksum(h, data)`, `verify(msg)`, `build_ipv6(src, dst, h, data)`, `verify_ipv6(src, dst, msg)`, `ECHO_REQUEST()` … |
-| `UdpHeader{src_port, dst_port, length, checksum}` | | `build_ipv4(src, dst, h, payload)`, `build_ipv6(…)`, `verify_ipv4(src, dst, dg)`, `verify_ipv4_with(zero_ok, …)`, `verify_ipv6(…)`, `payload(h, dg)` |
+| `UdpHeader{src_port, dst_port, length, checksum}` | | `build_ipv4(src, dst, h, payload)`, `build_ipv6(…)`, `verify_ipv4(src, dst, dg)`, `verify_ipv4_with(zero_ok, …)`, `verify_ipv6(…)`, `payload(h, dg)`, `nonzero(c)` (a computed checksum as sent: 0 as 0xffff) |
 | `TcpHeader{src_port, dst_port, seq, ack, data_offset, reserved, flags, window, checksum, urgent, options}` | `options: Octets`, raw; `flags` the 8 control bits | `build_ipv4(src, dst, h, payload)`, `build_ipv6(…)`, `verify_ipv4(src, dst, seg)`, `verify_ipv6(…)`, `FIN()` … `CWR()` |
 
 The checksum (`checksum.bend`): `inet_checksum(o)`, `inet_verify(o)` (the
@@ -141,7 +141,7 @@ cases contradicting the law's hypotheses. `rest` is handled through bytes'
 interface law `octets_append_list`.
 
 `LAWS_sum.bend`, the one's complement arithmetic of RFC 1071 and what it
-gives the headers (26 laws, for every input but the last two):
+gives the headers (28 laws, for every input but the last two):
 
 * on 16-bit values (a `U32` of at most 65535): `inet_add` is the plain sum
   when that fits 16 bits (`inet_add_no_carry`) and otherwise the sum less
@@ -174,6 +174,11 @@ gives the headers (26 laws, for every input but the last two):
   with the field written, parse back with it (`icmp_put_parse`,
   `udp_put_parse`); and with UDP's length field the datagram's length,
   `UdpHeader.payload` reads the payload back (`udp_put_payload`);
+* what the builders write: an ICMP header is 8 bytes
+  (`icmp_build_length`), and `UdpHeader.build_ipv4` is the header and
+  payload with RFC 768's checksum written at offset 6, the sum over the
+  pseudo-header and the datagram with the field zero, sent as 0xffff when
+  it is 0 (`udp_ipv4_build_fill`);
 * a satisfiability law (`inet_sum_sat`) and a vector of the end-around carry
   and the complement (`inet_add_vector`).
 

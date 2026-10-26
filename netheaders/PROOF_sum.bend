@@ -227,6 +227,18 @@ def h.icmp_put_parse.len.m(msg_type: U32, code: U32, checksum: U32, rest: U32, +
     case U32{msg_type_} U32{code_} U32{checksum_} U32{rest_}:
       S.os.le_zero(Nat.add(4n, B.len(B.Octets.to_list(data))))
 
+def h.icmp_blen(h: C.IcmpHeader) -> {B.len(C.IcmpHeader.build.list(h)) == 8n : Nat}:
+  match h:
+    case C.IcmpHeader{U32{a}, U32{b}, U32{c}, U32{d}}:
+      {==}
+
+def Laws.icmp_build_length(h):
+  %Equal.sym(Nat, B.Octets.len(B.Octets.of_list(C.IcmpHeader.build.list(h))), B.len(C.IcmpHeader.build.list(h)), BL.octets_len_of_list(C.IcmpHeader.build.list(h))) : {_ == 8n : Nat}
+  h.icmp_blen(h)
+
+def Laws.udp_ipv4_build_fill(src, dst, h, payload):
+  {==}
+
 def Laws.icmp_put_parse(msg_type, code, checksum, rest, data, c):
   %Equal.sym(B.Octets, B.Octets.append(C.IcmpHeader.build(C.IcmpHeader{msg_type, code, checksum, rest}), data), B.Octets.of_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data))), S.os.app_of(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), data)) : {C.IcmpHeader.parse(K.inet_put16(_, 2n, c)) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}
   %Equal.sym(List<&2, U32>, B.Octets.to_list(K.inet_put16(B.Octets.of_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data))), 2n, c)), B.append(B.mask(B.take(2n, B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))), B.append(B.mask(B.be16(c)), B.mask(B.drop(Nat.add(2n, 2n), B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)))))), S.os.put16_list(B.append(C.IcmpHeader.build.list(C.IcmpHeader{msg_type, code, checksum, rest}), B.Octets.to_list(data)), 2n, c, h.icmp_put_parse.len.m(msg_type, code, checksum, rest, data))) : {C.IcmpHeader.parse.list(_) == Done{C.IcmpHeader.norm(C.IcmpHeader{msg_type, code, c, rest})} : Result<&2, &2, N.NetError, C.IcmpHeader>}
