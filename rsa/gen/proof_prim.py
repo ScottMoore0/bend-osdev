@@ -484,6 +484,16 @@ def laws():
         "dp_crt_plain": ("kp.cp", "c", "Result.map(&2, &2, R.RsaError, N.BnNat, Nat, x => LL.bnlaw.value(x), R.Rsa.dp(_, c))", "Result.map(&2, &2, R.RsaError, N.BnNat, Nat, x => LL.bnlaw.value(x), R.Rsa.dp_plain(_, c))"),
     }
     put("# The laws\n")
+    put(f"""def kp.od(di: Maybe<&2, N.BnNat>, +n: N.BnNat, +e: N.BnNat, +p: N.BnNat, +q: N.BnNat, +sk: R.RsaPrivate, h: {EQ('R.rsa.of_d(n, e, p, q, di)', 'Done{sk}', RES)}) -> {EQ('R.Rsa.private_of(n, e, Maybe.default(&2, N.BnNat, di, N.BnNat.zero()), p, q)', 'Done{sk}', RES)}:
+  match di:
+    case None{{}}:
+      Empty.absurd({EQ('R.Rsa.private_of(n, e, Maybe.default(&2, N.BnNat, None{}, N.BnNat.zero()), p, q)', 'Done{sk}', RES)}, kp.fd(R.RsaBadKey{{}}, sk, h))
+    case Some{{d}}:
+      h
+
+def Laws.private_of_primes_key(p, q, e, sk, h):
+  kp.od(Md.BnMod.inv(e, Md.BnMod.lcm(R.rsa.minus1(p), R.rsa.minus1(q))), N.BnNat.mul(p, q), e, p, q, sk, h)
+""")
     K = f"{OKP}, {OK}, Md.BnMod.inv(q, p), n, e, d, p, q, sk, hk"
     for law, (lem, m, lhs, rhs) in G.items():
         hm = "hm" if m == "m" else "hc"

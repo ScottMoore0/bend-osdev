@@ -11,6 +11,7 @@
 # modulo p - 1 and q - 1, q qInv = 1 mod p). Proved in PROOF_prim.bend.
 import Base
 import ../bignum/bignum.bend as N
+import ../bignum/modular.bend as Md
 import ../bignum/LAWS_limbs.bend as LL
 import ../bignum/LAWS_fermat.bend as LF
 import ./rsa.bend as R
@@ -119,3 +120,14 @@ law dp_crt_plain:
   for +hc: {LL.bnlaw.valid(c) == True{} : Bool}
   for +hlt: {N.BnNat.is_lt(c, n) == True{} : Bool}
   {Result.map(&2, &2, R.RsaError, N.BnNat, Nat, x => LL.bnlaw.value(x), R.Rsa.dp(sk, c)) == Result.map(&2, &2, R.RsaError, N.BnNat, Nat, x => LL.bnlaw.value(x), R.Rsa.dp_plain(sk, c)) : Result<&2, &2, R.RsaError, Nat>}
+
+# a key from Rsa.private_of_primes (d = e^-1 mod lcm(p - 1, q - 1), as key
+# generation makes it) is one Rsa.private_of accepts, with that d: so the
+# laws above hold for it
+law private_of_primes_key:
+  for +p: N.BnNat
+  for +q: N.BnNat
+  for +e: N.BnNat
+  for +sk: R.RsaPrivate
+  for +h: {R.Rsa.private_of_primes(p, q, e) == Done{sk} : Result<&2, &2, R.RsaError, R.RsaPrivate>}
+  {R.Rsa.private_of(N.BnNat.mul(p, q), e, Maybe.default(&2, N.BnNat, Md.BnMod.inv(e, Md.BnMod.lcm(N.BnNat.sub(p, N.BnNat.one()), N.BnNat.sub(q, N.BnNat.one()))), N.BnNat.zero()), p, q) == Done{sk} : Result<&2, &2, R.RsaError, R.RsaPrivate>}
