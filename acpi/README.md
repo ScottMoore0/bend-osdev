@@ -133,6 +133,9 @@ Choices this package makes where the specification leaves room:
 | `fields.bend` | internal: little-endian fields at offsets |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
 | `LAWS_tables.bend`, `PROOF_tables.bend` | the structures' round trips (GAS, HPET, BGRT, FACS, XSDT, RSDT, MCFG, DSDT/SSDT) and their proofs, checked in a process of their own |
+| `LAWS_checksum.bend`, `PROOF_checksum.bend` | the checksum law (`AcpiChecksum.fix` makes the bytes sum to zero) and its proof |
+| `LAWS_whole.bend`, `PROOF_whole.bend` | the tables' whole round trips, `parse(build(t))` (any table through `AcpiSdt`, HPET, BGRT, XSDT, RSDT, MCFG, DSDT/SSDT) and their proofs |
+| `LAWS_rsdp.bend`, `PROOF_rsdp.bend` | the RSDP's whole round trip, both revisions, and its proof |
 | `check.bend` | examples with their expected output |
 | `ref/gen.py`, `ref/run.sh`, `ref/runner.bend` | the differential test |
 
@@ -490,19 +493,61 @@ a process of its own; it imports bytes' and word64's proofs, not
   byte. The FACS has no header and no checksum, so this is the whole
   round trip.
 
-**What is not proved.** The tables' whole round trip,
-`parse(build(t))`, also needs `build`'s checksum byte to make the table's
-bytes sum to zero modulo 256, for every content: that is arithmetic modulo
-256 over a sum of unknown bytes, which the proofs here cannot reach (they
-compute on words split into their bits, and a sum of unknown bytes does
-not compute). The tables not covered yet, most used first: the MADT (its
-entry list is split by length bytes with fuel and offsets, and each of its
-15 entry kinds needs its own read-back, plus a rule for `AcpiMadtOther`
-entries whose type is a known one), the FADT (about 50 fields and 15 GASes
-in versioned parts; `None` parts are written as zeros and read back as
-present, so the law needs a normalisation of every part), the SRAT (an
-entry list like the MADT's), the SLIT (an `n` by `n` matrix fitted to
-`n * n` bytes) and the RSDP (two checksums of its own, the reason above).
+`LAWS_checksum.bend` has 2 laws, proved in `PROOF_checksum.bend`:
+
+* `fix_ok`: for every byte string `o` and every offset `i < len(o)`,
+  `AcpiChecksum.ok(AcpiChecksum.fix(i, o)) == True`, whatever the bytes
+  are. The proof reads the U32 sum as a sum of `Nat`s modulo 256 (u32's
+  `u32_add_wrap` and `u32_sub_wrap`: the 2^32 a wrap or a borrow adds does
+  not change the low 8 bits), splits `o` into `take(i, o)`, its byte `i`
+  and `drop(1 + i, o)` through bytes' laws, and cancels byte `i` modulo
+  256.
+* `fix_example`: the hypothesis and the law at an example.
+
+`LAWS_whole.bend` has 8 laws, proved in `PROOF_whole.bend` (which imports
+`PROOF_tables.bend` and `PROOF_checksum.bend`), for every input:
+
+* `sdt_round_trip`: `AcpiSdt.parse(AcpiSdt.build(h, body)) ==
+  Done{AcpiSdt{written(h), body}}`, for any header `h` whose text fields
+  have their sizes (signature 4, OEMID 6, OEM table ID 8, creator ID 4
+  bytes) and whose revision is a byte, and any body, when the table's
+  length is no more than a U32's value (`Nat.is_le(len(build(h, body)),
+  U32.to_nat(z))` for some `z`). `written(h)` (`acpilaw.written(sig, h,
+  o)`) is `h` with the fields `build` computes: Length the table's length
+  and Checksum the byte at offset 9 of the table. Both checks pass: the
+  Length field reads back as the table's length, and the bytes sum to zero
+  (`fix_ok`).
+* `hpet_whole`, `bgrt_whole`, `xsdt_whole`, `rsdt_whole`, `mcfg_whole`,
+  `aml_whole`: each table's `parse(build(t))` gives `t` back, with its
+  header `written` (the signature `build` writes) and its contents as the
+  body laws of `LAWS_tables.bend` read them (the RSDT's addresses' low 32
+  bits, the MCFG's structures fitted), under those laws' hypotheses on the
+  header and the fields, the revision being a byte, and, but for the HPET
+  and the BGRT (56 bytes), the length fitting a U32. The DSDT and SSDT law
+  is for `AcpiAml.parse`, which takes any signature.
+* `whole_example`: the hypotheses at an example (a header from
+  `AcpiHeader.make` and a 39-byte table).
+
+`LAWS_rsdp.bend` has 3 laws, proved in `PROOF_rsdp.bend` (which imports
+`PROOF_whole.bend`):
+
+* `rsdp_v1_round_trip`: `AcpiRsdp.parse(AcpiRsdp.build(r)) == Done{r}`
+  for a revision 0 or 1 RSDP (`ext` `None`) whose OEMID is 6 bytes and
+  whose revision is a byte;
+* `rsdp_v2_round_trip`: the same for revision 2 or later, the Length read
+  back being the 36 that `build` writes; both checksums pass;
+* `rsdp_round_trip_example`: the hypotheses at an example.
+
+**What is not proved.** The tables not covered yet, most used first: the
+MADT (its entry list is split by length bytes with fuel and offsets, and
+each of its 15 entry kinds needs its own read-back, plus a rule for
+`AcpiMadtOther` entries whose type is a known one), the FADT (about 50
+fields and 15 GASes in versioned parts; `None` parts are written as zeros
+and read back as present, so the law needs a normalisation of every part),
+the SRAT (an entry list like the MADT's) and the SLIT (an `n` by `n`
+matrix fitted to `n * n` bytes); for each, the checksum and header part of
+the whole round trip is `sdt_round_trip`, and the body's read-back is what
+is missing.
 The interpreter's semantics, the resource templates and the device
 helpers are covered by `check.bend` and the differential test, not by laws
 for every input.
@@ -579,6 +624,10 @@ to provide `$ACPI_TABLES`).
   tables' bodies on words split into their bits; a W64 field is split
   through word64's `parts_of` into `W64.from_parts` of its halves, which
   `le64` and `from_parts` then compute through word64's definitions.
+  `PROOF_checksum.bend`, `PROOF_whole.bend` and `PROOF_rsdp.bend` reach
+  bytes the same way (`octets_take_drop`, `octets_at_drop`,
+  `octets_drop_append_add`, ...), and `PROOF_checksum.bend` computes
+  `B.byte` of a word's low 8 bits on the word split into its bits.
   These proofs would need revisiting if those packages' representations
   changed; the laws would not change.
 * The step-bound laws are stated for `AmlMemHost` only (above).
@@ -602,12 +651,13 @@ are `Nat`.
 ## Dependencies
 
 bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
-values (`LAWS.bend`).
+values (`LAWS.bend`) and of the order (`LAWS_order.bend`).
 
 ## Status
 
-Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
-`PROOF.bend` and `PROOF_tables.bend` ALL PROOFS CHECK, `--verdict` ALL
+Bend 2.0.39, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
+`PROOF.bend`, `PROOF_tables.bend`, `PROOF_checksum.bend`,
+`PROOF_whole.bend` and `PROOF_rsdp.bend` ALL PROOFS CHECK, `--verdict` ALL
 PROOFS CHECK, `check.bend` passes, `ref/run.sh` 415 cases match (the Python reference's, and 6
 programs compiled by `iasl`; real tables not tested), `scripts/deps.sh
 acpi` ok.
