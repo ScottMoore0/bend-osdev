@@ -44,6 +44,10 @@ at a time, since a byte does not fit at the register's top); `Crc64Spec` covers 
 | `crc16_ccitt_false` | CRC-16/IBM-3740 (CRC-16/CCITT-FALSE), poly 0x1021, init 0xFFFF | | 0x29B1 |
 | `crc16_xmodem` | CRC-16/XMODEM (CRC-16/ITU-T), poly 0x1021 | the kernel's `crc_itu_t` | 0x31C3 |
 
+Each def `x` above computes its CRC of an `Octets` in one call, and
+`x.spec()` is its parameters (a `Crc32Spec`, or a `Crc64Spec` for the 64-bit
+ones), for the streaming form below and the fast path.
+
 ## Computing a CRC in pieces
 
 `Crc32Spec.start(spec)` gives the initial register, `Crc32Spec.update(spec, c,

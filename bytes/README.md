@@ -38,6 +38,10 @@ The same operations on `List<&2, U32>` directly. Packages written before
 | `le16 be16 le32 be32` (of a `U32`), `le64 be64` (of a `W64`) | a field's bytes, in storage order |
 | `le16_at be16_at le32_at be32_at le64_at be64_at` | read a field at an offset; `None` if the string is too short |
 | `low16(v)` | the low 16 bits of a word |
+| `le16.head be16.head le32.head be32.head` | read a field at the start of the string; `None` if it is too short |
+| `at.head(xs)` | the first byte, or `None` |
+| `bits8(b)`, `of_bits8(s)` | a word's low 8 bits as a `Word(8n)`, and the byte with these 8 bits |
+| `list_eq(xs, ys)` | whether two lists are equal, element by element |
 | `of_string`, `to_string`, `hex` | text: one byte per character; two hex digits per byte |
 | `len.fast`, `take.fast`, `append.fast`, `zeros.fast`, `mask.fast`, `of_string.fast`, `to_string.fast`, `hex.fast`, `list_eq.fast`, `rev`, `rev_onto` | the same, tail-recursive, for long lists; each equals its structural form by a law |
 

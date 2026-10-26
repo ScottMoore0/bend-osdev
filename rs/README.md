@@ -94,6 +94,9 @@ symbol).
 | `RsFixed{word, count}`, `Rs.correct_with(opts, c, w, eras)`, `Rs.correct(c, w, eras)` | the corrected word and the number of symbols changed |
 | `Rs.decode(c, w, eras)` | the message of a received word |
 | `Rs.inject(w, i, v)` | a test helper: v added to the symbol at index i |
+| `RsPoly.add(f, p, q)`, `RsPoly.scale(f, c, p)`, `RsPoly.shift(k, p)`, `RsPoly.mul(f, p, q)`, `RsPoly.trunc(n, p)`, `RsPoly.eval(f, p, x)`, `RsPoly.deriv(p)` | polynomials over the field (`poly.bend`), lists of coefficients lowest degree first (trailing zeros allowed): p + q, c p, x^k p, p q, p mod x^n, p(x), the formal derivative |
+| `RsPoly.is_zero(f, p)`, `RsPoly.norm(f, p)`, `RsPoly.deg(p)` | whether every coefficient is 0; p without its trailing zeros; the degree of a normalised polynomial (0 for zero) |
+| `RsPoly.locator(f, rs)`, `RsPoly.from_roots(f, rs)` | the product of (1 + r x), and of (x + r), over the elements r |
 
 Decoding fails (`RsUncorrectable`) when 2 (errors) + (erasures) > 2t, when
 the locator does not have as many roots in the word as its degree, when an
