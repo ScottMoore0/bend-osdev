@@ -67,6 +67,7 @@ two limbs plus two more limbs fits in a `U32`.
 | `gen/proof_gcd.py`, `gen/proof_inv.py`, `gen/proof_fermat.py` | write `PROOF_gcd.bend`, `PROOF_inv.bend` and `PROOF_fermat.bend` (ring identities by `scripts/natproof.py`) |
 | `LAWS_rsa.bend`, `PROOF_rsa.bend` | RSA on `Nat`: Fermat's theorem generalised, the Chinese remainder theorem's uniqueness, (m^e)^d = m mod p q, the CRT exponentiation (Garner's recombination), congruences modulo an lcm; Nat facts on mod and pow, and `is_odd` as the value's parity; and their proofs |
 | `gen/proof_rsa.py` | writes `PROOF_rsa.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_octets.bend`, `PROOF_octets.bend` | the octet-string laws (OS2IP's result is valid; I2OSP gives k bytes, read back as the value, and depends only on the value), and their proofs |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -273,7 +274,10 @@ c^d mod p q, for distinct primes p and q with p q odd and the same d e
 (`crt_exp_nat`: p, q > 2, so d mod (p - 1) > 0 and m1 = c^d mod p; m2 + q h
 = m2 mod q and = m1 mod p, and is below p q, so the uniqueness applies; with
 p = 2, d mod 1 = 0 and m1 = 1, which is why `rsa`'s keys have an odd n); a
-congruence modulo lcm(a, b) is one modulo a and modulo b (`mod_lcm_l`,
+number with an inverse modulo p is not p (`mod_inv_ne`: q t = 1 mod p
+rules out q = p, since p t mod p = 0), so a CRT key's qInv makes p and q
+distinct; a congruence modulo lcm(a, b) is one modulo a and modulo b
+(`mod_lcm_l`,
 `mod_lcm_r`: x mod c = (x mod k c) mod c), so a d = e^-1 mod lcm(p - 1, q -
 1) (FIPS 186-5's, `rsa`'s key generation) meets the hypotheses. With them,
 the Nat facts the RSA laws of other packages are stated through, which
@@ -282,6 +286,24 @@ mod m = a for a < m, and a mod m < m (`nat_pow_pow`, `nat_pow_mod`,
 `nat_mod_small`, `nat_mod_lt`); and `BnNat.is_odd(x)` is whether value(x)
 mod 2 = 1, for a valid x (`is_odd_value`: bit 0 of the low limb, the parity
 of the value, u32's `nat_odd_half`).
+
+### Octet strings
+
+`LAWS_octets.bend`, **for every input**: `BnNat.of_octets(o)` (OS2IP) is
+valid (`of_octets_valid`: two bytes pack into a 16-bit limb); when
+`BnNat.to_octets(x, k)` (I2OSP) gives `Some{o}`, o has k bytes
+(`to_octets_len`) and, for a valid x, OS2IP reads o back as x's value
+(`to_octets_value`); for valid x and y of the same value, `to_octets(x, k)
+= to_octets(y, k)` (`to_octets_eq`: zero limbs on top only add zero bytes,
+which I2OSP ignores, and valid limbs of equal value have the same normal
+form); so for a valid x, I2OSP to o's length gives back every o whose OS2IP
+has x's value (`to_octets_of_value`, with `octets_round_trip`). On the way
+(lemmas in `PROOF_octets.bend`, not laws): the bytes of valid limbs pack
+back to them (each limb below 2^16 is its own `B.low16`, bytes'
+`le16_round_trip` and `low16_mask`), packing ignores the bits above a byte
+and appended zero bytes, and I2OSP's bytes padded with zeros are the
+number's bytes padded with zeros. These are what `rsa`'s primitives on
+octet strings, and its signature schemes, need.
 
 **Not proved, and tested:** that the public shifts (`shl`, `shr`), the
 Montgomery operations on forms other than `mul` (`sqr`, `add`, `sub`,
@@ -341,8 +363,8 @@ no defence against timing side channels.
 
 ## Dependencies
 
-`DEPS`: `bytes` (`Octets` for OS2IP and I2OSP, and its laws in the proof of
-`octets_round_trip`), `kmath` (`KMath.gcd` and `KMath.lcm` in the gcd and
+`DEPS`: `bytes` (`Octets` for OS2IP and I2OSP, and its laws in the proofs of
+`octets_round_trip` and the octet-string laws), `kmath` (`KMath.gcd` and `KMath.lcm` in the gcd and
 inverse laws and `KMath.lcm` in `mod_lcm_l` and `mod_lcm_r`, and its gcd
 and lcm laws in their proofs and in Fermat's), `u32`
 (`U32Nat.dbl` in the limb laws, and its laws in their proofs). The library
@@ -360,6 +382,8 @@ all nine (`PROOF.bend` about 44 s, peak 0.44 GB; `PROOF_limbs.bend` about
 0.50 GB; `PROOF_mont.bend` about 9 s, peak 0.56 GB; `PROOF_gcd.bend` about
 20 s, peak 0.55 GB; `PROOF_inv.bend` about 22 s, peak 0.54 GB;
 `PROOF_fermat.bend` about 20 s, peak 0.58 GB); Bend 2.0.39:
-`PROOF_rsa.bend` (12) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK (about
-25 s, peak 0.56 GB); `check.bend` passes,
+`PROOF_rsa.bend` (13) and `PROOF_octets.bend` (5) ALL PROOFS CHECK,
+`--verdict` ALL PROOFS CHECK on both (`PROOF_rsa.bend` about 25 s, peak
+0.60 GB; `PROOF_octets.bend` about 13 s, peak 0.64 GB); `check.bend`
+passes,
 `ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
