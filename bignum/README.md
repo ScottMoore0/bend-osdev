@@ -65,6 +65,8 @@ two limbs plus two more limbs fits in a `U32`.
 | `LAWS_inv.bend`, `PROOF_inv.bend` | the modular inverse laws (`BnMod.inv` gives an inverse exactly when m > 1 and gcd(a, m) = 1), and their proofs |
 | `LAWS_fermat.bend`, `PROOF_fermat.bend` | Fermat's little theorem on `Nat` (a^p = a mod p for a prime p), and its proof |
 | `gen/proof_gcd.py`, `gen/proof_inv.py`, `gen/proof_fermat.py` | write `PROOF_gcd.bend`, `PROOF_inv.bend` and `PROOF_fermat.bend` (ring identities by `scripts/natproof.py`) |
+| `LAWS_rsa.bend`, `PROOF_rsa.bend` | RSA on `Nat`: Fermat's theorem generalised, the Chinese remainder theorem's uniqueness, (m^e)^d = m mod p q, the CRT exponentiation (Garner's recombination), congruences modulo an lcm; Nat facts on mod and pow, and `is_odd` as the value's parity; and their proofs |
+| `gen/proof_rsa.py` | writes `PROOF_rsa.bend` (ring identities by `scripts/natproof.py`) |
 | `check.bend` | vectors with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive laws and their proofs (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's integers |
@@ -250,6 +252,37 @@ divides C(p, k) for 0 < k < p (k C(p, k) = p C(p - 1, k - 1), Pascal's rule
 by induction); the binomial theorem gives (1 + a)^p = 1 + a^p (mod p), and
 induction on a gives a^p = a.
 
+### RSA on the integers
+
+`LAWS_rsa.bend`, **for every input**, on `Nat` (the number theory behind
+`rsa`, usable by `dh` and `ecc` too), with primality as `bnlaw.prime`
+above: for a prime p, a^(1 + k (p - 1)) mod p = a mod p for every a and k
+(`fermat_gen`: a^(1 + (k + 1)(p - 1)) = a^(p - 1) a^(1 + k (p - 1)), which
+is a^(p - 1) a = a^p = a by induction and `fermat`); for distinct primes p
+and q, x = y mod p and x = y mod q give x = y mod p q (`crt_unique`: for x
+<= y, (y - x) + x = x mod p gives p | y - x, likewise q, and for p < q,
+Euclid's lemma takes q | k p to q | k, so p q | y - x); for distinct primes
+p and q and d e = 1 modulo p - 1 and modulo q - 1, (m^e)^d mod p q = m mod p
+q and (m^d)^e mod p q = m mod p q for every m (`rsa_nat`, `rsa_nat_rev`:
+d e = 1 + k (p - 1), for p = 2 because d e > 0, as p and q are not both 2;
+the hypothesis is the one `rsa`'s `Rsa.private_of` checks); the private
+exponentiation by the Chinese remainder theorem (RFC 8017, 5.1.2 step
+2.b), with m1 = c^(d mod (p - 1)) mod p, m2 = c^(d mod (q - 1)) mod q, h =
+((m1 mod p + p - m2 mod p) mod p) t mod p and q t = 1 mod p, is m2 + q h =
+c^d mod p q, for distinct primes p and q with p q odd and the same d e
+(`crt_exp_nat`: p, q > 2, so d mod (p - 1) > 0 and m1 = c^d mod p; m2 + q h
+= m2 mod q and = m1 mod p, and is below p q, so the uniqueness applies; with
+p = 2, d mod 1 = 0 and m1 = 1, which is why `rsa`'s keys have an odd n); a
+congruence modulo lcm(a, b) is one modulo a and modulo b (`mod_lcm_l`,
+`mod_lcm_r`: x mod c = (x mod k c) mod c), so a d = e^-1 mod lcm(p - 1, q -
+1) (FIPS 186-5's, `rsa`'s key generation) meets the hypotheses. With them,
+the Nat facts the RSA laws of other packages are stated through, which
+otherwise are lemmas: (x^a)^b = x^(a b), (x mod m)^e mod m = x^e mod m, a
+mod m = a for a < m, and a mod m < m (`nat_pow_pow`, `nat_pow_mod`,
+`nat_mod_small`, `nat_mod_lt`); and `BnNat.is_odd(x)` is whether value(x)
+mod 2 = 1, for a valid x (`is_odd_value`: bit 0 of the low limb, the parity
+of the value, u32's `nat_odd_half`).
+
 **Not proved, and tested:** that the public shifts (`shl`, `shr`), the
 Montgomery operations on forms other than `mul` (`sqr`, `add`, `sub`,
 `neg`, `BnMont.exp` on its own), `BnNat.mod_u16`, `BnNat.trailing_zeros`,
@@ -310,7 +343,8 @@ no defence against timing side channels.
 
 `DEPS`: `bytes` (`Octets` for OS2IP and I2OSP, and its laws in the proof of
 `octets_round_trip`), `kmath` (`KMath.gcd` and `KMath.lcm` in the gcd and
-inverse laws, and its gcd laws in their proofs and in Fermat's), `u32`
+inverse laws and `KMath.lcm` in `mod_lcm_l` and `mod_lcm_r`, and its gcd
+and lcm laws in their proofs and in Fermat's), `u32`
 (`U32Nat.dbl` in the limb laws, and its laws in their proofs). The library
 code imports only `bytes`; `kmath` and `u32` are for the laws.
 
@@ -325,5 +359,7 @@ all nine (`PROOF.bend` about 44 s, peak 0.44 GB; `PROOF_limbs.bend` about
 `PROOF_div.bend` about 7 s, peak 0.42 GB; `PROOF_mod.bend` about 7 s, peak
 0.50 GB; `PROOF_mont.bend` about 9 s, peak 0.56 GB; `PROOF_gcd.bend` about
 20 s, peak 0.55 GB; `PROOF_inv.bend` about 22 s, peak 0.54 GB;
-`PROOF_fermat.bend` about 20 s, peak 0.58 GB), `check.bend` passes,
+`PROOF_fermat.bend` about 20 s, peak 0.58 GB); Bend 2.0.39:
+`PROOF_rsa.bend` (12) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK (about
+25 s, peak 0.56 GB); `check.bend` passes,
 `ref/run.sh` 398 cases match, `scripts/deps.sh` passes.
