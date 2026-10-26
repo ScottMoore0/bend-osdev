@@ -229,7 +229,15 @@ directory records are); volume sets of more than one volume are not joined.
   * the 17-byte date: every `IsoVolDate` whose fields fit their digits
     (year below 10000, the rest below 100) reads back exactly, its offset
     to 8 bits (with a witness); proved by induction on the digit counter,
-    not by enumeration;
+    not by enumeration. The digit lemma (`value_of`) takes its bound as a
+    parameter `b` with `Nat.is_le(b, 1n+top(k))`, so the year's `10000n`
+    is never converted into `1n+top(4n)`: Bend's checker compares a number
+    literal with another term one successor per nested call
+    (bendlang/bend#957), and that conversion, about 10000 calls deep,
+    could overflow the stack. The side condition is evaluated to a Bool
+    instead, which the checker does in a loop. For the same reason the
+    creation-date vector is proved with the year's digits as a variable
+    (`gi_gen`), not by computing 2026 and comparing it;
   * UCS-2: every text reads back, each code to 16 bits;
   * directory records: every record with a non-empty identifier and a
     length below 256 reads back as stored, whatever bytes follow it (with a
