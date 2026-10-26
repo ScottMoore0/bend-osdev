@@ -194,10 +194,8 @@ X25519 shared secret).
 * `chacha_stream_involution`, `chacha_stream_streaming_data`,
   `chacha_stream_streaming_state`: the stream interface's three laws, for
   every round count, state and data (so ChaCha20, XChaCha20, ChaCha12...).
-  crypto proves them for every keystream generator, but its `PROOF.bend`
-  takes over 2 GB; the lemmas are written out in `PROOF.bend` as crypto
-  states them, and, unfolding `CrXor.update`, name crypto's `stream.bend`
-  loop (`cr.ks.*`), as pubkey's proofs name crypto's `cr.sign.check`;
+  each is crypto's law for every keystream generator, from its
+  `LAWS_xor.bend` pair (crypto's `PROOF.bend` takes over 2 GB);
 * `poly1305_accepts`, `poly1305_agrees`, `gmac_accepts`, `gmac_agrees`: the
   MAC interface's two laws;
 * `x25519_pk_format`, `ed25519_pk_format`: a public key read from bytes is

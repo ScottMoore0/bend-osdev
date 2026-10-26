@@ -119,7 +119,8 @@ cases, and the checker never computes with a concrete curve or group.
   key p read from bytes is read again from the bytes written for it when
   the reader's own round trip holds at those bytes.
 * **The signature interface's verify-from-bytes law** (crypto's
-  `sign_verify_bytes_if`, written out per instance by `gen/instances.py`):
+  `sign_verify_bytes_if`, written out per instance by `gen/instances.py`
+  and proved by it, from crypto's `LAWS_pk.bend` pair, as `kex_agree_if` is below):
   `rsa_pkcs1_verify_bytes_if`, `rsa_pss_verify_bytes_if`,
   `ecdsa_verify_bytes_if`, `sm2_verify_bytes_if`, `ecrdsa_verify_bytes_if`:
   a signature checked from the public key's bytes is accepted, for every

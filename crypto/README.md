@@ -489,7 +489,7 @@ type from `@x: A -> ...`).
 
 ## Laws
 
-230 laws, in ten pairs of law and proof files. Each proof file imports its
+234 laws, in twelve pairs of law and proof files. Each proof file imports its
 law file as `Laws` and only the proofs its laws rest on, and each is checked
 in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 
@@ -505,11 +505,17 @@ in a process of its own (`scripts/check.sh` checks every `PROOF*.bend`):
 | `LAWS_cts.bend`, `PROOF_cts.bend` | 2: `cmblock_cts_round_trip`, `lcblock64_cts_round_trip` | bytes' laws, cipher-core's `block64_octets_round_trip`, `PROOF_bytes.bend`'s lemmas |
 | `LAWS_hkdf.bend`, `PROOF_hkdf.bend` | 2: `hkdf_length`, `hkdf_prefix` | bytes' laws |
 | `LAWS_ctr.bend`, `PROOF_ctr.bend` | 1: `ctr_counter_increment` | bytes' laws |
+| `LAWS_xor.bend`, `PROOF_xor.bend` | 3: `xor_involution`, `xor_streaming_data`, `xor_streaming_state` (the statements of `LAWS.bend`'s three, which `PROOF.bend` proves from these) | bytes' laws |
+| `LAWS_pk.bend`, `PROOF_pk.bend` | 4: `sign_verify_bytes_done`, `sign_verify_bytes_if`, `kex_agree_done`, `kex_agree_if` (the last two of each the statements of `LAWS.bend`'s, which `PROOF.bend` proves from these) | nothing |
 
 A proof elsewhere that uses a law imports the pair that holds it: x509 and
 pkcs use `sign_verify_bytes_if` through `../crypto/LAWS.bend` and
 `../crypto/PROOF.bend`, which take in none of the algorithm packages'
-proofs. **Why several pairs:** a check takes in the proofs of every package
+proofs; pubkey and collections-crypto use the light pairs `LAWS_pk.bend`
+(their signature and key-agreement instances, and what
+`CrSign.verify_bytes` and `CrKex.agree` compute once the keys parse) and
+`LAWS_xor.bend` (their keystream generators), which take in no generic
+proofs but their own. **Why several pairs:** a check takes in the proofs of every package
 the proof file imports (under `--verdict` alone, on the machine of the
 Status line: aes' about 1.24 GB with gf's and mode-core's, ccm's 0.43 GB with mode-core's, crc's 0.68 GB, each hash package's 0.43 to 0.63 GB
 with md-engine's,
