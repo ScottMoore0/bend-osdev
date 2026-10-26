@@ -291,13 +291,6 @@ def value_zero(+k: Nat) -> {0n == value(F.iso.digits.zero(k)) : Nat}:
       %value_zero(p) : {0n == Nat.mul(_, 10n) : Nat}
       {==}
 
-def lt_irrefl(+n: Nat) -> {False{} == Nat.is_lt(n, n) : Bool}:
-  match n:
-    case 0n:
-      {==}
-    case 1n+p:
-      lt_irrefl(p)
-
 def lt_weaken(+n: Nat, +t: Nat, h: {Nat.is_lt(n, t) == True{} : Bool}) -> {Nat.is_lt(n, 1n+t) == True{} : Bool}:
   match n t:
     case 0n _:
@@ -313,26 +306,54 @@ def value_of.top(+k: Nat, +p: Nat, hb: {nines(F.iso.digits.of(k, p)) == True{} :
   %Equal.sym(Nat, top(dlen(F.iso.digits.of(k, p))), value(F.iso.digits.of(k, p)), value_nines(F.iso.digits.of(k, p), hb)) : {p == _ : Nat}
   ih
 
-def value_of.lt(+k: Nat, +p: Nat, e: {p == top(k) : Nat}, h: {Nat.is_lt(p, top(k)) == True{} : Bool}) -> {Nat.is_lt(top(k), top(k)) == True{} : Bool}:
-  %e : {Nat.is_lt(_, top(k)) == True{} : Bool}
+# a number below b is not at least b
+def lt_le_absurd(+a: Nat, +b: Nat, h1: {Nat.is_lt(a, b) == True{} : Bool}, h2: {Nat.is_le(b, a) == True{} : Bool}) -> Empty:
+  match a b:
+    case 0n 0n:
+      bool_absurd(h1)
+    case 0n 1n+q:
+      bool_absurd(h2)
+    case 1n+p 0n:
+      bool_absurd(h1)
+    case 1n+p 1n+q:
+      lt_le_absurd(p, q, h1, h2)
+
+def lt_pred(+p: Nat, +b: Nat, h: {Nat.is_lt(1n+p, b) == True{} : Bool}) -> {Nat.is_lt(p, b) == True{} : Bool}:
+  match p b:
+    case 0n 0n:
+      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, bool_absurd(h))
+    case 0n 1n+q:
+      {==}
+    case 1n+a 0n:
+      Empty.absurd({Nat.is_lt(1n+a, 0n) == True{} : Bool}, bool_absurd(h))
+    case 1n+a 1n+q:
+      lt_pred(a, q, h)
+
+def value_of.lt(+k: Nat, +p: Nat, +b: Nat, e: {p == top(k) : Nat}, h: {Nat.is_lt(1n+p, b) == True{} : Bool}) -> {Nat.is_lt(1n+top(k), b) == True{} : Bool}:
+  %e : {Nat.is_lt(1n+_, b) == True{} : Bool}
   h
 
-def value_of.pick(+k: Nat, +p: Nat, b: Bool, hb: {nines(F.iso.digits.of(k, p)) == b : Bool}, h: {Nat.is_lt(p, top(k)) == True{} : Bool}, ih: {p == value(F.iso.digits.of(k, p)) : Nat}) -> {1n+p == value(F.iso.digits.inc(F.iso.digits.of(k, p))) : Nat}:
-  match b:
+def value_of.pick(+k: Nat, +p: Nat, +b: Nat, c: Bool, hc: {nines(F.iso.digits.of(k, p)) == c : Bool}, h: {Nat.is_lt(1n+p, b) == True{} : Bool}, hb: {Nat.is_le(b, 1n+top(k)) == True{} : Bool}, ih: {p == value(F.iso.digits.of(k, p)) : Nat}) -> {1n+p == value(F.iso.digits.inc(F.iso.digits.of(k, p))) : Nat}:
+  match c:
     case False{}:
-      %value_inc(F.iso.digits.of(k, p), hb) : {1n+p == _ : Nat}
+      %value_inc(F.iso.digits.of(k, p), hc) : {1n+p == _ : Nat}
       %ih : {1n+p == 1n+_ : Nat}
       {==}
     case True{}:
-      Empty.absurd({1n+p == value(F.iso.digits.inc(F.iso.digits.of(k, p))) : Nat}, bool_absurd(Equal.trans(Bool, False{}, Nat.is_lt(top(k), top(k)), True{}, lt_irrefl(top(k)), value_of.lt(k, p, value_of.top(k, p, hb, ih), h))))
+      Empty.absurd({1n+p == value(F.iso.digits.inc(F.iso.digits.of(k, p))) : Nat}, lt_le_absurd(1n+top(k), b, value_of.lt(k, p, b, value_of.top(k, p, hc, ih), h), hb))
 
-# the digits of a number below 10^k give the number back
-def value_of(+k: Nat, +n: Nat, +h: {Nat.is_lt(n, 1n+top(k)) == True{} : Bool}) -> {n == value(F.iso.digits.of(k, n)) : Nat}:
+# the digits of a number below b give the number back, when b is at most
+# 10^k. The bound is a parameter, not 1n+top(k): the checker compares a
+# number literal with another term one successor per level (bendlang/bend#957),
+# so converting the year's 10000n into 1n+top(4n) nests about 10000 calls and
+# can overflow the stack. Here 10000n meets top(4n) only in hb, which the
+# checker evaluates to a Bool (a loop, not a nested comparison).
+def value_of(+k: Nat, +n: Nat, +b: Nat, +h: {Nat.is_lt(n, b) == True{} : Bool}, +hb: {Nat.is_le(b, 1n+top(k)) == True{} : Bool}) -> {n == value(F.iso.digits.of(k, n)) : Nat}:
   match n:
     case 0n:
       value_zero(k)
     case 1n+p:
-      value_of.pick(k, p, nines(F.iso.digits.of(k, p)), {==}, h, value_of(k, p, lt_weaken(p, top(k), h)))
+      value_of.pick(k, p, b, nines(F.iso.digits.of(k, p)), {==}, h, hb, value_of(k, p, b, lt_pred(p, b, h), hb))
 
 def append_nil(+ds: List<&2, F.IsoDigit>) -> {ds == List.append(&2, F.IsoDigit, ds, Nil{}) : List<&2, F.IsoDigit>}:
   match ds:
@@ -342,12 +363,16 @@ def append_nil(+ds: List<&2, F.IsoDigit>) -> {ds == List.append(&2, F.IsoDigit, 
       %append_nil(t) : {Con{d, t} == Con{d, _} : List<&2, F.IsoDigit>}
       {==}
 
-# one field: the k digits of n, then the rest
-def field_lemma(+k: Nat, +n: Nat, +rest: List<&2, U32>) -> {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.field(k, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest))) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}:
-  %Equal.trans(Nat, Nat.add(dlen(F.iso.digits.of(k, n)), 0n), dlen(F.iso.digits.of(k, n)), k, UL.nat_add_zero(dlen(F.iso.digits.of(k, n))), Equal.sym(Nat, k, dlen(F.iso.digits.of(k, n)), len_of(k, n))) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.got(F.iso.digits.read(_, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest)), Some{Nil{}})) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
-  %Equal.sym(Maybe<&2, F.IsoDigitsRest>, F.iso.digits.read(Nat.add(dlen(F.iso.digits.of(k, n)), 0n), B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest)), Some{Nil{}}), F.iso.digits.read(0n, B.mask(rest), Some{List.append(&2, F.IsoDigit, F.iso.digits.of(k, n), Nil{})}), read_bytes(F.iso.digits.of(k, n), rest, 0n, Nil{})) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.got(_) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
-  %append_nil(F.iso.digits.of(k, n)) : {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == Done{F.IsoDigitsRest{_, B.mask(rest)}} : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
+# one field: the k digits ds, then the rest
+def field_ds(+k: Nat, +ds: List<&2, F.IsoDigit>, +rest: List<&2, U32>, +hl: {k == dlen(ds) : Nat}) -> {Done{F.IsoDigitsRest{ds, B.mask(rest)}} == F.iso.voldate.field(k, B.mask(F.iso.digits.bytes(ds, rest))) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}:
+  %Equal.trans(Nat, Nat.add(dlen(ds), 0n), dlen(ds), k, UL.nat_add_zero(dlen(ds)), Equal.sym(Nat, k, dlen(ds), hl)) : {Done{F.IsoDigitsRest{ds, B.mask(rest)}} == F.iso.voldate.got(F.iso.digits.read(_, B.mask(F.iso.digits.bytes(ds, rest)), Some{Nil{}})) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
+  %Equal.sym(Maybe<&2, F.IsoDigitsRest>, F.iso.digits.read(Nat.add(dlen(ds), 0n), B.mask(F.iso.digits.bytes(ds, rest)), Some{Nil{}}), F.iso.digits.read(0n, B.mask(rest), Some{List.append(&2, F.IsoDigit, ds, Nil{})}), read_bytes(ds, rest, 0n, Nil{})) : {Done{F.IsoDigitsRest{ds, B.mask(rest)}} == F.iso.voldate.got(_) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
+  %append_nil(ds) : {Done{F.IsoDigitsRest{ds, B.mask(rest)}} == Done{F.IsoDigitsRest{_, B.mask(rest)}} : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}
   {==}
+
+# the k digits of n, then the rest
+def field_lemma(+k: Nat, +n: Nat, +rest: List<&2, U32>) -> {Done{F.IsoDigitsRest{F.iso.digits.of(k, n), B.mask(rest)}} == F.iso.voldate.field(k, B.mask(F.iso.digits.bytes(F.iso.digits.of(k, n), rest))) : Result<&2, &2, F.IsoError, F.IsoDigitsRest>}:
+  field_ds(k, F.iso.digits.of(k, n), rest, len_of(k, n))
 
 def vd_main(+y: Nat, +mo: Nat, +dd: Nat, +h: Nat, +mi: Nat, +s: Nat, +c: Nat, +o: U32, hy: {Nat.is_lt(y, 10000n) == True{} : Bool}, hmo: {Nat.is_lt(mo, 100n) == True{} : Bool}, hdd: {Nat.is_lt(dd, 100n) == True{} : Bool}, hh: {Nat.is_lt(h, 100n) == True{} : Bool}, hmi: {Nat.is_lt(mi, 100n) == True{} : Bool}, hs: {Nat.is_lt(s, 100n) == True{} : Bool}, hc: {Nat.is_lt(c, 100n) == True{} : Bool}) -> {F.IsoVolDate.decode(F.IsoVolDate.encode(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})) == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}:
   %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(F.IsoVolDate.bytes(F.IsoVolDate{y, mo, dd, h, mi, s, c, o}))), B.mask(F.IsoVolDate.bytes(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})), BL.octets_to_of(F.IsoVolDate.bytes(F.IsoVolDate{y, mo, dd, h, mi, s, c, o}))) : {F.iso.voldate.list(_) == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
@@ -358,13 +383,13 @@ def vd_main(+y: Nat, +mo: Nat, +dd: Nat, +h: Nat, +mi: Nat, +s: Nat, +c: Nat, +o
   %field_lemma(2n, mi, F.iso.digits.bytes(F.iso.digits.of(2n, s), F.iso.digits.bytes(F.iso.digits.of(2n, c), [o]))) : {F.iso.voldate.d5(F.iso.digits.value(F.iso.digits.of(4n, y)), F.iso.digits.value(F.iso.digits.of(2n, mo)), F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), _) == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
   %field_lemma(2n, s, F.iso.digits.bytes(F.iso.digits.of(2n, c), [o])) : {F.iso.voldate.d6(F.iso.digits.value(F.iso.digits.of(4n, y)), F.iso.digits.value(F.iso.digits.of(2n, mo)), F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), _) == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
   %field_lemma(2n, c, [o]) : {F.iso.voldate.d7(F.iso.digits.value(F.iso.digits.of(4n, y)), F.iso.digits.value(F.iso.digits.of(2n, mo)), F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), _) == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(4n, y, hy) : {Done{F.IsoVolDate{_, F.iso.digits.value(F.iso.digits.of(2n, mo)), F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, mo, hmo) : {Done{F.IsoVolDate{y, _, F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, dd, hdd) : {Done{F.IsoVolDate{y, mo, _, F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, h, hh) : {Done{F.IsoVolDate{y, mo, dd, _, F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, mi, hmi) : {Done{F.IsoVolDate{y, mo, dd, h, _, F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, s, hs) : {Done{F.IsoVolDate{y, mo, dd, h, mi, _, F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
-  %value_of(2n, c, hc) : {Done{F.IsoVolDate{y, mo, dd, h, mi, s, _, B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(4n, y, 10000n, hy, {==}) : {Done{F.IsoVolDate{_, F.iso.digits.value(F.iso.digits.of(2n, mo)), F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, mo, 100n, hmo, {==}) : {Done{F.IsoVolDate{y, _, F.iso.digits.value(F.iso.digits.of(2n, dd)), F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, dd, 100n, hdd, {==}) : {Done{F.IsoVolDate{y, mo, _, F.iso.digits.value(F.iso.digits.of(2n, h)), F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, h, 100n, hh, {==}) : {Done{F.IsoVolDate{y, mo, dd, _, F.iso.digits.value(F.iso.digits.of(2n, mi)), F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, mi, 100n, hmi, {==}) : {Done{F.IsoVolDate{y, mo, dd, h, _, F.iso.digits.value(F.iso.digits.of(2n, s)), F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, s, 100n, hs, {==}) : {Done{F.IsoVolDate{y, mo, dd, h, mi, _, F.iso.digits.value(F.iso.digits.of(2n, c)), B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %value_of(2n, c, 100n, hc, {==}) : {Done{F.IsoVolDate{y, mo, dd, h, mi, s, _, B.byte(o)}} == Done{F.IsoVolDate.norm(F.IsoVolDate{y, mo, dd, h, mi, s, c, o})} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
   {==}
 
 def Laws.vol_date_round_trip(d, h):
@@ -830,5 +855,20 @@ def Laws.gi_file_record():
 def Laws.gi_file_rr_name():
   {==}
 
-def Laws.gi_creation_date():
+# The creation date vector reads its year symbolically: decoded from
+# concrete digits, the year is a closed sum of about 2000 successors, and
+# comparing it with 2026n nests one call per successor (bendlang/bend#957).
+# With the year's digits a variable (gi_gen) it stays value(ys); the
+# literal meets it only in nat_eq's hypothesis, which the checker evaluates.
+def gi_gen(+ys: List<&2, F.IsoDigit>, +hl: {4n == dlen(ys) : Nat}) -> {F.IsoVolDate.decode(B.Octets.of_list(F.iso.digits.bytes(ys, [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4]))) == Done{F.IsoVolDate{F.iso.digits.value(ys), 10n, 17n, 20n, 45n, 23n, 0n, 4}} : Result<&2, &2, F.IsoError, F.IsoVolDate>}:
+  %Equal.sym(List<&2, U32>, B.Octets.to_list(B.Octets.of_list(F.iso.digits.bytes(ys, [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4]))), B.mask(F.iso.digits.bytes(ys, [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4])), BL.octets_to_of(F.iso.digits.bytes(ys, [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4]))) : {F.iso.voldate.list(_) == Done{F.IsoVolDate{F.iso.digits.value(ys), 10n, 17n, 20n, 45n, 23n, 0n, 4}} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %field_ds(4n, ys, [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4], hl) : {F.iso.voldate.d1(_) == Done{F.IsoVolDate{F.iso.digits.value(ys), 10n, 17n, 20n, 45n, 23n, 0n, 4}} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
   {==}
+
+def gi_bytes() -> {F.iso.digits.bytes([F.IsoDig6{}, F.IsoDig2{}, F.IsoDig0{}, F.IsoDig2{}], [49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4]) == [50, 48, 50, 54, 49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4] : List<&2, U32>}:
+  {==}
+
+def Laws.gi_creation_date():
+  %nat_eq(F.iso.digits.value([F.IsoDig6{}, F.IsoDig2{}, F.IsoDig0{}, F.IsoDig2{}]), 2026n, {==}) : {F.IsoVolDate.decode(B.Octets.of_list([50, 48, 50, 54, 49, 48, 49, 55, 50, 48, 52, 53, 50, 51, 48, 48, 4])) == Done{F.IsoVolDate{_, 10n, 17n, 20n, 45n, 23n, 0n, 4}} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  %gi_bytes() : {F.IsoVolDate.decode(B.Octets.of_list(_)) == Done{F.IsoVolDate{F.iso.digits.value([F.IsoDig6{}, F.IsoDig2{}, F.IsoDig0{}, F.IsoDig2{}]), 10n, 17n, 20n, 45n, 23n, 0n, 4}} : Result<&2, &2, F.IsoError, F.IsoVolDate>}
+  gi_gen([F.IsoDig6{}, F.IsoDig2{}, F.IsoDig0{}, F.IsoDig2{}], {==})
