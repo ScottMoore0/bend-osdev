@@ -292,4 +292,5 @@ peak 0.89 GB); `PROOF_pss.bend` ALL PROOFS CHECK (1 law; about 117 s, peak
 1.10 GB: it imports `PROOF.bend` for `pss_round_trip`), `--verdict` ALL
 PROOFS CHECK (about 341 s, peak 1.13 GB); `check.bend` passes, `ref/run.sh`
 195 cases match (the whole `VERDICT=1 scripts/check.sh rsa` about 580 s,
-peak 1.15 GB), `scripts/deps.sh` passes.
+peak 1.15 GB, on 2.0.37; about 1014 s, peak 1.13 GB, on 2.0.39 with the
+new proof files), `scripts/deps.sh` passes.
