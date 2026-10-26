@@ -85,6 +85,8 @@ register the identifiers; no kernel source was read.
 | `gen/gen_registry.py` | writes `registry.bend` (each source listed in it) |
 | `LAWS_registry.bend`, `PROOF_registry.bend` | the registry's contents: the laws and their proofs |
 | `gen/gen_regproof.py` | writes `PROOF_registry.bend` (one def per entry); `--check` fails if the file differs (run it after the table changes) |
+| `LAWS_valid.bend`, `PROOF_valid.bend` | the registry's entries are valid: the law and its proof |
+| `gen/gen_validproof.py` | writes `PROOF_valid.bend` (one def per entry); `--check` fails if the file differs (run it after the table changes) |
 | `check.bend` | examples, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test (`ref/.gitignore` lists what it generates) |
 
@@ -176,15 +178,38 @@ The rest is induction over any list of entries: in a list whose names (or
 arcs) are distinct, an entry is the first with its name (or arcs), so the
 lookups find it.
 
-**Not proved: that every entry is valid** (`Oid.valid`). It is a closed
-computation too, but validity computes each arc's decimal digits and its
-base-128 subidentifier octets, and the kernel's natural numbers are unary:
-for the arcs 10040 and up (1.2.840.10045's ECDSA, 1.2.840.113549's PKCS,
-and 19200300) that division runs out of the kernel's budget, or trips the
-mismatch above. It is tested: `check.bend` checks every entry (valid, its
-DER read back as it, its name and arcs found again, no name or arcs twice),
-and `ref/run.sh` compares the names with OpenSSL's and Python
-cryptography's.
+`LAWS_valid.bend`, the registry's entries are valid, for every position in
+it:
+
+* `entries_valid`: the entry at a position, when each of its arcs is below
+  10000 (`oidlaw.below`), is a valid Oid (`Oid.valid`). That is 86 of the
+  127 entries.
+
+**How it is proved.** Each entry's validity is a closed computation (its
+arcs' decimal digits and its DER contents through bend-osdev-asn1), one def
+per entry (`gen/gen_validproof.py` writes them), the entry taken by its
+position as above; an entry with an arc of 10000 or more passes by the
+bound alone, as its validity is computed only within the bound. The rest is
+induction over any list of entries.
+
+**Not proved: that the other 41 entries are valid**: the 29 under
+1.2.840.113549 (PKCS), the 11 under 1.2.840.10040, 10045 and 10046 (DSA,
+ECDSA, Diffie-Hellman) and id-domainComponent (0.9.2342.19200300.100.1.25).
+Validity computes each arc's decimal digits and each subidentifier's
+base-128 octets by division, and the `--verdict` kernel's natural numbers
+are unary: dividing a number of about 10000 or more runs out of its step
+budget per def (its cost grows roughly with the square of the number),
+and so does a comparison with 19200300 (one of a few million steps). A
+proof for every arc would need, for the decimal digits, a general lemma
+here (an arc below 10^k has at most k digits; comparisons only) and, for
+the octets, laws of bend-osdev-asn1 that `Asn1.oid_content` answers
+`Done{c}` when the first two arcs meet X.690 8.19.4 and every subidentifier
+is below 2^42, and that `Asn1.encode` of that element answers `Done`: asn1
+has no such laws, and its internal defs (`a1.*`, which compute the octets)
+are not for other packages' proofs. They are tested:
+`check.bend` checks every entry (valid, its DER read back as it, its name
+and arcs found again, no name or arcs twice), and `ref/run.sh` compares the
+names with OpenSSL's and Python cryptography's.
 
 ## Tests
 
@@ -239,6 +264,7 @@ values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
 
 Bend 2.0.37: `PROOF.bend` and `PROOF_registry.bend` ALL PROOFS CHECK,
 `--verdict` ALL PROOFS CHECK (`PROOF_registry.bend`: 4 minutes, 0.5 GB
-peak),
+peak); Bend 2.0.39: `PROOF_valid.bend` ALL PROOFS CHECK, `--verdict` ALL
+PROOFS CHECK (15 s, 0.6 GB peak),
 `check.bend` passes, `ref/run.sh` 495 cases match, `scripts/deps.sh oid`
 ok.
