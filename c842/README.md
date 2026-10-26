@@ -442,6 +442,10 @@ time.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(10 s, 0.52 GB peak; `--verdict` 24 s, 0.56 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (75 laws), `--verdict` ALL PROOFS
 CHECK, `check.bend` passes, `ref/run.sh` 4186 cases match (2118 from the Linux
 vectors, 2068 against the model; seeds 2026 and 1 to 5), `scripts/deps.sh`

@@ -255,6 +255,11 @@ values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.20 GB peak; `--verdict` 1 s, 0.21 GB peak) and `PROOF_balance.bend`
+(1 s, 0.34 GB peak; `--verdict` 2 s, 0.34 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (35 laws) and `PROOF_balance.bend` (7 laws) ALL
 PROOFS CHECK, `--verdict` ALL PROOFS CHECK for both (peaks 0.20 GB and
 0.22 GB), `gen/heights.py --check` up to date, `check.bend` passes,

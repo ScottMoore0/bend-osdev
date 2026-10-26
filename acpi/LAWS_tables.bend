@@ -14,8 +14,8 @@
 #     checksum), its Length being the 64 that build writes.
 #
 # A table's whole round trip, parse(build(t)), also needs build's checksum
-# byte to make the bytes sum to zero modulo 256, for every content; that is
-# not proved (README, Laws).
+# byte to make the bytes sum to zero modulo 256, for every content: that is
+# LAWS_checksum.bend, and the whole round trips are LAWS_whole.bend.
 import Base
 import ../word64/word64.bend as W
 import ../bytes/bytes.bend as B

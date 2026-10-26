@@ -841,6 +841,21 @@ values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.35 GB peak; `--verdict` 4 s, 0.43 GB peak), `PROOF_bytes.bend` (2 s,
+0.37 GB peak; `--verdict` 4 s, 0.42 GB peak), `PROOF_cm.bend` (3.7 minutes,
+1.40 GB peak; `--verdict` 7.5 minutes, 1.46 GB peak), `PROOF_crc.bend`
+(1.2 minutes, 0.80 GB peak; `--verdict` 2.3 minutes, 0.96 GB peak),
+`PROOF_ctr.bend` (2 s, 0.33 GB peak; `--verdict` 5 s, 0.38 GB peak),
+`PROOF_cts.bend` (3 s, 0.39 GB peak; `--verdict` 8 s, 0.59 GB peak),
+`PROOF_hkdf.bend` (2 s, 0.34 GB peak; `--verdict` 4 s, 0.38 GB peak),
+`PROOF_hs.bend` (33 s, 0.67 GB peak; `--verdict` 1.5 minutes, 0.83 GB peak),
+`PROOF_lc.bend` (14 s, 0.66 GB peak; `--verdict` 39 s, 0.81 GB peak),
+`PROOF_pk.bend` (1 s, 0.13 GB peak; `--verdict` 1 s, 0.16 GB peak),
+`PROOF_sha.bend` (29 s, 0.95 GB peak; `--verdict` 1.0 minutes, 0.99 GB peak)
+and `PROOF_xor.bend` (2 s, 0.34 GB peak; `--verdict` 4 s, 0.38 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: each of the ten proof files ALL PROOFS CHECK, and ALL PROOFS
 CHECK under `--verdict`, each in a process of its own (`--verdict`, on WSL2
 shared with other checks, after the split of legacy-ciphers into

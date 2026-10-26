@@ -452,6 +452,12 @@ lists of the input and output (about 80 bytes per byte held).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(40 s, 0.62 GB peak; `--verdict` 1.3 minutes, 0.69 GB peak),
+`PROOF_canon.bend` (1 s, 0.23 GB peak; `--verdict` 1 s, 0.28 GB peak) and
+`PROOF_stream.bend` (2 s, 0.36 GB peak; `--verdict` 5 s, 0.43 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (77 laws), `PROOF_canon.bend` (1) and
 `PROOF_stream.bend` (2) each ALL PROOFS CHECK, and `--verdict` ALL PROOFS
 CHECK (80 laws; under `--verdict`, `PROOF_canon.bend` peaks at about 0.17 GB

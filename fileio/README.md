@@ -202,6 +202,10 @@ are the word), `off_halves_join` (a joined pair splits back into it),
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.30 GB peak; `--verdict` 4 s, 0.35 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes natively and on the JavaScript lane, `ref/run.sh` 543
 operations on 31 files, the 5 GiB sparse file included, match on both

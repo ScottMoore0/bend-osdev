@@ -145,6 +145,10 @@ block count and the length fields). No hub package.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.33 GB peak; `--verdict` 4 s, 0.37 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s), `--verdict` ALL PROOFS
 CHECK (4 s, 0.37 GB peak), `check.bend` passes, `gen/laws.py --check` up
 to date, `scripts/deps.sh` passes.

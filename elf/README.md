@@ -379,6 +379,10 @@ indices (counting offsets up as `U32`s would need laws such as `to_nat(i + 1)
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.48 GB peak; `--verdict` 13 s, 2.06 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 62 files (2,760 lines) match, of which 26
 checked against readelf (`-h -l -S -s`) and 12 also against `readelf -r -d -n

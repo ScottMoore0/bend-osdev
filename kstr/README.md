@@ -157,6 +157,14 @@ sizes and orders against a model of the documented layout.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(4 s, 0.38 GB peak; `--verdict` 9 s, 0.39 GB peak), `PROOF_dec.bend` (5 s,
+0.45 GB peak; `--verdict` 6 s, 0.56 GB peak), `PROOF_hex.bend` (3 s, 0.46 GB
+peak; `--verdict` 6 s, 0.53 GB peak), `PROOF_oct.bend` (3 s, 0.41 GB peak;
+`--verdict` 6 s, 0.56 GB peak) and `PROOF_pad.bend` (2 s, 0.34 GB peak;
+`--verdict` 4 s, 0.38 GB peak) ALL PROOFS CHECK, with and without
+`--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (20 laws), `PROOF_dec.bend` (2), `PROOF_hex.bend`
 (4), `PROOF_oct.bend` (2) and `PROOF_pad.bend` (3) ALL PROOFS CHECK;
 `--verdict` ALL PROOFS CHECK on each (`PROOF.bend` about 8 s, peak 0.43 GB;

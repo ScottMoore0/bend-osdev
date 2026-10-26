@@ -230,6 +230,10 @@ missing. **CI needs no extra apt packages** beyond `python3`.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.21 GB peak; `--verdict` 2 s, 0.24 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37, `VERDICT=1 scripts/check.sh ebpf` with native builds:
 `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
 passes, `ref/run.sh` 240 cases match; `scripts/deps.sh ebpf` passes.

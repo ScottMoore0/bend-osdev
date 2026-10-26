@@ -504,6 +504,11 @@ values (`LAWS.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(5 s, 0.46 GB peak; `--verdict` 31 s, 0.54 GB peak) and `PROOF_lookup.bend`
+(5 s, 0.47 GB peak; `--verdict` 28 s, 0.55 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37, native (`VERDICT=1` with `scripts/check.sh`'s native runner):
 `PROOF.bend` and `PROOF_lookup.bend` ALL PROOFS CHECK, `--verdict` ALL
 PROOFS CHECK, `check.bend` passes, `ref/run.sh` 839 cases match (with dtc 1.7.0 and fdtdump

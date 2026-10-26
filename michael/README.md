@@ -158,6 +158,10 @@ and its laws in the proofs). No hub package.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.37 GB peak; `--verdict` 5 s, 0.42 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s), `--verdict` ALL PROOFS
 CHECK (5 s, 0.43 GB peak, with md-engine's proofs), `check.bend` passes,
 `ref/run.sh` 27 cases match (against the model), `gen/laws.py --check` and

@@ -41,6 +41,7 @@ the arithmetic of each 32-bit half.
 | `add sub mul div mod` | arithmetic modulo 2^64 |
 | `and or xor not shl shr` | bits; shifts by a `Nat` |
 | `cmp is_eq is_lt is_le is_gt is_ge is_zero` | comparisons |
+| `W64.sel(b, x, y)` | `x` if `b`, else `y` |
 | `W64.show(a)`, `W64.show_hex(a)` | decimal; 16 lower-case hex digits |
 | `W64.bits.lo`, `W64.bits.hi`, `W64.bits.cat` | split a `Word(m + n)` and join it back (used by bend-osdev-bytes) |
 | `W64.divmod(a, b)` | the quotient and the remainder together |
@@ -167,6 +168,14 @@ Python's integers on random words and on the edge values 0, 1, 2^32 - 1,
 2^32, 2^63 and 2^64 - 1, with shifts of 0 to 70 bits and divisors of 0.
 
 ## Status
+
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.30 GB peak; `--verdict` 4 s, 0.35 GB peak), `PROOF_bits.bend` (2 s,
+0.31 GB peak; `--verdict` 4 s, 0.36 GB peak), `PROOF_div.bend` (2 s, 0.34 GB
+peak; `--verdict` 4 s, 0.39 GB peak), `PROOF_mul.bend` (2 s, 0.34 GB peak;
+`--verdict` 6 s, 0.38 GB peak) and `PROOF_text.bend` (2 s, 0.32 GB peak;
+`--verdict` 5 s, 0.39 GB peak) ALL PROOFS CHECK, with and without
+`--verdict`.
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (34 laws), `PROOF_mul.bend`
 (4), `PROOF_div.bend` (4), `PROOF_bits.bend` (8) and `PROOF_text.bend` (1)

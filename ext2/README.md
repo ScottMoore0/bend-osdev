@@ -578,6 +578,10 @@ values (`LAWS.bend`) and `Nat` division (`LAWS_div.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(4 s, 0.52 GB peak; `--verdict` 14 s, 0.60 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` passes (reading: 7130 lines, 2949
 queries, 43 images match; writing: 27 cases, 993 operations match, every

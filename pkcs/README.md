@@ -223,6 +223,10 @@ interface).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(9 s, 0.47 GB peak; `--verdict` 34 s, 0.84 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 117 cases match, `scripts/deps.sh pkcs`
 ok.

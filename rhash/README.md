@@ -48,6 +48,7 @@ it (see khash's README for its sources).
 | `rhash.bend` | the table: types, the policy, buckets, bucket arrays, migration, the interface |
 | `model.bend` | the reference model: an association list that never resizes, for the laws |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs |
+| `LAWS_resize.bend`, `PROOF_resize.bend` | the law that a resize finishes, and its proof |
 | `check.bend` | examples, a migration checked step by step, with their expected output |
 | `ref/gen.py`, `ref/run.sh` | the differential test against a Python dict |
 
@@ -179,18 +180,22 @@ encoding, hash, policy and table:
 * **Vectors:** `vec_lookup`, `vec_size` (two inserts and a remove under
   the default policy and hash).
 
-Not a law: that a resize finishes. For tables built through the interface,
-draining (one step per old bucket) empties the old array, but for an
-arbitrary table value it need not, and nothing depends on it: lookups are
-right whether or not it does. `check.bend` and the reference test show it
-finishing. A proof would need a reachability invariant over every
-interface operation: the old array is a complete tree of depth `old_log`
-in which the buckets the cursor has passed are taken, a node whose buckets
-are all taken has collapsed, and the cursor walks 0, 1, ..., 2^old_log - 1
-(`rh.next`'s mask, `2^old_log - 1` as a U32, is right because a log is at
-most 31); then the bucket the cursor takes last in each subtree collapses
-it, so after 2^old_log steps from a fresh start, or from any point of a
-walk, the old array is one empty bucket. Not proved here.
+`LAWS_resize.bend`, 1 law, proved, for every key type, value type, key
+encoding, hash, policy and trace: **a resize finishes** (`drain_finishes`).
+A table built through the interface (`RHash.replay`: `RHash.new`, then any
+inserts, removes, steps and explicit resizes) is not resizing after
+`RHash.drain`, one step per old bucket. The proof is an invariant that every
+interface operation keeps: the current array is a complete tree of depth
+log, and the old array is one empty bucket, or the cursor c is below
+2^old_log and the tree has c of its buckets taken (a node with i of 2^d
+taken has its halves at ceil(i/2) and floor(i/2), since the cursor reads its
+low bit first; a subtree with all of its buckets taken has collapsed into
+one empty bucket). Taking the cursor's bucket moves i to i + 1, inserts and
+removes only delete from the old array, and a resize starts only from an
+empty old array, with c = 0. The cursor's U32 arithmetic (`rh.next`, the
+mask 2^log - 1) is exact because every log is at most 31. For an arbitrary
+table value a drain need not finish, and nothing depends on it: lookups are
+right whether or not it does.
 
 Every size is clamped to `RHash.log_limit()`, 31: an explicit resize
 (`RHash.resize`, `RhResize`), and the policy's `init_log` and `max_log`
@@ -223,8 +228,12 @@ bend-osdev-u32, in the proofs only: its laws of the order of `Nat` and words
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.21 GB peak; `--verdict` 1 s, 0.22 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 3800 operations in 38 batches match (the
 whole `VERDICT=1 scripts/check.sh rhash` about 21 s, peak 0.37 GB),
-`scripts/deps.sh` passes. Every size is clamped to `RHash.log_limit()`;
-that a resize started through the interface finishes is not proved (Laws).
+`scripts/deps.sh` passes. `PROOF_resize.bend` ALL PROOFS CHECK and
+`--verdict` ALL PROOFS CHECK on Bend 2.0.39 (about 1 s, peak 0.32 GB).

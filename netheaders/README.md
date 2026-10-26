@@ -274,6 +274,14 @@ natively; 0.7 s and 280 MB on the JavaScript lane).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(6 s, 0.55 GB peak; `--verdict` 18 s, 0.96 GB peak), `PROOF_ipv4.bend` (6 s,
+0.60 GB peak; `--verdict` 16 s, 0.95 GB peak), `PROOF_rev.bend` (10 s,
+1.28 GB peak; `--verdict` 21 s, 2.06 GB peak), `PROOF_revsum.bend` (10 s,
+1.38 GB peak; `--verdict` 25 s, 2.59 GB peak) and `PROOF_sum.bend` (2 s,
+0.35 GB peak; `--verdict` 7 s, 0.40 GB peak) ALL PROOFS CHECK, with and
+without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (44 laws), `PROOF_sum.bend` (26),
 `PROOF_ipv4.bend` (2), `PROOF_rev.bend` (7) and `PROOF_revsum.bend` (6) ALL
 PROOFS CHECK, and `--verdict` ALL PROOFS CHECK for each (peaks 0.62 GB,

@@ -109,4 +109,8 @@ The S-boxes are table lookups (trees walked by the bits of a secret index). None
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(5 s, 0.38 GB peak; `--verdict` 9 s, 0.44 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (3 s), `--verdict` ALL PROOFS CHECK (10 s, 0.42 GB peak, with cipher-core's proofs), `check.bend` passes, `ref/run.sh` 12 cases match (24 results also from `cryptography`), `gen/vectors.py --check` up to date, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.

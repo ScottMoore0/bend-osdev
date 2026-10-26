@@ -82,6 +82,10 @@ of odd length and a 6-byte nonce refused) are aes-modes' laws.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.39 GB peak; `--verdict` 5 s, 0.60 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s, 0.36 GB peak), `--verdict` ALL PROOFS CHECK (4 s, 0.43 GB peak, with mode-core's proofs), `check.bend` passes, `ref/run.sh` 60 cases match, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

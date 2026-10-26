@@ -278,6 +278,11 @@ values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.37 GB peak; `--verdict` 5 s, 0.39 GB peak) and `PROOF_range.bend`
+(2 s, 0.40 GB peak; `--verdict` 5 s, 0.45 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` and `PROOF_range.bend` ALL PROOFS CHECK,
 `--verdict` ALL PROOFS CHECK (each in its own process), `check.bend` passes, `ref/run.sh` 140 cases match (60 pure reads on `MemDev`,
 40 owned reads on `ImgDev`, 40 `ImgDev` write sequences),

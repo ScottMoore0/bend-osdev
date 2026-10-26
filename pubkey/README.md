@@ -209,6 +209,10 @@ Streebog come through sm2's and ecrdsa's defs).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.25 GB peak; `--verdict` 4 s, 0.51 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 1 s), `--verdict` ALL
 PROOFS CHECK (about 3 s), `check.bend` passes, `ref/run.sh` 63 cases match,
 `scripts/deps.sh` passes.

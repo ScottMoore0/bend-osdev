@@ -297,6 +297,10 @@ move-to-front walks about half the alphabet per byte.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(12 s, 0.45 GB peak; `--verdict` 55 s, 0.52 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 155 cases match (113 decoded as the bzip2
 tool decodes them, 42 compressed streams decode back with `bz2` and `bzip2

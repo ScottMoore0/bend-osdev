@@ -610,6 +610,11 @@ values (`LAWS.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.40 GB peak; `--verdict` 7 s, 0.52 GB peak) and `PROOF_alias.bend`
+(1 s, 0.15 GB peak; `--verdict` 1 s, 0.21 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (78 laws: 31 for every input,
 47 witnesses and vectors), `PROOF_alias.bend` ALL PROOFS CHECK (1 law),
 `--verdict` ALL PROOFS CHECK for both, `check.bend`

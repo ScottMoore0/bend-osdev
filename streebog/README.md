@@ -148,6 +148,10 @@ No hub package.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(13 s, 0.43 GB peak; `--verdict` 49 s, 0.61 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (10 s), `--verdict` ALL PROOFS
 CHECK (41 s, 0.63 GB peak, with md-engine's and bytes' proofs), `check.bend`
 passes, `ref/run.sh` 54 cases match (against the model),

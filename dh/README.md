@@ -141,6 +141,11 @@ exponentiation, the Jacobi symbol).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1.4 minutes, 0.45 GB peak; `--verdict` 4.1 minutes, 0.48 GB peak) and
+`PROOF_agree.bend` (2 s, 0.49 GB peak; `--verdict` 11 s, 0.52 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` and `PROOF_agree.bend` ALL PROOFS CHECK,
 `--verdict` ALL PROOFS CHECK on both (`PROOF.bend` about 3 min 48 s, peak
 0.49 GB; `PROOF_agree.bend` about 10 s, peak 0.56 GB), `check.bend` passes,

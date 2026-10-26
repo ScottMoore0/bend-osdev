@@ -177,6 +177,10 @@ arithmetic), `bend-collections-laws-crypto@1.0.0.0` (SHA-256 and SHA-512 for
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1.7 minutes, 0.45 GB peak; `--verdict` 5.7 minutes, 0.48 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
 (about 320 s), `check.bend` passes, `ref/run.sh` 238 cases match,
 `scripts/deps.sh` passes.

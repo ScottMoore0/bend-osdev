@@ -194,6 +194,11 @@ values (`LAWS.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(8.8 minutes, 0.48 GB peak; `--verdict` 25.1 minutes, 0.37 GB peak) and
+`PROOF_errors.bend` (15.4 minutes, 0.63 GB peak; `--verdict` 35.1 minutes,
+0.59 GB peak) ALL PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` and `PROOF_errors.bend` ALL PROOFS CHECK,
 `--verdict` ALL PROOFS CHECK for both, `check.bend` passes, `ref/run.sh`
 65 cases match, `scripts/deps.sh` passes. `PROOF_errors.bend` takes in

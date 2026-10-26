@@ -48,6 +48,11 @@ cryptography stands in (below).
 | `keygen.bend` | key generation from the caller's random bytes |
 | `keys.bend` | the keys' raw byte form (each integer as a four-byte length and its shortest bytes; the reader refuses any other form of an integer) |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_prim.bend`, `PROOF_prim.bend` | the primitives' laws (RSAVP1 undoes RSASP1 and RSADP undoes RSAEP, by the CRT and in the first form, for every key `Rsa.private_of` accepts with prime p and q), and their proofs |
+| `gen/proof_prim.py` | writes `PROOF_prim.bend` (Nat chains by `scripts/natproof.py`) |
+| `LAWS_sign.bend`, `PROOF_sign.bend` | the primitives on octet strings undo each other, and RSASSA-PKCS1-v1_5's signatures verify, for every such key; and their proofs |
+| `LAWS_pss.bend`, `PROOF_pss.bend` | RSASSA-PSS's signatures verify, for every such key; and its proof |
+| `gen/proof_sign.py` | writes `PROOF_sign.bend` and `PROOF_pss.bend` (Nat chains by `scripts/natproof.py`) |
 | `check.bend` | an RSA-2048 key through every scheme, with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive law and its proof (`--check` checks it) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's cryptography |
@@ -94,7 +99,9 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
 ## Laws
 
 `LAWS.bend` has 13 laws, all proved (`PROOF.bend`) and all accepted by
-`--verdict`.
+`--verdict`; `LAWS_prim.bend` has 6, `LAWS_sign.bend` 3 and
+`LAWS_pss.bend` 1, likewise (`PROOF_prim.bend`, `PROOF_sign.bend`,
+`PROOF_pss.bend`).
 
 * **For every input:**
   * `mgf1_length`, `mgf1_prefix`: MGF1 over every hash gives the length
@@ -110,7 +117,9 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
     M and M');
   * `pkcs1_sign_verify_if`: an RSASSA-PKCS1-v1_5 signature verifies, for
     every hash, prefix, key and message, wherever the encoding succeeds and
-    RSAVP1 undoes RSASP1 on the encoded message (hypotheses);
+    RSAVP1 undoes RSASP1 on the encoded message (hypotheses;
+    `LAWS_sign.bend`'s `pkcs1_sign_verify` discharges them for every key
+    `Rsa.private_of` accepts with prime p and q);
   * `public_form_read_write`, `private_form_read_write`: every form the
     reader accepts is the form the writer writes for the key it read
     (`RsaKeys.public_to(k)` is the bytes read, for every byte string the
@@ -134,19 +143,65 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
     then the integer's bytes cut at that length, and the field compared
     with the writer's. pubkey's RSA instance states its pk_format law from
     the public one.
+* **For every key** (`LAWS_prim.bend`): for every key `Rsa.private_of(n,
+  e, d, p, q)` accepts (`Done{sk}`) whose p and q are primes (bignum's
+  `bnlaw.prime` of their values: `Rsa.private_of` does not test primality,
+  key generation's Miller-Rabin does), with valid integers (bignum's
+  `bnlaw.valid`, which every number bignum's public defs make is), and every
+  valid representative m below n:
+  * `vp1_sp1`: RSAVP1(RSASP1(m)) = m, RSASP1 by the CRT (dP, dQ, qInv);
+  * `dp_ep`: RSADP(RSAEP(m)) = m, RSADP by the CRT;
+  * `ep_dp_plain`, `dp_plain_ep`: the same with RSADP in the first form (n,
+    d);
+  * `dp_crt_plain`: RSADP by the CRT has the first form's value, c^d mod n;
+
+  all as values (bignum's `bnlaw.value`; a result may differ from m in zero
+  limbs on top). The number theory is bignum's `LAWS_rsa.bend` (`rsa_nat`,
+  `rsa_nat_rev`, `crt_exp_nat`); its hypotheses are the checks
+  `Rsa.private_of` makes, read through bignum's value laws: n = p q,
+  `is_odd(n)` (so p q is odd, `is_odd_value`, and neither prime is 2, which
+  the CRT form needs: d mod 1 = 0), d e = 1 modulo p - 1 and modulo q - 1
+  (`BnMod.mul`, `BnNat.mod` and `BnNat.sub`'s values), and qInv =
+  `BnMod.inv(q, p)` with q qInv = 1 mod p (`inv_value`), which makes p and
+  q distinct (`mod_inv_ne`). The key's dP, dQ and qInv are the ones
+  `Rsa.private_of` computes (the accepted key is the `RsaPrivate` of its
+  integers with them), and every result is below n (`nat_mod_lt`), so the
+  range checks pass. A key from `Rsa.private_of_primes` (d = e^-1 mod lcm(p
+  - 1, q - 1), as `RsaKeygen.generate` makes it) is one `Rsa.private_of`
+  accepts, with that d (`private_of_primes_key`), so the laws hold for it
+  too: its d is checked modulo p - 1 and q - 1 like any other (bignum's
+  `mod_lcm_l` and `mod_lcm_r` are why such a d passes).
+* **For every key, on octet strings and for the signature schemes**
+  (`LAWS_sign.bend`, `LAWS_pss.bend`), for every such key (`Rsa.private_of`
+  accepts it, p and q prime, the integers valid):
+  * `ep_dp_octets`, `dp_ep_octets`: wherever `Rsa.dp_octets` (OS2IP,
+    RSADP or RSASP1 by the CRT, I2OSP to k bytes) gives a string, RSAEP (or
+    RSAVP1) on octet strings gives its input back, and the other way:
+    bignum's `to_octets_len` and `to_octets_value` read the k-byte result
+    back as the number, which is below n, and `to_octets_of_value` writes
+    the value back as the input;
+  * `pkcs1_sign_verify`: an RSASSA-PKCS1-v1_5 signature verifies, for every
+    hash, DigestInfo prefix and message (where signing refuses, both sides
+    refuse alike): `pkcs1_sign_verify_if` without hypotheses on the
+    primitives;
+  * `pss_sign_verify`: an RSASSA-PSS signature verifies, for every mask
+    generation function, message and salt, and every hash whose digest of
+    M' is as long as its digest of M (`hdg`, as in `pss_round_trip`): the
+    encoding has emLen bytes, so I2OSP of RSAVP1's value to emLen bytes is
+    the encoding again, which `pss_round_trip` accepts.
 * **Small-parameter exhaustive** (`gen/exhaustive.py`): `toy_round_trip`:
   for the key p = 5, q = 11, e = 3, every message below 55 goes through
   RSADP and back through RSAEP and the other way, and the CRT's RSADP equals
   the first form.
 
-**Not proved, and tested:** that RSAVP1 undoes RSASP1 (and RSADP undoes
-RSAEP) for every key: that is Euler's theorem with the CRT, number theory on
-the integers that bignum's limbs stand for, which is not formalised here
-(bignum's README explains why). It is the hypothesis of
-`pkcs1_sign_verify_if` and holds exhaustively for the toy key; for real keys
-`check.bend` and `ref/run.sh` test it against cryptography. Unconditional
-sign-then-verify laws for PSS and PKCS #1 v1.5 follow from it and are
-likewise not stated for every key.
+**Not proved, and tested:** that p and q are primes, which the laws above
+take as hypotheses (`pp`, `pq`): `Rsa.private_of` does not test it, and
+key generation's Miller-Rabin is a probabilistic test, whose "composite"
+answer is bignum's open question (its README). The encryption schemes'
+decrypt-after-encrypt (RSAES-OAEP, RSAES-PKCS1-v1_5) for every key is not
+stated; it would follow in the same way from `dp_ep_octets` and the
+encodings' round trips (`oaep_round_trip`, `es15_round_trip`).
+`check.bend` and `ref/run.sh` test all of it against cryptography.
 
 **The key reader is strict.** An integer whose bytes are not its
 shortest form is refused with `RsaBadFormat` (the malformed-form error; no
@@ -229,6 +284,13 @@ value laws, in the proofs: a word comparison is the comparison of values),
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (13 laws; about 100 s, peak
-0.48 GB), `--verdict` ALL PROOFS CHECK, `check.bend` passes, `ref/run.sh`
+0.48 GB), `--verdict` ALL PROOFS CHECK; Bend 2.0.39: `PROOF_prim.bend`
+ALL PROOFS CHECK (6 laws; about 7 s, peak 0.78 GB), `--verdict` ALL PROOFS
+CHECK (about 24 s, peak 0.79 GB); `PROOF_sign.bend` ALL PROOFS CHECK (3
+laws; about 10 s, peak 0.88 GB), `--verdict` ALL PROOFS CHECK (about 28 s,
+peak 0.89 GB); `PROOF_pss.bend` ALL PROOFS CHECK (1 law; about 117 s, peak
+1.10 GB: it imports `PROOF.bend` for `pss_round_trip`), `--verdict` ALL
+PROOFS CHECK (about 341 s, peak 1.13 GB); `check.bend` passes, `ref/run.sh`
 195 cases match (the whole `VERDICT=1 scripts/check.sh rsa` about 580 s,
-peak 1.15 GB), `scripts/deps.sh` passes.
+peak 1.15 GB, on 2.0.37; about 1014 s, peak 1.13 GB, on 2.0.39 with the
+new proof files), `scripts/deps.sh` passes.

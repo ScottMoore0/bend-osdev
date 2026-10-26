@@ -111,6 +111,10 @@ points, signatures and RFC 6979), `sm3` (SM3).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(50 s, 0.19 GB peak; `--verdict` 2.4 minutes, 0.23 GB peak) ALL PROOFS
+CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
 (about 113 s), `check.bend` passes, `ref/run.sh` 62 cases match,
 `scripts/deps.sh` passes.

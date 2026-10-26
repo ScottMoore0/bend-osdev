@@ -593,6 +593,10 @@ values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(9 s, 0.66 GB peak; `--verdict` 13 s, 0.73 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (natively), `ref/run.sh` 3422 answers on 25 images,
 20 tool checks and 1981 answers on 4 built directories match (seed 7 too),

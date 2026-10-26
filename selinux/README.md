@@ -463,6 +463,10 @@ overflow the checker, so long policies are built from pieces
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.18 GB peak; `--verdict` 3 s, 0.22 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 724 cases match and secilc 3.5 agrees on
 all 30 policies (seeds 2026 and 1 to 5), `scripts/deps.sh` passes.

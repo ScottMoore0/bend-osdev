@@ -140,6 +140,10 @@ measurement has been made.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3.4 minutes, 1.21 GB peak; `--verdict` 7.6 minutes, 1.25 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (3.4 minutes, 1.17 GB peak), `--verdict` ALL PROOFS CHECK (7.2 minutes, 1.24 GB peak; both include bend-osdev-gf's and mode-core's proofs), `gen/aes_proof.py --check` up to date, `check.bend` passes, `ref/run.sh` 28 cases match, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass. Packages that import `PROOF.bend` pass `--verdict` with it: bend-osdev-cm-instances, and crypto (`PROOF_cm.bend`).
 
 ## Dependencies

@@ -176,6 +176,11 @@ Python's `cryptography` package.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3.1 minutes, 0.75 GB peak; `--verdict` 5.9 minutes, 0.76 GB peak) and
+`PROOF_gfm.bend` (1 s, 0.12 GB peak; `--verdict` 1 s, 0.13 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 764 cases match, `scripts/deps.sh` passes.
 `PROOF.bend` takes about 3 minutes to check and its kernel check about 3

@@ -151,6 +151,10 @@ against the specifications' vectors in aes-modes.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.33 GB peak; `--verdict` 5 s, 0.58 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s, 0.35 GB peak), `--verdict` ALL PROOFS CHECK (4 s, 0.40 GB peak, with bytes' and u32's proofs), `check.bend` passes, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

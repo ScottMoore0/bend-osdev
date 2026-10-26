@@ -217,6 +217,10 @@ that version; it brings bend-kit-bytes@0.3.2.0 and bend-kit-int@0.2.0.0).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(24 s, 0.47 GB peak; `--verdict` 43 s, 0.52 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 23 s, 324 MB),
 `--verdict` ALL PROOFS CHECK (about 40 s, 381 MB), `check.bend` passes,
 `ref/run.sh` 592 cases match, `scripts/deps.sh` passes.
