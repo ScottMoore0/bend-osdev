@@ -6,8 +6,9 @@
 #   * RSASSA-PKCS1-v1_5 over every hash and DigestInfo prefix: a signature
 #     verifies whenever the encoding succeeds and the key's two primitives
 #     undo each other on the encoded message (pkcs1_sign_verify_if: a
-#     conditional law; that RSAVP1 undoes RSASP1 is number theory, Euler's
-#     theorem, which is not proved here for every key);
+#     conditional law; LAWS_sign.bend's pkcs1_sign_verify is the
+#     unconditional one, for every key Rsa.private_of accepts with prime p
+#     and q, where the primitives undo each other: LAWS_prim.bend);
 #   * EME-PKCS1-v1_5 and EME-OAEP: decoding undoes encoding
 #     (es15_round_trip; oaep_round_trip, for every hash and mask generation
 #     function), and EMSA-PSS's verification accepts every encoding
