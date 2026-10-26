@@ -41,6 +41,7 @@ the arithmetic of each 32-bit half.
 | `add sub mul div mod` | arithmetic modulo 2^64 |
 | `and or xor not shl shr` | bits; shifts by a `Nat` |
 | `cmp is_eq is_lt is_le is_gt is_ge is_zero` | comparisons |
+| `W64.sel(b, x, y)` | `x` if `b`, else `y` |
 | `W64.show(a)`, `W64.show_hex(a)` | decimal; 16 lower-case hex digits |
 | `W64.bits.lo`, `W64.bits.hi`, `W64.bits.cat` | split a `Word(m + n)` and join it back (used by bend-osdev-bytes) |
 | `W64.divmod(a, b)` | the quotient and the remainder together |

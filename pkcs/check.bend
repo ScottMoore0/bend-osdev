@@ -34,8 +34,16 @@ def unhex(s: String) -> List<&2, U32>:
 def hx(s: String) -> B.Octets:
   B.Octets.of_list(unhex(s))
 
-def join(sep: String, xs: List<&2, String>) -> String:
-  XN.x5.join(sep, xs)
+def join(+sep: String, xs: List<&2, String>) -> String:
+  match xs:
+    case Nil{}:
+      ""
+    case Con{a, t}:
+      match t:
+        case Nil{}:
+          a
+        case Con{b, u}:
+          a ++ sep ++ join(sep, Con{b, u})
 
 def val(r: Result<&2, &2, AE.Asn1Error, AS.Asn1Str>) -> String:
   match r:

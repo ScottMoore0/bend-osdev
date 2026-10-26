@@ -11,7 +11,8 @@ customised without breaking anything else.
       else is internal.
 - [ ] No other package's internals are used: no matching on or building of
       another package's constructors (`Octets`, `W64`, …), no calls to its
-      unlisted helpers. Proofs too: they use the other package's laws.
+      unlisted helpers (`scripts/internals.py` lists any). Proofs too: they
+      use the other package's laws.
 - [ ] Byte strings in the public interface are `Octets`, 64-bit values `W64`.
 - [ ] One file per concern; nothing a user needs alone is buried in a file
       with unrelated code.
