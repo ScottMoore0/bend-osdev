@@ -27,7 +27,8 @@ GPL source was read.
   its laws moved between files; acpi, bytes, crc, gf and word64 to 0.1.1.0
   for added laws; aead, algo, array and bpf to 0.1.0.1). Published on
   2026-10-25: u32, mode-core, aes, pkcs7 and cbc at 0.1.0.0, word64, bytes,
-  acpi and gf at 0.1.1.0, and array at 0.1.0.1. The rest follow: the hub
+  acpi and gf at 0.1.1.0, and array at 0.1.0.1; on 2026-10-26, cipher-core,
+  aria, blowfish, camellia and cast5 at 0.1.0.0. The rest follow: the hub
   registers about five new names a day. File names with a `-` are published with a `_`
   (`bend-osdev-mode-core@0.1.0.0/mode_core.bend`), since the hub refuses
   `-` in a path.
