@@ -17,8 +17,7 @@ import ./LAWS_padded.bend as Laws
 # would give the empty string, and unpadding the empty string is refused,
 # where unpadding M' gives m.
 
-# From bend-osdev-pkcs7's proofs (private there): False is not True, and
-# unpad with its two checks as arguments
+# From bend-osdev-pkcs7's proofs (private there): False is not True
 
 def pk.disc(b: Bool) -> Type:
   match b:
@@ -33,12 +32,6 @@ def pk.empty(h: {False{} == True{} : Bool}) -> Empty:
 
 def pk.absurd(-A: Type, h: {False{} == True{} : Bool}) -> A:
   Empty.absurd(A, pk.empty(h))
-
-def pk.ug(+bs: Nat, +m: B.Octets, +n: Nat, +md: Nat) -> Result<&2, &2, M.CmError, B.Octets>:
-  do Result<&2, &2, M.CmError, B.Octets>:
-    M.cm.check(Nat.is_lt(0n, n), M.CmTooShort{n})
-    M.cm.check(Nat.is_eq(md, 0n), M.CmNotBlockMultiple{n})
-    P.pkcs7.unpad.oct(bs, m, n)
 
 # Results
 
@@ -115,7 +108,7 @@ def pd.dc0(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +iv: B.Octets, +m
   +e3 = Equal.trans(Result<&2, &2, M.CmError, B.Octets>, C.cbc.d1.fast(~K, ~dec, k, C.cbc.iv(iv), Nil{}), C.Cbc.decrypt(~K, ~dec, k, iv, c), Done{mp}, Equal.cong(List<&2, U32>, Result<&2, &2, M.CmError, B.Octets>, l => C.cbc.d1.fast(~K, ~dec, k, C.cbc.iv(iv), l), Nil{}, B.Octets.to_list(c), Equal.sym(List<&2, U32>, B.Octets.to_list(c), Nil{}, nl)), e1)
   +z2 = pd.e0(~K, ~dec, k, C.cbc.iv(iv), mp)(e3)
   # and unpadding it is refused
-  +e4 = Equal.trans(Result<&2, &2, M.CmError, B.Octets>, Fail{M.CmTooShort{0n}}, P.Pkcs7.unpad(16n, mp), Done{m}, Equal.cong(Nat, Result<&2, &2, M.CmError, B.Octets>, n => pk.ug(16n, mp, n, Nat.mod(n, 16n)), 0n, B.Octets.len(mp), Equal.sym(Nat, B.Octets.len(mp), 0n, z2)), e2)
+  +e4 = Equal.trans(Result<&2, &2, M.CmError, B.Octets>, Fail{M.CmTooShort{0n}}, P.Pkcs7.unpad(16n, mp), Done{m}, Equal.sym(Result<&2, &2, M.CmError, B.Octets>, P.Pkcs7.unpad(16n, mp), Fail{M.CmTooShort{0n}}, PL.pkcs7_unpad_empty(16n, mp, {==}, {==}, z2)), e2)
   Empty.absurd({C.Cbc.decrypt_padded(~K, ~dec, k, iv, c) == Done{m} : Result<&2, &2, M.CmError, B.Octets>}, pd.fd(B.Octets, M.CmTooShort{0n}, m, e4))
 
 # from the ciphertext c, decrypting gives M' and unpadding M' gives m
@@ -137,5 +130,5 @@ def pd.go(~K: Data, ~dec: K -> M.CmBlock -> M.CmBlock, +k: K, +iv: B.Octets, +mp
 
 def Laws.cbc_padded_round_trip(K, enc, dec, k, inv, iv, m, hi):
   # the padded message is whole blocks
-  +hm = pd.inj(Nat, Nat.mod(B.Octets.len(P.pkcs7.pad.oct(16n, m)), 16n), 0n, PL.pkcs7_pad_blocks(16n, m))
-  pd.go(~K, ~dec, k, iv, P.pkcs7.pad.oct(16n, m), m, PL.pkcs7_round_trip(16n, m), C.Cbc.encrypt(~K, ~enc, k, iv, P.pkcs7.pad.oct(16n, m)))(CML.cbc_round_trip(~K, ~enc, ~dec, k, inv, iv, P.pkcs7.pad.oct(16n, m), hi, hm))
+  +hm = pd.inj(Nat, Nat.mod(B.Octets.len(pd.val(B.Octets, P.Pkcs7.pad(16n, m), m)), 16n), 0n, PL.pkcs7_pad_blocks(16n, m))
+  pd.go(~K, ~dec, k, iv, pd.val(B.Octets, P.Pkcs7.pad(16n, m), m), m, PL.pkcs7_round_trip(16n, m), C.Cbc.encrypt(~K, ~enc, k, iv, pd.val(B.Octets, P.Pkcs7.pad(16n, m), m)))(CML.cbc_round_trip(~K, ~enc, ~dec, k, inv, iv, pd.val(B.Octets, P.Pkcs7.pad(16n, m), m), hi, hm))

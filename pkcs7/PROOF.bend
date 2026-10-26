@@ -1416,6 +1416,14 @@ def pk.blocks(ok: Bool, +bs: Nat, +m: B.Octets) -> {P.pkcs7.size_ok(bs) == ok : 
 def Laws.pkcs7_pad_blocks(bs, m):
   pk.blocks(P.pkcs7.size_ok(bs), bs, m)({==})
 
+# Unpadding an empty string: the block size passes its check, and then the
+# length's
+
+def Laws.pkcs7_unpad_empty(bs, m, h0, h1, h):
+  %Equal.sym(Bool, Nat.is_lt(0n, bs), True{}, h0) : {P.Pkcs7.unpad.go(Bool.and(_, Nat.is_lt(bs, 256n)), bs, m) == Fail{M.CmTooShort{0n}} : Result<&2, &2, M.CmError, B.Octets>}
+  %Equal.sym(Bool, Nat.is_lt(bs, 256n), True{}, h1) : {P.Pkcs7.unpad.go(Bool.and(True{}, _), bs, m) == Fail{M.CmTooShort{0n}} : Result<&2, &2, M.CmError, B.Octets>}
+  Equal.cong(Nat, Result<&2, &2, M.CmError, B.Octets>, n => pk.ug(bs, m, n, Nat.mod(n, bs)), B.Octets.len(m), 0n, h)
+
 # Vectors
 
 def Laws.pkcs7_pad_empty():

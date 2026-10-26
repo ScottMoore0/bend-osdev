@@ -53,6 +53,18 @@ law decode_encode:
   for +hc: {C.Asn1.conforms(r, n) == True{} : Bool}
   {A.Asn1.decode(r, b) == Done{n} : Result<&2, &2, E.Asn1Error, N.Asn1Node>}
 
+# a primitive BIT STRING or OCTET STRING conforms to every rules, so
+# decode_encode applies to it under any rules
+law bit_string_conforms:
+  for +r: R.Asn1Rules
+  for +c: B.Octets
+  {C.Asn1.conforms(r, N.Asn1Prim{T.Asn1Tag.bit_string(), c}) == True{} : Bool}
+
+law octet_string_conforms:
+  for +r: R.Asn1Rules
+  for +c: B.Octets
+  {C.Asn1.conforms(r, N.Asn1Prim{T.Asn1Tag.octet_string(), c}) == True{} : Bool}
+
 law encode_decode:
   for +r: R.Asn1Rules
   for +hm: {R.Asn1Rules.min_length(r) == True{} : Bool}

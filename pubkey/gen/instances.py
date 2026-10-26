@@ -13,10 +13,11 @@ Everything outside the regions is written by hand.
 
 Why per instance: crypto's interface laws (crypto/LAWS.bend's
 sign_verify_bytes_if and kex_agree_if) are stated over template arguments;
-here each is written out for an instance's defs, with its proof filled in
-(the proofs are short rewrites, so they are written out rather than
-imported: crypto's PROOF.bend took 2 GB of the checker's memory then, and the
-algorithm packages' PROOF.bend files hold their exhaustive cases). Where an
+here each is written out for an instance's defs, and proved by the same
+law at the instance from crypto's LAWS_pk.bend, the pair that holds these
+two laws apart from crypto's other generic proofs (which took 2 GB of the
+checker's memory; the algorithm packages' PROOF.bend files, which hold
+their exhaustive cases, are not imported either). Where an
 algorithm's package proves that a public key read from bytes is read again
 from the bytes written for it, the instance's pk_format law is stated with
 that package's law, at the bytes used, as a hypothesis (hr), and proved
@@ -25,7 +26,9 @@ from the generic law lift_pk_format (LAWS.bend, by hand).
 Adding an instance: a row in SIGN or KEX (its defs, as template arguments,
 with its template parameters), and, if its package proves a public-key
 format, a row in FMT (the raw reader, writer and error mapping); then run
-this script.
+this script. A sign def with reusable (+) parameters is passed to crypto's
+law through a wrapper written by hand in PROOF.bend (the row's sign_arg),
+since a + parameter changes a function's type.
 """
 import os, sys, textwrap
 
@@ -71,7 +74,7 @@ SIGN = [
     dict(name="rsa_pss", title="RSASSA-PSS, for every hash (MGF1 over it) and salt length",
          tp=[DIG, "~slen: Nat"], SK="RR.RsaPrivate", PK="RR.RsaPublic",
          public="RR.Rsa.public", pk_of="PR.PkRsa.pk_of", pk_to="RK.RsaKeys.public_to",
-         sign="PR.PkRsa.pss_sign(~digest, ~slen)", verify="PR.PkRsa.pss_verify(~digest, ~slen)"),
+         sign="PR.PkRsa.pss_sign(~digest, ~slen)", sign_arg="pk_pss_sign(~digest, ~slen)", verify="PR.PkRsa.pss_verify(~digest, ~slen)"),
     dict(name="ecdsa", title="ECDSA, for every curve, hash and MAC (RFC 6979's k)", tp=[PRM, DIG, MAC],
          SK="NB.BnNat", PK="EE.EcPoint", public="PE.PkEcdh.public(~prm)", pk_of="PE.PkEcdh.pk_of(~prm)",
          pk_to="PE.PkEcdh.pk_to(~prm)", sign="PE.PkEcdsa.sign(~prm, ~digest, ~mac)", verify="PE.PkEcdsa.verify(~prm, ~digest)"),
@@ -152,8 +155,8 @@ def sign_laws(c):
          "ha: {%s == True{} : Bool}" % call(c["verify"], pub, "m", sig)],
         "{Sg.CrSign.verify_bytes(~%s, ~%s, ~%s, %s, m, %s) == True{} : Bool}" % (PK, c["pk_of"], c["verify"], call(c["pk_to"], pub), sig))
     proof("def Laws.%s_verify_bytes_if(%ssk, m, hf, ha):\n"
-          "  %%Equal.sym(%s, %s, Done{%s}, hf) : {Sg.cr.sign.check(~%s, ~%s, _, m, %s) == True{} : Bool}\n"
-          "  ha\n" % (n, tnames(c), R, call(c["pk_of"], call(c["pk_to"], pub)), pub, PK, c["verify"], sig))
+          "  CK.sign_verify_bytes_if(~%s, ~%s, ~%s, ~%s, ~%s, ~%s, ~%s, sk, m, hf, ha)\n"
+          % (n, tnames(c), SK, PK, c["public"], c["pk_of"], c["pk_to"], c.get("sign_arg", c["sign"]), c["verify"]))
 
 
 def kex_laws(c):
@@ -165,9 +168,6 @@ def kex_laws(c):
     def agree(k, peer):
         return "Kx.CrKex.agree(~%s, ~%s, ~%s, ~%s, ~%s, %s, %s)" % (SK, PK, c["secret"], c["pk_of"], c["shared"], k, peer)
 
-    def with_(sk, pk):
-        return "Kx.cr.kex.with(~%s, ~%s, ~%s, %s, %s)" % (SK, PK, c["shared"], sk, pk)
-
     lhs, rhs = agree("a", call(c["pk_to"], py)), agree("b", call(c["pk_to"], px))
     law("%s_agree_if" % n,
         "%s (crypto's kex_agree_if): two parties agree from each other's public-key bytes, for every pair of keys, when the keys parse (hx, hy), the public keys survive their bytes (hfx, hfy) and the shared secrets agree (h)" % c["title"],
@@ -176,13 +176,9 @@ def kex_laws(c):
          "hfx: {%s == Done{%s} : %s}" % (fx, px, RP), "hfy: {%s == Done{%s} : %s}" % (fy, py, RP),
          "h: {%s == %s : %s}" % (call(c["shared"], "x", py), call(c["shared"], "y", px), RO)],
         "{%s == %s : %s}" % (lhs, rhs, RO))
-    sx = call(c["shared"], "x", py)
-    proof("def Laws.%s_agree_if(%sa, b, x, y, hx, hy, hfx, hfy, h):\n" % (n, tnames(c))
-          + "  %%Equal.sym(%s, %s, Done{x}, hx) : {%s == %s : %s}\n" % (RS, call(c["secret"], "a"), with_("_", fy), rhs, RO)
-          + "  %%Equal.sym(%s, %s, Done{%s}, hfy) : {%s == %s : %s}\n" % (RP, fy, py, with_("Done{x}", "_"), rhs, RO)
-          + "  %%Equal.sym(%s, %s, Done{y}, hy) : {%s == %s : %s}\n" % (RS, call(c["secret"], "b"), sx, with_("_", fx), RO)
-          + "  %%Equal.sym(%s, %s, Done{%s}, hfx) : {%s == %s : %s}\n" % (RP, fx, px, sx, with_("Done{y}", "_"), RO)
-          + "  h\n")
+    proof("def Laws.%s_agree_if(%sa, b, x, y, hx, hy, hfx, hfy, h):\n"
+          "  CK.kex_agree_if(~%s, ~%s, ~%s, ~%s, ~%s, ~%s, ~%s, a, b, x, y, hx, hy, hfx, hfy, h)\n"
+          % (n, tnames(c), SK, PK, c["secret"], c["public"], c["pk_of"], c["pk_to"], c["shared"]))
 
 
 for c in SIGN:

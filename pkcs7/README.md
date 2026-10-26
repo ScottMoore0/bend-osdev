@@ -47,7 +47,7 @@ aead's CBC-HMAC uses it too.
 
 ## Laws
 
-`LAWS.bend` (7 laws).
+`LAWS.bend` (8 laws).
 
 **For every block size `bs` and message `m`:**
 
@@ -56,7 +56,9 @@ aead's CBC-HMAC uses it too.
   the padded message gives `m`; for any other, both refuse alike
   (`CmBadBlockSize`);
 * `pkcs7_pad_blocks`: a padded message is a whole number of blocks (its
-  length mod `bs` is 0).
+  length mod `bs` is 0);
+* `pkcs7_unpad_empty`: for a block size the padding takes, unpadding an
+  empty string is refused (`CmTooShort{0}`).
 
 The arithmetic is on Base's `Nat.divmod` (as kmath's division lemmas are):
 with `bs = 1 + q` and `L` the message's length, `L mod bs` is at most `q`,

@@ -44,6 +44,7 @@ the arithmetic of each 32-bit half.
 | `W64.show(a)`, `W64.show_hex(a)` | decimal; 16 lower-case hex digits |
 | `W64.bits.lo`, `W64.bits.hi`, `W64.bits.cat` | split a `Word(m + n)` and join it back (used by bend-osdev-bytes) |
 | `W64.divmod(a, b)` | the quotient and the remainder together |
+| `W64.fst(p)`, `W64.snd(p)` | the two words of a pair (`divmod`'s quotient and remainder) |
 
 ## Extension points
 

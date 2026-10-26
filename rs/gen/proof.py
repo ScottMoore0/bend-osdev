@@ -287,7 +287,8 @@ def gen_inv():
         hargs = ", ".join("a%d" % i for i in range(n, 32))
         ea = "M.Gfm.elt(%s, a)" % f
         out.append("def rsp.mi_%s(+a: U32) -> {M.Gfm.mul(%s, %s, A.RsGf.inv(%s, %s)) == M.Gfm.mul(%s, a, A.RsGf.inv(%s, a)) : U32}:" % (name, f, ea, f, ea, f, f))
-        out.append("  %%Equal.sym(U32, M.Gfm.elt(%s, %s), %s, %s(a)) : {M.gfm.mul.raw(%s, _, M.Gfm.elt(%s, A.rsgf.inv.go(Nat.sub(M.Gfm.m(%s), 1n), %s, _, 1))) == M.Gfm.mul(%s, a, A.RsGf.inv(%s, a)) : U32}" % (f, ea, ea, eid, f, f, f, f, f, f))
+        out.append("  %%Equal.sym(U32, M.Gfm.mul(%s, %s, A.RsGf.inv(%s, %s)), M.Gfm.mul(%s, a, A.RsGf.inv(%s, %s)), GML.gfm_mul_elt(%s, a, A.RsGf.inv(%s, %s))) : {_ == M.Gfm.mul(%s, a, A.RsGf.inv(%s, a)) : U32}" % (f, ea, f, ea, f, f, ea, f, f, ea, f, f))
+        out.append("  %%Equal.sym(U32, M.Gfm.elt(%s, %s), %s, %s(a)) : {M.Gfm.mul(%s, a, A.rsgf.inv.go(Nat.sub(M.Gfm.m(%s), 1n), %s, _, 1)) == M.Gfm.mul(%s, a, A.RsGf.inv(%s, a)) : U32}" % (f, ea, ea, eid, f, f, f, f, f))
         out.append("  {==}\n")
         for v in range(1, 1 << n):
             out.append("def rsp.l%s_%d(%s) -> {%d == M.Gfm.elt(%s, %s) : U32}:\n  {==}\n" % (name, v, hs, v, f, word(low("a", v, n))))

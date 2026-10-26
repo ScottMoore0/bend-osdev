@@ -24,6 +24,7 @@ import Base
 import ../bytes/bytes.bend as B
 import ./netheaders.bend as N
 import ./checksum.bend as K
+import ./ipv4.bend as I4
 import ./ipv6.bend as I6
 import ./icmp.bend as C
 import ./udp.bend as U
@@ -186,6 +187,22 @@ law inet_put16_drop:
   for +h1: {Nat.is_le(Nat.add(off, 2n), n) == True{} : Bool}
   for h2: {Nat.is_le(Nat.add(off, 2n), B.Octets.len(o)) == True{} : Bool}
   {B.Octets.drop(n, K.inet_put16(o, off, v)) == B.Octets.drop(n, o) : B.Octets}
+
+# an ICMP header is 8 bytes
+law icmp_build_length:
+  for +h: C.IcmpHeader
+  {B.Octets.len(C.IcmpHeader.build(h)) == 8n : Nat}
+
+# a UDP datagram built for IPv4 is the header and payload with RFC 768's
+# checksum written at offset 6: the one's complement sum over the
+# pseudo-header and the datagram with a zero checksum field, sent as 0xffff
+# when it is 0 (UdpHeader.nonzero)
+law udp_ipv4_build_fill:
+  for +src: U32
+  for +dst: U32
+  for +h: U.UdpHeader
+  for +payload: B.Octets
+  {U.UdpHeader.build_ipv4(src, dst, h, payload) == K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, U.UdpHeader.nonzero(K.inet_checksum(B.Octets.append(I4.ipv4_pseudo(src, dst, 17, U32.from_nat(B.Octets.len(B.Octets.append(U.UdpHeader.build(h), payload)))), K.inet_put16(B.Octets.append(U.UdpHeader.build(h), payload), 6n, 0))))) : B.Octets}
 
 law icmp_put_parse:
   for +msg_type: U32

@@ -174,6 +174,9 @@ the typed readers' and schemas' `Asn1Unexpected`, `Asn1BadValue`,
 * `decode_encode`: when `Asn1.encode(n)` answers `Done{b}` and `n` conforms
   to rules `r` (`Asn1.conforms`), `Asn1.decode(r, b)` answers `Done{n}`:
   decode(encode(v)) == v, under BER, DER and any rules between;
+* `bit_string_conforms`, `octet_string_conforms`: a primitive BIT STRING
+  or OCTET STRING conforms to every rules, so `decode_encode` applies to it
+  under any rules;
 * `encode_decode`: under any rules with `min_length` and without
   `indefinite` or `trailing`, when `Asn1.decode(r, b)` answers `Done{n}`,
   `Asn1.encode(n)` answers `Done{b}`: DER's encoding is unique, so decoding
