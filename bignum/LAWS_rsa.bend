@@ -92,6 +92,15 @@ law crt_exp_nat:
   for ht: {Nat.mod(Nat.mul(q, t), p) == 1n : Nat}
   {Nat.add(Nat.mod(Nat.pow(c, Nat.mod(d, Nat.sub(q, 1n))), q), Nat.mul(q, Nat.mod(Nat.mul(Nat.mod(Nat.sub(Nat.add(Nat.mod(Nat.mod(Nat.pow(c, Nat.mod(d, Nat.sub(p, 1n))), p), p), p), Nat.mod(Nat.mod(Nat.pow(c, Nat.mod(d, Nat.sub(q, 1n))), q), p)), p), t), p))) == Nat.mod(Nat.pow(c, d), Nat.mul(p, q)) : Nat}
 
+# a number with an inverse modulo p (q t = 1 mod p) is not p: so the CRT
+# key's qInv makes p and q distinct
+law mod_inv_ne:
+  for +p: Nat
+  for +q: Nat
+  for +t: Nat
+  for h: {Nat.mod(Nat.mul(q, t), p) == 1n : Nat}
+  {Nat.is_eq(p, q) == False{} : Bool}
+
 # A congruence modulo lcm(a, b) is one modulo a and modulo b (so a d with
 # d e = 1 mod lcm(p - 1, q - 1), FIPS 186-5's, meets rsa_nat's hypotheses)
 law mod_lcm_l:

@@ -48,6 +48,8 @@ cryptography stands in (below).
 | `keygen.bend` | key generation from the caller's random bytes |
 | `keys.bend` | the keys' raw byte form (each integer as a four-byte length and its shortest bytes; the reader refuses any other form of an integer) |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_prim.bend`, `PROOF_prim.bend` | the primitives' laws (RSAVP1 undoes RSASP1 and RSADP undoes RSAEP, by the CRT and in the first form, for every key `Rsa.private_of` accepts with prime p and q), and their proofs |
+| `gen/proof_prim.py` | writes `PROOF_prim.bend` (Nat chains by `scripts/natproof.py`) |
 | `check.bend` | an RSA-2048 key through every scheme, with expected output |
 | `gen/exhaustive.py` | writes the small-parameter exhaustive law and its proof (`--check` checks it) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against Python's cryptography |
@@ -94,7 +96,7 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
 ## Laws
 
 `LAWS.bend` has 13 laws, all proved (`PROOF.bend`) and all accepted by
-`--verdict`.
+`--verdict`; `LAWS_prim.bend` has 5, likewise (`PROOF_prim.bend`).
 
 * **For every input:**
   * `mgf1_length`, `mgf1_prefix`: MGF1 over every hash gives the length
@@ -134,19 +136,47 @@ are the caller's random bytes. Everything named `rsa.*` is internal.
     then the integer's bytes cut at that length, and the field compared
     with the writer's. pubkey's RSA instance states its pk_format law from
     the public one.
+* **For every key** (`LAWS_prim.bend`): for every key `Rsa.private_of(n,
+  e, d, p, q)` accepts (`Done{sk}`) whose p and q are primes (bignum's
+  `bnlaw.prime` of their values: `Rsa.private_of` does not test primality,
+  key generation's Miller-Rabin does), with valid integers (bignum's
+  `bnlaw.valid`, which every number bignum's public defs make is), and every
+  valid representative m below n:
+  * `vp1_sp1`: RSAVP1(RSASP1(m)) = m, RSASP1 by the CRT (dP, dQ, qInv);
+  * `dp_ep`: RSADP(RSAEP(m)) = m, RSADP by the CRT;
+  * `ep_dp_plain`, `dp_plain_ep`: the same with RSADP in the first form (n,
+    d);
+  * `dp_crt_plain`: RSADP by the CRT has the first form's value, c^d mod n;
+
+  all as values (bignum's `bnlaw.value`; a result may differ from m in zero
+  limbs on top). The number theory is bignum's `LAWS_rsa.bend` (`rsa_nat`,
+  `rsa_nat_rev`, `crt_exp_nat`); its hypotheses are the checks
+  `Rsa.private_of` makes, read through bignum's value laws: n = p q,
+  `is_odd(n)` (so p q is odd, `is_odd_value`, and neither prime is 2, which
+  the CRT form needs: d mod 1 = 0), d e = 1 modulo p - 1 and modulo q - 1
+  (`BnMod.mul`, `BnNat.mod` and `BnNat.sub`'s values), and qInv =
+  `BnMod.inv(q, p)` with q qInv = 1 mod p (`inv_value`), which makes p and
+  q distinct (`mod_inv_ne`). The key's dP, dQ and qInv are the ones
+  `Rsa.private_of` computes (the accepted key is the `RsaPrivate` of its
+  integers with them), and every result is below n (`nat_mod_lt`), so the
+  range checks pass. A key from `Rsa.private_of_primes` (d = e^-1 mod lcm(p
+  - 1, q - 1)) is one `Rsa.private_of` accepts or refuses: its d is checked
+  modulo p - 1 and q - 1 like any other (bignum's `mod_lcm_l` and
+  `mod_lcm_r` are why such a d passes).
 * **Small-parameter exhaustive** (`gen/exhaustive.py`): `toy_round_trip`:
   for the key p = 5, q = 11, e = 3, every message below 55 goes through
   RSADP and back through RSAEP and the other way, and the CRT's RSADP equals
   the first form.
 
-**Not proved, and tested:** that RSAVP1 undoes RSASP1 (and RSADP undoes
-RSAEP) for every key: that is Euler's theorem with the CRT, number theory on
-the integers that bignum's limbs stand for, which is not formalised here
-(bignum's README explains why). It is the hypothesis of
-`pkcs1_sign_verify_if` and holds exhaustively for the toy key; for real keys
-`check.bend` and `ref/run.sh` test it against cryptography. Unconditional
+**Not proved, and tested:** that RSAVP1 undoes RSASP1 on octet strings
+(`Rsa.ep_octets` after `Rsa.dp_octets`, the hypothesis of
+`pkcs1_sign_verify_if`): the numbers are proved for every key
+(`LAWS_prim.bend`), and the octet strings need bignum's I2OSP and OS2IP
+related to the values (I2OSP of a number below 256^k succeeds and depends
+only on the value), which bignum does not state. Unconditional
 sign-then-verify laws for PSS and PKCS #1 v1.5 follow from it and are
-likewise not stated for every key.
+likewise not stated for every key; `check.bend` and `ref/run.sh` test them
+against cryptography.
 
 **The key reader is strict.** An integer whose bytes are not its
 shortest form is refused with `RsaBadFormat` (the malformed-form error; no
@@ -229,6 +259,8 @@ value laws, in the proofs: a word comparison is the comparison of values),
 ## Status
 
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (13 laws; about 100 s, peak
-0.48 GB), `--verdict` ALL PROOFS CHECK, `check.bend` passes, `ref/run.sh`
+0.48 GB), `--verdict` ALL PROOFS CHECK; Bend 2.0.39: `PROOF_prim.bend`
+ALL PROOFS CHECK (5 laws; about 8 s, peak 0.78 GB), `--verdict` ALL PROOFS
+CHECK (about 27 s, peak 0.81 GB); `check.bend` passes, `ref/run.sh`
 195 cases match (the whole `VERDICT=1 scripts/check.sh rsa` about 580 s,
 peak 1.15 GB), `scripts/deps.sh` passes.

@@ -478,6 +478,27 @@ def rx.redp(p: Nat, +c: Nat, +d: Nat, +e: Nat, +hp: {PR('p')}, h3: {LT('2n', 'p'
 """)
 
 
+def ine():
+    put("# A number with an inverse modulo p is not p\n")
+    ms = calc(MOD("Nat.mul(1n+k, t)", "1n+k"), (MOD("Nat.add(0n, Nat.mul(t, 1n+k))", "1n+k"), "ring"),
+              (MOD("0n", "1n+k"), H("PX.bx.mam(0n, t, 1n+k, {==})", MOD("Nat.add(0n, Nat.mul(t, 1n+k))", "1n+k"), MOD("0n", "1n+k"))),
+              ("0n", "="))
+    put(f"""def rx.mself(q: Nat, +t: Nat) -> {EQ(MOD('Nat.mul(q, t)', 'q'), '0n')}:
+  match q:
+    case 0n:
+      {{==}}
+    case 1n+ +k:
+      {ms.text}
+
+def rx.ine(b: Bool, +p: Nat, +q: Nat, +t: Nat, eb: {EQ('Nat.is_eq(p, q)', 'b', 'Bool')}, h: {EQ(MOD('Nat.mul(q, t)', 'p'), '1n')}) -> {EQ('Nat.is_eq(p, q)', 'False{}', 'Bool')}:
+  match b:
+    case True{{}}:
+      Empty.absurd({EQ('Nat.is_eq(p, q)', 'False{}', 'Bool')}, PL.bq.zs(0n, Equal.trans(Nat, 0n, Nat.mod(Nat.mul(q, t), q), 1n, Equal.sym(Nat, Nat.mod(Nat.mul(q, t), q), 0n, rx.mself(q, t)), Equal.trans(Nat, Nat.mod(Nat.mul(q, t), q), Nat.mod(Nat.mul(q, t), p), 1n, Equal.cong(Nat, Nat, zz => Nat.mod(Nat.mul(q, t), zz), q, p, Equal.sym(Nat, p, q, PX.bx.eqt(p, q, eb))), h))))
+    case False{{}}:
+      eb
+""")
+
+
 def lcm():
     put("# Congruences modulo a multiple, and modulo lcm(a, b)\n")
     L = "Nat.mul(u, c)"
@@ -547,6 +568,9 @@ def Laws.rsa_nat_rev(p, q, e, d, m, hp, hq, hpq, hdp, hdq):
 def Laws.crt_exp_nat(p, q, e, d, t, c, hp, hq, hpq, hodd, hdp, hdq, ht):
   rx.cx(p, q, e, d, t, c, hp, hq, hpq, hodd, hdp, hdq, ht)
 
+def Laws.mod_inv_ne(p, q, t, h):
+  rx.ine(Nat.is_eq(p, q), p, q, t, {{==}}, h)
+
 def Laws.mod_lcm_l(a, b, x, y, h):
   rx.cl(a, b, x, y, K.KMath.lcm(a, b), h, KL.lcm_multiple_l(a, b))
 
@@ -577,6 +601,7 @@ def main():
     crt()
     rsa()
     crtexp()
+    ine()
     lcm()
     oddv()
     laws()
