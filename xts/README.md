@@ -100,6 +100,10 @@ the byte layer, and nothing looks inside `Octets`.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.38 GB peak; `--verdict` 6 s, 0.67 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s, 0.42 GB peak), `--verdict` ALL PROOFS CHECK (7 s, 0.41 GB peak, with mode-core's proofs), `check.bend` passes, `ref/run.sh` 72 cases match, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

@@ -249,6 +249,10 @@ and its block type, for `check.bend`), `crypto` (the interfaces, `CrError`, CBC,
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.34 GB peak; `--verdict` 5 s, 0.38 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (about 2 s), `--verdict` ALL
 PROOFS CHECK (about 4 s), `check.bend` passes, `ref/run.sh` 46 cases match,
 `scripts/deps.sh` passes.

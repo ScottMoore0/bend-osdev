@@ -400,6 +400,10 @@ than the one-shot decoder; it holds only the input not yet decoded.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(14 s, 0.48 GB peak; `--verdict` 30 s, 0.55 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (with its 100 KiB cases), `ref/run.sh` 389 cases match
 (160 of them `.lzma`; seeds 2026 and 1 to 5); 1 MB outputs decode exactly,

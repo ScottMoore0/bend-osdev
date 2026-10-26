@@ -196,6 +196,10 @@ takes 16 s and 600 MB (and its binary runs in under 0.01 s, in 4 MB).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.18 GB peak; `--verdict` 1 s, 0.21 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 717 cases match (also with seeds 1, 99 and
 31337), all as native binaries

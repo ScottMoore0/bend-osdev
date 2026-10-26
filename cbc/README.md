@@ -112,6 +112,11 @@ message that is not whole blocks, a short IV) are aes-modes' laws.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.34 GB peak; `--verdict` 5 s, 0.62 GB peak) and `PROOF_padded.bend`
+(2 s, 0.37 GB peak; `--verdict` 6 s, 0.64 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s, 0.34 GB peak), `--verdict` ALL PROOFS CHECK (4 s, 0.41 GB peak, with mode-core's proofs); `PROOF_padded.bend` ALL PROOFS CHECK (2 s, 0.37 GB) and under `--verdict` (5 s, 0.43 GB peak, with `PROOF.bend`'s and pkcs7's proofs), each in a process of its own; `check.bend` passes, `ref/run.sh` 64 cases match, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

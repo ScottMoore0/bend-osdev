@@ -110,6 +110,10 @@ proof), `cipher-core` (the ciphers' error type `LcError`, which
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3.9 minutes, 1.53 GB peak; `--verdict` 8.0 minutes, 1.51 GB peak) ALL
+PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (3.5 minutes, 1.43 GB peak),
 `--verdict` ALL PROOFS CHECK (7.4 minutes, 1.41 GB peak, nearly all of it
 aes' proofs, which include bend-osdev-gf's, with cbc's, xts' and

@@ -180,6 +180,12 @@ the operations are Base's own, and their values are what the laws prove.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.22 GB peak; `--verdict` 1 s, 0.25 GB peak), `PROOF_div.bend` (1 s,
+0.25 GB peak; `--verdict` 1 s, 0.24 GB peak) and `PROOF_order.bend` (1 s,
+0.13 GB peak; `--verdict` 1 s, 0.14 GB peak) ALL PROOFS CHECK, with and
+without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (108 laws), `PROOF_order.bend`
 (23 laws) and `PROOF_div.bend` (4 laws) ALL PROOFS CHECK, `--verdict` ALL
 PROOFS CHECK on each (the three together about 4 s, peak 0.28 GB),

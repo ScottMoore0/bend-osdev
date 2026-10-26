@@ -524,6 +524,10 @@ of build each).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(4 s, 0.23 GB peak; `--verdict` 8 s, 0.29 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes (native), `ref/run.sh` 20 policies, 520 queries and 63
 edge texts match, with apparmor_parser accepting every generated policy

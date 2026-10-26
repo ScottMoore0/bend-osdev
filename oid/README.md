@@ -262,6 +262,11 @@ values (`LAWS.bend`), `Nat` division (`LAWS_div.bend`) and the order of
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(8 s, 0.41 GB peak; `--verdict` 32 s, 0.58 GB peak) and
+`PROOF_registry.bend` (6 s, 0.29 GB peak; `--verdict` 3.9 minutes, 0.70 GB
+peak) ALL PROOFS CHECK, with and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` and `PROOF_registry.bend` ALL PROOFS CHECK,
 `--verdict` ALL PROOFS CHECK (`PROOF_registry.bend`: 4 minutes, 0.5 GB
 peak); Bend 2.0.39: `PROOF_valid.bend` ALL PROOFS CHECK, `--verdict` ALL

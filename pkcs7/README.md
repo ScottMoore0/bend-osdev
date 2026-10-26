@@ -88,6 +88,10 @@ cbc's differential test of padded CBC and `check.bend` cover it).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.34 GB peak; `--verdict` 5 s, 0.40 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s, 0.34 GB peak), `--verdict` ALL PROOFS CHECK (4 s, 0.40 GB peak), `gen/pkcs7_proof.py --check` up to date, `check.bend` passes, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

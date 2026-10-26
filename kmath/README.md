@@ -165,6 +165,14 @@ division for primes, on random and edge inputs.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(7 s, 0.34 GB peak; `--verdict` 15 s, 0.40 GB peak), `PROOF_div.bend` (2 s,
+0.37 GB peak; `--verdict` 5 s, 0.41 GB peak), `PROOF_fls.bend` (2 s, 0.25 GB
+peak; `--verdict` 1 s, 0.26 GB peak), `PROOF_prime.bend` (1 s, 0.38 GB peak;
+`--verdict` 3 s, 0.40 GB peak) and `PROOF_recip.bend` (3 s, 0.46 GB peak;
+`--verdict` 6 s, 0.62 GB peak) ALL PROOFS CHECK, with and without
+`--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (37 laws), `PROOF_div.bend` (10), `PROOF_fls.bend`
 (3), `PROOF_prime.bend` (3) and `PROOF_recip.bend` (1) ALL PROOFS CHECK;
 `--verdict` ALL PROOFS CHECK on each (`PROOF.bend` about 14 s, peak 0.40

@@ -279,6 +279,10 @@ values (`LAWS.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.38 GB peak; `--verdict` 2 s, 0.43 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37, `VERDICT=1 scripts/check.sh bpf` with native builds:
 `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK, `check.bend`
 passes (natively), `ref/run.sh` 1070 cases match and the kernel agrees (80

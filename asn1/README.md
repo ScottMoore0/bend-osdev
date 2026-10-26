@@ -454,6 +454,11 @@ laws, in the proofs of `LAWS_typed.bend` only).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(9 s, 0.42 GB peak; `--verdict` 28 s, 0.58 GB peak) and `PROOF_typed.bend`
+(16 s, 0.47 GB peak; `--verdict` 52 s, 0.62 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (32 laws), `--verdict` ALL
 PROOFS CHECK (0.43 GB peak); `PROOF_typed.bend` ALL PROOFS CHECK (49
 laws), `--verdict` ALL PROOFS CHECK (0.57 GB peak, a minute); `check.bend`

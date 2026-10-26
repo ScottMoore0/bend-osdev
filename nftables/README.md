@@ -465,6 +465,12 @@ and checking and building it takes about 1 GB.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.17 GB peak; `--verdict` 1 s, 0.20 GB peak), `PROOF_expr.bend` (5 s,
+0.41 GB peak; `--verdict` 7 s, 0.44 GB peak) and `PROOF_map.bend` (1 s,
+0.29 GB peak; `--verdict` 2 s, 0.32 GB peak) ALL PROOFS CHECK, with and
+without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend`, `PROOF_map.bend` and `PROOF_expr.bend` ALL
 PROOFS CHECK, `--verdict` ALL PROOFS CHECK (`PROOF_map.bend` peaks at
 0.22 GB, `PROOF_expr.bend` at 0.44 GB), `check.bend` passes

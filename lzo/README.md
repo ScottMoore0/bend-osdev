@@ -430,6 +430,10 @@ hand (one run each), not in CI.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(11 s, 0.50 GB peak; `--verdict` 40 s, 0.55 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 244 decoding cases match (20 of them
 the lzop tool's files) and 38 compressed streams and lzop files decode back

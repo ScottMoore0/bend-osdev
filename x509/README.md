@@ -282,6 +282,11 @@ elements inside it.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(9 s, 0.46 GB peak; `--verdict` 34 s, 0.81 GB peak) and `PROOF_ext.bend`
+(18 s, 0.53 GB peak; `--verdict` 56 s, 0.92 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (16 laws), `--verdict` ALL
 PROOFS CHECK (0.82 GB peak); `PROOF_ext.bend` ALL PROOFS CHECK (2 laws),
 `--verdict` ALL PROOFS CHECK (0.85 GB peak, a minute); `check.bend`

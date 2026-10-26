@@ -50,5 +50,9 @@ the length through bytes' structural `B.len`; it now uses `B.len.fast`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.17 GB peak; `--verdict` 1 s, 0.19 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes.

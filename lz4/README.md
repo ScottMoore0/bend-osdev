@@ -446,6 +446,10 @@ values (`LAWS.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(13 s, 0.50 GB peak; `--verdict` 51 s, 0.55 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 427 decoding cases match and 113
 compressed blocks and frames (45 of them LZ4HC's) decode back (with `lz4`

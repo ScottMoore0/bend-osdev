@@ -340,6 +340,10 @@ bend-osdev-u32, in the proofs only: its laws of the order of `Nat` and words
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(1 s, 0.17 GB peak; `--verdict` 1 s, 0.19 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 663 cases match (338 on the kernel, ABI 3),
 all as native binaries (`VERDICT=1 scripts/check.sh landlock`: no

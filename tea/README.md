@@ -119,4 +119,8 @@ TEA's steps are additions, shifts and XORs on words, but the words are Bend valu
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.34 GB peak; `--verdict` 5 s, 0.38 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (2 s), `--verdict` ALL PROOFS CHECK (4 s, 0.35 GB peak, with cipher-core's proofs), `check.bend` passes, `ref/run.sh` 12 cases match, `gen/proof.py --check`, `gen/vectors.py --check` up to date, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.

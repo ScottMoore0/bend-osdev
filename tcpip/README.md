@@ -343,6 +343,12 @@ values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.35 GB peak; `--verdict` 5 s, 0.41 GB peak), `PROOF_packet.bend`
+(3 s, 0.35 GB peak; `--verdict` 5 s, 0.40 GB peak) and `PROOF_stream.bend`
+(2 s, 0.33 GB peak; `--verdict` 4 s, 0.37 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` (47 laws), `PROOF_packet.bend` (6 laws) and
 `PROOF_stream.bend` (4 laws) ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK
 for each (`PROOF_packet.bend` peaks at 0.31 GB, `PROOF_stream.bend` at

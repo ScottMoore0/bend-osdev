@@ -121,6 +121,10 @@ the lists and blocks the modes work on.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(6 s, 0.67 GB peak; `--verdict` 17 s, 0.73 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (5 s, 0.65 GB peak), `--verdict` ALL PROOFS CHECK (16 s, 0.75 GB peak; the vectors evaluate AES, and import no package's proofs), `check.bend` passes, `scripts/deps.sh` and `scripts/publish.py --dry-run` pass.
 
 ## Dependencies

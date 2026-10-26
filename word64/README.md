@@ -169,6 +169,14 @@ Python's integers on random words and on the edge values 0, 1, 2^32 - 1,
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(2 s, 0.30 GB peak; `--verdict` 4 s, 0.35 GB peak), `PROOF_bits.bend` (2 s,
+0.31 GB peak; `--verdict` 4 s, 0.36 GB peak), `PROOF_div.bend` (2 s, 0.34 GB
+peak; `--verdict` 4 s, 0.39 GB peak), `PROOF_mul.bend` (2 s, 0.34 GB peak;
+`--verdict` 6 s, 0.38 GB peak) and `PROOF_text.bend` (2 s, 0.32 GB peak;
+`--verdict` 5 s, 0.39 GB peak) ALL PROOFS CHECK, with and without
+`--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (34 laws), `PROOF_mul.bend`
 (4), `PROOF_div.bend` (4), `PROOF_bits.bend` (8) and `PROOF_text.bend` (1)
 ALL PROOFS CHECK, and `--verdict` ALL PROOFS CHECK on each (about 4 s

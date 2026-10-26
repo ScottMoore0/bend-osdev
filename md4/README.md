@@ -129,6 +129,10 @@ types and word helpers, and its laws in the proofs). No hub package.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(3 s, 0.40 GB peak; `--verdict` 8 s, 0.44 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK (3.3 s), `--verdict` ALL PROOFS
 CHECK (6.7 s, 0.45 GB peak, with md-engine's proofs), `check.bend` passes,
 `ref/run.sh` 27 cases match (against the model), `gen/rounds.py --check`,

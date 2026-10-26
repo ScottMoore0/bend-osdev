@@ -175,5 +175,9 @@ a 384-entry table (a 48 KB array) as a regression test.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(6 s, 0.56 GB peak; `--verdict` 21 s, 2.51 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` ALL PROOFS CHECK, `--verdict` ALL PROOFS CHECK,
 `check.bend` passes, `ref/run.sh` 116 facts from 18 images match.

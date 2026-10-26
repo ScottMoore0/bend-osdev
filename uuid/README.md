@@ -119,6 +119,11 @@ version field and the variant.
 
 ## Status
 
+Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
+(4 s, 0.35 GB peak; `--verdict` 6 s, 0.40 GB peak) and `PROOF_parse.bend`
+(1 s, 0.16 GB peak; `--verdict` 1 s, 0.21 GB peak) ALL PROOFS CHECK, with
+and without `--verdict`.
+
 Bend 2.0.37: `PROOF.bend` and `PROOF_parse.bend` ALL PROOFS CHECK, `--verdict`
 ALL PROOFS CHECK (`PROOF_parse.bend` under `--verdict`: 0.2 GB peak),
 `check.bend` passes and `ref/run.sh` 112 cases match, both as native binaries
