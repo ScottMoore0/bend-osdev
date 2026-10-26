@@ -28,6 +28,23 @@ import ./LAWS.bend as Laws
 def Laws.decode_encode(r, n, b, e, hc):
   PE.pe.de(En.a1.enc_err([n]), r, n, b, {==}, e, hc)
 
+# the forms check of a primitive BIT STRING or OCTET STRING passes whether
+# or not the rules check forms
+def pf.when_true(on: Bool) -> {R.a1.when(on, True{}) == True{} : Bool}:
+  match on:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.bit_string_conforms(r, c):
+  %Equal.sym(Bool, R.a1.when(R.Asn1Rules.forms(r), True{}), True{}, pf.when_true(R.Asn1Rules.forms(r))) : {Bool.and(_, True{}) == True{} : Bool}
+  {==}
+
+def Laws.octet_string_conforms(r, c):
+  %Equal.sym(Bool, R.a1.when(R.Asn1Rules.forms(r), True{}), True{}, pf.when_true(R.Asn1Rules.forms(r))) : {Bool.and(_, True{}) == True{} : Bool}
+  {==}
+
 def Laws.encode_decode(r, hm, hi, ht, b, n, e):
   PC.pc.ed(r, hm, hi, ht, b, n, e)
 
