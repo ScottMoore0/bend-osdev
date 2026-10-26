@@ -23,6 +23,7 @@ GF(2^m)). No GPL source was read.
 | `gf128.bend` | GF(2^128): `Gf128`, GCM's multiplication and GHASH, multiplication by x in each bit order, the big-endian product |
 | `gfm.bend` | GF(2^m), 2 ≤ m ≤ 16: `GfmField`, the named BCH fields, add, multiply, power, inverse, divide, exponential and logarithm |
 | `LAWS.bend`, `PROOF.bend` | the laws and their proofs (`PROOF.bend` is written by `gen/proof.py`) |
+| `LAWS_gfm.bend`, `PROOF_gfm.bend` | a GF(2^m) law whose proof needs none of `PROOF.bend`'s, in a pair of its own so that a proof elsewhere can use it without importing `PROOF.bend` (rs does) |
 | `proof_tab.bend` | the tables' proof helpers: the fills as lists through bend-osdev-array's laws, the exp table's entries, U32 and `Nat` counting |
 | `proof_tab_cases.bend` | the named fields' facts for the table proofs, by computation (written by `gen/proof_tab.py`) |
 
@@ -56,7 +57,7 @@ GF(2^128) (`gf128.bend`):
 |---|---|
 | `Gf128{w0, w1, w2, w3}` | a 16-byte block as big-endian words (byte 0 is the top byte of `w0`); the type is open |
 | `Gf128.zero()`, `Gf128.of_words`, `Gf128.words`, `Gf128.xor`, `Gf128.is_eq` | building and comparing |
-| `Gf128.of_octets(o)`, `Gf128.to_octets(x)`, `Gf128.hex(x)` | 16 bytes (`Fail{Gf128BadLength{n}}` otherwise); hex text |
+| `Gf128.of_octets(o)`, `Gf128.to_octets(x)`, `Gf128.hex(x)` | 16 bytes (`Fail{Gf128BadLength{n}}`, a `Gf128Error`, otherwise); hex text |
 | `Gf128.mul_gcm(x, y)` | GCM's product (SP 800-38D, Algorithm 1) |
 | `Gf128.mul_x_gcm(x)` | x times x in GCM's order (a right shift; 0xE1 on the carry) |
 | `Gf128.ghash_update(h, y, x)`, `Gf128.ghash(h, xs)` | one GHASH step (y + x) * h, and GHASH over a list of blocks |
@@ -122,7 +123,9 @@ named fields `Gfm.gf16()` (x^4+x+1), `Gfm.gf32()` (x^5+x^2+1),
   byte the table answers 0, as does `Gf8.mul` (`mul_zero`).
 * **GF(2^m):** addition commutes for every field and input; in GF(2^4)
   multiplication commutes (all 256 pairs) and every nonzero element has an
-  inverse; in GF(2^5) every nonzero element has an inverse.
+  inverse; in GF(2^5) every nonzero element has an inverse. `LAWS_gfm.bend`:
+  for every field and input, a product is unchanged when a factor is first
+  reduced to its element (`gfm_mul_elt`).
 * **Vectors:** FIPS 197's products ({57}·{83} = {c1}, {57}·{13} = {fe}, the
   xtime chain), the AES inverse of {53}; GCM Test Case 2 (X1 and GHASH);
   the CMAC subkeys K1 and K2 of SP 800-38B D.1; the XTS wrap-around; the
