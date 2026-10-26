@@ -63,7 +63,7 @@ GPL source was read.
 | [gf](gf/) | Finite fields: GF(2^8) with any polynomial (ring laws proved for every polynomial), log/exp tables, GF(2^128) in GCM, CMAC/LRW and XTS bit orders, GF(2^m) for BCH |
 | [kmath](kmath/) | Integer helpers: gcd/lcm (divides-both proved), powers, integer square roots (bounds proved), 64-bit division, reciprocal division, best rational approximation, CORDIC, primes |
 | [khash](khash/) | Non-cryptographic hashes: Jenkins' lookup3 (jhash, jhash2, the word forms) and golden-ratio hash_32/hash_64 |
-| [rhash](rhash/) | A resizable hash table with incremental resizing (rhashtable): every key found at every step of a migration, proved for every hash and key encoding |
+| [rhash](rhash/) | A resizable hash table with incremental resizing (rhashtable): every key found at every step of a migration, and a resize finishing, proved for every hash and key encoding |
 | [kstr](kstr/) | Text conversions: kstrtox-style strict parsing, a vsprintf number subset, hex_dump_to_buffer lines, match_token option parsing (hex round trip proved) |
 | [cpio](cpio/) | cpio `newc` and `crc` archives, the initramfs format |
 | [elf](elf/) | ELF32/ELF64 headers, program and section headers, symbols (with an indexed string table), relocations, the dynamic section, notes and symbol versions |
