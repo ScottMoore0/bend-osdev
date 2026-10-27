@@ -55,6 +55,7 @@ README cites it). Choices made here, beyond the specifications:
 | `sm2.bend` | SM2 as a signature |
 | `ecrdsa.bend` | GOST R 34.10-2012 as a signature |
 | `LAWS.bend`, `PROOF.bend` | the laws, and their proofs |
+| `LAWS_rsa.bend`, `PROOF_rsa.bend` | the RSASSA-PKCS1-v1_5 instance's sign-then-verify with no hypothesis on the scheme, and its proof |
 | `check.bend` | every instance through the interfaces, with expected output |
 | `gen/instances.py` | the table of instances: writes their laws in `LAWS.bend` and proofs in `PROOF.bend` (`--check` checks them) |
 | `ref/gen.py`, `ref/run.sh` | the differential test against cryptography and the openssl command |
@@ -148,9 +149,19 @@ cases, and the checker never computes with a concrete curve or group.
   the bytes written for it) has the others' shape with no hypotheses; an
   instance law from it, through `lift_pk_format`, is not stated here yet.
 
-**Not proved, and tested:** the hypotheses `ha` and `h` (that a scheme
-accepts its own signatures, and that both parties' shared secrets agree,
-for every key) are number theory: the group law and Euler's theorem, on
+`LAWS_rsa.bend` (checked in a process of its own, since it imports rsa's
+proofs): `rsa_pkcs1_verify_bytes` is `rsa_pkcs1_verify_bytes_if` with `ha`
+discharged by rsa's `pkcs1_sign_verify`: for every hash, DigestInfo prefix
+and message, a signature checked from the public key's bytes is accepted,
+for every key `Rsa.private_of` accepts from valid integers with p and q
+prime, wherever the signature is made (`hs`) and the public key survives
+its bytes (`hf`).
+
+**Not proved, and tested:** the hypotheses `ha` and `h` of the other
+instances (that a scheme accepts its own signatures, and that both parties'
+shared secrets agree, for every key; RSA-PSS's `ha` would follow from rsa's
+`pss_sign_verify` in the same way, given its fixed-length-hash hypothesis
+and MGF1's salt length, and is not stated here yet) are number theory: the group law and Euler's theorem, on
 the integers the limbs stand for, which bend-osdev does not formalise
 (bignum's README). They hold exhaustively for the packages' toy
 parameters (rsa's `toy_round_trip`, ecc's `toy_ecdsa` and `toy_ecdh`,
