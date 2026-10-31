@@ -18,6 +18,13 @@ if [ "$got" != "$(cat expected.txt)" ]; then
   exit 1
 fi
 model="model: $n match"
+u=$(python3 gen_udp.py) || exit 1
+got=$("${bend[@]}" udp_cases.bend 2>&1)
+if [ "$got" != "$(cat udp_expected.txt)" ]; then
+  diff <(cat udp_expected.txt) <(printf '%s\n' "$got") | head -20
+  exit 1
+fi
+model="$model; UDP: $u match"
 if unshare -rn true 2> /dev/null && [ -c /dev/net/tun ] && command -v ip > /dev/null && command -v ping > /dev/null; then
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
