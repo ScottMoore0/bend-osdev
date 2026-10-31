@@ -334,8 +334,26 @@ def same(xs: List<&2, U32>, ys: List<&2, U32>) -> Bool:
 def trailer.name() -> List<&2, U32>:
   [84, 82, 65, 73, 76, 69, 82, 33, 33, 33]
 
+def trailer.zeros(xs: List<&2, U32>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case Con{h, t}:
+      Bool.and(U32.is_eq(U32.and(h, 255), 0), trailer.zeros(t))
+
+def trailer.prefix(prefix: List<&2, U32>, name: List<&2, U32>) -> Bool:
+  match prefix:
+    case Nil{}:
+      trailer.zeros(name)
+    case Con{h, t}:
+      match name:
+        case Nil{}:
+          False{}
+        case Con{v, rest}:
+          Bool.and(U32.is_eq(U32.and(v, 255), h), trailer.prefix(t, rest))
+
 def trailer.is(name: List<&2, U32>) -> Bool:
-  same(name, trailer.name())
+  trailer.prefix(trailer.name(), name)
 
 # Reading an entry
 
