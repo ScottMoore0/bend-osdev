@@ -113,10 +113,27 @@ def Udp.recv.go(ok: Bool, +st: UdpState, +src: U32, +dst: U32, +dg: B.Octets) ->
     case True{}:
       Udp.recv.header(NU.UdpHeader.parse(dg), st, src, dst, dg)
 
-# a datagram arrives: its checksum must verify (or be zero) and its length
-# field fit
+def Udp.recv.trim_length(ok: Bool, +st: UdpState, +src: U32, +dst: U32, +dg: B.Octets, n: Nat) -> List<&2, UdpAction>:
+  match ok:
+    case False{}:
+      Nil{}
+    case True{}:
+      +trimmed = B.Octets.take(n, dg)
+      Udp.recv.go(NU.UdpHeader.verify_ipv4(src, dst, trimmed), st, src, dst, trimmed)
+
+def Udp.recv.trim_header(r: Result<&2, &2, N.NetError, NU.UdpHeader>, +st: UdpState, +src: U32, +dst: U32, +dg: B.Octets) -> List<&2, UdpAction>:
+  match r:
+    case Fail{e}:
+      Nil{}
+    case Done{NU.UdpHeader{sp, dp, len, ck}}:
+      +n = U32.to_nat(len)
+      Udp.recv.trim_length(Bool.and(Nat.is_ge(n, 8n), Nat.is_le(n, B.Octets.len(dg))), st, src, dst, dg, n)
+
+# RFC 768: the checksum covers only the declared UDP length. The IPv4
+# payload may contain a surplus area (RFC 9868 sections 7-9); validate the
+# length before trimming, so take cannot hide a truncated datagram.
 def Udp.recv(+st: UdpState, +src: U32, +dst: U32, +dg: B.Octets) -> Pair(UdpState, List<&2, UdpAction>):
-  (st, Udp.recv.go(NU.UdpHeader.verify_ipv4(src, dst, dg), st, src, dst, dg))
+  (st, Udp.recv.trim_header(NU.UdpHeader.parse(dg), st, src, dst, dg))
 
 # Sending: the header, with its checksum over the pseudo-header from our
 # address to dst; at most 65507 bytes of data fit an IPv4 packet

@@ -35,7 +35,8 @@ bend-osdev-netheaders; byte strings are bend-osdev-bytes' `Octets`.
   default ISN function; see Extension points);
 * RFC 791, Internet Protocol (version 4), with fragmentation and reassembly;
 * RFC 792, Internet Control Message Protocol;
-* RFC 768, User Datagram Protocol;
+* RFC 768, User Datagram Protocol; [RFC 9868](https://www.rfc-editor.org/rfc/rfc9868.html)
+  sections 7–9 for the surplus area outside the UDP length and checksum;
 * RFC 826, An Ethernet Address Resolution Protocol (the packet reception
   algorithm);
 * RFC 1122, Requirements for Internet Hosts: Communication Layers (ARP cache
@@ -293,6 +294,14 @@ bend-osdev-bytes' laws of take, drop and append on Octets.
 
 ## Tests
 
+`ref/gen_udp.py` independently constructs UDP wire bytes and checksums using
+Python `struct`. Its receive regressions cover odd/even and empty payloads,
+surplus bytes, corruption inside the datagram, absent checksums, truncated
+headers/data, and invalid lengths. `ref/run.sh` runs these alongside the TCP
+model tests. The receiver validates length before checking only the declared
+UDP datagram; surplus bytes are ignored, without processing UDP options.
+
+
 * `check.bend`: five TCP walk-throughs through `sim.bend` (the three-way
   handshake, data both ways and both closes with TIME-WAIT; a segment lost
   three times, with the RTO doubling from 1 s to 2 s to 4 s; segments out of
@@ -342,6 +351,13 @@ bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
 values (`LAWS.bend`) and the order of `Nat` and words (`LAWS_order.bend`).
 
 ## Status
+
+2026-10-31: Bend 2.0.39 / Lean 4.34.0: `scripts/check.sh tcpip` and
+`VERDICT=1 scripts/check.sh tcpip` pass (all three proof files, runtime
+examples, 100 TCP model cases / 6671 trace lines, and 86 UDP cases).
+`scripts/deps.sh tcpip`, the public-interface audit, and the packet proof
+generator's `--check` pass. Linux TAP integration is skipped on this VM
+(no usable namespace/TAP setup).
 
 Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
 (2 s, 0.35 GB peak; `--verdict` 5 s, 0.41 GB peak), `PROOF_packet.bend`
