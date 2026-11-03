@@ -11,7 +11,7 @@ format's checksum. Byte strings are `Octets` (bend-osdev-bytes).
   "New CRC Format"; BSD-licensed documentation).
 * The Linux kernel's documentation of the initramfs buffer format
   (`Documentation/driver-api/early-userspace/buffer-format.rst`): the
-  documentation only, not the kernel's code.
+  documentation only, not the kernel's code: [initramfs buffer format](https://docs.kernel.org/driver-api/early-userspace/buffer-format.html).
 
 Each entry is a 110-byte header, the name, and the data. The header is the
 six-byte magic and thirteen fields of eight ASCII hex digits each: `ino`,
@@ -27,7 +27,10 @@ Choices this package makes where the specification leaves them open: it
 writes upper-case hex digits and reads either case; it writes the trailer
 with `nlink` 1 and every other field 0; it does not pad the archive to a
 block (an initramfs may be padded; `Cpio.parse` ignores everything after the
-trailer's name); it skips padding without checking that it is zero.
+trailer's name); it skips padding without checking that it is zero. A trailer name may have
+additional NUL bytes within `namesize`. Other names are returned as raw bytes
+with only the final required NUL removed; embedded or additional NULs are not
+normalized.
 
 ## Files
 
@@ -56,7 +59,7 @@ trailer's name); it skips padding without checking that it is zero.
 | `CpioHeader.encode(h) -> Octets`, `CpioHeader.decode(o) -> Result<…, CpioHeaderAt>` | one header's 110 bytes, and reading one back (`CpioHeaderAt{header, rest}`) |
 | `CpioEntry.header(fmt, e)` | the header `Cpio.build` writes for an entry |
 | `Cpio.checksum(o)` | the crc format's check: the sum of the bytes, modulo 2^32 |
-| `Cpio.trailer_name()`, `Cpio.is_trailer_name(name)` | `TRAILER!!!` |
+| `Cpio.trailer_name()`, `Cpio.is_trailer_name(name)` | `TRAILER!!!`; recognition also accepts an all-NUL suffix |
 | `CpioEntry.valid(e)`, `CpioEntry.valid_all(es)` | the entries an archive can hold (see Laws) |
 
 `hexfield.bend`:
@@ -99,7 +102,7 @@ Everything else in the two files (the list-level `fields.*`, `hdr.*`,
     `CpioEntry.valid_all` admits, `Cpio.parse(Cpio.build(fmt, es)) ==
     Done{es}`, proved by induction on the list. `CpioEntry.valid` asks that
     the data, and the name with its NUL, are shorter than 2^32 bytes (they
-    must fit their size fields); and that the name is not `TRAILER!!!`.
+    must fit their size fields); and that the name is not `TRAILER!!!` followed by zero or more NULs.
     Reading the name and data back as `Octets` uses bytes' interface law
     `octets_of_to` (`of_list(to_list(o)) == o` for every `o`).
   * `valid_example`: the hypothesis is satisfiable (an ordinary one-file
@@ -110,7 +113,8 @@ Everything else in the two files (the list-level `fields.*`, `hdr.*`,
   the trailer ignored; and one archive for each error: empty input, no
   trailer, a truncated header, truncated data, the `070707` magic, a non-hex
   digit, a bad checksum, a name size of 0, a name without its NUL; and the
-  newc format ignoring its check field.
+  newc format ignoring its check field. Padded trailers, a preceding entry,
+non-trailer suffixes and a malformed padded name are also checked.
 
 ## Tests
 
@@ -171,7 +175,7 @@ and 250 small ones) as a regression test.
 * Sizes are computed on `Nat`, and lengths are counted by walking the lists:
   linear in the archive's size (see Sizes).
 * `Cpio.build` does not refuse an entry whose data is 2^32 bytes or longer, or
-  whose name is `TRAILER!!!`; such an archive does not parse back.
+  whose name is `TRAILER!!!` followed by zero or more NULs; such an archive does not parse back.
 
 ## Dependencies
 
@@ -179,6 +183,9 @@ bend-osdev-u32, in the proofs only: its laws of `Nat` arithmetic and words'
 values (`LAWS.bend`).
 
 ## Status
+
+2026-10-31: `scripts/check.sh cpio` and `VERDICT=1 scripts/check.sh cpio`
+pass (proofs, examples and 100 reference cases); `scripts/deps.sh cpio` passes.
 
 Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
 (3 s, 0.38 GB peak; `--verdict` 6 s, 0.43 GB peak) ALL PROOFS CHECK, with

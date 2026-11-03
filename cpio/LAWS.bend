@@ -2,7 +2,7 @@
 # the value; a header reads back as itself; and parsing an archive built from
 # any list of entries, in either format, gives the entries back. The last
 # holds for the entries an archive can hold (CpioEntry.valid: sizes that fit
-# in 32 bits, a name other than "TRAILER!!!", canonical Octets).
+# in 32 bits, a name other than "TRAILER!!!" followed only by NULs).
 #
 # Vectors: digits in both cases, a non-digit and a short field refused, the
 # crc format's checksum, the bytes of a one-file archive (computed from
@@ -65,6 +65,28 @@ law empty_archive_crc:
 # bytes after the trailer (an initramfs padded to a block) are ignored
 law trailing_bytes:
   {C.Cpio.parse(B.Octets.append(C.Cpio.build(C.CpioCrc{}, [C.CpioEntry.file("a", 33188, B.Octets.of_string("hi"))]), B.Octets.zeros(12n))) == Done{[C.CpioEntry.file("a", 33188, B.Octets.of_string("hi"))]} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+
+# namesize 12 includes two NULs; the two further NULs align the header.
+def padded_trailer() -> B.Octets:
+  B.Octets.append(C.CpioHeader.encode(C.CpioHeader{C.CpioNewc{}, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 12, 0}), B.Octets.append(B.Octets.of_string("TRAILER!!!"), B.Octets.zeros(4n)))
+
+law padded_trailer_empty:
+  {C.Cpio.parse(padded_trailer()) == Done{[]} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+
+law padded_trailer_after_entry:
+  {C.Cpio.parse(B.Octets.append(B.Octets.take(116n, C.Cpio.build(C.CpioNewc{}, [C.CpioEntry.file("a", 33188, B.Octets.of_string("hi"))])), padded_trailer())) == Done{[C.CpioEntry.file("a", 33188, B.Octets.of_string("hi"))]} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+
+law trailer_name_suffix:
+  {C.Cpio.is_trailer_name(B.Octets.append(C.Cpio.trailer_name(), B.Octets.zeros(3n))) == True{} : Bool}
+
+law non_trailer_suffix:
+  {C.Cpio.is_trailer_name(B.Octets.append(C.Cpio.trailer_name(), B.Octets.of_list([0, 65]))) == False{} : Bool}
+
+law non_trailer_entry:
+  {C.Cpio.parse(C.Cpio.build(C.CpioNewc{}, [C.CpioEntry{0, 0, 0, 0, 1, 0, 0, 0, 0, 0, B.Octets.append(C.Cpio.trailer_name(), B.Octets.of_list([0, 65])), B.Octets.empty()}])) == Done{[C.CpioEntry{0, 0, 0, 0, 1, 0, 0, 0, 0, 0, B.Octets.append(C.Cpio.trailer_name(), B.Octets.of_list([0, 65])), B.Octets.empty()}]} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
+
+law malformed_padded_trailer:
+  {C.Cpio.parse(B.Octets.append(C.CpioHeader.encode(C.CpioHeader{C.CpioNewc{}, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 12, 0}), B.Octets.append(B.Octets.of_string("TRAILER!!!"), B.Octets.of_list([0, 65])))) == Fail{C.CpioNoNul{}} : Result<&2, &2, C.CpioError, List<&2, C.CpioEntry>>}
 
 # Vectors: malformed archives
 

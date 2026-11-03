@@ -564,3 +564,21 @@ def Laws.reject_no_nul():
 
 def Laws.valid_example():
   (({==}, ({==}, {==})), Unit{})
+
+def Laws.padded_trailer_empty():
+  {==}
+
+def Laws.padded_trailer_after_entry():
+  {==}
+
+def Laws.trailer_name_suffix():
+  {==}
+
+def Laws.non_trailer_suffix():
+  {==}
+
+def Laws.malformed_padded_trailer():
+  {==}
+
+def Laws.non_trailer_entry():
+  {==}
