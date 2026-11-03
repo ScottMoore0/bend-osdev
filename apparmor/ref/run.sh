@@ -5,6 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 command -v python3 > /dev/null || { echo "python3 missing"; exit 77; }
+python3 test_gen.py || exit 1
 read -r -a bend <<< "${BEND:-bend}"
 n=$(python3 gen.py "${SEED:-2026}" "${POLICIES:-20}") || { printf '%s\n' "$n"; exit 1; }
 got=$(for f in cases-*.bend; do "${bend[@]}" "$f" 2>&1; done)
