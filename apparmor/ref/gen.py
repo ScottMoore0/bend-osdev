@@ -570,6 +570,20 @@ def gen_policy(r, idx):
         top2 = Profile('top2', r.pick(['/usr/bin/t*', '/usr/bin/**']), 'enforce', False)
         fill(top2, 1)
         pol['profiles'].append(top2)
+    # Some 4.0.1 builds fail compiling profiles whose only file rules are
+    # audit deny. Keep those rules and add a separate, modelled allow rule.
+    def ensure_file_allow(p):
+        files = [x for x in p.rules if x.kind == 'file']
+        if files and all(x.q['audit'] and x.q['deny'] for x in files):
+            x = Rule()
+            x.kind, x.q = 'file', {'audit': False, 'deny': False, 'owner': False}
+            x.text, x.letters, x.xmode, x.target = '/aa-ref-allow', 'r', None, None
+            x.src = '/aa-ref-allow r,'
+            p.rules.append(x)
+        for child in p.children:
+            ensure_file_allow(child)
+    for profile in pol['profiles']:
+        ensure_file_allow(profile)
     return pol
 
 def render_profile(p, depth):
@@ -1029,9 +1043,9 @@ def parser_accepts(files, main, tmp):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f:
             f.write(text)
-    res = subprocess.run(['apparmor_parser', '-Q', '-K', '-q', '--base', tmp, '-I', tmp, os.path.join(tmp, main)],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    return res.returncode == 0, res.stderr.strip().split('\n')[-1] if res.stderr else ''
+    res = subprocess.run(['apparmor_parser', '-Q', '-K', '--base', tmp, '-I', tmp, os.path.join(tmp, main)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return res.returncode == 0, '%s; stdout: %s; stderr: %s' % (('signal %d' % -res.returncode) if res.returncode < 0 else ('exit code %d' % res.returncode), res.stdout or '(empty)', res.stderr or '(empty)')
 
 def main():
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
@@ -1116,4 +1130,5 @@ def main():
     if parser_bad or bad_edges:
         sys.exit(1)
 
-main()
+if __name__ == "__main__":
+    main()

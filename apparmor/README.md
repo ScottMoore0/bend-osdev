@@ -475,7 +475,12 @@ disagreements, each where the package is stricter (`/a rw -> b`, `foo r,`,
 `uX`, `profile -e`, the unix, pivot_root, rlimit and link rules outside the
 model, `abi` without the system's abi files, and change_profile safe and
 unsafe on disjoint exec conditions). A disagreement outside the list fails
-the test. Runtime decisions could not be compared with the kernel: loading
+the test. Generated profiles whose file rules are all audited denials also
+receive a separate, modelled read grant: Ubuntu 24.04 parser 4.0.1 package
+revision .9 has a [reported regression](https://bugs.launchpad.net/ubuntu/+source/apparmor/+bug/2171436)
+affecting that shape. The denial remains tested. Parser failures report the
+exit status or signal and complete stdout and stderr; `ref/test_gen.py` checks
+the fixture and diagnostics. Runtime decisions could not be compared with the kernel: loading
 a profile needs root, and none was used.
 
 Run on the JavaScript lane with 80 policies (2,080 queries) each, seeds
@@ -523,6 +528,12 @@ exec rules with each other. `check.bend` builds in 14 s and runs in 0.09 s;
 of build each).
 
 ## Status
+
+Bend 2.0.39 (2026-11-03): `scripts/check.sh apparmor` and
+`VERDICT=1 scripts/check.sh apparmor` pass; the reference run accepts 20
+policies with Ubuntu 24.04 apparmor_parser 4.0.1 package revision .9,
+with 53 edge agreements and 10 known disagreements. `scripts/deps.sh
+apparmor` and `python3 scripts/internals.py apparmor` pass.
 
 Bend 2.0.39 (2026-10-26, native, three packages at a time): `PROOF.bend`
 (4 s, 0.23 GB peak; `--verdict` 8 s, 0.29 GB peak) ALL PROOFS CHECK, with
